@@ -235,3 +235,26 @@
 - **integration** — End-to-end test (Tests/KerfAppTests/EndToEndSignTests.swift) runs the app model pipeline headlessly on Tests/Fixtures/e2e/sign.svg and compares against Tests/Fixtures/golden/sign-{materialTop,spoilboard}.tap. Regenerate with `KERF_UPDATE_GOLDEN=1 scripts/test.sh --filter EndToEnd`. The fixture text uses Helvetica-Bold outlines baked into the SVG, so font changes on the OS don't affect the test.
 - **integration** — Drill pecks rapid back down to just above the previous peck depth (standard peck behaviour); the validator reports this as a "rapid plunge below material top" warning, not an error. Left as is.
 - **integration** — samples/sign.svg is a copy of the e2e fixture for manual testing in the app.
+
+## drawing
+
+- **drawing** — Pure editing model lives in `CADCore/Editing` (PathNodes, ShapeNodes, TransformHandles,
+  SnapEngine, PenPath, Grouping) and is unit-tested; the canvas only maps gestures onto it.
+- **drawing** — Node editing works on an "editable form" of each path: arcs become cubic Béziers and
+  closed paths get an explicit closing segment, so node indices are stable. The first node edit
+  therefore converts that shape's arcs to cubics and drops parametric provenance (rectangle,
+  circle…) — the shape becomes a plain drawn vector.
+- **drawing** — Deleting a node between two curves keeps the outer handles (approximate merge);
+  otherwise the neighbours are joined with a line. Paths never drop below 2 nodes (open) / 3 (closed).
+- **drawing** — Groups are a `groupID` on `Shape` (optional, so older .kerf files still decode; no
+  format-version bump). Clicking any member selects the group; grouping a member absorbs its whole
+  group (flat groups, no nesting). The old merge-into-one-shape action is now "Combine", and
+  "Break Apart" splits multi-path shapes.
+- **drawing** — Snapping: object points (nodes, segment midpoints, bounding-box centres) within
+  8 screen points win over the grid; Command temporarily disables snapping. Moves snap a corner,
+  centre or node of the selection onto targets. Snap-to-grid moved to ⌘' (⇧⌘G is now Ungroup).
+- **drawing** — Transform handles: corner/edge handles scale about the opposite handle (Shift keeps
+  proportions, Option scales about the centre); the round handle above the box rotates (Shift
+  snaps to 15°). Mirroring stays on menu/inspector buttons.
+- **drawing** — Bézier pen is a separate tool (P); the old click-through smooth curve remains as
+  "Smooth Curve". Canvas single-key tool shortcuts: V N R C E L P T.
