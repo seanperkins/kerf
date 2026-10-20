@@ -85,11 +85,7 @@ struct ContentView: View {
                 .help("Zoom to material (F)")
             Toggle(isOn: $document.snapToGrid) { Label("Snap", systemImage: "grid") }
                 .help("Snap to grid")
-            Picker("Machine", selection: Binding(get: { document.postProfile.id }, set: { document.setPostProfile($0) })) {
-                ForEach(catalog.profiles) { Text($0.name).tag($0.id) }
-            }
-            .frame(width: 210)
-            .help("Machine / post processor")
+            MachinePostPickers(document: document)
             Button { openWindow(id: ToolDatabaseView.windowID) } label: { Label("Tools", systemImage: "wrench.and.screwdriver") }
                 .help("Tool Database")
             Button { document.calculateAll() } label: { Label("Calculate", systemImage: "play.fill") }
@@ -111,7 +107,7 @@ struct StatusBar: View {
             Text(GCodeExporter.materialDescription(document.document))
             Text("Z0: " + document.document.job.zZero.displayName)
             Text("Origin: " + document.document.job.xyOrigin.displayName)
-            Text(document.postProfile.name)
+            Text([document.machine?.name, document.postProfile.name].compactMap { $0 }.joined(separator: " · "))
             Spacer()
             if !document.selection.isEmpty { Text("\(document.selection.count) selected") }
             if let p = document.cursorPosition {

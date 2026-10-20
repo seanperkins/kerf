@@ -299,7 +299,8 @@ struct JobSummaryView: View {
             LabeledContent("Z zero", value: j.zZero.displayName)
             LabeledContent("Safe Z", value: "\(RulerTicks.label(j.safeZ)) \(u)")
             LabeledContent("Home", value: "X\(RulerTicks.label(j.home.x)) Y\(RulerTicks.label(j.home.y)) Z\(RulerTicks.label(j.homeZ)) \(u)")
-            LabeledContent("Machine", value: document.postProfile.name)
+            LabeledContent("Machine", value: document.machine.map { "\($0.name), \($0.envelopeDescription)" } ?? "Custom (post limits)")
+            LabeledContent("Post", value: document.postProfile.name)
             Button("Job Setup…") { document.sheet = .jobSetup }
         }
         Divider()

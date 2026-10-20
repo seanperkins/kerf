@@ -295,3 +295,7 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## app-ux
+
+- **app-ux** — **Machines are separate from posts.** `MachineDefinition` (PostCore) holds the bed/Z travel (`MachineLimits`), spoilboard allowance, optional rapid rate, max feed and RPM range, and the list of compatible post ids. `KerfProject.machineID` is optional (older files decode; nil is not written). Resolution: the chosen machine, else the first machine whose posts include the job's post, else none (the post's own limits, as before). `KerfDocument.postProfile` is the post with the machine's limits converted into the post's units, so validation, export, time estimates and the preview all use the machine envelope. Built-ins: Avid PRO6096 (same limits as the Avid posts, so existing jobs validate identically) and Generic GRBL. User machines are JSON in `~/Library/Application Support/Kerf/machines/` (same id overrides a built-in). Picking a machine switches to its default post (matching document units) only when the current post does not drive it; both changes are one "Change Machine" undo step. Choosing a post is now "Change Post Processor". Job Setup warns when the material is larger than the bed or thicker than Z travel.

@@ -55,6 +55,12 @@ struct JobSetupSheet: View {
                 Section("Drawing") {
                     LengthField("Grid spacing", value: $form.gridSpacing, units: u)
                 }
+                let fit = MachineResolver.fitProblems(job: form.job, units: form.units, machine: document.machine)
+                if !fit.isEmpty {
+                    Section("Machine") {
+                        ForEach(fit, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                    }
+                }
                 if !form.problems.isEmpty {
                     Section {
                         ForEach(form.problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }

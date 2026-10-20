@@ -18,7 +18,8 @@ struct SaveAllToolpathsSheet: View {
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
 
-    private var profile: PostProfile { catalog.profile(id: profileID) }
+    /// The chosen post with the job's machine limits applied.
+    private var profile: PostProfile { document.effectiveProfile(id: profileID) }
     private var hasErrors: Bool { posted.contains { $0.result.hasErrors || $0.result.text == nil } }
 
     var body: some View {
@@ -29,9 +30,8 @@ struct SaveAllToolpathsSheet: View {
                     ForEach(SaveAllMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.radioGroup)
-                Picker("Machine / post", selection: $profileID) {
-                    ForEach(catalog.profiles) { Text($0.name).tag($0.id) }
-                }
+                LabeledContent("Machine", value: document.machine?.name ?? "Custom (post limits)")
+                PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine)
             }
             .formStyle(.grouped)
             .frame(height: 190)

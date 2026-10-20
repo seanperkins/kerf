@@ -13,12 +13,16 @@ public struct KerfProject: Codable, Hashable, Sendable {
     public var tools: [Tool]
     /// Selected post profile (`PostProfile.id`).
     public var postProfileID: String?
+    /// Selected machine (`MachineDefinition.id` in PostCore). Optional so older files decode; nil
+    /// means "the machine whose posts include `postProfileID`, else the post's own limits".
+    public var machineID: String?
 
     public init(document: Document = Document(), operations: [AnyOperation] = [], tools: [Tool] = [],
-                postProfileID: String? = nil) {
+                postProfileID: String? = nil, machineID: String? = nil) {
         self.formatVersion = Self.currentFormatVersion
         self.document = document; self.operations = operations; self.tools = tools
         self.postProfileID = postProfileID
+        self.machineID = machineID
     }
 
     public func encoded() throws -> Data {

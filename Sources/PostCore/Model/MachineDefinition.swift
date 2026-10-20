@@ -1,0 +1,99 @@
+import CADCore
+import Foundation
+
+/// A physical CNC machine: its working envelope and the post processors that drive it. Picked
+/// once per job (and as an app default); the machine's limits replace the post profile's when
+/// validating and estimating, so one post can serve machines of different sizes.
+public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
+    public var id: String
+    public var name: String
+    /// Units of `limits`, `rapidRate` and `maxFeed`.
+    public var units: LengthUnit
+    /// Travel envelope (bed size and Z travel) in `units`.
+    public var limits: MachineLimits
+    /// Compatible post profiles (`PostProfile.id`), in order of preference.
+    public var postIDs: [String]
+    /// Rapid traverse speed, `units` per minute. nil = the post's value.
+    public var rapidRate: Double?
+    /// Fastest programmable feed, `units` per minute. nil = the post's value.
+    public var maxFeed: Double?
+    /// Spindle range. nil = the post's values.
+    public var minRPM: Double?
+    public var maxRPM: Double?
+    public var notes: String?
+
+    public init(id: String, name: String, units: LengthUnit, limits: MachineLimits, postIDs: [String],
+                rapidRate: Double? = nil, maxFeed: Double? = nil, minRPM: Double? = nil, maxRPM: Double? = nil,
+                notes: String? = nil) {
+        self.id = id; self.name = name; self.units = units; self.limits = limits; self.postIDs = postIDs
+        self.rapidRate = rapidRate; self.maxFeed = maxFeed; self.minRPM = minRPM; self.maxRPM = maxRPM
+        self.notes = notes
+    }
+
+    /// The first compatible post (among `available`) in `documentUnits`, else the first compatible
+    /// post that exists at all. nil when none of `postIDs` is available.
+    public func defaultPostID(for documentUnits: LengthUnit, available: [PostProfile]) -> String? {
+        let compatible = postIDs.compactMap { id in available.first { $0.id == id } }
+        return (compatible.first { $0.units == documentUnits } ?? compatible.first)?.id
+    }
+
+    public func supports(postID: String) -> Bool { postIDs.contains(postID) }
+
+    /// `profile` with this machine's limits, rapid rate, max feed and RPM range converted into the
+    /// profile's output units. Everything textual (the G-code dialect) stays the post's.
+    public func applied(to profile: PostProfile) -> PostProfile {
+        var p = profile
+        let f = units.factor(to: profile.units)
+        p.limits = MachineLimits(xTravel: limits.xTravel * f, yTravel: limits.yTravel * f,
+                                 zTravel: limits.zTravel * f, maxSpoilboardCut: limits.maxSpoilboardCut * f)
+        if let r = rapidRate { p.rapidRate = r * f }
+        if let m = maxFeed { p.maxFeed = m * f }
+        if let lo = minRPM { p.minRPM = lo }
+        if let hi = maxRPM { p.maxRPM = hi }
+        return p
+    }
+
+    /// "60 x 96 x 8 in".
+    public var envelopeDescription: String {
+        func f(_ v: Double) -> String {
+            let r = (v * 1000).rounded() / 1000
+            return r == r.rounded() ? String(Int(r)) : String(r)
+        }
+        return "\(f(limits.xTravel)) x \(f(limits.yTravel)) x \(f(limits.zTravel)) \(units.abbreviation)"
+    }
+
+    public func toJSON() throws -> Data {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try enc.encode(self)
+    }
+
+    public static func fromJSON(_ data: Data) throws -> MachineDefinition {
+        try JSONDecoder().decode(MachineDefinition.self, from: data)
+    }
+}
+
+/// Machines shipped with Kerf. Their limits match the built-in posts, so jobs saved before
+/// machines existed validate exactly as before.
+public enum BuiltInMachines {
+    /// Avid CNC PRO6096 running Mach4.
+    public static let avidPRO6096 = MachineDefinition(
+        id: "avid-pro6096", name: "Avid PRO6096 (Mach4)", units: .inch,
+        limits: BuiltInPosts.avidMach4Inch.limits,
+        postIDs: [BuiltInPosts.avidMach4Inch.id, BuiltInPosts.avidMach4MM.id],
+        rapidRate: BuiltInPosts.avidMach4Inch.rapidRate, maxFeed: BuiltInPosts.avidMach4Inch.maxFeed,
+        minRPM: 6000, maxRPM: 24000,
+        notes: "60 x 96 in bed, single spindle, manual tool changes.")
+
+    /// A small hobby router running GRBL 1.1.
+    public static let genericGRBL = MachineDefinition(
+        id: "generic-grbl", name: "Generic GRBL router", units: .millimeter,
+        limits: BuiltInPosts.genericGRBLMM.limits,
+        postIDs: [BuiltInPosts.genericGRBLMM.id],
+        rapidRate: BuiltInPosts.genericGRBLMM.rapidRate, maxFeed: BuiltInPosts.genericGRBLMM.maxFeed)
+
+    public static let all: [MachineDefinition] = [avidPRO6096, genericGRBL]
+    public static let defaultID = avidPRO6096.id
+
+    public static func machine(id: String) -> MachineDefinition? { all.first { $0.id == id } }
+}

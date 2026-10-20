@@ -120,7 +120,11 @@ final class KerfDocument: ReferenceFileDocument {
 
     convenience init() {
         let doc = Document()
-        self.init(project: KerfProject(document: doc, postProfileID: PostProfileStore.defaultID(for: doc.units)))
+        var project = KerfProject(document: doc, postProfileID: PostProfileStore.defaultID(for: doc.units))
+        if let m = MachineCatalog.shared.machine(id: BuiltInMachines.defaultID) {
+            MachineResolver.select(machine: m, in: &project, profiles: PostProfileCatalog.shared.profiles)
+        }
+        self.init(project: project)
     }
 
     required convenience init(configuration: ReadConfiguration) throws {
@@ -179,8 +183,17 @@ final class KerfDocument: ReferenceFileDocument {
     var units: LengthUnit { project.document.units }
     var mergedLibrary: ToolLibrary { project.mergedTools(with: toolLibrary.library) }
 
+    /// The post profile with the job's machine limits applied (what validation and export use).
     var postProfile: PostProfile {
-        PostProfileCatalog.shared.profile(id: project.postProfileID ?? PostProfileStore.defaultID(for: units))
+        effectiveProfile(id: project.postProfileID ?? PostProfileStore.defaultID(for: units))
+    }
+
+    /// The machine this job is set up for (nil = a custom post with its own limits).
+    var machine: MachineDefinition? { MachineCatalog.shared.machine(for: project) }
+
+    /// Post `id` with this job's machine limits applied.
+    func effectiveProfile(id: String?) -> PostProfile {
+        MachineResolver.effectiveProfile(PostProfileCatalog.shared.profile(id: id), machine: machine)
     }
 
     /// Profile rapid rate converted to document units per minute.
@@ -538,7 +551,14 @@ final class KerfDocument: ReferenceFileDocument {
     }
 
     func setPostProfile(_ id: String) {
-        perform("Change Machine") { $0.postProfileID = id }
+        perform("Change Post Processor") { $0.postProfileID = id }
+    }
+
+    /// Picks the machine (and its default post if the current post does not drive it).
+    func setMachine(_ id: String) {
+        guard let m = MachineCatalog.shared.machine(id: id) else { return }
+        let profiles = PostProfileCatalog.shared.profiles
+        perform("Change Machine") { MachineResolver.select(machine: m, in: &$0, profiles: profiles) }
     }
 
     // MARK: Job setup
