@@ -129,6 +129,7 @@ extension Document {
         d.models = models.map { $0.scaled(by: f) }
         for i in d.layers.indices {
             if let s = d.layers[i].sheet { d.layers[i].sheet = SheetSlot(number: s.number, offset: s.offset * f) }
+            if let k = d.layers[i].keepOut { d.layers[i].keepOut = KeepOutZone(height: k.height * f) }
         }
         return d
     }

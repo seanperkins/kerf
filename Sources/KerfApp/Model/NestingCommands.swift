@@ -73,7 +73,8 @@ enum NestingCommands {
         // Nesting always fills sheet 1 first, so put it on the material.
         NestSheets.activate(1, in: &project.document)
         let doc = project.document
-        let shapes = doc.shapes(ids: doc.expandToGroups(ids)).filter { project.isEditable($0) }
+        let keepOut = Fixtures.keepOutLayerIDs(in: doc)
+        let shapes = doc.shapes(ids: doc.expandToGroups(ids)).filter { project.isEditable($0) && !keepOut.contains($0.layerID) }
         let tol = doc.units == .inch ? 0.002 : 0.05
         let groups = NestPartBuilder.parts(from: shapes, tolerance: tol)
         guard !groups.isEmpty else {
@@ -88,8 +89,9 @@ enum NestingCommands {
         }
         let parts = groups.map { NestPart(outline: $0.outline, quantity: max(1, options.quantity)) }
         let sheets = options.overflowSheets ? max(1, options.maxSheets) : 1
+        // Clamps and screws are on every sheet.
         let result = Nester.nest(parts, settings: options.settings(for: doc.job, maxSheets: sheets),
-                                 firstSheetObstacles: obstacles)
+                                 obstacles: Fixtures.zones(in: doc).flatMap(\.loops), firstSheetObstacles: obstacles)
         return apply(result, groups: groups, in: &project)
     }
 

@@ -12,6 +12,7 @@ public enum LayoutChecks {
         let eps = doc.units == .inch ? 0.0005 : 0.01
         let material = doc.job.materialBounds
         let hidden = Set(doc.layers.filter { !$0.isVisible }.map(\.id)).union(ignoredLayers)
+            .union(Fixtures.keepOutLayerIDs(in: doc))
         var outside: [String] = [], beyond: [String] = []
         for (i, s) in doc.shapes.enumerated() where !hidden.contains(s.layerID) {
             let b = s.bounds()
@@ -74,6 +75,83 @@ public enum LayoutChecks {
             }
         }
         return issues
+    }
+
+    /// Errors when the cutter (radius included) enters a clamp / keep-out zone below the
+    /// zone's top (material top + clamp height), whether cutting or rapid.
+    public static func keepOut(_ toolpaths: [Toolpath], zones: [Fixtures.Zone], job: JobSetup,
+                               units: LengthUnit) -> [GCodeIssue] {
+        guard !zones.isEmpty else { return [] }
+        let coords = MachineCoordinates(job: job)
+        let eps = units == .inch ? 0.0005 : 0.01
+        var issues: [GCodeIssue] = []
+        for tp in toolpaths {
+            let r = tp.tool.converted(to: units).radius
+            for zone in zones {
+                let clean = GeomKernel.boolean(.union, subject: zone.loops, clip: [], fillRule: .evenOdd)
+                let grown = r > eps ? GeomKernel.offset(clean, by: r - eps, join: .round, arcTolerance: eps) : clean
+                let box = Rect2(points: grown.joined())
+                let top = coords.materialTopZ + zone.height
+                var hitCut = false, hitRapid = false
+                var prev: Vec3?
+                for move in tp.moves {
+                    guard let target = move.target else { continue }
+                    var pts: [Vec3] = []
+                    switch move {
+                    case .arcCW(_, let c, _), .arcCCW(_, let c, _):
+                        if let p = prev {
+                            var cw = false
+                            if case .arcCW = move { cw = true }
+                            pts = ArcGeometry.points(from: p, to: target, center: c, clockwise: cw, tolerance: eps * 4)
+                        } else {
+                            pts = [target]
+                        }
+                    default: pts = [target]
+                    }
+                    var a = prev ?? target
+                    for b in pts {
+                        defer { a = b }
+                        guard min(a.z, b.z) < top - eps else { continue }
+                        let qa = coords.materialXY(fromMachine: a.xy), qb = coords.materialXY(fromMachine: b.xy)
+                        let seg = Rect2(points: [qa, qb])
+                        guard seg.intersects(box), segmentHits(qa, qb, grown) else { continue }
+                        if move.isRapid { hitRapid = true } else { hitCut = true }
+                    }
+                    prev = target
+                }
+                if hitCut {
+                    issues.append(GCodeIssue(severity: .error, message:
+                        "Toolpath '\(tp.name)' cuts into the keep-out zone '\(zone.name)'"))
+                }
+                if hitRapid {
+                    issues.append(GCodeIssue(severity: .error, message:
+                        "Toolpath '\(tp.name)' rapids through the clamp '\(zone.name)' below its top "
+                            + "(\(NumberFormat.compact(zone.height, maxDecimals: 3)) \(units.abbreviation) above the material); raise safe Z"))
+                }
+            }
+        }
+        return issues
+    }
+
+    /// True when segment a–b touches the even-odd region `loops`.
+    static func segmentHits(_ a: Vec2, _ b: Vec2, _ loops: [[Vec2]]) -> Bool {
+        var inside = false
+        for l in loops where PathGeometry.contains(l, a) { inside.toggle() }
+        if inside { return true }
+        for l in loops {
+            var p = l[l.count - 1]
+            for q in l {
+                if segmentsCross(a, b, p, q) { return true }
+                p = q
+            }
+        }
+        return false
+    }
+
+    private static func segmentsCross(_ a: Vec2, _ b: Vec2, _ c: Vec2, _ d: Vec2) -> Bool {
+        func orient(_ p: Vec2, _ q: Vec2, _ r: Vec2) -> Double { (q - p).cross(r - p) }
+        let d1 = orient(c, d, a), d2 = orient(c, d, b), d3 = orient(a, b, c), d4 = orient(a, b, d)
+        return ((d1 > 0) != (d2 > 0)) && ((d3 > 0) != (d4 > 0))
     }
 
     private static func count(_ n: Int, _ noun: String) -> String { "\(n) \(noun)\(n == 1 ? "" : "s")" }

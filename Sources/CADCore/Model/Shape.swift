@@ -55,10 +55,13 @@ public struct Layer: Codable, Hashable, Identifiable, Sendable {
     public var colorHex: String
     /// Set when the layer holds an extra nesting sheet (layout). Optional so older files decode.
     public var sheet: SheetSlot?
+    /// Set when the layer's closed vectors are clamp / fixture zones the tool must stay out
+    /// of (layout). They are never machined. Optional so older files decode.
+    public var keepOut: KeepOutZone?
 
     public init(id: UUID = UUID(), name: String, isVisible: Bool = true, isLocked: Bool = false,
-                colorHex: String = "#000000", sheet: SheetSlot? = nil) {
+                colorHex: String = "#000000", sheet: SheetSlot? = nil, keepOut: KeepOutZone? = nil) {
         self.id = id; self.name = name; self.isVisible = isVisible; self.isLocked = isLocked
-        self.colorHex = colorHex; self.sheet = sheet
+        self.colorHex = colorHex; self.sheet = sheet; self.keepOut = keepOut
     }
 }

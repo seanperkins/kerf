@@ -142,7 +142,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | done | P2 | CADCore/Layout/NestSheets.swift, Nest Parts overflow + Layout > Sheet on Material; LayoutMultiSheetTests |
 | `lay-tiling` | layout | Tiling large jobs | missing | P3 | Not implemented |
 | `lay-job-sheet` | layout | Job sheets / operator setup sheet | done | P1 | Model/JobSheet.swift (HTML), File > Export Job Sheet…; LayoutJobSheetTests |
-| `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | missing | P2 | Not implemented |
+| `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | done | P2 | CADCore/Layout/Fixtures.swift, Panels/FixturesSheet.swift, LayoutChecks.keepOut; LayoutFixture*Tests, LayoutKeepOutTests |
 | `lay-material-validation` | layout | Material-size and travel validation | done | P1 | PostCore/Validation/LayoutChecks.swift, Check Toolpaths "Material and machine"; LayoutChecksTests |
 | `lay-part-labels` | layout | Part labelling (IDs/names engraved or printed on parts) | missing | P3 | Not implemented |
 | `pv-3d-sim` | preview | 3D material removal simulation | done | P1 | CAMCore/Simulation/MaterialSimulator.swift, Preview/SimulationPreviewView.swift; SimMaterialSimulatorTests |

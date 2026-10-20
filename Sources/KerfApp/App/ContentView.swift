@@ -42,6 +42,7 @@ struct ContentView: View {
             case .saveAllToolpaths: SaveAllToolpathsSheet(document: document)
             case .validation: ValidationSheet(document: document)
             case .nesting: NestingSheet(document: document)
+            case .fixtures: FixturesSheet(document: document)
             }
         }
         .alert(item: $document.alert) { a in

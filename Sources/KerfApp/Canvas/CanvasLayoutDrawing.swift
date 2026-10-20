@@ -2,9 +2,32 @@ import AppKit
 import CADCore
 import CAMCore
 
-/// Layout overlays on the design canvas: outlines of nesting sheets parked beside the material.
+/// Layout overlays on the design canvas: clamp / keep-out zones and the outlines of nesting
+/// sheets parked beside the material.
 extension CanvasNSView {
     func drawLayoutOverlay(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform) {
+        drawKeepOutZones(ctx, doc, vt)
+        drawSheetSlots(ctx, doc, vt)
+    }
+
+    /// Clamp / keep-out zones: translucent red fill under their outlines.
+    private func drawKeepOutZones(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform) {
+        let d = doc.document
+        let layers = d.layers.filter { $0.keepOut != nil && $0.isVisible }
+        guard !layers.isEmpty else { return }
+        let ids = Set(layers.map(\.id))
+        ctx.saveGState()
+        ctx.setFillColor(NSColor.systemRed.withAlphaComponent(0.18).cgColor)
+        for s in d.shapes where ids.contains(s.layerID) && s.isClosed {
+            var t = vt
+            guard let p = cgPath(s).copy(using: &t) else { continue }
+            ctx.addPath(p)
+            ctx.fillPath(using: .evenOdd)
+        }
+        ctx.restoreGState()
+    }
+
+    private func drawSheetSlots(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform) {
         let d = doc.document
         guard NestSheets.hasSheets(d) else { return }
         let active = NestSheets.activeSheet(in: d)

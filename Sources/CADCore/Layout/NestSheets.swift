@@ -45,7 +45,7 @@ public enum NestSheets {
 
     /// Layers whose shapes belong to sheet `n` (sheet 1: every non-sheet layer).
     public static func layerIDs(ofSheet n: Int, in doc: Document) -> Set<UUID> {
-        if n == 1 { return Set(doc.layers.filter { $0.sheet == nil }.map(\.id)) }
+        if n == 1 { return Set(doc.layers.filter { $0.sheet == nil && $0.keepOut == nil }.map(\.id)) }
         return Set(doc.layers.filter { $0.sheet?.number == n }.map(\.id))
     }
 
@@ -62,16 +62,16 @@ public enum NestSheets {
         return doc.shapes.filter { layers.contains($0.layerID) }.map { $0.transformed(back) }
     }
 
-    /// Layers whose shapes are parked off the material.
+    /// Layers whose shapes are parked off the material (clamp / keep-out layers never move).
     public static func parkedLayerIDs(in doc: Document) -> Set<UUID> {
         guard hasSheets(doc) else { return [] }
         let a = activeSheet(in: doc)
-        return Set(doc.layers.map(\.id)).subtracting(layerIDs(ofSheet: a, in: doc))
+        return Set(doc.layers.filter { $0.keepOut == nil }.map(\.id)).subtracting(layerIDs(ofSheet: a, in: doc))
     }
 
-    /// The document as CAM sees it: parked sheets removed.
+    /// The document as CAM sees it: parked sheets and clamp / keep-out zones removed.
     public static func activeDocument(_ doc: Document) -> Document {
-        let parked = parkedLayerIDs(in: doc)
+        let parked = parkedLayerIDs(in: doc).union(Fixtures.keepOutLayerIDs(in: doc))
         guard !parked.isEmpty else { return doc }
         var d = doc
         d.shapes.removeAll { parked.contains($0.layerID) }

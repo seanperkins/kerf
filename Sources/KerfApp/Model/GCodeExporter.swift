@@ -53,6 +53,7 @@ enum GCodeExporter {
         let validator = GCodeValidator(profile: profile, job: doc.job, units: doc.units)
         var issues = validator.validate(toolpaths: toolpaths)
         issues += LayoutChecks.toolpaths(toolpaths, job: doc.job, units: doc.units)
+        issues += LayoutChecks.keepOut(toolpaths, zones: Fixtures.zones(in: doc), job: doc.job, units: doc.units)
         // The post header already prints W x H x T, so no extra material description.
         let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths)
         do {

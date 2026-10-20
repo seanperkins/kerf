@@ -119,6 +119,9 @@ struct KerfCommands: Commands {
                     }
                 }
                 .disabled(!(document.map { NestSheets.hasSheets($0.document) } ?? false))
+                Divider()
+                Button("Clamps and Fixture Holes…") { document?.sheet = .fixtures }
+                    .disabled(document == nil)
             }
             Divider()
             Toggle("Snap to Grid", isOn: Binding(get: { document?.snapToGrid ?? true }, set: { document?.snapToGrid = $0 }))
