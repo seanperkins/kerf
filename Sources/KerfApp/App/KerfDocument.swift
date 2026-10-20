@@ -541,7 +541,7 @@ final class KerfDocument: ReferenceFileDocument {
             if calculating.contains(id) { pendingRecalculation.insert(id); continue }
             calculating.insert(id)
             let generation = nextGeneration()
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let r = ToolpathCalculator.calculate(op, project: snapshot, library: library, designRevision: rev,
                                                      rapidRate: rapid)
                 DispatchQueue.main.async { [weak self] in

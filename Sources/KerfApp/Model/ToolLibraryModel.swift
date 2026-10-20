@@ -35,7 +35,6 @@ final class ToolLibraryModel: ObservableObject {
 
     /// A reasonable starting tool of `kind` in `units`.
     static func template(kind: ToolKind, units: LengthUnit, number: Int) -> Tool {
-        let f = LengthUnit.inch.factor(to: units)
         let base: Tool
         switch kind {
         case .endMill:
