@@ -13,23 +13,40 @@ struct RasterPattern {
     let lines: [[Segment]]
 
     init(region: [[Vec2]], angleDegrees: Double, spacing: Double) {
-        let a = angleDegrees * .pi / 180
-        let dir = Vec2(cos(a), sin(a))
-        let nrm = dir.perpendicular
-        direction = dir
-        let pts = region.flatMap { $0 }
-        guard pts.count >= 3, spacing > 0 else { lines = []; return }
-        let ss = pts.map { $0.dot(nrm) }, ts = pts.map { $0.dot(dir) }
-        let sMin = ss.min()!, sMax = ss.max()!
-        let tMin = ts.min()! - 1, tMax = ts.max()! + 1
-        let span = sMax - sMin
+        guard spacing > 0, let range = Self.offsetRange(region: region, angleDegrees: angleDegrees) else {
+            self.init(region: region, angleDegrees: angleDegrees, offsets: [])
+            return
+        }
+        let span = range.upperBound - range.lowerBound
         let n = max(1, Int(ceil(span / spacing - 1e-9)))
         // Inset the outermost lines a hair so they do not graze a boundary edge exactly
         // (Clipper's result for collinear open paths is ill-defined).
         let inset = min(span * 1e-6, 1e-6)
+        let offsets = span < 1e-12 ? [range.lowerBound]
+            : (0...n).map { range.lowerBound + inset + (span - 2 * inset) * Double($0) / Double(n) }
+        self.init(region: region, angleDegrees: angleDegrees, offsets: offsets)
+    }
+
+    /// Range of perpendicular offsets (`p · direction.perpendicular`) the region spans.
+    static func offsetRange(region: [[Vec2]], angleDegrees: Double) -> ClosedRange<Double>? {
+        let a = angleDegrees * .pi / 180
+        let nrm = Vec2(cos(a), sin(a)).perpendicular
+        let ss = region.flatMap { $0 }.map { $0.dot(nrm) }
+        guard ss.count >= 3, let lo = ss.min(), let hi = ss.max() else { return nil }
+        return lo...hi
+    }
+
+    /// Lines at explicit perpendicular offsets (in order).
+    init(region: [[Vec2]], angleDegrees: Double, offsets: [Double]) {
+        let a = angleDegrees * .pi / 180
+        let dir = Vec2(cos(a), sin(a))
+        let nrm = dir.perpendicular
+        direction = dir
+        let ts = region.flatMap { $0 }.map { $0.dot(dir) }
+        guard ts.count >= 3 else { lines = []; return }
+        let tMin = ts.min()! - 1, tMax = ts.max()! + 1
         var out: [[Segment]] = []
-        for k in 0...n {
-            let s = span < 1e-12 ? sMin : sMin + inset + (span - 2 * inset) * Double(k) / Double(n)
+        for s in offsets {
             let p0 = nrm * s + dir * tMin, p1 = nrm * s + dir * tMax
             let clipped = GeomKernel.boolean(.intersection, subject: [[p0, p1]], clip: region,
                                              fillRule: .evenOdd, subjectsOpen: true)
@@ -41,7 +58,6 @@ struct RasterPattern {
             }
             segs.sort { $0.start.dot(dir) < $1.start.dot(dir) }
             if !segs.isEmpty { out.append(segs) }
-            if span < 1e-12 { break }
         }
         lines = out
     }
