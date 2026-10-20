@@ -143,7 +143,7 @@ struct OperationEditor: View {
         Binding(get: { document.tabEditingOperationID == draft.id }, set: { on in
             if on {
                 save()
-                document.centerMode = .design2D
+                document.showDesignCanvas()
                 document.tabEditingOperationID = draft.id
             } else if document.tabEditingOperationID == draft.id {
                 document.tabEditingOperationID = nil

@@ -18,7 +18,12 @@ enum SidebarTab: String, CaseIterable, Identifiable {
 
 enum CenterMode: String, CaseIterable, Identifiable {
     case design2D = "2D", preview3D = "3D"
+    /// 2D design and 3D preview side by side.
+    case split = "2D | 3D"
     var id: String { rawValue }
+
+    var showsDesign: Bool { self != .preview3D }
+    var showsPreview: Bool { self != .design2D }
 }
 
 enum DocumentSheet: Identifiable, Equatable {
@@ -581,6 +586,11 @@ final class KerfDocument: ReferenceFileDocument {
         requestCanvas(.fit)
     }
 
+    /// Makes sure the 2D canvas is on screen (keeps the side-by-side view if it is showing).
+    func showDesignCanvas() {
+        if !centerMode.showsDesign { centerMode = .design2D }
+    }
+
     func requestCanvas(_ kind: CanvasRequest.Kind) {
         canvasRequest = CanvasRequest(kind: kind, serial: canvasRequest.serial + 1)
     }
@@ -616,7 +626,7 @@ final class KerfDocument: ReferenceFileDocument {
         } else {
             // A sheet and an alert cannot show together: report after the placement dialogs.
             deferredAlert = message
-            centerMode = .design2D
+            showDesignCanvas()
             showNextPlacement()
         }
     }

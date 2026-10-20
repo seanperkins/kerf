@@ -35,6 +35,7 @@ struct KerfCommands: Commands {
             Button("Zoom Out") { document?.requestCanvas(.zoomOut) }.keyboardShortcut("-", modifiers: .command)
             Divider()
             Button("Show 2D Design") { document?.centerMode = .design2D }.keyboardShortcut("1", modifiers: [.command, .option])
+            Button("Show 2D and 3D Side by Side") { document?.centerMode = .split }.keyboardShortcut("2", modifiers: [.command, .option])
             Button("Show 3D Preview") { document?.centerMode = .preview3D }.keyboardShortcut("3", modifiers: [.command, .option])
             Divider()
         }

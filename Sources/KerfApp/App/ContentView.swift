@@ -55,19 +55,28 @@ struct ContentView: View {
     @ViewBuilder private var center: some View {
         switch document.centerMode {
         case .design2D:
-            ZStack(alignment: .topLeading) {
-                DesignCanvas(document: document)
-                ToolPalette(document: document).padding(.leading, 28).padding(.top, 28)
-                if let id = document.tabEditingOperationID, let op = document.operation(id) {
-                    TabEditingBanner(name: op.setup.name, count: op.profileTabs?.manualTabs?.count ?? 0) {
-                        document.tabEditingOperationID = nil
-                    }
-                    .frame(maxWidth: .infinity, alignment: .top)
-                    .padding(.top, 28)
-                }
-            }
+            designPane
         case .preview3D:
             Preview3DHost(document: document)
+        case .split:
+            HSplitView {
+                designPane.frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+                Preview3DHost(document: document).frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var designPane: some View {
+        ZStack(alignment: .topLeading) {
+            DesignCanvas(document: document)
+            ToolPalette(document: document).padding(.leading, 28).padding(.top, 28)
+            if let id = document.tabEditingOperationID, let op = document.operation(id) {
+                TabEditingBanner(name: op.setup.name, count: op.profileTabs?.manualTabs?.count ?? 0) {
+                    document.tabEditingOperationID = nil
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.top, 28)
+            }
         }
     }
 
@@ -79,10 +88,11 @@ struct ContentView: View {
         ToolbarItemGroup(placement: .principal) {
             Picker("View", selection: $document.centerMode) {
                 Text("2D").tag(CenterMode.design2D)
+                Text("2D | 3D").tag(CenterMode.split)
                 Text("3D").tag(CenterMode.preview3D)
             }
             .pickerStyle(.segmented)
-            .help("Design canvas or 3D preview")
+            .help("Design canvas, both side by side, or 3D preview")
         }
         ToolbarItemGroup {
             Button { document.requestCanvas(.fit) } label: { Label("Zoom to Fit", systemImage: "arrow.up.left.and.arrow.down.right") }
