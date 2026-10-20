@@ -9,11 +9,14 @@ enum IOSheet: Equatable {
     case modelParts(ModelPartsForm)
     /// File > Job Notes…; `openedWithFile` = shown automatically as the file opened.
     case jobNotes(openedWithFile: Bool)
+    /// File > Clipart…
+    case clipart
 
     var id: String {
         switch self {
         case .modelParts(let f): return "parts-\(f.id)"
         case .jobNotes: return "notes"
+        case .clipart: return "clipart"
         }
     }
 }
@@ -26,6 +29,7 @@ struct IOSheetHost: View {
         switch sheet {
         case .modelParts(let form): ModelPartsSheet(document: document, form: form)
         case .jobNotes(let opened): JobNotesSheet(document: document, openedWithFile: opened)
+        case .clipart: ClipartBrowserSheet(document: document)
         }
     }
 }
