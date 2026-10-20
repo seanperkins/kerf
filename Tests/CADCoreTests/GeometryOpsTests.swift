@@ -134,6 +134,25 @@ import Testing
         #expect(approx(abs(area(PathOps.xor([a], [b]))), 6))
     }
 
+    @Test func sameDirectionHoleSurvivesOffsetAndBooleans() {
+        // Two CCW circles: the inner one is a hole under the even-odd rule the CAM side uses.
+        let ring = [ShapeFactory.circle(center: Vec2(10, 10), radius: 2),
+                    ShapeFactory.circle(center: Vec2(10, 10), radius: 1)]
+        let far = [ShapeFactory.rectangle(Rect2(x: 0, y: 0, width: 1, height: 1))]
+        func area(_ p: [Path]) -> Double { p.reduce(0) { $0 + $1.signedArea(tolerance: 0.001) } }
+        let ringArea = Double.pi * 3
+        let grown = PathOps.offset(ring, by: 0.1, tolerance: 0.001)
+        #expect(grown.count == 2)
+        #expect(approx(area(grown), Double.pi * (2.1 * 2.1 - 0.9 * 0.9), 0.02))
+        let welded = PathOps.union(shapes: [ring, far], tolerance: 0.001)
+        #expect(welded.count == 3)
+        #expect(approx(area(welded), ringArea + 1, 0.02))
+        #expect(approx(area(PathOps.subtract(far + [ShapeFactory.rectangle(Rect2(x: 5, y: 5, width: 10, height: 10))],
+                                              minus: ring, tolerance: 0.001)), 1 + 100 - ringArea, 0.02))
+        #expect(approx(area(PathOps.intersect(ring, with: [ShapeFactory.rectangle(Rect2(x: 5, y: 5, width: 10, height: 10))],
+                                              tolerance: 0.001)), ringArea, 0.02))
+    }
+
     @Test func offsetOpenMakesSleeve() {
         let line = Path(points: [Vec2(0, 0), Vec2(10, 0)], closed: false)
         let s = PathOps.offsetOpen([line], by: 1, end: .openButt)

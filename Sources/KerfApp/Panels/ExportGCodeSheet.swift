@@ -11,10 +11,12 @@ struct ExportGCodeSheet: View {
     @ObservedObject var catalog = PostProfileCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @State var scope: GCodeExportScope
-    @State private var groupByTool = true
+    @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var profileID: String = ""
     @State private var result: GCodeExportResult?
     @State private var confirmErrors = false
+    @State private var calcTask: Task<Void, Never>?
+    @State private var calculatingCount = 0
 
     private var profile: PostProfile { catalog.profile(id: profileID) }
 
@@ -39,6 +41,9 @@ struct ExportGCodeSheet: View {
             }
             .formStyle(.grouped)
             .frame(height: 230)
+            if calcTask != nil {
+                CalculationProgressView(count: calculatingCount) { stopCalculating() }
+            }
             issuesView
             HStack {
                 Button("Refresh") { run() }
@@ -46,7 +51,7 @@ struct ExportGCodeSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save…") { if result?.hasErrors == true { confirmErrors = true } else { save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(result?.text == nil)
+                    .disabled(result?.text == nil || calcTask != nil)
             }
         }
         .padding(20)
@@ -55,6 +60,7 @@ struct ExportGCodeSheet: View {
             profileID = document.postProfile.id
             run()
         }
+        .onDisappear { calcTask?.cancel() }
         .onChange(of: scope) { _, _ in run() }
         .onChange(of: groupByTool) { _, _ in run() }
         .onChange(of: profileID) { _, _ in run() }
@@ -92,8 +98,9 @@ struct ExportGCodeSheet: View {
                 .background(Color(nsColor: .textBackgroundColor))
                 .border(Color.secondary.opacity(0.3))
             }
-        } else {
-            ProgressView()
+        } else if calcTask == nil {
+            Label("Calculation stopped. Press Refresh to calculate and post.", systemImage: "pause.circle")
+                .foregroundStyle(.secondary)
         }
         Spacer(minLength: 0)
     }
@@ -105,10 +112,29 @@ struct ExportGCodeSheet: View {
         }
     }
 
+    /// Recalculates stale toolpaths in the background (exported toolpaths must reflect the
+    /// current parameters), then posts.
     private func run() {
-        // Make sure exported toolpaths reflect the current parameters.
+        calcTask?.cancel()
+        calcTask = nil
         let stale = targetOperations().filter { document.isStale($0) }
-        if !stale.isEmpty { document.calculateNow(stale) }
+        guard !stale.isEmpty else { post(); return }
+        result = nil
+        calculatingCount = stale.count
+        calcTask = Task { @MainActor in
+            let done = await document.calculateAndWait(stale)
+            guard done, !Task.isCancelled else { return }
+            calcTask = nil
+            post()
+        }
+    }
+
+    private func stopCalculating() {
+        calcTask?.cancel()
+        calcTask = nil
+    }
+
+    private func post() {
         let tps = GCodeExporter.toolpaths(scope: scope, operations: document.project.operations,
                                           results: document.results, groupByTool: groupByTool)
         let failed = targetOperations().compactMap { id -> String? in

@@ -11,10 +11,12 @@ struct SaveAllToolpathsSheet: View {
     @ObservedObject var document: KerfDocument
     @ObservedObject var catalog = PostProfileCatalog.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var mode: SaveAllMode = .oneFileGroupedByTool
+    @State private var mode: SaveAllMode = .oneFileInOrder
     @State private var profileID = ""
     @State private var posted: [(file: PlannedGCodeFile, result: GCodeExportResult)] = []
     @State private var confirmErrors = false
+    @State private var calcTask: Task<Void, Never>?
+    @State private var calculatingCount = 0
 
     private var profile: PostProfile { catalog.profile(id: profileID) }
     private var hasErrors: Bool { posted.contains { $0.result.hasErrors || $0.result.text == nil } }
@@ -33,7 +35,10 @@ struct SaveAllToolpathsSheet: View {
             }
             .formStyle(.grouped)
             .frame(height: 190)
-            if posted.isEmpty {
+            if calcTask != nil {
+                CalculationProgressView(count: calculatingCount) { calcTask?.cancel(); calcTask = nil }
+                Spacer()
+            } else if posted.isEmpty {
                 Label("There are no calculated, enabled toolpaths to save.", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
             } else {
@@ -56,6 +61,7 @@ struct SaveAllToolpathsSheet: View {
             profileID = document.postProfile.id
             run()
         }
+        .onDisappear { calcTask?.cancel() }
         .onChange(of: mode) { _, _ in run() }
         .onChange(of: profileID) { _, _ in run() }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
@@ -93,8 +99,21 @@ struct SaveAllToolpathsSheet: View {
     }
 
     private func run() {
+        calcTask?.cancel()
+        calcTask = nil
         let stale = document.project.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
-        if !stale.isEmpty { document.calculateNow(stale) }
+        guard !stale.isEmpty else { post(); return }
+        posted = []
+        calculatingCount = stale.count
+        calcTask = Task { @MainActor in
+            let done = await document.calculateAndWait(stale)
+            guard done, !Task.isCancelled else { return }
+            calcTask = nil
+            post()
+        }
+    }
+
+    private func post() {
         let files = GCodeBatchExport.plan(mode: mode, operations: document.project.operations,
                                           results: document.results, jobName: document.document.name, profile: profile)
         posted = GCodeBatchExport.post(files, project: document.project, profile: profile, jobName: document.document.name)

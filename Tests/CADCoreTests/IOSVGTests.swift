@@ -194,3 +194,11 @@ import Testing
         #expect(text.contains("Cut &amp; Drill"))
     }
 }
+
+@Test func svgPathReturningToStartWithoutZImportsClosed() throws {
+    let svg = #"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M10 10 L 50 10 L50 50 L10 10"/><path d="M0 0 L5 5"/></svg>"#
+    let r = try SVGImporter().importVectors(from: Data(svg.utf8), targetUnits: .inch)
+    #expect(r.shapes.count == 2)
+    #expect(r.shapes[0].isClosed)
+    #expect(!r.shapes[1].isClosed)
+}

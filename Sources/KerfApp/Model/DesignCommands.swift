@@ -84,8 +84,10 @@ enum DesignCommands {
         let first = shapes[0], rest = Array(shapes.dropFirst())
         let paths: [Path]
         switch mode {
-        case .union: paths = PathOps.union(shapes.flatMap(\.paths), tolerance: tol)
-        case .subtract: paths = PathOps.subtract(first.paths, minus: rest.flatMap(\.paths), tolerance: tol)
+        case .union: paths = PathOps.union(shapes: shapes.map(\.paths), tolerance: tol)
+        case .subtract:
+            let cutters = PathOps.union(shapes: rest.map(\.paths), tolerance: tol)
+            paths = PathOps.subtract(first.paths, minus: cutters, tolerance: tol)
         case .intersect:
             paths = rest.reduce(first.paths) { PathOps.intersect($0, with: $1.paths, tolerance: tol) }
         }

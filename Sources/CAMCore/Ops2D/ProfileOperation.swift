@@ -46,7 +46,12 @@ public struct ProfileOperation: ToolpathOperation {
                 builder: &builder, tolerance: tol)
         }
         var meta: [String: String] = [:]
-        if plan.droppedLoops > 0 { meta["warning"] = "\(plan.droppedLoops) vector(s) too small for the tool" }
+        var warnings: [String] = []
+        if plan.droppedLoops > 0 { warnings.append("\(plan.droppedLoops) vector(s) too small for the tool") }
+        if params.side != .on && !open.isEmpty {
+            warnings.append("\(open.count) open vector(s) cut on the line (close them to cut \(params.side == .outside ? "outside" : "inside"))")
+        }
+        if !warnings.isEmpty { meta["warning"] = warnings.joined(separator: "; ") }
         return [Toolpath(name: setup.name, operationID: setup.id, kind: .profile, tool: tool,
                          moves: builder.finish(), metadata: meta)]
     }

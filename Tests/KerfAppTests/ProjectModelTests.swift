@@ -58,6 +58,18 @@ import Testing
         #expect(OperationFactory.make(kind: .relief3D, project: p, library: .seeded, shapeIDs: []) != nil)
     }
 
+    @Test func reliefRoughsWithAnEndMillWhenFinishingWithABallNose() {
+        var p = AppTestSupport.project()
+        p.document.models.append(PlacedModel(name: "m", mesh: Mesh3D()))
+        let lib = ToolLibrary.seeded
+        guard case .relief3D(let r) = OperationFactory.make(kind: .relief3D, project: p, library: lib, shapeIDs: []) else {
+            Issue.record("expected relief"); return
+        }
+        #expect(lib.tool(id: r.setup.toolID)?.kind == .ballNose)
+        #expect(r.params.roughing.isEnabled)
+        #expect(lib.tool(id: r.params.roughing.toolID ?? r.setup.toolID)?.kind == .endMill)
+    }
+
     @Test func namesAreUnique() {
         var p = AppTestSupport.project()
         let a = OperationFactory.make(kind: .profile, project: p, library: .seeded, shapeIDs: [])!

@@ -9,7 +9,9 @@ struct ValidationSheet: View {
     @ObservedObject var document: KerfDocument
     @Environment(\.dismiss) private var dismiss
     @State private var report: ValidationReport?
-    @State private var groupByTool = true
+    @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
+    @State private var calcTask: Task<Void, Never>?
+    @State private var calculatingCount = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -17,6 +19,9 @@ struct ValidationSheet: View {
                 Text("Check Toolpaths").font(.title2.bold())
                 Spacer()
                 Text(document.postProfile.name).foregroundStyle(.secondary)
+            }
+            if calcTask != nil {
+                CalculationProgressView(count: calculatingCount) { calcTask?.cancel(); calcTask = nil }
             }
             if let r = report {
                 summary(r)
@@ -46,7 +51,7 @@ struct ValidationSheet: View {
                     }
                 }
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spacer()
             }
             HStack {
                 Toggle("Combined program grouped by tool", isOn: $groupByTool)
@@ -58,6 +63,7 @@ struct ValidationSheet: View {
         .padding(20)
         .frame(width: 640, height: 560)
         .onAppear { run() }
+        .onDisappear { calcTask?.cancel() }
         .onChange(of: groupByTool) { _, _ in run() }
     }
 
@@ -75,8 +81,20 @@ struct ValidationSheet: View {
     }
 
     private func run() {
+        calcTask?.cancel()
+        calcTask = nil
         let stale = document.project.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
-        if !stale.isEmpty { document.calculateNow(stale) }
+        guard !stale.isEmpty else { check(); return }
+        calculatingCount = stale.count
+        calcTask = Task { @MainActor in
+            let done = await document.calculateAndWait(stale)
+            guard done, !Task.isCancelled else { return }
+            calcTask = nil
+            check()
+        }
+    }
+
+    private func check() {
         report = ValidationReport.make(project: document.project, results: document.results,
                                        profile: document.postProfile, groupByTool: groupByTool)
     }

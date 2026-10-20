@@ -117,7 +117,15 @@ enum OperationFactory {
             guard let model = doc.models.first else { return nil }
             var s = setup
             s.shapeIDs = []
-            let p = Relief3DParameters(modelID: model.id, boundaryShapeIDs: shapeIDs).scaled(by: f)
+            var p = Relief3DParameters(modelID: model.id, boundaryShapeIDs: shapeIDs).scaled(by: f)
+            // Roughing needs an end mill; the primary (finishing) tool is usually a ball nose.
+            if library.tool(id: toolID)?.kind != .endMill {
+                if let mill = library.tools.first(where: { $0.kind == .endMill }) {
+                    p.roughing.toolID = mill.id
+                } else {
+                    p.roughing.isEnabled = false
+                }
+            }
             return .relief3D(Relief3DOperation(setup: s, params: p))
         }
     }

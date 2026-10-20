@@ -57,15 +57,38 @@ public struct TemplatePostProcessor: PostProcessor {
 }
 
 public enum ToolpathOrdering {
-    /// Combined export: stable-group toolpaths by tool (first appearance order) so each tool
-    /// is loaded once.
+    /// Combined export: reduces tool changes by letting a toolpath join an earlier group that
+    /// uses the same tool, but only when the move is safe. A toolpath never moves ahead of:
+    ///  * an earlier toolpath of its own operation (clearance before primary, flat before V);
+    ///  * an earlier toolpath whose XY footprint (padded by both tool radii) overlaps its own
+    ///    (rest machining, carving after pocketing, etc.);
+    /// and profile toolpaths never move at all (a through-cut or final profile stays where the
+    /// user put it). Otherwise the user's order is kept.
     public static func groupedByTool(_ toolpaths: [Toolpath]) -> [Toolpath] {
-        var order: [UUID] = []
-        var groups: [UUID: [Toolpath]] = [:]
+        var groups: [[Toolpath]] = []
         for tp in toolpaths {
-            if groups[tp.tool.id] == nil { order.append(tp.tool.id) }
-            groups[tp.tool.id, default: []].append(tp)
+            guard let g = groups.lastIndex(where: { $0.first?.tool.id == tp.tool.id }) else {
+                groups.append([tp]); continue
+            }
+            let jumped = groups[(g + 1)...].flatMap { $0 }
+            if jumped.isEmpty || canMove(tp, aheadOf: jumped) {
+                groups[g].append(tp)
+            } else {
+                groups.append([tp])
+            }
         }
-        return order.flatMap { groups[$0] ?? [] }
+        return groups.flatMap { $0 }
+    }
+
+    static func canMove(_ tp: Toolpath, aheadOf others: [Toolpath]) -> Bool {
+        if tp.kind == .profile { return false }
+        let r = tp.tool.diameter / 2
+        let box = tp.xyBounds.insetBy(-r)
+        for o in others {
+            if let op = tp.operationID, op == o.operationID { return false }
+            if box.isEmpty || o.xyBounds.isEmpty { continue }
+            if box.intersects(o.xyBounds.insetBy(-o.tool.diameter / 2)) { return false }
+        }
+        return true
     }
 }

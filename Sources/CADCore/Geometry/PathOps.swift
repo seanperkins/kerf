@@ -3,32 +3,43 @@ import Foundation
 /// Shape-level geometry operations (boolean, offset, join). Booleans/offsets return
 /// polyline paths (arcs are flattened with `tolerance`).
 public enum PathOps {
+    // Each `[Path]` argument below is ONE shape's loops, read with the even-odd rule (the rule
+    // the CAM side uses): a loop inside another is a hole whatever its direction. Loops are
+    // normalised with an even-odd union before the operation runs.
+
+    /// Union of closed paths, each path a separate filled region (non-zero fill). Use
+    /// `union(shapes:)` to keep the holes of compound shapes.
     public static func union(_ paths: [Path], tolerance: Double = Path.defaultTolerance) -> [Path] {
         let polys = closedPolygons(paths, tolerance)
         return wrap(GeomKernel.boolean(.union, subject: polys, clip: []))
     }
 
-    /// Union of `a` with `b` (both treated as filled regions, non-zero fill).
+    /// Union of several shapes; each shape's loops are read even-odd, so holes survive.
+    public static func union(shapes: [[Path]], tolerance: Double = Path.defaultTolerance) -> [Path] {
+        wrap(GeomKernel.boolean(.union, subject: shapes.flatMap { regions($0, tolerance) }, clip: []))
+    }
+
+    /// Union of `a` with `b` (each one shape, even-odd).
     public static func union(_ a: [Path], _ b: [Path], tolerance: Double = Path.defaultTolerance) -> [Path] {
-        wrap(GeomKernel.boolean(.union, subject: closedPolygons(a, tolerance), clip: closedPolygons(b, tolerance)))
+        wrap(GeomKernel.boolean(.union, subject: regions(a, tolerance), clip: regions(b, tolerance)))
     }
 
     public static func subtract(_ a: [Path], minus b: [Path], tolerance: Double = Path.defaultTolerance) -> [Path] {
-        wrap(GeomKernel.boolean(.difference, subject: closedPolygons(a, tolerance), clip: closedPolygons(b, tolerance)))
+        wrap(GeomKernel.boolean(.difference, subject: regions(a, tolerance), clip: regions(b, tolerance)))
     }
 
     public static func intersect(_ a: [Path], with b: [Path], tolerance: Double = Path.defaultTolerance) -> [Path] {
-        wrap(GeomKernel.boolean(.intersection, subject: closedPolygons(a, tolerance), clip: closedPolygons(b, tolerance)))
+        wrap(GeomKernel.boolean(.intersection, subject: regions(a, tolerance), clip: regions(b, tolerance)))
     }
 
     public static func xor(_ a: [Path], _ b: [Path], tolerance: Double = Path.defaultTolerance) -> [Path] {
-        wrap(GeomKernel.boolean(.xor, subject: closedPolygons(a, tolerance), clip: closedPolygons(b, tolerance)))
+        wrap(GeomKernel.boolean(.xor, subject: regions(a, tolerance), clip: regions(b, tolerance)))
     }
 
     /// Offset closed paths outward (positive) or inward (negative).
     public static func offset(_ paths: [Path], by distance: Double, join: GeomKernel.Join = .round,
                               tolerance: Double = Path.defaultTolerance) -> [Path] {
-        wrap(GeomKernel.offset(closedPolygons(paths, tolerance), by: distance, join: join,
+        wrap(GeomKernel.offset(regions(paths, tolerance), by: distance, join: join,
                                arcTolerance: tolerance))
     }
 
@@ -86,6 +97,14 @@ public enum PathOps {
     }
 
     // MARK: - Helpers
+
+    /// One shape's closed loops as a clean region: even-odd union, so holes come out wound
+    /// opposite to their outer loop and non-zero operations keep them.
+    static func regions(_ paths: [Path], _ tol: Double) -> [[Vec2]] {
+        let polys = closedPolygons(paths, tol)
+        guard polys.count > 1 else { return polys }
+        return GeomKernel.boolean(.union, subject: polys, clip: [], fillRule: .evenOdd)
+    }
 
     static func closedPolygons(_ paths: [Path], _ tol: Double) -> [[Vec2]] {
         paths.filter(\.isClosed).map { $0.flattened(tolerance: tol) }

@@ -6,11 +6,12 @@ import SwiftUI
 /// enabled, calculated toolpaths. The 2D overlay is drawn by the design canvas itself.
 struct Preview3DHost: View {
     @ObservedObject var document: KerfDocument
+    @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
 
     /// Enabled, calculated toolpaths in machining order.
     var toolpaths: [Toolpath] {
         GCodeExporter.toolpaths(scope: .all, operations: document.project.operations, results: document.results,
-                                groupByTool: false)
+                                groupByTool: groupByTool)
     }
 
     var body: some View {

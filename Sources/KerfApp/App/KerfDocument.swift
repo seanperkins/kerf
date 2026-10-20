@@ -82,6 +82,11 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var showToolpaths = true
     @Published var results: [UUID: ToolpathResult] = [:]
     @Published var calculating: Set<UUID> = []
+    /// Operations asked to recalculate while already calculating.
+    private var pendingRecalculation: Set<UUID> = []
+    /// Monotonic stamp per calculation; a result is stored only if newer than the current one.
+    private var generationCounter = 0
+    private var resultGeneration: [UUID: Int] = [:]
     @Published var activeTool: CanvasTool = .select {
         didSet { if activeTool != .nodeEdit { nodeSelection = [] } }
     }
@@ -430,20 +435,24 @@ final class KerfDocument: ReferenceFileDocument {
         return r.operation != op || r.designRevision != designRevision
     }
 
-    /// Generates toolpaths off the main thread; results arrive asynchronously.
+    /// Generates toolpaths off the main thread; results arrive asynchronously. A request for an
+    /// operation that is already calculating is queued and runs when the current one finishes.
     func calculate(_ ids: [UUID]) {
         let snapshot = project, library = toolLibrary.library, rev = designRevision
         let rapid = rapidRateInDocumentUnits
         for id in ids {
-            guard let op = operation(id), !calculating.contains(id) else { continue }
+            guard let op = operation(id) else { continue }
+            if calculating.contains(id) { pendingRecalculation.insert(id); continue }
             calculating.insert(id)
+            let generation = nextGeneration()
             DispatchQueue.global(qos: .userInitiated).async {
                 let r = ToolpathCalculator.calculate(op, project: snapshot, library: library, designRevision: rev,
                                                      rapidRate: rapid)
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
                     self.calculating.remove(id)
-                    if self.operation(id) != nil { self.results[id] = r }
+                    self.store(r, for: id, generation: generation)
+                    if self.pendingRecalculation.remove(id) != nil { self.calculate([id]) }
                 }
             }
         }
@@ -451,14 +460,54 @@ final class KerfDocument: ReferenceFileDocument {
 
     func calculateAll() { calculate(project.operations.filter(\.setup.isEnabled).map(\.id)) }
 
-    /// Calculates synchronously (used before exporting so the file matches the parameters).
+    /// Calculates synchronously (tests and small jobs). The UI uses `calculateAndWait`.
     func calculateNow(_ ids: [UUID]) {
         for id in ids {
             guard let op = operation(id) else { continue }
-            results[id] = ToolpathCalculator.calculate(op, project: project, library: toolLibrary.library,
-                                                       designRevision: designRevision,
-                                                       rapidRate: rapidRateInDocumentUnits)
+            let generation = nextGeneration()
+            let r = ToolpathCalculator.calculate(op, project: project, library: toolLibrary.library,
+                                                 designRevision: designRevision, rapidRate: rapidRateInDocumentUnits)
+            store(r, for: id, generation: generation)
         }
+    }
+
+    /// Calculates `ids` on a background queue and returns when all results are stored. Returns
+    /// false when the calling task was cancelled (results finished so far are still kept).
+    @MainActor
+    func calculateAndWait(_ ids: [UUID]) async -> Bool {
+        let snapshot = project, library = toolLibrary.library, rev = designRevision
+        let rapid = rapidRateInDocumentUnits
+        let jobs = ids.compactMap { id in operation(id).map { (id, $0, nextGeneration()) } }
+        let flag = CancellationFlag()
+        let finished: [(UUID, ToolpathResult, Int)] = await withTaskCancellationHandler {
+            await withCheckedContinuation { cont in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    var out: [(UUID, ToolpathResult, Int)] = []
+                    for (id, op, g) in jobs {
+                        if flag.isCancelled { break }
+                        out.append((id, ToolpathCalculator.calculate(op, project: snapshot, library: library,
+                                                                     designRevision: rev, rapidRate: rapid), g))
+                    }
+                    cont.resume(returning: out)
+                }
+            }
+        } onCancel: {
+            flag.cancel()
+        }
+        for (id, r, g) in finished { store(r, for: id, generation: g) }
+        return !Task.isCancelled && finished.count == jobs.count
+    }
+
+    private func nextGeneration() -> Int {
+        generationCounter += 1
+        return generationCounter
+    }
+
+    /// Stores a result unless a newer calculation of the same operation already landed.
+    private func store(_ r: ToolpathResult, for id: UUID, generation: Int) {
+        guard operation(id) != nil, generation > resultGeneration[id] ?? 0 else { return }
+        results[id] = r
+        resultGeneration[id] = generation
     }
 
     var totalEstimatedSeconds: TimeInterval {
@@ -562,4 +611,12 @@ final class PostProfileCatalog: ObservableObject {
         profiles.first { $0.id == id } ?? profiles.first { $0.id == PostProfileStore.defaultProfileID }
             ?? BuiltInPosts.avidMach4Inch
     }
+}
+
+/// Thread-safe cancel flag shared with a background calculation.
+final class CancellationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
 }

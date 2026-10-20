@@ -82,6 +82,45 @@ import Testing
         #expect(doc.isStale(id))
     }
 
+    @MainActor
+    private func waitForCalculations(_ doc: KerfDocument) async throws {
+        for _ in 0..<2000 where !doc.calculating.isEmpty { try await Task.sleep(nanoseconds: 5_000_000) }
+        #expect(doc.calculating.isEmpty)
+    }
+
+    @MainActor @Test func backgroundCalculationCanBeAwaited() async {
+        let (doc, um) = makeDoc()
+        doc.selectAll()
+        step(um) { doc.addOperation(.profile) }
+        let id = doc.project.operations[0].id
+        #expect(await doc.calculateAndWait([id]))
+        #expect(doc.results[id] != nil && !doc.isStale(id))
+    }
+
+    @MainActor @Test func lateBackgroundResultDoesNotOverwriteNewerOne() async throws {
+        let (doc, um) = makeDoc()
+        doc.selectAll()
+        step(um) { doc.addOperation(.profile) }
+        let id = doc.project.operations[0].id
+        doc.calculate([id])                       // snapshot before the move
+        step(um) { doc.translateSelection(by: Vec2(0, 1)) }
+        doc.calculateNow([id])                    // fresh result
+        try await waitForCalculations(doc)
+        #expect(!doc.isStale(id))
+    }
+
+    @MainActor @Test func calculateWhileCalculatingQueuesARerun() async throws {
+        let (doc, um) = makeDoc()
+        doc.selectAll()
+        step(um) { doc.addOperation(.profile) }
+        let id = doc.project.operations[0].id
+        doc.calculate([id])
+        step(um) { doc.translateSelection(by: Vec2(0, 1)) }
+        doc.calculate([id])                       // previously dropped
+        try await waitForCalculations(doc)
+        #expect(doc.results[id] != nil && !doc.isStale(id))
+    }
+
     @Test func snapshotEmbedsReferencedTools() throws {
         let (doc, um) = makeDoc()
         step(um) { doc.addOperation(.vcarve) }
@@ -122,9 +161,11 @@ import Testing
 }
 
 @Suite struct GCodeExporterTests {
-    func toolpath(_ tool: Tool, name: String) -> Toolpath {
-        Toolpath(name: name, kind: .profile, tool: tool,
-                 moves: [.rapid(to: Vec3(0, 0, 0.2)), .linear(to: Vec3(1, 0, -0.1), feed: 50), .rapid(to: Vec3(1, 0, 0.2))])
+    /// Pocket-like toolpath at `x` (separate x values keep footprints apart, so grouping may move them).
+    func toolpath(_ tool: Tool, name: String, x: Double = 0) -> Toolpath {
+        Toolpath(name: name, kind: .pocket, tool: tool,
+                 moves: [.rapid(to: Vec3(x, 0, 0.2)), .linear(to: Vec3(x + 1, 0, -0.1), feed: 50),
+                         .rapid(to: Vec3(x + 1, 0, 0.2))])
     }
 
     @Test func combinedExportGroupsByToolAndSkipsDisabled() {
@@ -140,7 +181,7 @@ import Testing
             s.toolID = t.id
             op.editableSetup = s
             ops.append(op)
-            results[op.id] = ToolpathResult(toolpaths: [toolpath(t, name: "tp\(i)")], error: nil, operation: op,
+            results[op.id] = ToolpathResult(toolpaths: [toolpath(t, name: "tp\(i)", x: Double(i) * 10)], error: nil, operation: op,
                                             designRevision: 0, estimatedSeconds: 1)
         }
         let grouped = GCodeExporter.toolpaths(scope: .all, operations: ops, results: results, groupByTool: true)

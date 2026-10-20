@@ -61,7 +61,7 @@ enum GCodeBatchExport {
                     title: op.setup.name, toolpaths: tps))
             }
         case .filePerTool:
-            let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: true)
+            let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: false)
             var order: [UUID] = []
             var groups: [UUID: [Toolpath]] = [:]
             for tp in tps {

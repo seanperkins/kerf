@@ -125,7 +125,9 @@ public struct SVGImporter: VectorImporter {
                 warnOnce("Embedded images were skipped.")
             default:
                 if let paths = SVGImporter.geometry(of: n), !paths.isEmpty {
-                    let doc = paths.map { $0.transformed(ctm) }
+                    // A subpath that returns to its start without "Z" is still a closed vector.
+                    let doc = PathGeometry.closeNearlyClosed(paths.map { $0.transformed(ctm) },
+                                                             tolerance: units == .inch ? 0.0005 : 0.01)
                     shapes.append(Shape(name: n.id ?? n.name, layerID: layerID, paths: doc,
                                         origin: .imported(format: "svg")))
                 }

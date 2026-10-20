@@ -26,12 +26,12 @@ private enum Job {
 }
 
 @Suite struct JobSummaryTests {
-    @Test func groupedByToolLoadsEachToolOnce() {
+    @Test func groupingNeverPullsAPocketAheadOfOverlappingVCarve() {
+        // The pocket (T1) is on the same shape as the V-carve (T6), so it keeps its place.
         let p = Job.project()
         let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true)
-        #expect(s.sequence.map(\.number) == [1, 6])
-        #expect(s.toolChanges == 1)
-        #expect(s.sequence[0].toolpathNames.count == 2)
+        #expect(s.sequence.map(\.number) == [1, 6, 1])
+        #expect(s.toolChanges == 2)
     }
 
     @Test func listOrderChangesToolWheneverItDiffers() {
@@ -154,6 +154,8 @@ private enum Job {
         guard case .inlay(let f) = ops[0], case .inlay(let m) = ops[1] else { Issue.record("expected inlays"); return }
         #expect(f.params.part == .female && m.params.part == .male)
         #expect(f.setup.name == "Inlay 1 Pocket" && m.setup.name == "Inlay 1 Plug")
+        // The plug is cut on another board, so it must not be exported with the pocket by default.
+        #expect(f.setup.isEnabled && !m.setup.isEnabled)
         #expect(m.params.maleStartDepth == 0.15 && f.params.pocketDepth == 0.25)
         #expect(f.setup.toolID == ToolLibrary.seeded.tools[5].id)
         #expect(abs(w.bottomGap - 0.1) < 1e-12)

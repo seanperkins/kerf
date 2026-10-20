@@ -6,7 +6,7 @@ import SwiftUI
 /// program (grouped by tool, as "Save All Toolpaths" does by default).
 struct ToolChangeSummaryView: View {
     @ObservedObject var document: KerfDocument
-    @State private var groupByTool = true
+    @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var expanded = false
 
     var body: some View {

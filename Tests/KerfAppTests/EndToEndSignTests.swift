@@ -121,6 +121,11 @@ struct EndToEndSignTests {
         #expect(text.contains("T6 M6"))     // 60 deg V-bit
         #expect(text.contains("T1 M6"))     // 1/4" end mill
         #expect(text.hasSuffix("M30\n") || text.hasSuffix("M30"))
+        // Grouping by tool must not cut the sign free before it is carved and drilled.
+        let profileAt = try #require(text.range(of: "Toolpath: Profile 1")?.lowerBound)
+        let vcarveAt = try #require(text.range(of: "Toolpath: V-Carve 1")?.lowerBound)
+        let drillAt = try #require(text.range(of: "Toolpath: Drilling 1")?.lowerBound)
+        #expect(vcarveAt < profileAt && drillAt < profileAt)
         // Deepest Z: profile through the 0.75" stock (+ any cut-through allowance).
         let zs = text.split(separator: "\n").compactMap { line -> Double? in
             guard let r = line.range(of: #"Z(-?\d+(\.\d+)?)"#, options: .regularExpression),

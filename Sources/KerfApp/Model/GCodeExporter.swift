@@ -22,6 +22,10 @@ struct GCodeExportResult {
 
 /// Collects toolpaths, runs the post processor and the validator. Pure (no UI).
 enum GCodeExporter {
+    /// UserDefaults key for the shared "group by tool" choice. The export, validation and
+    /// tool-change summary panels and the 3D preview all read it, so the simulated order is
+    /// always the exported order. Off by default: the user's toolpath order is kept.
+    static let groupByToolKey = "kerf.groupByTool"
     static func toolpaths(scope: GCodeExportScope, operations: [AnyOperation],
                           results: [UUID: ToolpathResult], groupByTool: Bool) -> [Toolpath] {
         switch scope {

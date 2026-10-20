@@ -181,3 +181,16 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
     #expect(has(issues, "zero or negative feed"))
     #expect(!has(issues, "allowed depth"))
 }
+
+@Test func flagsInlayPocketAndPlugInOneProgram() {
+    let tool = ToolLibrary.seeded.tools[5]
+    func part(_ name: String) -> Toolpath {
+        Toolpath(name: name, kind: .inlay, tool: tool,
+                 moves: [.rapid(to: Vec3(1, 1, 0.5)), .linear(to: Vec3(1, 1, -0.1), feed: 20),
+                         .rapid(to: Vec3(1, 1, 0.5))],
+                 metadata: ["part": name])
+    }
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job(zZero: .materialTop), units: .inch)
+    #expect(has(v.validate(toolpaths: [part("female"), part("male")]), "same program"))
+    #expect(!has(v.validate(toolpaths: [part("female")]), "same program"))
+}

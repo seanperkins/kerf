@@ -334,7 +334,7 @@ struct Relief3DForm: View {
         InspectorSection(title: "Roughing") {
             Toggle("Rough first", isOn: $params.roughing.isEnabled)
             if params.roughing.isEnabled {
-                OptionalToolPicker(title: "Roughing tool", toolID: $params.roughing.toolID, library: library, kinds: [.endMill, .ballNose])
+                OptionalToolPicker(title: "Roughing tool", toolID: $params.roughing.toolID, library: library, kinds: [.endMill])
                 LengthField("Allowance", value: $params.roughing.allowance, units: units)
                 OptionalLengthField(label: "Pass depth", value: $params.roughing.passDepth, units: units,
                                     defaultValue: units == .inch ? 0.125 : 3)

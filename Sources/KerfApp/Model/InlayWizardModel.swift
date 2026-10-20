@@ -58,10 +58,14 @@ struct InlayWizardModel: Equatable {
                         flatClearanceToolID: clearanceToolID, mirrorMale: mirrorPlug, maleBoundaryMargin: plugMargin)
     }
 
-    /// Female pocket then male plug.
+    /// Female pocket then male plug. The plug is generated in place over the pocket and is cut
+    /// on a separate board, so it starts disabled: "Export all enabled toolpaths" then never
+    /// carves it into the board that holds the pocket. Enable it (and disable the pocket) when
+    /// the plug board is on the machine.
     func makeOperations() -> [AnyOperation] {
         [(InlayPart.female, "Pocket"), (.male, "Plug")].map { part, suffix in
-            let setup = OperationSetup(name: "\(baseName) \(suffix)", toolID: vbitID, shapeIDs: shapeIDs)
+            var setup = OperationSetup(name: "\(baseName) \(suffix)", toolID: vbitID, shapeIDs: shapeIDs)
+            setup.isEnabled = part == .female
             return .inlay(InlayOperation(setup: setup, params: parameters(part: part)))
         }
     }

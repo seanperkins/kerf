@@ -109,6 +109,14 @@ func dxf(header: [(Int, String)] = [], entities: [(Int, String)]) -> Data {
         #expect(p.segments.count == 2 && p.segments[0].end == Vec2(5, 5) && p.end == Vec2(10, 0))
     }
 
+    @Test func lwpolylineReturningToStartWithoutClosedFlagImportsClosed() throws {
+        let pl: [(Int, String)] = [(0, "LWPOLYLINE"), (8, "0"), (90, "4"), (70, "0"),
+                                   (10, "0"), (20, "0"), (10, "4"), (20, "0"), (10, "2"), (20, "3"),
+                                   (10, "0"), (20, "0")]
+        let r = try DXFImporter().importVectors(from: dxf(entities: pl), targetUnits: .millimeter)
+        #expect(r.shapes.count == 1 && r.shapes[0].isClosed)
+    }
+
     @Test func rejectsGarbage() {
         #expect(throws: KerfIOError.self) { try DXFImporter().importVectors(from: Data("hello\nworld\n".utf8), targetUnits: .inch) }
     }

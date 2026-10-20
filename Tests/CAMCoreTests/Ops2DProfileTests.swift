@@ -239,3 +239,11 @@ func ops2DProfileLeadInStartsInWaste(type: LeadType) throws {
                              params: tiny.params).generate(in: small)
     }
 }
+
+@Test func ops2DProfileWarnsWhenOpenVectorsAreCutOnTheLine() throws {
+    let open = Path(points: [Vec2(2, 2), Vec2(4, 2), Vec2(3, 4)], closed: false)
+    let (outside, _) = try profile([open], side: .outside)
+    #expect(outside.metadata["warning"]?.contains("open vector") == true)
+    let (on, _) = try profile([open], side: .on)
+    #expect(on.metadata["warning"] == nil)
+}
