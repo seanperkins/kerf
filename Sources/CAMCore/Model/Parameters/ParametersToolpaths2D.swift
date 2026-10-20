@@ -93,3 +93,17 @@ public struct HoleMillParameters: Codable, Hashable, Sendable {
         self.direction = direction
     }
 }
+
+/// Prism carving: a V-bit runs round each shape's outline deep enough that its flanks meet in a
+/// sharp ridge along the shape's centreline, so the shape is carved as a bevelled prism.
+public struct PrismParameters: Codable, Hashable, Sendable {
+    /// Depth limit; wide parts deeper than this keep a flat top. nil = no limit.
+    public var maxDepth: Double?
+    /// Max depth per pass; nil = the tool's stepdown.
+    public var passDepth: Double?
+    public var direction: CutDirection
+
+    public init(maxDepth: Double? = nil, passDepth: Double? = nil, direction: CutDirection = .climb) {
+        self.maxDepth = maxDepth; self.passDepth = passDepth; self.direction = direction
+    }
+}

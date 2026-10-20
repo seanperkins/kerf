@@ -19,6 +19,7 @@ extension AnyOperation {
             case .engrave(var o): o.setup = newValue; self = .engrave(o)
             case .chamfer(var o): o.setup = newValue; self = .chamfer(o)
             case .holeMill(var o): o.setup = newValue; self = .holeMill(o)
+            case .prism(var o): o.setup = newValue; self = .prism(o)
             }
         }
     }
@@ -41,7 +42,7 @@ extension AnyOperation {
 /// in inches; millimetre documents get them scaled by 25.4).
 enum OperationFactory {
     /// Kinds offered in the "New toolpath" menu, in VCarve-like order.
-    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .inlay, .fluting, .texture, .relief3D]
+    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .fluting, .texture, .relief3D]
 
     /// Title in the "New toolpath" menus (Inlay opens the pocket + plug wizard).
     static func menuTitle(_ kind: OperationKind) -> String {
@@ -52,7 +53,7 @@ enum OperationFactory {
     static func primaryToolTitle(_ kind: OperationKind) -> String {
         switch kind {
         case .pocket: return "Finish tool"
-        case .vcarve, .inlay, .chamfer: return "V-bit"
+        case .vcarve, .inlay, .chamfer, .prism: return "V-bit"
         case .drill: return "Drill"
         case .relief3D: return "Finishing tool"
         default: return "Tool"
@@ -64,7 +65,7 @@ enum OperationFactory {
         switch kind {
         case .profile, .pocket, .holeMill: return [.endMill, .ballNose]
         case .drill: return [.drill, .endMill]
-        case .vcarve, .inlay, .chamfer: return [.vBit, .engraving]
+        case .vcarve, .inlay, .chamfer, .prism: return [.vBit, .engraving]
         case .engrave: return [.engraving, .vBit, .ballNose, .endMill]
         case .fluting: return [.ballNose, .vBit, .endMill]
         case .texture: return [.ballNose, .vBit]
@@ -121,6 +122,8 @@ enum OperationFactory {
             return .engrave(EngraveOperation(setup: setup, params: EngraveParameters().scaled(by: f)))
         case .chamfer:
             return .chamfer(ChamferOperation(setup: setup, params: ChamferParameters().scaled(by: f)))
+        case .prism:
+            return .prism(PrismOperation(setup: setup, params: PrismParameters().scaled(by: f)))
         case .holeMill:
             var p = HoleMillParameters().scaled(by: f)
             p.cutDepth = min(p.cutDepth, thickness)

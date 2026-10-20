@@ -116,6 +116,14 @@ extension HoleMillParameters {
     }
 }
 
+extension PrismParameters {
+    func scaled(by f: Double) -> PrismParameters {
+        var p = self
+        p.maxDepth = maxDepth.map { $0 * f }; p.passDepth = passDepth.map { $0 * f }
+        return p
+    }
+}
+
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
         switch self {
@@ -130,6 +138,7 @@ extension AnyOperation {
         case .engrave(var o): o.params = o.params.scaled(by: f); return .engrave(o)
         case .chamfer(var o): o.params = o.params.scaled(by: f); return .chamfer(o)
         case .holeMill(var o): o.params = o.params.scaled(by: f); return .holeMill(o)
+        case .prism(var o): o.params = o.params.scaled(by: f); return .prism(o)
         }
     }
 }

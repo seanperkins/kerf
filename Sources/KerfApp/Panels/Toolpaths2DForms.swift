@@ -208,3 +208,20 @@ struct HoleMillForm: View {
         }
     }
 }
+
+struct PrismForm: View {
+    @Binding var params: PrismParameters
+    var units: LengthUnit
+
+    var body: some View {
+        InspectorSection(title: "Prism Carve") {
+            OptionalLengthField(label: "Max depth", value: $params.maxDepth, units: units,
+                                defaultValue: units == .inch ? 0.25 : 6)
+            OptionalLengthField(label: "Pass depth", value: $params.passDepth, units: units,
+                                defaultValue: units == .inch ? 0.1 : 2.5)
+            DirectionPicker(direction: $params.direction)
+            Text("The V-bit runs round each closed shape at the depth where its flanks meet along the shape's centreline, so the shape is left as a bevelled prism with a sharp ridge. Each shape gets its own depth; with a max depth, wider parts keep a flat top.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
