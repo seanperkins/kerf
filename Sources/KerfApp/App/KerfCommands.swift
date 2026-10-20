@@ -127,6 +127,10 @@ struct KerfCommands: Commands {
             Button("Save All Toolpaths…") { document?.sheet = .saveAllToolpaths }
                 .keyboardShortcut("s", modifiers: [.command, .option])
                 .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Save Toolpath Template…") { document?.runSaveTemplatePanel() }
+                .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Apply Toolpath Template…") { document?.runApplyTemplatePanel() }
+                .disabled(document == nil)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("t", modifiers: [.command, .option])
