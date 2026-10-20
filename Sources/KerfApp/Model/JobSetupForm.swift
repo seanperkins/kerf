@@ -58,7 +58,9 @@ struct JobSetupForm: Equatable {
 
     func apply(to project: KerfProject) -> KerfProject {
         var p = project.converted(to: units)
+        let oldThickness = p.document.job.thickness
         p.document.job = job
+        p.operations = DepthFollow.adjusted(p.operations, thicknessFrom: oldThickness, to: job.thickness)
         p.document.gridSpacing = gridSpacing
         p.document.name = name
         if isMultiSheet, !sheetName.isEmpty { p.document.activeSheetName = sheetName }

@@ -10,10 +10,27 @@ struct DepthForm: View {
     var showFinalPass = true
     /// The tool's stepdown in document units (for the pass list; nil = unknown).
     var toolStepdown: Double? = nil
+    /// The material thickness, when the form offers to keep the cut depth following it.
+    var materialThickness: Double? = nil
 
     var body: some View {
         LengthField("Start depth", value: $depth.startDepth, units: units, help: "Depth below the material top where cutting starts")
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
+        if let thickness = materialThickness {
+            Toggle("Follow the material thickness", isOn: Binding(get: { depth.followsThickness == true }, set: { on in
+                depth.followsThickness = on ? true : nil
+                if on, depth.cutDepth < thickness { depth.cutDepth = thickness }
+            }))
+            .fieldHelp("Follow the material thickness")
+            if depth.followsThickness == true {
+                let past = depth.cutDepth - thickness
+                let tol = units == .inch ? 0.0005 : 0.01
+                Text(past > tol
+                     ? "Stays \(RulerTicks.label((past * 10000).rounded() / 10000)) \(units.abbreviation) past the material bottom when Job Setup changes the thickness."
+                     : "Stays at the material bottom when Job Setup changes the thickness.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
         PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: toolStepdown)
         if depth.cutDepth <= depth.startDepth {
             Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(Color.warningText)
@@ -119,7 +136,9 @@ struct ProfileForm: View {
     }
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown) }
+        InspectorSection(title: "Cutting Depths") {
+            DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown, materialThickness: materialThickness)
+        }
         Divider()
         InspectorSection(title: "Machine Vectors") {
             Picker("Side", selection: $params.side) {

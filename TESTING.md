@@ -61,6 +61,9 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
      In the inspector, try Offset roughing, the Offset/Spiral finishing patterns, "Rest after" a
      larger ball nose, "Combine with" a second model, and "Two-Sided" (one toolpath per side).
      On a Fluting or Profile toolpath, "Project onto 3D" drops it onto the model's surface.
+   - **Follow the thickness.** A new Profile shows "Follow the material thickness" on under Cut depth.
+     Change the thickness in Job Setup (Design → Job Setup…) from 0.75 to 0.5 in: the profile's cut
+     depth becomes 0.5 in; a pocket's depth and a profile with the toggle off do not move.
    - **Tooltips.** Hover any setting in a toolpath form: every field, toggle and picker shows a one-line
      explanation (not just its label). In the Tool Database's feeds calculator, choose a material in the
      Material pop-up: the target chip load fills in for that tool's diameter and Apply sets the feed.
