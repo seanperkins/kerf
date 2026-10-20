@@ -121,6 +121,15 @@ struct ProfileForm: View {
                 Text("Top side").tag(ProfileStartPoint.top)
             }
             .help("Where each closed loop starts cutting")
+            Picker("Cut order", selection: Binding(get: { params.order ?? .nearest },
+                                                   set: { params.order = $0 == .nearest ? nil : $0 })) {
+                Text("Shortest rapids").tag(ProfileOrder.nearest)
+                Text("Selection order").tag(ProfileOrder.selection)
+                Text("Left to right").tag(ProfileOrder.leftToRight)
+                Text("Bottom to top").tag(ProfileOrder.bottomToTop)
+                Text("Grid (rows from bottom)").tag(ProfileOrder.grid)
+            }
+            .help("Order the parts are cut in. Holes are always cut before the part around them.")
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)

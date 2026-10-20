@@ -91,6 +91,8 @@ public struct ProfileParameters: Codable, Hashable, Sendable {
     public var openVectorSide: OpenVectorSide?
     /// Where closed loops start (nil = nearest; toolpaths-2d addition).
     public var startPoint: ProfileStartPoint?
+    /// Part cutting order (nil = nearest; toolpaths-2d addition).
+    public var order: ProfileOrder?
 
     public init(depth: DepthSettings = DepthSettings(cutDepth: 0.75), side: ProfileSide = .outside,
                 direction: CutDirection = .climb, allowance: Double = 0, tabs: TabSettings = TabSettings(),

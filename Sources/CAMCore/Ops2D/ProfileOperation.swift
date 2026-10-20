@@ -52,13 +52,15 @@ public struct ProfileOperation: ToolpathOperation {
         var builder = ToolpathBuilder(coords: coords, tool: tool, units: context.units, tolerance: tol,
                                       fitArcs: params.preferArcs)
         let sourceStarts = closed.compactMap(\.first)
+        let shapeLoops = shapes.map { s in s.paths.map { $0.flattened(tolerance: tol) } }
         cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
-                 sourceStarts: sourceStarts, context: context, builder: &builder)
+                 sourceStarts: sourceStarts, shapeLoops: shapeLoops, context: context, builder: &builder)
         if let lastPass, let finishPlan {
             // Last pass: removes the side allowance the roughing passes left on the wall.
             let finishPasses = lastPass.fullDepth ? [params.depth.cutDepth] : passes
             cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
-                     wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, context: context, builder: &builder)
+                     wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
+                     context: context, builder: &builder)
         }
         var meta: [String: String] = [:]
         var warnings: [String] = []
@@ -83,13 +85,13 @@ public struct ProfileOperation: ToolpathOperation {
 
     /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`.
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
-                          sourceStarts: [Vec2], context: CAMContext, builder: inout ToolpathBuilder) {
+                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], context: CAMContext,
+                          builder: inout ToolpathBuilder) {
         guard !chains.isEmpty else { return }
         let tol = context.tolerance
         let startPoint = params.startPoint ?? .nearest
-        var ordered = ChainOrdering.nearestNeighbour(chains, from: start, allowReverse: startPoint != .vectorStart,
-                                                     predecessors: ChainOrdering.innerFirstPredecessors(chains),
-                                                     tolerance: tol)
+        var ordered = ProfileOrdering.ordered(chains, by: params.order ?? .nearest, from: start, shapeLoops: shapeLoops,
+                                              allowReverse: startPoint != .vectorStart, tolerance: tol)
         ordered = ordered.map { StartPoints.rotate($0, to: startPoint, sourceStarts: sourceStarts, tolerance: tol) }
         var manualCenters: [[Double]]?
         if params.tabs.isEnabled, let anchors = params.tabs.manualTabs {

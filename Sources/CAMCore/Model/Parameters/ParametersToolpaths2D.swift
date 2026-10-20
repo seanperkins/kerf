@@ -19,6 +19,18 @@ public enum ProfileStartPoint: String, Codable, CaseIterable, Sendable {
     case left, right, bottom, top
 }
 
+/// Order in which a profile cuts its parts (inner loops always before the loop around them).
+public enum ProfileOrder: String, Codable, CaseIterable, Sendable {
+    /// Greedy nearest neighbour (shortest rapids; the default).
+    case nearest
+    /// The order the vectors were selected in.
+    case selection
+    case leftToRight
+    case bottomToTop
+    /// Rows from the bottom, left to right within each row.
+    case grid
+}
+
 /// Quick engrave: follow the vectors on their centreline at a fixed depth (no offset).
 public struct EngraveParameters: Codable, Hashable, Sendable {
     public var depth: DepthSettings
