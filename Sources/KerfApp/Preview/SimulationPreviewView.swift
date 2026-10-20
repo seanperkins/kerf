@@ -32,6 +32,7 @@ struct StockSceneView: NSViewRepresentable {
     func makeNSView(context: Context) -> SCNView {
         let v = SCNView()
         context.coordinator.view = v
+        stockScene.attachedView = v
         let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.clicked(_:)))
         v.addGestureRecognizer(click)
         v.scene = stockScene.scene
@@ -63,6 +64,8 @@ struct SimulationPreviewView: View {
     /// When set, a picker chooses which toolpaths are simulated (all / visible / selected).
     var scope: Binding<PreviewScope>? = nil
     var emptyMessage = "No toolpaths to simulate"
+    /// Used for the default file name when saving an image.
+    var documentName = "Untitled"
 
     @StateObject private var model = SimulationPreviewModel()
     @ObservedObject private var timeStore = TimeEstimateStore.shared
@@ -171,6 +174,10 @@ struct SimulationPreviewView: View {
             .labelsHidden()
             .frame(width: 100)
             Toggle("Tool", isOn: $model.showTool).toggleStyle(.checkbox)
+            Button { PreviewImageExport.runSavePanel(stockScene: model.stockScene, documentName: documentName) } label: {
+                Image(systemName: "camera")
+            }
+            .help("Save the preview as an image…")
             Toggle(isOn: $model.isMeasuring) { Image(systemName: "ruler") }
                 .toggleStyle(.button)
                 .help("Measure: click the stock for a depth, click again for a distance")

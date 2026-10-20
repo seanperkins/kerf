@@ -18,6 +18,8 @@ final class StockScene {
     private(set) var job = JobSetup()
     /// Specular strength of the stock (0...1), from the material appearance.
     var shininess = 0.15
+    /// The on-screen view (for its camera when saving an image).
+    weak var attachedView: SCNView?
 
     init() {
         scene.background.contents = NSColor(calibratedWhite: 0.16, alpha: 1)

@@ -22,7 +22,7 @@ struct Preview3DHost: View {
         SimulationPreviewView(
             job: document.document.job, units: document.document.units, toolpaths: toolpaths,
             rapidRate: SimulationPreviewView.rapidRate(for: document.postProfile, units: document.document.units),
-            scope: $scope, emptyMessage: scope.emptyMessage)
+            scope: $scope, emptyMessage: scope.emptyMessage, documentName: document.document.name)
         .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
     }
 }
