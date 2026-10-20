@@ -53,7 +53,7 @@ struct DimensionToolOptions: View {
                             if p.document.dimensions?.isEmpty == true { p.document.dimensions = nil }
                         }
                     } label: { Image(systemName: "trash") }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.icon)
                 }
             }
             Button("Delete All Dimensions") { document.perform("Delete Dimensions") { $0.document.dimensions = nil } }

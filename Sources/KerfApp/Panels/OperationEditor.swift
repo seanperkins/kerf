@@ -230,7 +230,7 @@ struct ToolPicker: View {
                 ForEach(sorted) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
             Button { openWindow(id: ToolDatabaseView.windowID) } label: { Image(systemName: "wrench.and.screwdriver") }
-                .buttonStyle(.borderless).help("Tool Database").accessibilityLabel("Open Tool Database")
+                .buttonStyle(.icon).help("Tool Database").accessibilityLabel("Open Tool Database")
         }
         if let t = library.tool(id: toolID) {
             Text(toolSummary(t)).font(.caption).foregroundStyle(.secondary)

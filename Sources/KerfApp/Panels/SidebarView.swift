@@ -139,7 +139,7 @@ struct LayersList: View {
                 Text("Layers").font(.headline)
                 Spacer()
                 Button { document.perform("Add Layer") { $0.addLayer() } } label: { Image(systemName: "plus") }
-                    .buttonStyle(.borderless).help("Add layer").accessibilityLabel("Add layer")
+                    .buttonStyle(.icon).help("Add layer").accessibilityLabel("Add layer")
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             List {
@@ -162,12 +162,12 @@ struct LayerRow: View {
             Button { update { $0.isVisible.toggle() } } label: {
                 Image(systemName: layer.isVisible ? "eye" : "eye.slash")
             }
-            .buttonStyle(.borderless).help(layer.isVisible ? "Hide layer" : "Show layer")
+            .buttonStyle(.icon).help(layer.isVisible ? "Hide layer" : "Show layer")
             .accessibilityLabel(layer.isVisible ? "Hide layer \(layer.name)" : "Show layer \(layer.name)")
             Button { update { $0.isLocked.toggle() } } label: {
                 Image(systemName: layer.isLocked ? "lock.fill" : "lock.open")
             }
-            .buttonStyle(.borderless).help(layer.isLocked ? "Unlock layer" : "Lock layer")
+            .buttonStyle(.icon).help(layer.isLocked ? "Unlock layer" : "Lock layer")
             .accessibilityLabel(layer.isLocked ? "Unlock layer \(layer.name)" : "Lock layer \(layer.name)")
             ColorPicker("", selection: Binding(
                 get: { Color(nsColor: NSColor(hex: layer.colorHex) ?? .black) },
@@ -316,7 +316,7 @@ struct ToolpathRow: View {
             Button { document.toggleToolpathVisibility(operation.id) } label: {
                 Image(systemName: document.hiddenToolpaths.contains(operation.id) ? "eye.slash" : "eye")
             }
-            .buttonStyle(.borderless).help("Show/hide on canvas")
+            .buttonStyle(.icon).help("Show/hide on canvas")
             .accessibilityLabel(document.hiddenToolpaths.contains(operation.id) ? "Show \(operation.setup.name) on canvas" : "Hide \(operation.setup.name) on canvas")
             Circle().fill(Color(nsColor: ToolpathColors.color(forIndex: colorIndex))).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 1) {
@@ -360,7 +360,7 @@ struct ToolpathRow: View {
             }
         } else {
             Button { document.calculate([operation.id]) } label: { Image(systemName: "play.circle") }
-                .buttonStyle(.borderless).help("Calculate").accessibilityLabel("Calculate \(operation.setup.name)")
+                .buttonStyle(.icon).help("Calculate").accessibilityLabel("Calculate \(operation.setup.name)")
         }
     }
 }

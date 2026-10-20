@@ -349,7 +349,7 @@ struct ClearanceToolList: View {
                 ForEach(choices) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
             Button { if i < tools.count { tools.remove(at: i) } } label: { Image(systemName: "minus.circle") }
-                .buttonStyle(.borderless).help("Remove this clearance tool")
+                .buttonStyle(.icon).help("Remove this clearance tool")
         }
         if library.tool(id: id)?.angle != nil {
             Toggle("Corner sharpen", isOn: Binding(get: { i < tools.count && tools[i].cornerSharpen },
@@ -611,7 +611,7 @@ struct ClearanceToolsEditor: View {
                     ForEach(candidates) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
                 }
                 Button { var n = ids; n.remove(at: i); set(n) } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.borderless).help("Remove this clearance tool")
+                    .buttonStyle(.icon).help("Remove this clearance tool")
             }
             if let problem = problems[i] {
                 Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)

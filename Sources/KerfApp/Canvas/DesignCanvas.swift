@@ -37,6 +37,8 @@ struct ToolPalette: View {
                         .frame(width: 28, height: 26)
                         .background(document.activeTool == tool ? Color.accentColor.opacity(0.25) : Color.clear,
                                     in: RoundedRectangle(cornerRadius: 5))
+                        // A plain button only hit-tests what it draws, so without this the target was the glyph (11–17 pt).
+                        .contentShape(RoundedRectangle(cornerRadius: 5))
                 }
                 .buttonStyle(.plain)
                 .help(tool.shortcut.map { "\(tool.title) (\(String($0).uppercased()))" } ?? tool.title)

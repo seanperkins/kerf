@@ -144,7 +144,7 @@ struct PassEditor: View {
                         depth.customPasses = list
                     }), units: units)
                     Button { depth.customPasses?.remove(at: i) } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.borderless).help("Remove this pass")
+                        .buttonStyle(.icon).help("Remove this pass")
                 }
             }
             LabeledContent("Pass \(custom.count + 1)") {

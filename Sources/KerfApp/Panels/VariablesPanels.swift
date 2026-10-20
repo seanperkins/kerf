@@ -142,7 +142,7 @@ struct DocumentVariablesSheet: View {
                 .width(110)
                 TableColumn("") { $r in
                     Button { rows.removeAll { $0.id == r.id } } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.icon)
                 }
                 .width(30)
             }

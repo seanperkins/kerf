@@ -138,9 +138,11 @@ struct OriginPicker: View {
                 Spacer()
                 HStack { dot(.lowerLeft); Spacer(); dot(.lowerRight) }
             }
-            .frame(width: 136, height: 96)
+            // Each dot is a 22 pt button, so its centre sits 11 pt in from this frame's edge: 142 x 102
+            // puts the centres on the corners of the 120 x 80 outline.
+            .frame(width: 142, height: 102)
         }
-        .frame(width: 140, height: 100)
+        .frame(width: 146, height: 106)
     }
 
     private func dot(_ o: XYOrigin) -> some View {
@@ -148,7 +150,7 @@ struct OriginPicker: View {
             Image(systemName: origin == o ? "largecircle.fill.circle" : "circle")
                 .foregroundStyle(origin == o ? Color.accentColor : Color.secondary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.icon)
         .help(o.displayName)
     }
 }

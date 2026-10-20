@@ -133,3 +133,30 @@ struct InspectorSection<Content: View>: View {
         .padding(.vertical, 4)
     }
 }
+
+/// Borderless icon button with a hit target of at least `minimumSide` points. A bare SF Symbol is only
+/// 10–17 pt, below the HIG minimum of 20 x 20 on macOS, and a borderless or plain button only
+/// hit-tests the glyph itself.
+struct IconButtonStyle: ButtonStyle {
+    static let minimumSide: CGFloat = 22
+
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        IconButtonLabel(configuration: configuration)
+    }
+
+    private struct IconButtonLabel: View {
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            configuration.label
+                .frame(minWidth: IconButtonStyle.minimumSide, minHeight: IconButtonStyle.minimumSide)
+                .contentShape(Rectangle())
+                .opacity(isEnabled ? (configuration.isPressed ? 0.55 : 1) : 0.4)
+        }
+    }
+}
+
+extension ButtonStyle where Self == IconButtonStyle {
+    static var icon: IconButtonStyle { IconButtonStyle() }
+}

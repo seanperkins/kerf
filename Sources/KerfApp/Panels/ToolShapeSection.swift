@@ -123,7 +123,7 @@ private struct FormPointsEditor: View {
                           format: decimalFormat).multilineTextAlignment(.trailing)
                 Text(units.abbreviation).foregroundStyle(.secondary)
                 Button { points.remove(at: i) } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.borderless).disabled(points.count <= 2)
+                    .buttonStyle(.icon).disabled(points.count <= 2)
             }
         }
         HStack {
