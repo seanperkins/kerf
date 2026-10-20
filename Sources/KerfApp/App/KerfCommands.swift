@@ -9,8 +9,12 @@ import UniformTypeIdentifiers
 struct KerfCommands: Commands {
     @FocusedObject private var document: KerfDocument?
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.newDocument) private var newDocument
 
     var body: some Commands {
+        CommandGroup(after: .newItem) {
+            TemplateMenu(document: document) { project in newDocument { KerfDocument(project: project) } }
+        }
         CommandGroup(after: .importExport) {
             Button("Import…") { runImportPanel() }
                 .keyboardShortcut("i", modifiers: .command)
