@@ -78,6 +78,7 @@ struct DrawingOptionsView: View {
             case .select, .nodeEdit:
                 EmptyView()
             }
+            QuickEntryHelp(tool: document.activeTool)
             Toggle("Snap to grid", isOn: $document.snapToGrid)
             Toggle("Snap to objects", isOn: $document.snapToObjects)
             Button("Done") { document.activeTool = .select }

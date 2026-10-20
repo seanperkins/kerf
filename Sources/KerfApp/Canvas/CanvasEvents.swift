@@ -235,6 +235,7 @@ extension CanvasNSView {
 
     override func keyDown(with event: NSEvent) {
         guard let doc = document else { return super.keyDown(with: event) }
+        if handleDrawingToolKey(event, doc) { needsDisplay = true; return }
         let step = doc.document.gridSpacing * (event.modifierFlags.contains(.shift) ? 10 : 1)
         let nodeMode = doc.activeTool == .nodeEdit && !doc.nodeSelection.isEmpty
         func nudge(_ d: Vec2) {

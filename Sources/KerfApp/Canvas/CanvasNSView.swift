@@ -54,6 +54,8 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
     var snapCache: (revision: Int, excluded: Set<UUID>, engine: SnapEngine)?
     var hoverDoc: Vec2?
     var spaceHeld = false
+    /// Drawing-tool extras (typed entry, measure, guides) — see CanvasDrawingTools.swift.
+    var drawingState = CanvasDrawingState()
     private var didInitialFit = false
     private var lastRequestSerial = 0
     private var trackingArea: NSTrackingArea?

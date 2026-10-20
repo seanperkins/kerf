@@ -6,6 +6,7 @@ import CAMCore
 extension CanvasNSView {
     func drawDrawingOverlays(_ ctx: CGContext, _ doc: KerfDocument) {
         drawHighlightMarkers(ctx, doc)
+        drawQuickEntry(doc)
     }
 
     private func drawHighlightMarkers(_ ctx: CGContext, _ doc: KerfDocument) {

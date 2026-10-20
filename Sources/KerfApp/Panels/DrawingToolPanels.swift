@@ -2,6 +2,30 @@ import CADCore
 import CAMCore
 import SwiftUI
 
+/// How to type exact values on the canvas for the active tool.
+struct QuickEntryHelp: View {
+    var tool: CanvasTool
+
+    var body: some View {
+        if let text {
+            Text(text).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var text: String? {
+        if [.circle, .polygon, .star].contains(tool) {
+            return "Typed entry: with the pointer at the centre, type a radius (or radius<angle) and press Return."
+        }
+        if tool.isDragShape {
+            return "Typed entry: with the pointer at the lower-left corner (or while dragging), type W,H and press Return."
+        }
+        if tool == .polyline || tool == .curve || tool == .arc {
+            return "Typed entry: X,Y places the first point; then ΔX,ΔY, length<angle, or a length towards the pointer. Press Return after each value."
+        }
+        return nil
+    }
+}
+
 /// Arc tool options: click mode plus exact centre/radius/angle entry.
 struct ArcToolOptions: View {
     @ObservedObject var document: KerfDocument
