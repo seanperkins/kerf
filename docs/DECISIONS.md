@@ -295,3 +295,16 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## vcarve-parity (round 1)
+
+- **vcarve-parity** — Multiple flat-area clearance tools: `flatClearanceToolID` stays the first
+  tool and `extraClearanceTools: [VCarveClearanceTool]` (V-carve and inlay) adds more, run in
+  list order like Vectric's clearance tool list (the UI says to list them largest first; the
+  order is not re-sorted). Tool k only cuts where the flat area minus everything earlier tools
+  swept (their centre region grown by their floor radius) is non-empty: its centre region is
+  (flat area inset by its wall clearance) ∩ (rest grown by its floor radius), cleared with
+  rings/raster at its own stepdown. A later tool with nothing left is dropped with a warning.
+  Tapered engraving tools may be clearance tools: their wall clearance is tip radius + flat
+  depth · max(0, tan(tool half-angle) − tan(V half-angle)), capped at the tool radius.
+  New parameter fields are decoded with `decodeIfPresent`, so older `.kerf` files open unchanged.

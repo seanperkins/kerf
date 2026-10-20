@@ -220,13 +220,48 @@ struct VCarveForm: View {
                                 defaultValue: units == .inch ? 0.125 : 3)
             if params.flatDepth != nil {
                 OptionalToolPicker(title: "Flat area tool", toolID: $params.flatClearanceToolID, library: library,
-                                   kinds: [.endMill, .ballNose])
+                                   kinds: ClearanceToolList.kinds)
                 if params.flatClearanceToolID != nil {
+                    ClearanceToolList(tools: $params.extraClearanceTools, library: library)
                     PocketStrategyForm(strategy: $params.flatClearanceStrategy)
                 }
             }
             OptionalLengthField(label: "Max pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.1 : 2.5)
+        }
+    }
+}
+
+/// Further flat-area clearance tools (after the first): each one only clears what the tools
+/// above it could not reach, so list them largest first.
+struct ClearanceToolList: View {
+    static let kinds: [ToolKind] = [.endMill, .ballNose, .engraving]
+    @Binding var tools: [VCarveClearanceTool]
+    var library: ToolLibrary
+
+    private var choices: [Tool] { library.tools.filter { Self.kinds.contains($0.kind) } }
+
+    var body: some View {
+        ForEach(tools.indices, id: \.self) { i in
+            HStack {
+                // Index-guarded bindings: SwiftUI may re-read a row after it was removed.
+                let id = i < tools.count ? tools[i].toolID : UUID()
+                Picker("Then tool \(i + 2)", selection: Binding(get: { i < tools.count ? tools[i].toolID : id },
+                                                                set: { if i < tools.count { tools[i].toolID = $0 } })) {
+                    if library.tool(id: id) == nil { Text("Missing tool").tag(id) }
+                    ForEach(choices) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
+                }
+                Button { if i < tools.count { tools.remove(at: i) } } label: { Image(systemName: "minus.circle") }
+                    .buttonStyle(.borderless).help("Remove this clearance tool")
+            }
+        }
+        Button("Add Smaller Clearance Tool") {
+            if let t = choices.min(by: { $0.diameter < $1.diameter }) { tools.append(VCarveClearanceTool(toolID: t.id)) }
+        }
+        .disabled(choices.isEmpty)
+        if !tools.isEmpty {
+            Text("Tools run in this order; each one only clears what the tools before it could not reach.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -249,7 +284,10 @@ struct InlayForm: View {
             Toggle("Mirror plug", isOn: $params.mirrorMale)
             LengthField("Plug boundary margin", value: $params.maleBoundaryMargin, units: units)
             OptionalToolPicker(title: "Flat area tool", toolID: $params.flatClearanceToolID, library: library,
-                               kinds: [.endMill, .ballNose])
+                               kinds: ClearanceToolList.kinds)
+            if params.flatClearanceToolID != nil {
+                ClearanceToolList(tools: $params.extraClearanceTools, library: library)
+            }
             let gap = params.pocketDepth - params.maleStartDepth
             if params.maleStartDepth + params.glueGap > params.pocketDepth + 1e-9 {
                 Text("Plug start depth + glue gap must not exceed the pocket depth.").font(.caption).foregroundStyle(.orange)

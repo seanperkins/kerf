@@ -34,7 +34,7 @@ public struct InlayOperation: ToolpathOperation {
         let (paths, skipped) = try VCarveEngine.closedPaths(context.shapes(for: setup))
         let vbit = try context.tool(setup.toolID)
         _ = try VCarveEngine.validateVBit(vbit)
-        let clearance = try p.flatClearanceToolID.map { try context.tool($0) }
+        let clearance = try VCarveEngine.clearanceTools(p.clearanceToolIDs, context: context)
         let gap = p.pocketDepth - p.maleStartDepth
         var metadata = ["bottomGap": String(format: "%.4f", gap), "boardGap": String(format: "%.4f", gap)]
         if skipped > 0 { metadata["warning"] = "\(skipped) open vector(s) ignored" }
@@ -74,12 +74,12 @@ public struct InlayOperation: ToolpathOperation {
         return region
     }
 
-    private func carve(_ region: VCarveRegion, part: String, start: Double, vbit: Tool, clearance: Tool?,
+    private func carve(_ region: VCarveRegion, part: String, start: Double, vbit: Tool, clearance: [Tool],
                        context: CAMContext, metadata: [String: String]) throws -> [Toolpath] {
         var engine = VCarveEngine(region: region, vbit: vbit, context: context)
         engine.startDepth = start
         engine.flatDepth = params.pocketDepth - start
-        engine.clearanceTool = clearance
+        engine.clearanceTools = clearance
         let result = try engine.run()
         var meta = metadata
         meta["part"] = part.lowercased()
@@ -87,17 +87,7 @@ public struct InlayOperation: ToolpathOperation {
         if !result.warnings.isEmpty {
             meta["warning"] = ([meta["warning"]].compactMap { $0 } + result.warnings).joined(separator: "; ")
         }
-        var out: [Toolpath] = []
-        if let clr = clearance,
-           let tp = VCarveEngine.toolpath(name: "\(setup.name) \(part) (flat clearance)", operationID: setup.id,
-                                          kind: Self.kind, tool: clr, passes: result.clearancePasses,
-                                          context: context, metadata: meta) {
-            out.append(tp)
-        }
-        if let tp = VCarveEngine.toolpath(name: "\(setup.name) \(part)", operationID: setup.id, kind: Self.kind,
-                                          tool: vbit, passes: result.vbitPasses, context: context, metadata: meta) {
-            out.append(tp)
-        }
-        return out
+        return VCarveEngine.toolpaths(name: "\(setup.name) \(part)", operationID: setup.id, kind: Self.kind,
+                                      vbit: vbit, result: result, context: context, metadata: meta)
     }
 }
