@@ -529,4 +529,4 @@
 - `GrayImage` existed in both CADCore (bitmap tracing) and CAMCore (photo V-carve); the tracing one was renamed `GrayBitmap`.
 - Help: new topics for Quick Engrave, Chamfer, Hole Milling, Prism Carve, Merged, Straight Inlay, Moulding and Photo V-Carve, so every toolpath kind's "?" opens its own page.
 - PARITY: tp-tiling is marked done because lay-tiling covers it; io-setup-sheet is done through lay-job-sheet. tp-drill-bank and 3d-rotary stay missing on purpose.
-- drawing-r1's TODO(cam-2d) about the start point is closed: Profile's "Vector start" option (tp-profile-start-point) starts at node 0, which "Set Start" moves.
+- drawing-r1's TODO(cam-2d) about the start point is closed: Profile's "Vector start node" option (tp-profile-start-point) starts at node 0, which "Set Start" moves.
