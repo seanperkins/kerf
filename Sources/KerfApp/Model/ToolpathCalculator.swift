@@ -22,7 +22,7 @@ enum ToolpathCalculator {
         let context = CAMContext(document: project.document, tools: project.mergedTools(with: library))
         do {
             let tps = try op.generate(in: context)
-            let secs = MachiningTimeEstimator.estimate(tps, rapidRate: rapidRate)
+            let secs = TimeEstimateSettings.load().estimate(tps, rapidRate: rapidRate, units: project.document.units)
             let err = tps.isEmpty ? "No toolpath was generated (check the selected vectors and depths)." : nil
             return ToolpathResult(toolpaths: tps, error: err, operation: op, designRevision: designRevision,
                                   estimatedSeconds: secs)

@@ -86,5 +86,7 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 - Inlay plugs are generated in place over the pocket. Export the plug as its own program and cut
   it on a separate board.
 - Tool changes are manual (M5, comment, T#M6). G43 H# is off unless you turn it on in the profile.
-- Time estimates do not include tool-change time or acceleration.
+- App time estimates model acceleration (default 15 in/s², one value for all axes) and allow 90 s per tool
+  change; calibrate them in the 3D preview (stopwatch button). The estimate in the G-code header is
+  still length / feed.
 - The GRBL profile is untested on real hardware.

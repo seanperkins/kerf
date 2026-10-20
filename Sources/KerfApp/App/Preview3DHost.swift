@@ -7,6 +7,7 @@ import SwiftUI
 struct Preview3DHost: View {
     @ObservedObject var document: KerfDocument
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
+    @ObservedObject private var timeStore = TimeEstimateStore.shared
 
     /// Enabled, calculated toolpaths in machining order.
     var toolpaths: [Toolpath] {
@@ -18,5 +19,6 @@ struct Preview3DHost: View {
         SimulationPreviewView(
             job: document.document.job, units: document.document.units, toolpaths: toolpaths,
             rapidRate: SimulationPreviewView.rapidRate(for: document.postProfile, units: document.document.units))
+        .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
     }
 }

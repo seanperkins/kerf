@@ -39,6 +39,8 @@ struct SimulationPreviewView: View {
     var rapidRate: Double
 
     @StateObject private var model = SimulationPreviewModel()
+    @ObservedObject private var timeStore = TimeEstimateStore.shared
+    @State private var showTimeSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,10 +55,12 @@ struct SimulationPreviewView: View {
         .onChange(of: toolpaths) { _, _ in configure() }
         .onChange(of: job) { _, _ in configure() }
         .onChange(of: rapidRate) { _, _ in configure() }
+        .onChange(of: timeStore.settings) { _, _ in configure() }
     }
 
     private func configure() {
-        model.configure(job: job, toolpaths: toolpaths, rapidRate: rapidRate, units: units)
+        model.configure(job: job, toolpaths: toolpaths, rapidRate: rapidRate, units: units,
+                        timeSettings: timeStore.settings)
     }
 
     private var infoBadge: some View {
@@ -98,6 +102,11 @@ struct SimulationPreviewView: View {
             .labelsHidden()
             .frame(width: 100)
             Toggle("Tool", isOn: $model.showTool).toggleStyle(.checkbox)
+            Button { showTimeSettings.toggle() } label: { Image(systemName: "stopwatch") }
+                .help("Time estimate settings (acceleration, calibration)")
+                .popover(isPresented: $showTimeSettings) {
+                    TimeEstimatePopover(store: timeStore, toolpaths: toolpaths, rapidRate: rapidRate, units: units)
+                }
             Button(action: model.resetCamera) { Image(systemName: "camera.metering.center.weighted") }
                 .help("Reset view")
             if model.isBusy { ProgressView().controlSize(.small) }

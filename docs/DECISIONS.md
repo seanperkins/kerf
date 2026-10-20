@@ -295,3 +295,9 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## preview (parity round 1)
+
+- **preview** — pv-time-accel: `MachineMotion` + `MotionPlanner` (CAMCore/Simulation) give the time estimate a trapezoidal velocity profile: one acceleration for all axes, junction-deviation cornering (0.002 in), full stops at dwells, tool changes and reversals, forward/backward speed passes over the whole job. `SimulationTimeline` lays steps out with these durations, so preview playback follows the same clock. A calibration `timeScale` multiplies motion and dwell time but not tool-change allowances. Default `.instant` keeps the old length / feed behaviour for every existing caller.
+- **preview** — Time-estimate settings are per user (UserDefaults `kerf.time.*`), not per post profile: acceleration (stored in in/s², default 15 in/s², a conservative guess for a stepper gantry — not a published Avid number), scale factor (clamped 0.2–5), tool-change allowance (90 s). Edited from the stopwatch popover in the 3D preview, which can also calibrate the scale from a measured run time of the previewed job. `ToolpathCalculator`, the operation editor and Save All use them; changing them refreshes stored per-operation estimates.
+- **preview** — The G-code header estimate (`PostTimeEstimator`, owned by post) is unchanged so golden files stay stable; it remains length / feed + spindle dwell. TODO(post): accept a `MachineMotion` if the header should match the app.

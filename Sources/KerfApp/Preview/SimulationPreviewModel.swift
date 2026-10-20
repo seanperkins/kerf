@@ -86,9 +86,12 @@ final class SimulationPreviewModel: ObservableObject {
     private var configuredKey: Int?
 
     /// Rebuilds the simulation when the inputs change (cheap no-op otherwise).
-    func configure(job: JobSetup, toolpaths: [Toolpath], rapidRate: Double, units: LengthUnit) {
+    func configure(job: JobSetup, toolpaths: [Toolpath], rapidRate: Double, units: LengthUnit,
+                   timeSettings: TimeEstimateSettings = TimeEstimateSettings()) {
+        let motion = timeSettings.motion(units: units)
         var hasher = Hasher()
         hasher.combine(job); hasher.combine(toolpaths); hasher.combine(rapidRate)
+        hasher.combine(motion); hasher.combine(timeSettings.toolChangeSeconds)
         let key = hasher.finalize()
         guard key != configuredKey else { return }
         configuredKey = key
@@ -99,7 +102,8 @@ final class SimulationPreviewModel: ObservableObject {
         let cell = Heightfield.automaticCellSize(width: job.width, height: job.height,
                                                  targetCells: 800_000, minimum: minCell)
         cellSize = cell
-        let player = SimulationPlayer(job: job, toolpaths: toolpaths, rapidRate: rapidRate, cellSize: cell)
+        let player = SimulationPlayer(job: job, toolpaths: toolpaths, rapidRate: rapidRate, cellSize: cell,
+                                      toolChangeSeconds: timeSettings.toolChangeSeconds, motion: motion)
         totalTime = player.timeline.totalTime
         engine = SimulationEngine(player: player, job: job, maxVertices: 200_000)
         stockScene.configure(job: job)
