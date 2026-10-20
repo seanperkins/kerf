@@ -138,13 +138,13 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `3d-project-2d` | cam-3d | Project 2D toolpaths onto 3D surface | done | P3 | OperationSetup.projectOntoModelID, Ops3D/ReliefProjection.swift, inspector "Project onto 3D"; ReliefProjectionTests |
 | `3d-two-sided` | cam-3d | Two-sided 3D machining | done | P3 | Relief3DParameters.twoSided (side, flip, split, web), Ops3D/ReliefTwoSided.swift, inspector "Two-Sided"; ReliefTwoSidedTests. No registration-pin toolpaths |
 | `3d-rotary` | cam-3d | Rotary / wrapped toolpaths | missing | P3 | Out of scope: Avid has no rotary axis |
-| `lay-nesting` | layout | True-shape nesting on sheets | missing | P1 | Not implemented |
-| `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | missing | P2 | Not implemented |
-| `lay-tiling` | layout | Tiling large jobs | missing | P3 | Not implemented |
-| `lay-job-sheet` | layout | Job sheets / operator setup sheet | missing | P1 | See io-setup-sheet; only sidebar summary exists |
-| `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | missing | P2 | Not implemented |
-| `lay-material-validation` | layout | Material-size and travel validation | partial | P1 | GCodeValidator checks travel span and spoilboard depth; no warning for vectors outside the material |
-| `lay-part-labels` | layout | Part labelling (IDs/names engraved or printed on parts) | missing | P3 | Not implemented |
+| `lay-nesting` | layout | True-shape nesting on sheets | done | P1 | CADCore/Layout/Nesting.swift, Panels/NestingSheet.swift; LayoutNestingTests |
+| `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | done | P2 | CADCore/Layout/NestSheets.swift, Nest Parts overflow + Layout > Sheet on Material; LayoutMultiSheetTests |
+| `lay-tiling` | layout | Tiling large jobs | done | P3 | CAMCore/Layout/ToolpathTiling.swift, Toolpaths > Save Tiled G-code…; LayoutTilingTests, LayoutTiledExportTests |
+| `lay-job-sheet` | layout | Job sheets / operator setup sheet | done | P1 | Model/JobSheet.swift (HTML), File > Export Job Sheet…; LayoutJobSheetTests |
+| `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | done | P2 | CADCore/Layout/Fixtures.swift, Panels/FixturesSheet.swift, LayoutChecks.keepOut; LayoutFixture*Tests, LayoutKeepOutTests |
+| `lay-material-validation` | layout | Material-size and travel validation | done | P1 | PostCore/Validation/LayoutChecks.swift, Check Toolpaths "Material and machine"; LayoutChecksTests |
+| `lay-part-labels` | layout | Part labelling (IDs/names engraved or printed on parts) | done | P3 | Model/PartLabelCommands.swift, Layout > Label Parts…, job sheet part list; LayoutPartLabel*Tests |
 | `pv-3d-sim` | preview | 3D material removal simulation | done | P1 | CAMCore/Simulation/MaterialSimulator.swift, Preview/SimulationPreviewView.swift; SimMaterialSimulatorTests |
 | `pv-playback` | preview | Playback controls (play/pause, scrub, speed, jump to end, reset) | done | P1 | SimulationPreviewView.swift (rewind/play/end/slider/speed); SimTimelineTests |
 | `pv-show-tool` | preview | Show tool during preview | done | P2 | SimulationPreviewModel.showTool |

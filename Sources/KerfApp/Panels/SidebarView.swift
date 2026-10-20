@@ -176,6 +176,9 @@ struct LayerRow: View {
             TextField("Layer", text: $name, onCommit: { update { $0.name = name.isEmpty ? layer.name : name } })
                 .textFieldStyle(.plain)
             Spacer()
+            if layer.keepOut != nil {
+                Image(systemName: "hand.raised.fill").foregroundStyle(.red).help("Clamp / keep-out zones: never cut, tool must stay clear")
+            }
             Text("\(document.document.shapes(inLayer: layer.id).count)").font(.caption).foregroundStyle(.secondary)
         }
         .onAppear { name = layer.name }
@@ -189,6 +192,10 @@ struct LayerRow: View {
                 document.perform("Move to Layer") { $0.moveShapes(ids, toLayer: layer.id) }
             }
             .disabled(document.selection.isEmpty)
+            Button(layer.keepOut == nil ? "Make Clamp / Keep-Out Layer" : "Stop Using as Clamp / Keep-Out Layer") {
+                update { $0.keepOut = $0.keepOut == nil ? LayerKeepOut() : nil }
+            }
+            .disabled(layer.sheet != nil)
             Divider()
             Button("Move Layer Up") { document.perform("Reorder Layers") { $0.moveLayer(layer.id, by: -1) } }
                 .disabled(document.document.layers.first?.id == layer.id)

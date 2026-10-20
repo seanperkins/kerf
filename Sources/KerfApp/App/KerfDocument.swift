@@ -35,6 +35,10 @@ enum DocumentSheet: Identifiable, Equatable {
     case saveAllToolpaths
     case validation
     case keepOutZones
+    case nesting
+    case fixtures
+    case tiling
+    case partLabels
 
     var id: String {
         switch self {
@@ -46,6 +50,10 @@ enum DocumentSheet: Identifiable, Equatable {
         case .saveAllToolpaths: return "saveAll"
         case .validation: return "validation"
         case .keepOutZones: return "keepOut"
+        case .nesting: return "nesting"
+        case .fixtures: return "fixtures"
+        case .tiling: return "tiling"
+        case .partLabels: return "partLabels"
         }
     }
 }

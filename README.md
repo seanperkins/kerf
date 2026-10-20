@@ -9,6 +9,9 @@ machine.
   booleans, offset, layers, snapping and undo/redo.
 - **Toolpaths:** Profile (tabs, ramps, leads), Pocket (offset/raster, clearance tool), Drilling (peck),
   V-Carve, Inlay, Fluting, Texture and 3D relief (roughing + finishing).
+- **Layout:** true-shape nesting with overflow onto extra sheets, clamp and fixture keep-out
+  zones, part labels, a printable job sheet, material and bed checks, and tiled G-code for jobs
+  larger than the bed (Design > Layout, File > Export Job Sheet…, Toolpaths > Save Tiled G-code…).
 - **Preview and output:** 2D overlay, 3D material-removal simulation and time estimates. A
   data-driven post (JSON profiles) ships with Avid Mach4 inch/mm and Generic GRBL (mm), and output
   goes through a built-in G-code validator.

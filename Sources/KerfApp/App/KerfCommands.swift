@@ -22,6 +22,8 @@ struct KerfCommands: Commands {
             Button("Export G-code…") { document?.sheet = .exportGCode(.all) }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Export Job Sheet…") { document?.exportJobSheet() }
+                .disabled(document == nil)
         }
         CommandGroup(after: .pasteboard) {
             Button("Duplicate") { document?.duplicateSelection() }
@@ -109,6 +111,24 @@ struct KerfCommands: Commands {
                 .keyboardShortcut("]", modifiers: .command)
             Button("Close Open Vectors") { withSelection("Close Vectors") { ids, p in DesignCommands.close(ids, in: &p) } }
             Divider()
+            Menu("Layout") {
+                Button("Nest Parts…") { document?.sheet = .nesting }
+                    .disabled(document?.project.document.shapes.isEmpty ?? true)
+                Menu("Sheet on Material") {
+                    ForEach(document.map { NestSheets.numbers(in: $0.document) } ?? [1], id: \.self) { n in
+                        Button("Sheet \(n)" + (document.map { NestSheets.activeSheet(in: $0.document) == n } == true ? " ✓" : "")) {
+                            document?.showSheetOnMaterial(n)
+                        }
+                    }
+                }
+                .disabled(!(document.map { NestSheets.hasSheets($0.document) } ?? false))
+                Divider()
+                Button("Clamps and Fixture Holes…") { document?.sheet = .fixtures }
+                    .disabled(document == nil)
+                Button("Label Parts…") { document?.sheet = .partLabels }
+                    .disabled(document?.project.document.shapes.isEmpty ?? true)
+            }
+            Divider()
             Toggle("Snap to Grid", isOn: Binding(get: { document?.snapToGrid ?? true }, set: { document?.snapToGrid = $0 }))
                 .keyboardShortcut("'", modifiers: .command)
             Toggle("Snap to Objects", isOn: Binding(get: { document?.snapToObjects ?? true }, set: { document?.snapToObjects = $0 }))
@@ -152,6 +172,8 @@ struct KerfCommands: Commands {
                 if let doc = document, let id = doc.selectedOperationID { doc.splitMergedOperation(id) }
             }
             .disabled(document.flatMap { $0.operation($0.selectedOperationID)?.kind } != .merge)
+            Button("Save Tiled G-code…") { document?.sheet = .tiling }
+                .disabled(document?.project.operations.isEmpty ?? true)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("t", modifiers: [.command, .option])

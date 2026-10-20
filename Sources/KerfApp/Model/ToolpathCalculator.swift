@@ -19,7 +19,20 @@ enum ToolpathCalculator {
     /// Runs the operation's generator. Never throws: failures become `error` text.
     static func calculate(_ op: AnyOperation, project: KerfProject, library: ToolLibrary,
                           designRevision: Int, rapidRate: Double) -> ToolpathResult {
-        let context = CAMContext(document: project.document, tools: project.mergedTools(with: library))
+        // Extra nesting sheets parked beside the material are not machined.
+        let onMaterial = NestSheets.activeDocument(project.document)
+        let context = CAMContext(document: onMaterial, tools: project.mergedTools(with: library))
+        if onMaterial.shapes.count != project.document.shapes.count, !op.setup.shapeIDs.isEmpty,
+           op.setup.shapeIDs.allSatisfy({ onMaterial.shape(id: $0) == nil && project.document.shape(id: $0) != nil }) {
+            let keepOut = Fixtures.keepOutLayerIDs(in: project.document)
+            let clampsOnly = op.setup.shapeIDs.allSatisfy { project.document.shape(id: $0).map { keepOut.contains($0.layerID) } ?? false }
+            let why = clampsOnly
+                ? "This toolpath only uses clamp / keep-out vectors, which are never machined."
+                : "All of this toolpath's vectors are on a sheet that is not on the material. "
+                    + "Use Design > Layout > Sheet on Material to cut that sheet."
+            return ToolpathResult(toolpaths: [], error: why, operation: op, designRevision: designRevision,
+                                  estimatedSeconds: 0)
+        }
         do {
             let tps = try op.generate(in: context)
             let secs = TimeEstimateSettings.load().estimate(tps, rapidRate: rapidRate, units: project.document.units)
