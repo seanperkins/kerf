@@ -22,6 +22,23 @@ import Testing
         #expect(!PathNodes.anchors(c).contains(Vec2(2, 2)))
     }
 
+    @Test func oneSidedOpenOffset() throws {
+        let l = Path(points: [Vec2(0, 0), Vec2(4, 0), Vec2(4, 4)], closed: false)  // left turn at (4,0)
+        // Left = inside of the turn: mitred corner.
+        let left = try #require(OpenOffset.oneSide(l, distance: 1, tolerance: 0.001))
+        #expect(left.start.isApproximatelyEqual(to: Vec2(0, 1), tolerance: 1e-9))
+        #expect(left.end.isApproximatelyEqual(to: Vec2(3, 4), tolerance: 1e-9))
+        #expect(PathNodes.anchors(PathNodes.editable(left)).contains { $0.isApproximatelyEqual(to: Vec2(3, 1), tolerance: 1e-9) })
+        // Right = outside: rounded corner, every point 1 away from the source.
+        let right = try #require(OpenOffset.oneSide(l, distance: -1, tolerance: 0.001))
+        #expect(right.start.isApproximatelyEqual(to: Vec2(0, -1), tolerance: 1e-9))
+        #expect(right.end.isApproximatelyEqual(to: Vec2(5, 4), tolerance: 1e-9))
+        for p in right.flattened(tolerance: 1e-4) {
+            #expect(abs(VectorValidator.distance(p, toPolyline: l.flattened()) - 1) < 2e-3)
+        }
+        #expect(right.segments.contains { if case .arc = $0 { return true }; return false })
+    }
+
     @Test func openPathInteriorCornerOnlyAndShortEdgesSkipped() {
         let l = Path(points: [Vec2(0, 0), Vec2(2, 0), Vec2(2, 2)], closed: false)
         let f = CornerOps.apply(.fillet(radius: 0.5), to: l)

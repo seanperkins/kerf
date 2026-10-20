@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen
     var id: String { rawValue }
 }
 
@@ -275,6 +275,46 @@ enum VectorCommands {
             if paths.isEmpty { project.deleteShapes([s.id]) } else { replacePaths(s.id, with: paths, operation: "trim", in: &project) }
         }
         return changed
+    }
+
+    // MARK: Open offsets
+
+    enum OpenOffsetSide: String, CaseIterable, Identifiable {
+        case left, right, both, outline
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .left: return "Left side"
+            case .right: return "Right side"
+            case .both: return "Both sides"
+            case .outline: return "Closed outline around"
+            }
+        }
+    }
+
+    /// Offsets the open vectors of the selection, adding one new shape per source shape.
+    static func offsetOpen(_ ids: [UUID], distance: Double, side: OpenOffsetSide, in project: inout KerfProject) -> [UUID] {
+        let tol = tolerance(project.document.units)
+        let d = abs(distance)
+        guard d > 0 else { return [] }
+        var newIDs: [UUID] = []
+        for s in project.document.shapes(ids: ids) {
+            let open = s.paths.filter { !$0.isClosed }
+            guard !open.isEmpty else { continue }
+            var paths: [Path] = []
+            switch side {
+            case .left: paths = open.compactMap { OpenOffset.oneSide($0, distance: d, tolerance: tol) }
+            case .right: paths = open.compactMap { OpenOffset.oneSide($0, distance: -d, tolerance: tol) }
+            case .both: paths = open.flatMap { p in [d, -d].compactMap { OpenOffset.oneSide(p, distance: $0, tolerance: tol) } }
+            case .outline: paths = PathOps.offsetOpen(open, by: d, tolerance: tol)
+            }
+            guard !paths.isEmpty else { continue }
+            let n = Shape(name: (s.name.isEmpty ? "Vector" : s.name) + " offset", layerID: s.layerID, paths: paths,
+                          origin: .derived(operation: "offset"))
+            project.document.add(n)
+            newIDs.append(n.id)
+        }
+        return newIDs
     }
 
     // MARK: Extend

@@ -21,6 +21,7 @@ struct DrawingSheetHost: View {
         case .textOnCurve: TextOnCurveSheet(document: document)
         case .traceBitmap: TraceBitmapSheet(document: document)
         case .distort: DistortSheet(document: document)
+        case .offsetOpen: OpenOffsetSheet(document: document)
         }
     }
 }

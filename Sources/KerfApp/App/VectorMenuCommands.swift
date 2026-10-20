@@ -39,6 +39,7 @@ struct VectorMenuCommands: Commands {
             Divider()
             sheetButton("Trace Bitmap…", .traceBitmap, needsSelection: false)
             sheetButton("Fit Curves to Vectors…", .curveFit)
+            sheetButton("Offset Open Vectors…", .offsetOpen)
             sheetButton("Fillet / Chamfer Corners…", .filletChamfer)
             sheetButton("Dog-bone Fillets…", .dogbone)
             Divider()

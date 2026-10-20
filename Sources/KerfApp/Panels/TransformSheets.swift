@@ -67,6 +67,36 @@ struct DistortSheet: View {
     }
 }
 
+struct OpenOffsetSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var distance: Double
+    @State private var side = VectorCommands.OpenOffsetSide.both
+
+    init(document: KerfDocument) {
+        self.document = document
+        _distance = State(initialValue: document.units == .inch ? 0.125 : 3)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let openCount = document.selectedShapes.reduce(0) { $0 + $1.paths.filter { !$0.isClosed }.count }
+        DrawingDialog(title: "Offset Open Vectors", action: "Offset", disabled: openCount == 0 || distance <= 0,
+                      note: openCount == 0 ? "Select open vectors (closed ones use Offset…)."
+                          : "Left/right follow each vector's direction. The closed outline wraps the vector with round ends — the shape of a cut that wide.",
+                      perform: {
+                          let (d, s) = (distance, side)
+                          var newIDs: [UUID] = []
+                          document.perform("Offset Open Vectors") { newIDs = VectorCommands.offsetOpen(ids, distance: d, side: s, in: &$0) }
+                          if !newIDs.isEmpty { document.setSelection(newIDs) }
+                      }) {
+            LengthField("Distance", value: $distance, units: document.units)
+            Picker("Offset", selection: $side) {
+                ForEach(VectorCommands.OpenOffsetSide.allCases) { Text($0.title).tag($0) }
+            }
+        }
+    }
+}
+
 struct MirrorSheet: View {
     @ObservedObject var document: KerfDocument
     @State private var horizontally = true
