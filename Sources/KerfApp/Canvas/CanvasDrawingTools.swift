@@ -10,10 +10,80 @@ struct CanvasDrawingState {
     var guideDrag: (index: Int?, guide: GuideLine)?
     /// Last guide/alignment snap (drawn as dotted lines).
     var axisHint: AxisSnap.Result?
+    /// Measure tool drag (start, current).
+    var measureDrag: (Vec2, Vec2)?
 }
 
-/// Trim tool, typed entry ("quick keys") while drawing.
+/// Trim and measure tools, typed entry ("quick keys") while drawing.
 extension CanvasNSView {
+    /// Drags owned by the drawing extras (guides, measure). True when handled.
+    func extrasMouseDragged(_ event: NSEvent) -> Bool {
+        if guideMouseDragged(event) { return true }
+        if let (a, _) = drawingState.measureDrag {
+            updateHover(event)
+            let b = docPoint(event)
+            drawingState.measureDrag = (a, b)
+            document?.measurement = Measurement.between(a, b)
+            needsDisplay = true
+            return true
+        }
+        return false
+    }
+
+    func extrasMouseUp(_ event: NSEvent) -> Bool {
+        if guideMouseUp(event) { return true }
+        guard let (a, b) = drawingState.measureDrag, let doc = document else { return false }
+        drawingState.measureDrag = nil
+        if viewport.toView(a).distance(to: viewport.toView(b)) < dragThreshold {
+            // A click: measure the vector under the pointer.
+            let p = docPoint(event, snapped: false)
+            let visible = flatShapes(doc.project.document.shapes.filter { doc.project.isVisible($0) })
+            if let id = HitTesting.pick(at: p, in: visible, tolerance: pickTolerance), let s = doc.document.shape(id: id) {
+                doc.measurement = Measurement.vector(s, at: p, tolerance: tolerance)
+            } else {
+                doc.measurement = nil
+            }
+        } else {
+            doc.measurement = Measurement.between(a, b)
+        }
+        needsDisplay = true
+        return true
+    }
+
+    /// Measure line and readout.
+    func drawMeasurement(_ ctx: CGContext, _ doc: KerfDocument) {
+        guard doc.activeTool == .measure, let m = doc.measurement else { return }
+        if let a = m.from, let b = m.to {
+            let va = viewport.toView(a), vb = viewport.toView(b)
+            ctx.saveGState()
+            ctx.setStrokeColor(NSColor.systemOrange.cgColor)
+            ctx.setLineWidth(1.5)
+            ctx.beginPath()
+            ctx.move(to: CGPoint(x: va.x, y: va.y)); ctx.addLine(to: CGPoint(x: vb.x, y: vb.y))
+            ctx.strokePath()
+            ctx.setFillColor(NSColor.systemOrange.cgColor)
+            for v in [va, vb] { ctx.fillEllipse(in: CGRect(x: v.x - 3, y: v.y - 3, width: 6, height: 6)) }
+            ctx.restoreGState()
+        }
+        if let c = m.center, let r = m.radius {
+            let vc = viewport.toView(c), vr = r * viewport.scale
+            ctx.saveGState()
+            ctx.setStrokeColor(NSColor.systemOrange.cgColor)
+            ctx.setLineDash(phase: 0, lengths: [4, 3])
+            ctx.strokeEllipse(in: CGRect(x: vc.x - vr, y: vc.y - vr, width: 2 * vr, height: 2 * vr))
+            ctx.restoreGState()
+        }
+        let text = m.lines(units: doc.units).joined(separator: "\n") as NSString
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+                                                    .foregroundColor: NSColor.labelColor]
+        let size = text.size(withAttributes: attrs)
+        let anchor = m.to.map { viewport.toView($0) } ?? hoverDoc.map { viewport.toView($0) } ?? Vec2(60, 60)
+        let r = CGRect(x: anchor.x + 12, y: anchor.y + 8, width: size.width + 10, height: size.height + 6)
+        NSColor.windowBackgroundColor.withAlphaComponent(0.92).setFill()
+        NSBezierPath(roundedRect: r, xRadius: 4, yRadius: 4).fill()
+        text.draw(at: CGPoint(x: r.minX + 5, y: r.minY + 3), withAttributes: attrs)
+    }
+
     /// Trim tool click: deletes the clicked span between intersections.
     func trimClick(_ p: Vec2, _ doc: KerfDocument) {
         let tol = pickTolerance

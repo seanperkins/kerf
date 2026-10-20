@@ -66,6 +66,8 @@ struct DrawingOptionsView: View {
                 ArcToolOptions(document: document)
             case .trim:
                 TrimToolOptions(document: document)
+            case .measure:
+                MeasureToolOptions(document: document)
             case .text:
                 TextField("Text", text: $document.drawingOptions.text, axis: .vertical).lineLimit(1...6)
                 Picker("Font", selection: $document.drawingOptions.fontName) {

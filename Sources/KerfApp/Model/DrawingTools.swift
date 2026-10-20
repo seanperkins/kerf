@@ -3,7 +3,7 @@ import Foundation
 
 /// Canvas interaction modes.
 enum CanvasTool: String, CaseIterable, Identifiable {
-    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, arc, text, trim
+    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, arc, text, trim, measure
 
     var id: String { rawValue }
 
@@ -22,6 +22,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .curve: return "Smooth Curve"
         case .arc: return "Arc"
         case .trim: return "Trim"
+        case .measure: return "Measure"
         case .text: return "Text"
         }
     }
@@ -41,6 +42,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .curve: return "scribble"
         case .arc: return "circle.bottomhalf.filled"
         case .trim: return "scissors"
+        case .measure: return "ruler"
         case .text: return "textformat"
         }
     }
@@ -58,6 +60,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .text: return "t"
         case .arc: return "a"
         case .trim: return "x"
+        case .measure: return "m"
         default: return nil
         }
     }

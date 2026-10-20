@@ -26,6 +26,23 @@ struct QuickEntryHelp: View {
     }
 }
 
+/// Measure tool help and the last reading.
+struct MeasureToolOptions: View {
+    @ObservedObject var document: KerfDocument
+
+    var body: some View {
+        Text("Drag between two points for distance, ΔX/ΔY and angle (points snap). Click a vector for its length, size and, on an arc or circle, its radius.")
+            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        if let m = document.measurement {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(m.lines(units: document.units), id: \.self) { Text($0).monospacedDigit() }
+            }
+            .textSelection(.enabled)
+            Button("Clear") { document.measurement = nil }
+        }
+    }
+}
+
 /// Trim tool help and the trim-to-boundary command.
 struct TrimToolOptions: View {
     @ObservedObject var document: KerfDocument

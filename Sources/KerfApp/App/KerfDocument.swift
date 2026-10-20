@@ -110,6 +110,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var highlightMarkers: [Vec2] = []
     /// Snap to guides (and, with object snapping, to horizontal/vertical lines through nodes).
     @Published var snapToGuides = true
+    /// Last Measure-tool reading (shown on the canvas and in the inspector).
+    @Published var measurement: Measurement?
 
     weak var undoManager: UndoManager?
     /// Bumped by every undoable change (including undo/redo).

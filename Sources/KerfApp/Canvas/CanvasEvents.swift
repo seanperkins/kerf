@@ -58,6 +58,9 @@ extension CanvasNSView {
             clickPoints.append(p)
         case .trim:
             trimClick(docPoint(event, snapped: false), doc)
+        case .measure:
+            let p = docPoint(event)
+            drawingState.measureDrag = (p, p)
         case .arc:
             clickPoints.append(docPoint(event))
             if clickPoints.count >= 3 { finishClickShape() }
@@ -72,7 +75,7 @@ extension CanvasNSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let doc = document else { return }
-        if guideMouseDragged(event) { return }
+        if extrasMouseDragged(event) { return }
         let v = viewPoint(event)
         updateHover(event)
         switch drag {
@@ -146,7 +149,7 @@ extension CanvasNSView {
 
     override func mouseUp(with event: NSEvent) {
         guard let doc = document else { drag = .none; return }
-        if guideMouseUp(event) { drag = .none; return }
+        if extrasMouseUp(event) { drag = .none; return }
         switch drag {
         case .pending(_, let hit, let extend):
             if let id = hit { doc.select(id, extending: extend) } else if !extend { doc.clearSelection() }
@@ -214,7 +217,7 @@ extension CanvasNSView {
 
     func updateHover(_ event: NSEvent) {
         let drawing = document?.activeTool.isClickBuilt == true || (document?.activeTool.isDragShape ?? false)
-            || document?.activeTool == .text
+            || document?.activeTool == .text || document?.activeTool == .measure
         let p = docPoint(event, snapped: drawing)
         if !drawing { lastSnap = nil }
         hoverDoc = p
