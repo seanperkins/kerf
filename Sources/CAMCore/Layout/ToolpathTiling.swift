@@ -74,6 +74,10 @@ public enum ToolpathTiling {
             tj.width = cell.region.width
             tj.height = cell.region.height
             tj.xyOrigin = .lowerLeft
+            // The operator zeros XY at the tile corner; the job's datum offset and home were
+            // relative to the whole material's origin and would shift every tile.
+            tj.datumOffset = nil
+            tj.home = .zero
             let tc = MachineCoordinates(job: tj)
             let clipped = toolpaths.compactMap {
                 clip($0, to: cell.clip, offset: cell.region.min, source: source, target: tc, units: units)

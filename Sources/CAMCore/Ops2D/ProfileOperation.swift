@@ -55,14 +55,18 @@ public struct ProfileOperation: ToolpathOperation {
                                       fitArcs: params.preferArcs)
         let sourceStarts = closed.compactMap(\.first)
         let shapeLoops = shapes.map { s in s.paths.map { $0.flattened(tolerance: tol) } }
-        cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
-                 sourceStarts: sourceStarts, shapeLoops: shapeLoops, context: context, builder: &builder)
+        let roughTabs = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
+                                 sourceStarts: sourceStarts, shapeLoops: shapeLoops, context: context,
+                                 builder: &builder)
         if let lastPass, let finishPlan {
-            // Last pass: removes the side allowance the roughing passes left on the wall.
+            // Last pass: removes the side allowance the roughing passes left on the wall. Its loops
+            // start wherever the roughing ended, so automatic tabs would land elsewhere and the lap
+            // would cut the roughing tabs away; the roughing tab positions are reused instead.
             let finishPasses = lastPass.fullDepth ? [params.depth.cutDepth] : passes
-            cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
-                     wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
-                     context: context, builder: &builder)
+            _ = cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
+                         wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
+                         inheritedTabs: (points: roughTabs, within: lastPass.allowance + 4 * tol + 1e-6),
+                         context: context, builder: &builder)
         }
         var meta: [String: String] = [:]
         var warnings: [String] = []
@@ -85,11 +89,15 @@ public struct ProfileOperation: ToolpathOperation {
         return lp
     }
 
-    /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`.
+    /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`. Returns the
+    /// material-frame centre of every tab it placed. `inheritedTabs` puts tabs at those centres
+    /// (each projected onto the loop within `within`) instead of laying them out afresh.
+    @discardableResult
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
-                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], context: CAMContext,
-                          builder: inout ToolpathBuilder) {
-        guard !chains.isEmpty else { return }
+                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]],
+                          inheritedTabs: (points: [Vec2], within: Double)? = nil, context: CAMContext,
+                          builder: inout ToolpathBuilder) -> [Vec2] {
+        guard !chains.isEmpty else { return [] }
         let tol = context.tolerance
         let startPoint = params.startPoint ?? .nearest
         var ordered = ProfileOrdering.ordered(chains, by: params.order ?? .nearest, from: start, shapeLoops: shapeLoops,
@@ -100,17 +108,28 @@ public struct ProfileOperation: ToolpathOperation {
             manualCenters = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) },
                                                document: context.document, tolerance: tol)
         }
+        var placed: [Vec2] = []
         for (i, chain) in ordered.enumerated() {
-            cut(chain, passes: passes, tool: tool, wasteRegion: wasteRegion, manualTabs: manualCenters?[i],
-                builder: &builder, tolerance: tol)
+            var centers = manualCenters?[i]
+            if centers == nil, let inherited = inheritedTabs, chain.isClosed {
+                let alc = ArcLengthChain(chain)
+                centers = inherited.points.compactMap { p in
+                    let pr = alc.project(p)
+                    return pr.distance <= inherited.within ? pr.s : nil
+                }
+            }
+            placed += cut(chain, passes: passes, tool: tool, wasteRegion: wasteRegion, manualTabs: centers,
+                          builder: &builder, tolerance: tol)
         }
+        return placed
     }
 
-    /// `manualTabs`: user-placed tab centres for this loop (nil = automatic layout).
+    /// `manualTabs`: tab centres (loop parameters) for this loop (nil = automatic layout).
+    /// Returns the material-frame centre of each tab used.
     private func cut(_ chain: Chain2D, passes: [Double], tool: Tool, wasteRegion: WasteSide, manualTabs: [Double]?,
-                     builder: inout ToolpathBuilder, tolerance tol: Double) {
+                     builder: inout ToolpathBuilder, tolerance tol: Double) -> [Vec2] {
         let alc = ArcLengthChain(chain)
-        guard alc.length > tol else { return }
+        guard alc.length > tol else { return [] }
         let start = params.depth.startDepth
         if !chain.isClosed {
             // Open vectors: cut on the line, alternating direction each pass.
@@ -124,7 +143,7 @@ public struct ProfileOperation: ToolpathOperation {
                 prev = d
                 forward.toggle()
             }
-            return
+            return []
         }
 
         var tabs: TabLayout?
@@ -167,6 +186,7 @@ public struct ProfileOperation: ToolpathOperation {
             // Without leads the next pass starts where this one ended (no retract).
             if !useLeads { s0 = pass.endS }
         }
+        return tabs?.centers.map { alc.point(at: $0) } ?? []
     }
 }
 

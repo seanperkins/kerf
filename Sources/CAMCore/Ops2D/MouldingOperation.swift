@@ -25,6 +25,7 @@ public struct MouldingOperation: ToolpathOperation {
         let rails = context.shapes(for: setup).filter { $0.id != sid }
         guard !rails.isEmpty else { throw CAMError.invalidParameter("Select the rail vectors (not only the section)") }
         let profile = try Self.sectionProfile(section, tolerance: tol)
+        guard tool.diameter > tol else { throw CAMError.invalidParameter("Tool diameter must be positive") }
         let step = min(max(params.stepover ?? tool.stepover, tol * 10), tool.diameter)
         let depths = Self.tipDepths(profile, tool: tool, step: step, extra: params.startDepth)
 

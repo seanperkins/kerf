@@ -63,12 +63,13 @@ public struct Relief3DOperation: ToolpathOperation {
         let reach = max(finishTool.radius, roughTool.radius + max(0, params.roughing.allowance), restTool?.radius ?? 0)
         let area = regionBounds.insetBy(-(reach + 2 * params.resolution))
         var metadata: [String: String] = [:]
+        var warnings: [String] = []
         if extras.count < extraIDs.count {
-            metadata["warning"] = "\(extraIDs.count - extras.count) combined model(s) are missing and were skipped"
+            warnings.append("\(extraIDs.count - extras.count) combined model(s) are missing and were skipped")
         }
         let cellSize = Self.cellSize(requested: params.resolution, area: area)
         if cellSize > params.resolution * 1.0001 {
-            metadata["warning"] = String(format: "Heightmap resolution coarsened to %.4g", cellSize)
+            warnings.append(String(format: "Heightmap resolution coarsened to %.4g", cellSize))
         }
         var map = try ReliefHeightmap.rasterize(models, over: area, cellSize: cellSize)
         if let limit = sideLimit {
@@ -76,8 +77,9 @@ public struct Relief3DOperation: ToolpathOperation {
             metadata["side"] = params.twoSided?.side.rawValue
         }
         if map.maxDepth > job.thickness + 1e-9 {
-            metadata["warning"] = "Model is deeper than the material thickness"
+            warnings.append("Model is deeper than the material thickness")
         }
+        if !warnings.isEmpty { metadata["warning"] = warnings.joined(separator: "; ") }
         let clearance = context.coords.job.effectivePlungeGap(default: context.units == .inch ? 0.04 : 1.0)
         let coords = context.coords
         var result: [Toolpath] = []
