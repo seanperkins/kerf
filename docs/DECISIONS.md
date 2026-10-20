@@ -54,3 +54,35 @@
   feed above `maxFeed`, G91, units differing from the profile, no G20/G21, no M30/M2,
   unparseable text. Repeats of the same rule are collapsed into one issue "(N more)". G-code
   is checked in the units it declares (G20/G21), defaulting to the profile's.
+- **cad-io** — SVG import places the SVG page's lower-left corner at document (0,0) and flips Y.
+  User units without a physical size are CSS px (96/in); `preserveAspectRatio` (meet/slice/none)
+  is honoured. Top-level `<g>` elements (and Inkscape layers) become layers; loose top-level
+  elements go to an "SVG Import" layer. `<text>`/`<image>` are skipped with a warning.
+- **cad-io** — Circular SVG arcs stay `.arc` segments (split at 180°); elliptical/rotated arcs
+  become cubics. Quadratics become cubics everywhere (SVG, CoreText, EPS).
+- **cad-io** — SVG export page spans `min(0, bounds.min)…bounds.max` with physical width/height
+  in document units, so designs in the material frame round-trip exactly.
+- **cad-io** — DXF without `$INSUNITS` falls back to `$MEASUREMENT`; with neither, values are read
+  as document units and a warning is returned. Loose open entities on the same layer are joined
+  (0.0005 in / 0.01 mm) so imported outlines are usable as closed vectors.
+- **cad-io** — DXF SPLINEs with control points are evaluated (rational de Boor) and sampled to a
+  polyline; fit-point-only splines become Catmull-Rom cubics. Block INSERTs are expanded
+  (layer-0 entities inherit the insert's layer); MINSERT arrays, TEXT, HATCH, DIMENSION are skipped
+  with a warning. OCS extrusion Z=-1 mirrors X.
+- **cad-io** — DXF export is R12 ASCII: one POLYLINE with bulges per path (cubics flattened at
+  0.0005 in / 0.01 mm), full circles as CIRCLE, layer table with nearest basic ACI colour.
+- **cad-io** — Text size is the CAP HEIGHT in document units (what is measured on the finished
+  sign); the CoreText point size is derived from the font's cap height. Unknown fonts throw
+  `TextOutliner.TextError.fontNotFound` instead of silently substituting. Glyph contours are
+  normalised (outer CCW, holes CW) by nesting depth; overlapping contours (some variable fonts)
+  are not unioned.
+- **cad-io** — `.kerf` versioning lives in `KerfFile` (CADCore): JSON-level migrations keyed by
+  the version they upgrade from, newer files rejected, missing `formatVersion` = 1.
+  `DocumentFile` writes `{formatVersion, document, operations: [], tools: []}` so a design-only
+  file opens as a `KerfProject`. `KerfFile.currentVersion` must track
+  `KerfProject.currentFormatVersion`; the app should decode projects via
+  `KerfFile.decode(KerfProject.self, from:)` to get migrations.
+- **cad-io** — Test fixtures live in `Tests/Fixtures/CADCore/` (outside any target, loaded via
+  `#filePath`) so no `Package.swift` resource change was needed.
+- **cad-io** — EPS import is a minimal path interpreter (no PostScript programming); PDF-based
+  `.ai` files are rejected with a "save as SVG" message.

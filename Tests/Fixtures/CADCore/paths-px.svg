@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- No physical size: 96 user units per inch. Page is 192 x 96 px = 2 x 1 in. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 96">
+  <path id="tri" d="M0,96 L96,96 L48,0 Z"/>
+  <path id="rel" d="m 100 10 h 20 v 20 h -20 z m 40 0 l 10 10 l -10 10 z"/>
+  <path id="curves" d="M100,80 Q120,60 140,80 T180,80 C185,90 190,90 190,80 S185,70 180,70"/>
+  <path id="arc" d="M120,50 A20,20 0 1,0 160,50"/>
+  <path id="earc" d="M10,40 a 30 10 30 0 1 40 0"/>
+  <polygon id="poly" points="0,0 10,0 10,10"/>
+  <polyline id="pl" points="0 0,1 1 2,2"/>
+</svg>
