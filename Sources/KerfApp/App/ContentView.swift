@@ -34,6 +34,9 @@ struct ContentView: View {
         .onAppear {
             document.undoManager = undoManager
             RecoveryCoordinator.shared.register(document)
+            #if DEBUG
+            UIHarness.shared.noteDocument(document)
+            #endif
         }
         .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }

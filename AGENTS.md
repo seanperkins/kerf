@@ -10,6 +10,7 @@ scripts/test.sh                      # full swift-testing suite (~900 tests, ~20
 scripts/test.sh --filter Ops2D       # subset
 scripts/bundle.sh                    # release build → dist/Kerf.app (ad-hoc signed)
 scripts/run.sh                       # debug bundle + launch
+scripts/ui.sh main --light           # UI harness: screenshots + accessibility tree, no permissions (docs/UI-HARNESS.md)
 KERF_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
 KERF_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
 ```
@@ -50,6 +51,13 @@ changes as safety-critical:
 - Every program must pass `GCodeValidator`. Don't weaken a validator check to make a test pass.
 - Changing post output means regenerating the golden files on purpose and reviewing the diff.
 - Retract to safe Z before XY rapids; keep-out zones and the move home are checked on export.
+
+## Checking UI changes
+
+Run a harness scenario (`scripts/ui.sh <scenario> [--light|--dark] [--size WxH]`, see
+[docs/UI-HARNESS.md](docs/UI-HARNESS.md)) and look at the PNG and the `.ax.txt` tree instead of
+launching the app and driving it by hand. It runs in its own HOME, so it never touches real preferences or
+recovery files. Add a scenario in `harness/scenarios/` for a state you need to see.
 
 ## Docs to keep current
 

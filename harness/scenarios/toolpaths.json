@@ -1,0 +1,52 @@
+{
+  "name": "toolpaths calculated, 2D and 3D",
+  "window": [
+    1280,
+    820
+  ],
+  "steps": [
+    {
+      "op": "sample",
+      "name": "sign"
+    },
+    {
+      "op": "tab",
+      "value": "toolpaths"
+    },
+    {
+      "op": "calculate"
+    },
+    {
+      "op": "selectToolpath",
+      "name": "Profile 1"
+    },
+    {
+      "op": "capture",
+      "name": "profile-selected"
+    },
+    {
+      "op": "mode",
+      "value": "3d"
+    },
+    {
+      "op": "wait",
+      "seconds": 3
+    },
+    {
+      "op": "capture",
+      "name": "preview-3d"
+    },
+    {
+      "op": "mode",
+      "value": "split"
+    },
+    {
+      "op": "wait",
+      "seconds": 2
+    },
+    {
+      "op": "capture",
+      "name": "split"
+    }
+  ]
+}

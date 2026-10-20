@@ -1,0 +1,12 @@
+{
+  "name": "main window with the sample sign",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "capture", "name": "main"},
+    {"op": "menus", "name": "no-selection"},
+    {"op": "select", "names": ["KERF"]},
+    {"op": "capture", "name": "shape-selected"},
+    {"op": "menus", "name": "one-shape"}
+  ]
+}
