@@ -143,6 +143,17 @@ import Testing
 
     enum Failure: Error { case notMerged }
 
+    @Test func theSidebarSummaryListsThePauseAndCountsItAsAStop() {
+        let (doc, _, ids) = makeDoc()
+        setPause(doc, ids[0], PauseStep(message: "Flip the part"))
+        setPause(doc, ids[1], PauseStep(message: "Never written"))
+        let s = JobSummary.make(operations: doc.project.operations, results: doc.results, groupByTool: false, toolChangeSeconds: 90)
+        #expect(s.pauses == [JobSummary.PauseRow(after: "Profile 1", text: "Flip the part")])
+        #expect(s.toolChanges == 0)
+        #expect(s.stops == 1)
+        #expect(abs(s.totalSeconds - (s.machiningSeconds + 90)) < 1e-9)
+    }
+
     @Test func anEmptyMessageNamesTheToolpath() {
         #expect(PauseStep().text(afterToolpath: "Pocket 1") == "Paused after Pocket 1")
         #expect(PauseStep(message: "  Flip  ").text(afterToolpath: "Pocket 1") == "Flip")

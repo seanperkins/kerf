@@ -36,6 +36,25 @@ private func slot(tool: Tool) -> Toolpath {
     #expect(abs(t - (3 * perPath + 2 * link + 30)) < 1e-9)
 }
 
+@Test func simTimeEstimateCountsAPauseAsAStop() {
+    let a = endMill(1), b = endMill(2)
+    var paused = slot(tool: a)
+    paused.pauseAfter = PauseStep(message: "Flip")
+    let perPath = 7.6, link = 6.0 / 180 * 60
+    // Same tool on both sides of the pause: one stop.
+    let same = MachiningTimeEstimator.estimate([paused, slot(tool: a)], rapidRate: 180, toolChangeSeconds: 30)
+    #expect(abs(same - (2 * perPath + link + 30)) < 1e-9)
+    // A pause that ends in a tool change is one stop, not two.
+    let change = MachiningTimeEstimator.estimate([paused, slot(tool: b)], rapidRate: 180, toolChangeSeconds: 30)
+    #expect(abs(change - (2 * perPath + link + 30)) < 1e-9)
+    // A pause on the last toolpath is never written, so it adds nothing.
+    let last = MachiningTimeEstimator.estimate([slot(tool: a), paused], rapidRate: 180, toolChangeSeconds: 30)
+    #expect(abs(last - (2 * perPath + link)) < 1e-9)
+    // The per-toolpath job estimate agrees.
+    let stats = ToolpathStats.estimatedSeconds([paused, slot(tool: a)], rapidRate: 180, toolChangeSeconds: 30)
+    #expect(abs(stats - (2 * perPath + 30)) < 1e-9)
+}
+
 @Test func simTimeEstimateArcUsesArcLength() {
     let start = coords.machine(Vec2(3, 2), depth: 0.1)
     let tp = Toolpath(name: "c", kind: .profile, tool: endMill(1), moves: [

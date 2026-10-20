@@ -18,7 +18,10 @@ struct ToolChangeSummaryView: View {
                 let time = "Estimated time: " + ToolpathCalculator.formatDuration(s.totalSeconds)
                 let tools = s.sequence.count
                 let toolsText = tools == 0 ? "No tools" : "\(tools) tool\(tools == 1 ? "" : "s")"
+                let pauses = s.pauses.count
+                let pauseText = pauses == 0 ? "" : " · \(pauses) pause\(pauses == 1 ? "" : "s")"
                 ViewThatFits(in: .horizontal) {
+                    header(time, tools == 0 ? toolsText : "\(toolsText) · \(s.toolChanges) change\(s.toolChanges == 1 ? "" : "s")" + pauseText)
                     header(time, tools == 0 ? toolsText : "\(toolsText) · \(s.toolChanges) change\(s.toolChanges == 1 ? "" : "s")")
                     header(time, toolsText)
                     header(time, nil)
@@ -37,6 +40,10 @@ struct ToolChangeSummaryView: View {
                             Text(load.toolpathNames.joined(separator: ", ")).font(.caption2).foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
+                    }
+                    ForEach(Array(s.pauses.enumerated()), id: \.offset) { _, p in
+                        Label("Pause after \(p.after): \(p.text)", systemImage: "pause.circle")
+                            .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                     let missing = s.rows.filter { $0.isEnabled && $0.estimatedSeconds == nil }.count
                     if missing > 0 {
@@ -63,9 +70,10 @@ struct ToolChangeSummaryView: View {
     /// What the total is made of, so it can be compared with the 3D preview's.
     private func totalHelp(_ s: JobSummary) -> String {
         var text = "Cutting and rapids: " + ToolpathCalculator.formatDuration(s.machiningSeconds)
-        if s.toolChanges > 0 {
-            text += " + \(s.toolChanges) tool change\(s.toolChanges == 1 ? "" : "s") at "
-                + ToolpathCalculator.formatDuration(s.toolChangeSeconds) + " each"
+        if s.stops > 0 {
+            let what = s.pauses.isEmpty ? "tool change\(s.stops == 1 ? "" : "s")"
+                : "stop\(s.stops == 1 ? "" : "s") (tool changes and pauses)"
+            text += " + \(s.stops) \(what) at " + ToolpathCalculator.formatDuration(s.toolChangeSeconds) + " each"
         }
         return text + ". Set the tool-change allowance in the 3D preview's time settings."
     }
