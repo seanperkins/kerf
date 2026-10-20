@@ -157,18 +157,18 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `pv-save-image` | preview | Save preview image | missing | P3 | Not implemented |
 | `pv-step-control` | preview | Single-step / run-to-retract simulation control | missing | P3 | Continuous playback and scrubbing only |
 | `ux-menus-shortcuts` | app-ux | Menus and keyboard shortcuts | done | P1 | App/KerfCommands.swift, DrawingTools.shortcut |
-| `ux-preferences` | app-ux | Preferences window (default units, grid, post, snapping, colours) | missing | P2 | No Settings scene in KerfApp.swift; only kerf.groupByTool in UserDefaults |
+| `ux-preferences` | app-ux | Preferences window (default units, grid, post, snapping, colours) | done | P2 | Panels/PreferencesView.swift, Model/AppPreferences.swift; PreferencesTests |
 | `ux-undo` | app-ux | Undo/redo for every document edit | done | P1 | KerfDocument.perform snapshot undo; DocumentTests |
-| `ux-autosave-crash` | app-ux | Autosave and crash recovery | partial | P2 | Relies on DocumentGroup system autosave/versions; not tested, no explicit recovery |
+| `ux-autosave-crash` | app-ux | Autosave and crash recovery | done | P2 | DocumentGroup autosave + Model/RecoveryStore.swift recovery copies, Panels/RecoveryPrompt.swift; RecoveryTests |
 | `ux-canvas-handles` | app-ux | On-canvas resize/rotate handles and mouse node editing | done | P1 | TransformHandles.swift, CanvasNodeEvents.swift; EditingRenderTests |
 | `ux-context-menus` | app-ux | Context (right-click) menus | done | P2 | Canvas/CanvasEditMenu.swift, SidebarView contextMenu |
-| `ux-contextual-help` | app-ux | Contextual help and tooltips | partial | P2 | .help tooltips on toolbar/sidebar; no help book or per-form help |
-| `ux-onboarding` | app-ux | First-run onboarding and sample project | partial | P2 | samples/ and TESTING.md exist; no in-app welcome or sample opener |
-| `ux-accessibility` | app-ux | Accessibility basics (VoiceOver labels, keyboard navigation, contrast) | partial | P3 | Standard SwiftUI controls are labelled; canvas has no accessibility elements |
-| `ux-machine-config` | app-ux | Machine configuration (bed size, post, travel limits) | partial | P1 | Post profile carries limits (PostProfile.swift); no machine picker separate from post |
+| `ux-contextual-help` | app-ux | Contextual help and tooltips | done | P2 | Model/HelpTopics.swift, Panels/HelpView.swift (per-form ? buttons, field tooltips); HelpTopicsTests |
+| `ux-onboarding` | app-ux | First-run onboarding and sample project | done | P2 | Panels/WelcomeView.swift, Model/SampleProjects.swift, bundle.sh ships samples; OnboardingTests |
+| `ux-accessibility` | app-ux | Accessibility basics (VoiceOver labels, keyboard navigation, contrast) | done | P3 | Canvas/CanvasAccessibilityElements.swift, Model/CanvasAccessibility.swift (Tab selection); AccessibilityTests |
+| `ux-machine-config` | app-ux | Machine configuration (bed size, post, travel limits) | done | P1 | PostCore/Model/MachineDefinition.swift, Model/MachineStore.swift, toolbar machine + post pickers; MachineConfigTests |
 | `ux-async-calc` | app-ux | Background toolpath calculation with progress and cancel | done | P1 | KerfDocument.calculateAndWait, Panels/CalculationProgressView.swift |
 | `ux-zoom-pan` | app-ux | Zoom/pan (fit material, fit selection, trackpad pinch) | done | P1 | CanvasViewport.swift, CanvasEvents scroll/magnify |
-| `ux-split-view` | app-ux | Side-by-side 2D and 3D views | missing | P3 | Center pane switches between 2D and 3D only |
+| `ux-split-view` | app-ux | Side-by-side 2D and 3D views | done | P3 | CenterMode.split in ContentView (⌥⌘2); AppUXRenderTests |
 
 ## Sources
 
