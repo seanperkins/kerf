@@ -41,7 +41,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .star: return "star"
         case .polyline: return "point.topleft.down.to.point.bottomright.curvepath"
         case .pen: return "pencil.tip"
-        case .curve: return "scribble"
+        case .curve: return "scribble.variable"
         case .arc: return "circle.bottomhalf.filled"
         case .trim: return "scissors"
         case .freehand: return "hand.draw"
@@ -50,6 +50,18 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .text: return "textformat"
         }
     }
+
+    /// The palette's rows, separated by dividers: selecting and editing, closed shapes, lines and curves, and
+    /// annotation. Together they list every tool once, in palette order.
+    static let groups: [[CanvasTool]] = [
+        [.select, .nodeEdit],
+        [.rectangle, .roundedRectangle, .circle, .ellipse, .polygon, .star],
+        [.polyline, .pen, .curve, .arc, .freehand],
+        [.text, .trim, .measure, .dimension],
+    ]
+
+    /// Drawn by `ToolGlyph` instead of an SF Symbol, because no symbol reads as an arc.
+    var hasCustomGlyph: Bool { self == .arc }
 
     /// Single-key shortcut on the canvas (VCarve/Illustrator-like).
     var shortcut: Character? {

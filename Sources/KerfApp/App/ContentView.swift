@@ -117,7 +117,7 @@ struct ContentView: View {
     /// stay visible when the window is narrow; the machine and post live in Job Setup.
     @ToolbarContentBuilder private var toolbarContent: some CustomizableToolbarContent {
         ToolbarItem(id: "jobSetup", placement: .navigation) {
-            Button { document.sheet = .jobSetup } label: { Label("Job Setup", systemImage: "square.dashed") }
+            Button { document.sheet = .jobSetup } label: { Label("Job Setup", systemImage: "doc.badge.gearshape") }
                 .help("Job Setup (material, machine, post processor, origin, Z zero)")
         }
         ToolbarItem(id: "viewMode", placement: .principal) {
@@ -130,7 +130,7 @@ struct ContentView: View {
             .help("Design canvas, both side by side, or 3D preview")
         }
         ToolbarItem(id: "zoomToFit") {
-            Button { document.requestCanvas(.fit) } label: { Label("Zoom to Fit", systemImage: "arrow.up.left.and.arrow.down.right") }
+            Button { document.requestCanvas(.fit) } label: { Label("Zoom to Fit", systemImage: "arrow.up.left.and.down.right.magnifyingglass") }
                 .help("Zoom to material (F)")
         }
         ToolbarItem(id: "snap") {
