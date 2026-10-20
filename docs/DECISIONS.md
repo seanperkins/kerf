@@ -224,3 +224,14 @@
 - **app-shell** — The canvas draws a basic 2D toolpath overlay (cuts solid per-operation colour,
   rapids dashed red). The 3D tab is a placeholder (`Preview3DHost`, TODO(integration)) for the
   preview workstream's view. Marquee: left→right = window (fully inside), right→left = crossing.
+
+## integration
+
+- **integration** — Merged the seven workstream branches into main in order post, cad-io, cam-2d, cam-vcarve, cam-3d, preview, app-shell. The only conflicts were appended sections in this file (all kept).
+- **integration** — cam-2d and cam-3d both declared an internal `SplitMix64`; the cam-3d one is renamed `ReliefSplitMix64`. `FlutingOperation`/`TextureOperation` use the cam-2d implementations; the cam-3d `FluteToolpathGenerator`/`TextureToolpathGenerator` stay as public builders.
+- **integration** — `KerfProject.decode` now goes through `KerfFile.decode`, so .kerf migrations run and files from a newer version are rejected.
+- **integration** — The 3D tab (`Preview3DHost`) shows `SimulationPreviewView` for all enabled, calculated toolpaths using the selected post's rapid rate. The 2D toolpath overlay remains the design canvas's own drawing, so it shares the canvas zoom/pan.
+- **integration** — G-code export no longer passes a material description to the post; the header already prints W x H x T, and the description line duplicated it.
+- **integration** — End-to-end test (Tests/KerfAppTests/EndToEndSignTests.swift) runs the app model pipeline headlessly on Tests/Fixtures/e2e/sign.svg and compares against Tests/Fixtures/golden/sign-{materialTop,spoilboard}.tap. Regenerate with `KERF_UPDATE_GOLDEN=1 scripts/test.sh --filter EndToEnd`. The fixture text uses Helvetica-Bold outlines baked into the SVG, so font changes on the OS don't affect the test.
+- **integration** — Drill pecks rapid back down to just above the previous peck depth (standard peck behaviour); the validator reports this as a "rapid plunge below material top" warning, not an error. Left as is.
+- **integration** — samples/sign.svg is a copy of the e2e fixture for manual testing in the app.

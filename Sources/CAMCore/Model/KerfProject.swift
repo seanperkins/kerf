@@ -27,8 +27,9 @@ public struct KerfProject: Codable, Hashable, Sendable {
         return try enc.encode(self)
     }
 
+    /// Decodes through `KerfFile` so version migrations run and newer files are rejected.
     public static func decode(from data: Data) throws -> KerfProject {
-        try JSONDecoder().decode(KerfProject.self, from: data)
+        try KerfFile.decode(KerfProject.self, from: data)
     }
 
     /// Tool library = project snapshot merged over `library` (library entries win on ID clash).

@@ -48,8 +48,8 @@ enum GCodeExporter {
         }
         let validator = GCodeValidator(profile: profile, job: doc.job, units: doc.units)
         var issues = validator.validate(toolpaths: toolpaths)
-        let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths,
-                          materialDescription: materialDescription(doc))
+        // The post header already prints W x H x T, so no extra material description.
+        let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths)
         do {
             let text = try TemplatePostProcessor(profile: profile).post(job)
             issues += validator.validate(gcode: text)
