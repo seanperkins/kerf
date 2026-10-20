@@ -78,7 +78,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `io-material-plunge-z` | io | Separate plunge Z (Z2) and XY datum offset | done | P2 | JobSetup.plungeGap |
 | `io-model-position` | io | Model position in material (gap above/below) | done | P2 | Model placement sheet position/datum; JobSetup.datumOffset |
 | `io-multiple-sheets` | io | Multiple sheets per job (different sizes/thicknesses) | done | P2 | Document.otherSheets / MaterialSheet; 3D models and relief stay on the primary sheet |
-| `io-document-variables` | io | Document variables in numeric fields | partial | P3 | Expressions and variables evaluated when typed; fields do not stay linked |
+| `io-document-variables` | io | Document variables in numeric fields | done | P3 | Job Setup and toolpath fields stay linked to expressions with variables (Document.variableLinks, KerfApp/Model/VariableLinks.swift; IOVariableLinkTests); drawing-panel fields are evaluated once |
 | `io-units-convert` | io | Unit switching inch↔mm with conversion | done | P1 | KerfApp/Model/UnitScaling.swift; ProjectModelTests |
 | `io-setup-sheet` | io | Job / setup sheet (printable report) | done | P1 | Covered by lay-job-sheet (File > Export Job Sheet…); the io job-sheet variant was dropped at merge |
 | `io-print` | io | Print 2D design / 3D view | done | P3 | File > Print / Print at Actual Size (2D design only) |

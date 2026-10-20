@@ -27,6 +27,8 @@ public struct Document: Codable, Hashable, Sendable {
     public var guides: [GuideLine]?
     /// Reference dimensions (never cut; optional so older files decode).
     public var dimensions: [DimensionAnnotation]?
+    /// Parameters tied to expressions with variables (io; optional so older files decode).
+    public var variableLinks: [VariableLink]?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

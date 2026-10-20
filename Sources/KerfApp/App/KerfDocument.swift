@@ -102,6 +102,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
     var deferredAlert: AlertMessage?
+    /// Expressions typed into numeric fields, linked to parameters on the next edit (io).
+    let expressionRecorder = ExpressionRecorder()
     @Published var showToolpaths = true
     @Published var results: [UUID: ToolpathResult] = [:]
     @Published var calculating: Set<UUID> = []
@@ -199,6 +201,7 @@ final class KerfDocument: ReferenceFileDocument {
     func perform(_ actionName: String, _ change: (inout KerfProject) -> Void) {
         var p = project
         change(&p)
+        VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
         guard p != project else { return }
         replaceProject(p, actionName: actionName)
     }
@@ -426,6 +429,7 @@ final class KerfDocument: ReferenceFileDocument {
         if let live = liveOperationEdit, live.id == op.id, live.serial == editSerial {
             var p = project
             p.upsertOperation(op)
+            VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
             guard p != project else { return }
             project = p  // the open undo step already restores the state before the first edit
             return

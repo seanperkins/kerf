@@ -66,6 +66,7 @@ struct ContentView: View {
         }
         .environment(\.documentVariables, document.document.variableTable)
         .environment(\.expressionUnits, document.units)
+        .environment(\.expressionRecorder, document.expressionRecorder)
     }
 
     @ViewBuilder private var center: some View {
