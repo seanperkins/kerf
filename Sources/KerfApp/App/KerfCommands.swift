@@ -51,6 +51,8 @@ struct KerfCommands: Commands {
             .keyboardShortcut("f", modifiers: [.command, .option])
             .disabled(!(document?.isTwoSided ?? false))
             SheetsMenu(document: document)
+            Button("Document Variables…") { document?.sheet = .variables }
+                .disabled(document == nil)
             Divider()
             Menu("Draw") {
                 ForEach(CanvasTool.allCases) { tool in

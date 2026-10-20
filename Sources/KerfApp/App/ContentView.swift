@@ -41,11 +41,14 @@ struct ContentView: View {
             case .placeModel(let form): ModelPlacementSheet(document: document, form: form)
             case .saveAllToolpaths: SaveAllToolpathsSheet(document: document)
             case .validation: ValidationSheet(document: document)
+            case .variables: DocumentVariablesSheet(document: document)
             }
         }
         .alert(item: $document.alert) { a in
             Alert(title: Text(a.title), message: Text(a.message))
         }
+        .environment(\.documentVariables, document.document.variableTable)
+        .environment(\.expressionUnits, document.units)
     }
 
     @ViewBuilder private var center: some View {

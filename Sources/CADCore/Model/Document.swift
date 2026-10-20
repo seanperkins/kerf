@@ -19,6 +19,8 @@ public struct Document: Codable, Hashable, Sendable {
     public var activeSheetName: String?
     public var otherSheets: [MaterialSheet]?
     public var sheetOrder: [UUID]?
+    /// Named numbers for numeric fields (see `ExpressionEvaluator`); nil when none.
+    public var variables: [DocumentVariable]?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

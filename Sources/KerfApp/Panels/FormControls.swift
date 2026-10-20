@@ -18,7 +18,7 @@ struct NumberField: View {
     var body: some View {
         LabeledContent(label) {
             HStack(spacing: 4) {
-                TextField(label, value: $value, format: decimalFormat)
+                ExpressionTextField(label: label, value: $value)
                     .labelsHidden()
                     .multilineTextAlignment(.trailing)
                     .frame(minWidth: 60, maxWidth: 110)
@@ -57,7 +57,7 @@ struct OptionalLengthField: View {
             Toggle(label, isOn: Binding(get: { value != nil }, set: { value = $0 ? (value ?? defaultValue) : nil }))
             Spacer()
             if value != nil {
-                TextField(label, value: Binding(get: { value ?? defaultValue }, set: { value = $0 }), format: decimalFormat)
+                ExpressionTextField(label: label, value: Binding(get: { value ?? defaultValue }, set: { value = $0 }))
                     .labelsHidden()
                     .multilineTextAlignment(.trailing)
                     .frame(minWidth: 60, maxWidth: 110)
