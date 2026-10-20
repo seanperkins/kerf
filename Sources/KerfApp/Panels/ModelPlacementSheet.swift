@@ -77,7 +77,7 @@ struct ModelPlacementSheet: View {
                 if !form.warnings.isEmpty {
                     Section {
                         ForEach(form.warnings, id: \.self) {
-                            Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                            Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(Color.warningText)
                         }
                     }
                 }

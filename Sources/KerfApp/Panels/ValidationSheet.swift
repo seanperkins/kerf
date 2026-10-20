@@ -30,7 +30,7 @@ struct ValidationSheet: View {
                     ForEach(r.sections) { section in
                         Section {
                             if section.issues.isEmpty {
-                                Label("No problems found", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                                Label("No problems found", systemImage: "checkmark.seal.fill").foregroundStyle(Color.successText)
                             }
                             ForEach(Array(section.issues.enumerated()), id: \.offset) { _, issue in
                                 IssueRow(issue: issue)
@@ -71,7 +71,7 @@ struct ValidationSheet: View {
     private func summary(_ r: ValidationReport) -> some View {
         Group {
             if r.isClean {
-                Label("All toolpaths passed the validator.", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                Label("All toolpaths passed the validator.", systemImage: "checkmark.seal.fill").foregroundStyle(Color.successText)
             } else {
                 Label("\(r.errorCount) error(s) and \(r.warningCount) warning(s). Errors must be fixed before cutting; warnings are worth a look.",
                       systemImage: r.errorCount > 0 ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")

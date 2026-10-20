@@ -71,7 +71,7 @@ struct WelcomeView: View {
                             .help("Import it with File ▸ Import… in any document")
                     }
                 }
-                if let message { Text(message).font(.caption).foregroundStyle(.red) }
+                if let message { Text(message).font(.caption).foregroundStyle(Color.errorText) }
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)

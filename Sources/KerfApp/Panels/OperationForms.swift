@@ -16,7 +16,7 @@ struct DepthForm: View {
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
         PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: toolStepdown)
         if depth.cutDepth <= depth.startDepth {
-            Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(.orange)
+            Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(Color.warningText)
         }
     }
 }
@@ -388,7 +388,7 @@ struct InlayForm: View {
             }
             let gap = params.pocketDepth - params.maleStartDepth
             if params.maleStartDepth + params.glueGap > params.pocketDepth + 1e-9 {
-                Text("Plug start depth + glue gap must not exceed the pocket depth.").font(.caption).foregroundStyle(.orange)
+                Text("Plug start depth + glue gap must not exceed the pocket depth.").font(.caption).foregroundStyle(Color.warningText)
             } else {
                 Text("Gap under the plug: \(RulerTicks.label((gap * 1000).rounded() / 1000)) \(units.abbreviation)")
                     .font(.caption).foregroundStyle(.secondary)
@@ -617,7 +617,7 @@ struct ClearanceToolsEditor: View {
                     .buttonStyle(.icon).help("Remove this clearance tool")
             }
             if let problem = problems[i] {
-                Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                Text(problem).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
             }
         }
         Button { if let t = nextSuggestion { set(ids + [t.id]) } } label: { Label("Add Clearance Tool", systemImage: "plus") }

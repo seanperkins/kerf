@@ -25,7 +25,7 @@ struct VectorValidatorSheet: View {
                 .font(.callout).foregroundStyle(.secondary)
             Toggle("Report open vectors", isOn: $includeOpen)
             if list.isEmpty {
-                Label("No problems found.", systemImage: "checkmark.circle").foregroundStyle(.green)
+                Label("No problems found.", systemImage: "checkmark.circle").foregroundStyle(Color.successText)
             } else {
                 List {
                     ForEach(VectorIssue.Kind.allCases, id: \.self) { kind in

@@ -143,7 +143,7 @@ struct MachinePreferences: View {
                         .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+            if let error { Text(error).font(.caption).foregroundStyle(Color.errorText) }
         }
         .padding(12)
         .onChange(of: selectedID) { _, id in draft = machines.machine(id: id); error = nil }

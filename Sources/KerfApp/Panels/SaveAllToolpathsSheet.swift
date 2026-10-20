@@ -40,7 +40,7 @@ struct SaveAllToolpathsSheet: View {
                 Spacer()
             } else if posted.isEmpty {
                 Label("There are no calculated, enabled toolpaths to save.", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
             } else {
                 List(Array(posted.enumerated()), id: \.offset) { _, item in fileRow(item.file, item.result) }
             }
@@ -87,12 +87,12 @@ struct SaveAllToolpathsSheet: View {
             Text(loads.map { "T\($0.number) \($0.name)" }.joined(separator: " → "))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
             if let e = r.errorMessage {
-                Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.red)
+                Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(Color.errorText)
             } else if errors + warnings > 0 {
                 Label("\(errors) error(s), \(warnings) warning(s)", systemImage: errors > 0 ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(errors > 0 ? .red : .orange)
             } else {
-                Label("No problems found", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(.green)
+                Label("No problems found", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.successText)
             }
         }
         .padding(.vertical, 2)

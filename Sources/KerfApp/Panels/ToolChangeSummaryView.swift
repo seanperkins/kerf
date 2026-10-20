@@ -41,7 +41,7 @@ struct ToolChangeSummaryView: View {
                     let missing = s.rows.filter { $0.isEnabled && $0.estimatedSeconds == nil }.count
                     if missing > 0 {
                         Text("\(missing) enabled toolpath\(missing == 1 ? " is" : "s are") not calculated.")
-                            .font(.caption2).foregroundStyle(.orange)
+                            .font(.caption2).foregroundStyle(Color.warningText)
                     }
                 }
                 .padding(.top, 2)

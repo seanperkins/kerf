@@ -103,7 +103,7 @@ struct JobSetupSheet: View {
             }
             if !problems.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                    ForEach(problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(Color.warningText) }
                 }
             }
             HStack {

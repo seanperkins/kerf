@@ -27,7 +27,7 @@ struct PhotoVCarveForm: View {
                         .frame(maxHeight: 140)
                 }
             }
-            if let loadError { Text(loadError).font(.caption).foregroundStyle(.orange) }
+            if let loadError { Text(loadError).font(.caption).foregroundStyle(Color.warningText) }
             LengthField("Left (X)", value: Binding(get: { params.origin.x }, set: { params.origin.x = $0 }), units: units)
             LengthField("Bottom (Y)", value: Binding(get: { params.origin.y }, set: { params.origin.y = $0 }), units: units)
             LengthField("Width", value: $params.width, units: units)

@@ -163,7 +163,7 @@ struct PassEditor: View {
             }
         }
         if depth.customPasses == nil, let s = stepdown, !(s > 0) {
-            Text("Pass depth must be positive.").font(.caption).foregroundStyle(.red)
+            Text("Pass depth must be positive.").font(.caption).foregroundStyle(Color.errorText)
         } else if stepdown != nil || depth.customPasses != nil {
             let passes = depth.passDepths(toolStepdown: stepdown ?? 1)
             if !passes.isEmpty {
@@ -291,7 +291,7 @@ struct StraightInlayForm: View {
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if params.plugDepth < params.pocketDepth {
                 Text("The plug depth is less than the pocket depth; the plug will not fill the pocket.")
-                    .font(.caption).foregroundStyle(.orange)
+                    .font(.caption).foregroundStyle(Color.warningText)
             }
         }
     }

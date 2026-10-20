@@ -110,7 +110,7 @@ struct ShapeRow: View {
             Text(shape.name.isEmpty ? "Vector" : shape.name).lineLimit(1)
             Spacer()
             if shape.isLocked { Image(systemName: "lock.fill").font(.caption).foregroundStyle(.secondary) }
-            if !shape.isClosed { Text("open").font(.caption2).foregroundStyle(.orange) }
+            if !shape.isClosed { Text("open").font(.caption2).foregroundStyle(Color.warningText) }
         }
     }
 

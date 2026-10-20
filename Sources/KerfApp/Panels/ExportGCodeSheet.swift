@@ -78,11 +78,11 @@ struct ExportGCodeSheet: View {
     @ViewBuilder private var issuesView: some View {
         if let r = result {
             if let e = r.errorMessage {
-                Label(e, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                Label(e, systemImage: "xmark.octagon.fill").foregroundStyle(Color.errorText)
             }
             if r.issues.isEmpty && r.errorMessage == nil {
                 Label("No problems found in \(r.toolpathCount) toolpath(s).", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.successText)
             }
             if !r.issues.isEmpty {
                 List(Array(r.issues.enumerated()), id: \.offset) { _, issue in

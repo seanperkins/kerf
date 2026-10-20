@@ -151,12 +151,12 @@ struct OperationEditor: View {
         } else if let r = document.results[draft.id] {
             VStack(alignment: .leading, spacing: 4) {
                 if let e = r.error {
-                    Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.warningText)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     let moves = r.toolpaths.reduce(0) { $0 + $1.moves.count }
                     Label("\(r.toolpaths.count) toolpath\(r.toolpaths.count == 1 ? "" : "s"), \(moves) moves",
-                          systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                          systemImage: "checkmark.circle.fill").foregroundStyle(Color.successText)
                     Text("Estimated time: " + ToolpathCalculator.formatDuration(r.estimatedSeconds))
                         .font(.caption).foregroundStyle(.secondary)
                     if r.toolpaths.count > 1 {
@@ -176,7 +176,7 @@ struct OperationEditor: View {
                     }
                 }
                 if document.isStale(draft.id) {
-                    Text("Parameters or design changed — recalculate.").font(.caption).foregroundStyle(.orange)
+                    Text("Parameters or design changed — recalculate.").font(.caption).foregroundStyle(Color.warningText)
                 }
             }
         }

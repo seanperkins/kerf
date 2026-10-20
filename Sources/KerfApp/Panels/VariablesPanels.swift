@@ -152,7 +152,7 @@ struct DocumentVariablesSheet: View {
                 while rows.contains(where: { $0.name == "var\(n)" }) { n += 1 }
                 rows.append(DocumentVariable(name: "var\(n)", value: 0))
             } label: { Label("Add Variable", systemImage: "plus") }
-            ForEach(problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+            ForEach(problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(Color.warningText) }
             if !links.isEmpty {
                 Text("Linked fields").font(.headline)
                 let p = preview
@@ -165,7 +165,7 @@ struct DocumentVariablesSheet: View {
                                 Text("\(l.expression) = \(decimalFormat.format(v))").foregroundStyle(.secondary)
                             } else {
                                 Label("\(l.expression): unknown name", systemImage: "exclamationmark.triangle")
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.warningText)
                             }
                             Button("Unlink") { links.removeAll { $0.id == l.id } }
                                 .buttonStyle(.borderless)
