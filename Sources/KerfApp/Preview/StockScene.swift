@@ -15,6 +15,8 @@ final class StockScene {
     private let stockNode = SCNNode()
     private let toolNode = SCNNode()
     private(set) var job = JobSetup()
+    /// Specular strength of the stock (0...1), from the material appearance.
+    var shininess = 0.15
 
     init() {
         scene.background.contents = NSColor(calibratedWhite: 0.16, alpha: 1)
@@ -71,7 +73,7 @@ final class StockScene {
     }
 
     func updateStock(_ mesh: HeightfieldMesh) {
-        stockNode.geometry = Self.geometry(from: mesh)
+        stockNode.geometry = Self.geometry(from: mesh, shininess: shininess)
     }
 
     /// Shows the cutter with its tip at material-frame `tip` (depth below top as negative z).
@@ -127,7 +129,7 @@ final class StockScene {
         return root
     }
 
-    static func geometry(from mesh: HeightfieldMesh) -> SCNGeometry {
+    static func geometry(from mesh: HeightfieldMesh, shininess: Double = 0.15) -> SCNGeometry {
         let n = mesh.vertexCount
         func source(_ values: [Float], _ semantic: SCNGeometrySource.Semantic) -> SCNGeometrySource {
             let data = values.withUnsafeBufferPointer { Data(buffer: $0) }
@@ -145,7 +147,8 @@ final class StockScene {
                               elements: [element])
         let m = SCNMaterial()
         m.diffuse.contents = NSColor.white // multiplied by the vertex colours
-        m.specular.contents = NSColor(calibratedWhite: 0.15, alpha: 1)
+        m.specular.contents = NSColor(calibratedWhite: CGFloat(min(max(shininess, 0), 1)), alpha: 1)
+        m.shininess = CGFloat(0.1 + 0.6 * min(max(shininess, 0), 1))
         m.lightingModel = .blinn
         m.isDoubleSided = true
         geo.materials = [m]

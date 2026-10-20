@@ -18,18 +18,25 @@ actor SimulationEngine {
     private let thickness: Double
     private let coords: MachineCoordinates
     private let maxVertices: Int
+    private var appearance: StockAppearance
+    private let unitsPerInch: Double
 
-    init(player: SimulationPlayer, job: JobSetup, maxVertices: Int) {
+    init(player: SimulationPlayer, job: JobSetup, maxVertices: Int, appearance: StockAppearance = .default,
+         unitsPerInch: Double = 1) {
         self.player = player
         thickness = job.thickness
         coords = MachineCoordinates(job: job)
         self.maxVertices = maxVertices
+        self.appearance = appearance
+        self.unitsPerInch = unitsPerInch
     }
+
+    func setAppearance(_ a: StockAppearance) { appearance = a }
 
     func frame(at time: TimeInterval) -> SimulationFrame {
         player.seek(to: time)
         let mesh = HeightfieldMesh(heightfield: player.heightfield, thickness: thickness,
-                                   maxVertices: maxVertices)
+                                   maxVertices: maxVertices, appearance: appearance, unitsPerInch: unitsPerInch)
         guard let pos = player.timeline.toolPosition(at: time) else {
             return SimulationFrame(mesh: mesh)
         }
@@ -84,6 +91,19 @@ final class SimulationPreviewModel: ObservableObject {
     private var playTask: Task<Void, Never>?
     private var lastFrame: SimulationFrame?
     private var configuredKey: Int?
+    private(set) var appearance = StockAppearance.default
+
+    /// Recolours the stock without re-simulating.
+    func setAppearance(_ a: StockAppearance) {
+        guard a != appearance else { return }
+        appearance = a
+        stockScene.shininess = a.shininess
+        guard let engine else { return }
+        Task { [weak self] in
+            await engine.setAppearance(a)
+            self?.requestFrame()
+        }
+    }
 
     /// Rebuilds the simulation when the inputs change (cheap no-op otherwise).
     func configure(job: JobSetup, toolpaths: [Toolpath], rapidRate: Double, units: LengthUnit,
@@ -105,7 +125,8 @@ final class SimulationPreviewModel: ObservableObject {
         let player = SimulationPlayer(job: job, toolpaths: toolpaths, rapidRate: rapidRate, cellSize: cell,
                                       toolChangeSeconds: timeSettings.toolChangeSeconds, motion: motion)
         totalTime = player.timeline.totalTime
-        engine = SimulationEngine(player: player, job: job, maxVertices: 200_000)
+        engine = SimulationEngine(player: player, job: job, maxVertices: 200_000, appearance: appearance,
+                                  unitsPerInch: LengthUnit.inch.factor(to: units))
         stockScene.configure(job: job)
         // Show the finished result by default; scrub back to watch it being cut.
         if time == totalTime { requestFrame() } else { time = totalTime }

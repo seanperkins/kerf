@@ -44,6 +44,8 @@ struct SimulationPreviewView: View {
     @StateObject private var model = SimulationPreviewModel()
     @ObservedObject private var timeStore = TimeEstimateStore.shared
     @State private var showTimeSettings = false
+    @ObservedObject private var appearanceStore = PreviewAppearanceStore.shared
+    @State private var showAppearance = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,9 +61,11 @@ struct SimulationPreviewView: View {
         .onChange(of: job) { _, _ in configure() }
         .onChange(of: rapidRate) { _, _ in configure() }
         .onChange(of: timeStore.settings) { _, _ in configure() }
+        .onChange(of: appearanceStore.settings) { _, s in model.setAppearance(s.appearance) }
     }
 
     private func configure() {
+        model.setAppearance(appearanceStore.settings.appearance)
         model.configure(job: job, toolpaths: toolpaths, rapidRate: rapidRate, units: units,
                         timeSettings: timeStore.settings)
     }
@@ -119,6 +123,9 @@ struct SimulationPreviewView: View {
             .labelsHidden()
             .frame(width: 100)
             Toggle("Tool", isOn: $model.showTool).toggleStyle(.checkbox)
+            Button { showAppearance.toggle() } label: { Image(systemName: "paintpalette") }
+                .help("Material appearance")
+                .popover(isPresented: $showAppearance) { PreviewAppearancePopover(store: appearanceStore) }
             Button { showTimeSettings.toggle() } label: { Image(systemName: "stopwatch") }
                 .help("Time estimate settings (acceleration, calibration)")
                 .popover(isPresented: $showTimeSettings) {
