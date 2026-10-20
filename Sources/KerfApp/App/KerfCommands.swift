@@ -106,6 +106,11 @@ struct KerfCommands: Commands {
                 .keyboardShortcut("]", modifiers: .command)
             Button("Close Open Vectors") { withSelection("Close Vectors") { ids, p in DesignCommands.close(ids, in: &p) } }
             Divider()
+            Menu("Layout") {
+                Button("Nest Parts…") { document?.sheet = .nesting }
+                    .disabled(document?.project.document.shapes.isEmpty ?? true)
+            }
+            Divider()
             Toggle("Snap to Grid", isOn: Binding(get: { document?.snapToGrid ?? true }, set: { document?.snapToGrid = $0 }))
                 .keyboardShortcut("'", modifiers: .command)
             Toggle("Snap to Objects", isOn: Binding(get: { document?.snapToObjects ?? true }, set: { document?.snapToObjects = $0 }))

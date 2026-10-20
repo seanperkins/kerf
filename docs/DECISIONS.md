@@ -295,3 +295,8 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## layout
+
+- **layout** — True-shape nesting (`CADCore/Layout`, Design > Layout > Nest Parts…) is a raster nester written from general CAM knowledge. Each part is rasterised on a square grid after growing it by half the part spacing plus half a cell diagonal, so two parts whose cells do not overlap are always at least the spacing apart. Parts are placed largest first, at the lowest and then leftmost free position over all allowed rotations. A free-run table per grid row lets a span be tested with one lookup and lets the scan jump over whole occupied stretches. Grid size comes from a precision setting (Draft 250k, Normal 1M, Fine 3M cells per sheet, so about 0.07 in on a 48x96 sheet at Normal). Gaps are therefore slightly larger than the spacing, never smaller.
+- **layout** — A part is a group (`groupID`) or a loose shape, plus every selected shape inside its outer outline (holes, pockets, text, drill marks), so features move and rotate with their part. Small parts may nest inside holes of larger parts (option). Unselected visible vectors are obstacles by default. Copies beyond the first are new shapes, and they are added to every toolpath that cuts the original. Parts that do not fit stay where they were, and the sheet reports them.
