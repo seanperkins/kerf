@@ -1,0 +1,7 @@
+*.exe
+.build/
+.build-*/
+dist/
+.DS_Store
+.claude/settings.local.json
+*.xcodeproj/xcuserdata/
