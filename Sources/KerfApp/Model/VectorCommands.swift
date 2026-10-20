@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit
     var id: String { rawValue }
 }
 
@@ -96,6 +96,27 @@ enum VectorCommands {
         project.deleteShapes(editable.subtracting(kept))
         for s in fixed { project.document.replace(s) }
         return used.count
+    }
+
+    // MARK: Curve fitting
+
+    /// Refits the selected vectors with lines and arcs. Returns (segments before, after).
+    @discardableResult
+    static func fitCurves(_ ids: [UUID], tolerance: Double, in project: inout KerfProject) -> (Int, Int) {
+        var before = 0, after = 0
+        for s in editableShapes(ids, in: project) {
+            let paths = s.paths.map { CurveFit.fit($0, tolerance: tolerance) }
+            let old = CurveFit.segmentCount(s.paths), new = CurveFit.segmentCount(paths)
+            before += old
+            // Only replace when it actually simplifies (keeps clean Béziers/arcs as they are).
+            if new < old {
+                replacePaths(s.id, with: paths, operation: "fit curves", in: &project)
+                after += new
+            } else {
+                after += old
+            }
+        }
+        return (before, after)
     }
 
     // MARK: Fillet / chamfer

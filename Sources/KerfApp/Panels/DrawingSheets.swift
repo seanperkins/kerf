@@ -16,6 +16,7 @@ struct DrawingSheetHost: View {
         case .trimBoundary: TrimBoundarySheet(document: document)
         case .filletChamfer: FilletChamferSheet(document: document)
         case .arrayCircular: CircularArraySheet(document: document)
+        case .curveFit: CurveFitSheet(document: document)
         }
     }
 }
@@ -82,6 +83,31 @@ struct FilletChamferSheet: View {
             }
             .pickerStyle(.segmented)
             LengthField(chamfer ? "Distance" : "Radius", value: $size, units: document.units)
+        }
+    }
+}
+
+// MARK: Curve fitting
+
+struct CurveFitSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var tolerance: Double
+
+    init(document: KerfDocument) {
+        self.document = document
+        _tolerance = State(initialValue: document.units == .inch ? 0.002 : 0.05)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let before = CurveFit.segmentCount(document.selectedShapes.flatMap(\.paths))
+        DrawingDialog(title: "Fit Curves to Vectors", action: "Fit", disabled: ids.isEmpty || tolerance <= 0,
+                      note: "Replaces runs of short segments (traced, scanned or DXF data) with lines and circular arcs within the tolerance, which gives smoother cuts and shorter G-code. The selection has \(before) segments.",
+                      perform: {
+                          let t = tolerance
+                          document.perform("Fit Curves") { VectorCommands.fitCurves(ids, tolerance: t, in: &$0) }
+                      }) {
+            LengthField("Tolerance", value: $tolerance, units: document.units, help: "Largest allowed distance from the original points")
         }
     }
 }

@@ -96,6 +96,15 @@ import Testing
         #expect(b.min == Vec2(1, 1) && b.max == Vec2(5.5, 4))
     }
 
+    @Test func fitCurvesSimplifiesDenseVectorsOnly() {
+        var p = AppTestSupport.project()
+        let dense = Shape(layerID: p.document.defaultLayerID, paths: [Path(points: (0...100).map { Vec2(Double($0) * 0.01, 0) }, closed: false)])
+        p.document.add(dense)
+        let (before, after) = VectorCommands.fitCurves(p.document.shapes.map(\.id), tolerance: 0.001, in: &p)
+        #expect(before - after == 99)  // the rectangles are left alone
+        #expect(p.document.shape(id: dense.id)!.paths[0].segments.count == 1)
+    }
+
     @Test func circularArrayAroundPoint() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]  // centre (2, 1.5)
