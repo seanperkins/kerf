@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator
+    case dogbone, arrayLinear, validator, mirror
     var id: String { rawValue }
 }
 
@@ -96,6 +96,48 @@ enum VectorCommands {
         project.deleteShapes(editable.subtracting(kept))
         for s in fixed { project.document.replace(s) }
         return used.count
+    }
+
+    // MARK: Mirror
+
+    enum MirrorPivot: String, CaseIterable, Identifiable {
+        case selectionCenter, materialCenter, minEdge, maxEdge
+        var id: String { rawValue }
+        func title(horizontally: Bool) -> String {
+            switch self {
+            case .selectionCenter: return "Selection centre"
+            case .materialCenter: return "Material centre"
+            case .minEdge: return horizontally ? "Selection left edge" : "Selection bottom edge"
+            case .maxEdge: return horizontally ? "Selection right edge" : "Selection top edge"
+            }
+        }
+    }
+
+    /// Mirror transform: `horizontally` flips left↔right about a vertical line, otherwise
+    /// top↔bottom about a horizontal line.
+    static func mirrorTransform(_ ids: Set<UUID>, horizontally: Bool, pivot: MirrorPivot, in project: KerfProject) -> Transform2D? {
+        let b = project.bounds(of: ids)
+        guard !b.isEmpty else { return nil }
+        let p: Vec2
+        switch pivot {
+        case .selectionCenter: p = b.center
+        case .materialCenter: p = project.document.job.materialBounds.center
+        case .minEdge: p = b.min
+        case .maxEdge: p = b.max
+        }
+        return .mirror(horizontalAxis: !horizontally, about: p)
+    }
+
+    /// Mirrors the selection, or adds a mirrored copy when `keepOriginal`. Returns the new
+    /// selection (copies) or nil when the originals were mirrored in place.
+    @discardableResult
+    static func mirror(_ ids: [UUID], horizontally: Bool, pivot: MirrorPivot, keepOriginal: Bool,
+                       in project: inout KerfProject) -> [UUID]? {
+        let all = project.document.expandToGroups(ids)
+        guard let t = mirrorTransform(Set(all), horizontally: horizontally, pivot: pivot, in: project) else { return nil }
+        if keepOriginal { return arrayCopies(all, transforms: [t], in: &project) }
+        project.transformShapes(Set(all), by: t)
+        return nil
     }
 
     // MARK: Arrays

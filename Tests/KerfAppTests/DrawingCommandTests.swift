@@ -48,6 +48,19 @@ import Testing
         #expect(p.document.shapes.count == 2)
     }
 
+    @Test func mirrorAboutMaterialCentreAndCopy() {
+        var p = AppTestSupport.project()
+        p.document.job.width = 10
+        let first = p.document.shapes[0]  // x 1...3
+        VectorCommands.mirror([first.id], horizontally: true, pivot: .materialCenter, keepOriginal: false, in: &p)
+        let b = p.document.shape(id: first.id)!.bounds()
+        #expect(abs(b.min.x - 7) < 1e-9 && abs(b.max.x - 9) < 1e-9)
+        let copies = VectorCommands.mirror([first.id], horizontally: false, pivot: .maxEdge, keepOriginal: true, in: &p)!
+        #expect(copies.count == 1 && p.document.shapes.count == 3)
+        let c = p.document.shape(id: copies[0])!.bounds()
+        #expect(abs(c.min.y - 2) < 1e-9 && abs(c.max.y - 3) < 1e-9)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]

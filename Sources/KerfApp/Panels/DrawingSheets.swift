@@ -12,6 +12,7 @@ struct DrawingSheetHost: View {
         case .dogbone: DogboneSheet(document: document)
         case .arrayLinear: RectangularArraySheet(document: document)
         case .validator: VectorValidatorSheet(document: document)
+        case .mirror: MirrorSheet(document: document)
         }
     }
 }
