@@ -44,6 +44,7 @@ struct ContentView: View {
             case .nesting: NestingSheet(document: document)
             case .fixtures: FixturesSheet(document: document)
             case .tiling: TilingSheet(document: document)
+            case .partLabels: PartLabelsSheet(document: document)
             }
         }
         .alert(item: $document.alert) { a in

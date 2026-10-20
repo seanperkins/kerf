@@ -32,6 +32,7 @@ enum DocumentSheet: Identifiable, Equatable {
     case nesting
     case fixtures
     case tiling
+    case partLabels
 
     var id: String {
         switch self {
@@ -45,6 +46,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .nesting: return "nesting"
         case .fixtures: return "fixtures"
         case .tiling: return "tiling"
+        case .partLabels: return "partLabels"
         }
     }
 }

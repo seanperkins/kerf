@@ -35,6 +35,8 @@ struct JobSheet: Equatable {
         /// Shapes moved into the material frame of this sheet.
         var shapes: [Shape]
         var partNames: [String]
+        /// Where each part's name is printed on the preview (parallel to `partNames`).
+        var partCentres: [Vec2] = []
     }
 
     var jobName: String
@@ -64,12 +66,24 @@ struct JobSheet: Equatable {
         let active = NestSheets.activeSheet(in: doc)
         return NestSheets.numbers(in: doc).map { n in
             let shapes = NestSheets.shapes(onSheet: n, in: doc).filter { project.isVisible($0) || n != active }
-            let parts = NestPartBuilder.parts(from: shapes).enumerated().map { i, part in
-                part.shapeIDs.lazy.compactMap { id in shapes.first { $0.id == id }?.name }.first { !$0.isEmpty }
-                    ?? "Part \(i + 1)"
-            }
+            let parts = partList(shapes, in: doc)
             return Sheet(title: "Sheet \(n)" + (n == active ? " (on the material now)" : ""), shapes: shapes,
-                         partNames: parts)
+                         partNames: parts.map(\.name), partCentres: parts.map(\.centre))
+        }
+    }
+
+    /// Parts among `shapes` (labels and keep-out zones left out) with their names: the name of
+    /// the part's largest shape, else "Part N".
+    static func partList(_ shapes: [Shape], in doc: Document) -> [(name: String, centre: Vec2)] {
+        let skip = Fixtures.keepOutLayerIDs(in: doc)
+            .union(doc.layers.filter { $0.name == PartLabelCommands.layerName }.map(\.id))
+        let candidates = shapes.filter { !skip.contains($0.layerID) }
+        let byID = Dictionary(uniqueKeysWithValues: candidates.map { ($0.id, $0) })
+        return NestPartBuilder.parts(from: candidates).enumerated().map { i, part in
+            let members = part.shapeIDs.compactMap { byID[$0] }
+            let primary = members.max { $0.bounds().width * $0.bounds().height < $1.bounds().width * $1.bounds().height }
+            let name = primary.map(\.name).flatMap { $0.isEmpty ? nil : $0 } ?? "Part \(i + 1)"
+            return (name, Rect2(points: part.outline.joined()).center)
         }
     }
 
@@ -138,7 +152,9 @@ struct JobSheet: Equatable {
             : "Touch off Z0 on the SPOILBOARD (machine bed); the material top is Z \(fmt(job.thickness, u))."
 
         let visible = doc.shapes.filter { project.isVisible($0) }
-        let defaultSheet = Sheet(title: "Sheet 1", shapes: visible, partNames: [])
+        let defaultParts = partList(visible, in: doc)
+        let defaultSheet = Sheet(title: "Sheet 1", shapes: visible, partNames: defaultParts.map(\.name),
+                                 partCentres: defaultParts.map(\.centre))
         let total = ToolpathStats.estimatedSeconds(toolpaths, rapidRate: rapidRate, toolChangeSeconds: 90)
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
@@ -238,6 +254,9 @@ enum JobSheetHTML {
                 let tag = path.isClosed ? "polygon" : "polyline"
                 s += "<\(tag) points=\"\(pts.map(pt).joined(separator: " "))\" fill=\"none\" stroke=\"\(escape(color))\" stroke-width=\"\(num(stroke))\"/>"
             }
+        }
+        for (name, c) in zip(sheet.partNames, sheet.partCentres) {
+            s += "<text x=\"\(num(c.x))\" y=\"\(num(hgt - c.y))\" font-size=\"\(num(pad * 0.45))\" text-anchor=\"middle\" fill=\"#335\">\(escape(name))</text>"
         }
         let o = js.origin, r = pad * 0.35
         s += "<circle cx=\"\(num(o.x))\" cy=\"\(num(hgt - o.y))\" r=\"\(num(r))\" fill=\"none\" stroke=\"#d00\" stroke-width=\"\(num(stroke * 2))\"/>"
