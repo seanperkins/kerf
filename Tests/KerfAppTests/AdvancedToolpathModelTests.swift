@@ -87,15 +87,32 @@ private enum Job {
         let p = Job.project()
         let files = GCodeBatchExport.plan(mode: .filePerTool, operations: p.operations, results: Job.results(p),
                                           jobName: "Sign", profile: Job.post)
-        #expect(files.count == 2)
-        #expect(files[0].fileName.hasPrefix("Sign_T1_"))
+        // The pocket (T1) overlaps the V-carve (T6), so it keeps its own, later, T1 file.
+        #expect(files.count == 3)
+        #expect(files.map { $0.toolpaths.map(\.name) } == [["Profile 1"], ["V-Carve 1"], ["Pocket 1"]])
+        #expect(files[0].fileName.hasPrefix("01_Sign_T1_"))
+        #expect(files[1].fileName.hasPrefix("02_Sign_T6_"))
+        #expect(files[2].fileName.hasPrefix("03_Sign_T1_"))
         for f in files { #expect(Set(f.toolpaths.map(\.tool.id)).count == 1) }
         let posted = GCodeBatchExport.post(files, project: p, profile: Job.post, jobName: "Sign")
         let dir = AppTestSupport.tempDir()
         let urls = try GCodeBatchExport.write(posted, to: dir)
-        #expect(urls.count == 2)
+        #expect(urls.count == 3)
         let text = try String(contentsOf: urls[1], encoding: .utf8)
         #expect(text.contains("M30"))
+    }
+
+    @Test func filePerToolNeverPullsAThroughProfileAheadOfOtherTools() {
+        // Pocket (T1) → V-carve (T6) → final profile (T1): the profile must stay last.
+        var p = AppTestSupport.project()
+        let a = p.document.shapes[0].id, b = p.document.shapes[1].id
+        for (kind, ids) in [(OperationKind.pocket, [b]), (.vcarve, [b]), (.profile, [a])] {
+            p.operations.append(OperationFactory.make(kind: kind, project: p, library: .seeded, shapeIDs: ids)!)
+        }
+        let files = GCodeBatchExport.plan(mode: .filePerTool, operations: p.operations, results: Job.results(p),
+                                          jobName: "Sign", profile: Job.post)
+        #expect(files.map { $0.toolpaths.map(\.name) } == [["Pocket 1"], ["V-Carve 1"], ["Profile 1"]])
+        #expect(files.map(\.title).first?.hasPrefix("1. ") == true)
     }
 
     @Test func disabledAndUncalculatedToolpathsAreSkipped() {

@@ -11,7 +11,8 @@ enum SaveAllMode: String, CaseIterable, Identifiable {
     case oneFileInOrder
     /// One program per toolpath (operation).
     case filePerToolpath
-    /// One program per tool (no tool changes inside a file).
+    /// One program per tool run, numbered in run order (no tool changes inside a file). A tool
+    /// gets several files when its toolpaths cannot safely be run together.
     case filePerTool
 
     var id: String { rawValue }
@@ -61,19 +62,18 @@ enum GCodeBatchExport {
                     title: op.setup.name, toolpaths: tps))
             }
         case .filePerTool:
+            // Same safety rules as the grouped single file: a tool only gets one file when its
+            // toolpaths can safely run together; otherwise it is split (profiles never move).
             let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: false)
-            var order: [UUID] = []
-            var groups: [UUID: [Toolpath]] = [:]
-            for tp in tps {
-                if groups[tp.tool.id] == nil { order.append(tp.tool.id) }
-                groups[tp.tool.id, default: []].append(tp)
-            }
-            for id in order {
-                guard let group = groups[id], let tool = group.first?.tool else { continue }
+            let groups = ToolpathOrdering.toolGroups(tps)
+            let width = max(2, String(groups.count).count)
+            for (i, group) in groups.enumerated() {
+                guard let tool = group.first?.tool else { continue }
+                let seq = String(repeating: "0", count: width - String(i + 1).count) + String(i + 1)
                 files.append(PlannedGCodeFile(
-                    fileName: GCodeExporter.suggestedFileName(jobName: jobName, operationName: "T\(tool.number)_\(tool.name)",
-                                                              profile: profile),
-                    title: JobSummary.label(tool), toolpaths: group))
+                    fileName: seq + "_" + GCodeExporter.suggestedFileName(
+                        jobName: jobName, operationName: "T\(tool.number)_\(tool.name)", profile: profile),
+                    title: "\(i + 1). " + JobSummary.label(tool), toolpaths: group))
             }
         }
         return uniquified(files)

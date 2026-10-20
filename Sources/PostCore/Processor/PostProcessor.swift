@@ -65,6 +65,12 @@ public enum ToolpathOrdering {
     /// and profile toolpaths never move at all (a through-cut or final profile stays where the
     /// user put it). Otherwise the user's order is kept.
     public static func groupedByTool(_ toolpaths: [Toolpath]) -> [Toolpath] {
+        toolGroups(toolpaths).flatMap { $0 }
+    }
+
+    /// The runs of `groupedByTool`, in run order: each run uses one tool, and consecutive runs
+    /// differ in tool. A tool can appear in several runs when merging would be unsafe.
+    public static func toolGroups(_ toolpaths: [Toolpath]) -> [[Toolpath]] {
         var groups: [[Toolpath]] = []
         for tp in toolpaths {
             guard let g = groups.lastIndex(where: { $0.first?.tool.id == tp.tool.id }) else {
@@ -77,7 +83,7 @@ public enum ToolpathOrdering {
                 groups.append([tp])
             }
         }
-        return groups.flatMap { $0 }
+        return groups
     }
 
     static func canMove(_ tp: Toolpath, aheadOf others: [Toolpath]) -> Bool {
