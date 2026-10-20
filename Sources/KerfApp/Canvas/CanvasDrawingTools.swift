@@ -14,12 +14,15 @@ struct CanvasDrawingState {
     var measureDrag: (Vec2, Vec2)?
     /// Freehand stroke being drawn (document points, nil when not drawing).
     var freehand: [Vec2]?
+    /// Envelope corner being dragged (index into `EnvelopeEdit.offsets`).
+    var envelopeCorner: Int?
 }
 
 /// Trim and measure tools, typed entry ("quick keys") while drawing.
 extension CanvasNSView {
     /// Drags owned by the drawing extras (guides, measure). True when handled.
     func extrasMouseDragged(_ event: NSEvent) -> Bool {
+        if envelopeMouseDragged(event) { return true }
         if guideMouseDragged(event) { return true }
         if var pts = drawingState.freehand {
             let p = viewport.toDocument(viewPoint(event))
@@ -41,6 +44,7 @@ extension CanvasNSView {
     }
 
     func extrasMouseUp(_ event: NSEvent) -> Bool {
+        if drawingState.envelopeCorner != nil { drawingState.envelopeCorner = nil; needsDisplay = true; return true }
         if guideMouseUp(event) { return true }
         if let pts = drawingState.freehand, let doc = document {
             drawingState.freehand = nil

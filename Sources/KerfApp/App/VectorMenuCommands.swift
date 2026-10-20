@@ -19,6 +19,9 @@ struct VectorMenuCommands: Commands {
             Divider()
             sheetButton("Mirror…", .mirror)
             sheetButton("Shear / Distort…", .distort)
+            Button("Distort Envelope on Canvas") { document?.beginEnvelopeEdit() }
+                .disabled(noSelection)
+                .help("Drag the four corners of the selection's box to bend the vectors")
             Divider()
             sheetButton("Fit Text to Box…", .textFit)
             sheetButton("Text on Curve / Arc…", .textOnCurve)

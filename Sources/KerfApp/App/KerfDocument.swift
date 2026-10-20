@@ -96,6 +96,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var hiddenToolpaths: Set<UUID> = []
     /// Profile operation whose tabs the canvas is editing (click to add, drag to move).
     @Published var tabEditingOperationID: UUID?
+    /// Envelope distortion with draggable corners in progress on the canvas.
+    @Published var envelopeEdit: EnvelopeEdit?
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
     private var deferredAlert: AlertMessage?

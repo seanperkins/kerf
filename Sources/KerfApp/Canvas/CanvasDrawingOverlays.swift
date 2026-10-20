@@ -12,6 +12,7 @@ extension CanvasNSView {
         drawMeasurement(ctx, doc)
         drawFreehand(ctx)
         drawQuickEntry(doc)
+        drawEnvelope(ctx, doc)
     }
 
     /// Start point and direction of each selected vector (node editing).

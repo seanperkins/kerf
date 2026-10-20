@@ -92,6 +92,11 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
                 .padding(.top, 28)
             }
+            if document.envelopeEdit != nil {
+                EnvelopeEditBanner(document: document)
+                    .frame(maxWidth: .infinity, alignment: .top)
+                    .padding(.top, 28)
+            }
         }
     }
 

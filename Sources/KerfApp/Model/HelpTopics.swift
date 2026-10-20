@@ -210,6 +210,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             The Design menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors, closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
 
             Drag the selection box handles to scale (Shift keeps proportions, Option scales about the centre). The round handle above the box rotates (Shift snaps to 15°).
+
+            **Vectors ▸ Distort Envelope on Canvas** puts four corner handles on the selection's box: drag them and the vectors are previewed bending to follow; Return or **Apply** makes the change, Esc cancels. Typed corner offsets are under **Values…** or in Vectors ▸ Shear / Distort….
             """
         case .toolpathsOverview:
             return """
