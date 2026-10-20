@@ -5,3 +5,5 @@ import CADCore
 typealias Shape = CADCore.Shape
 /// Likewise for `Path` (SwiftUI.Path).
 typealias Path = CADCore.Path
+/// And `Document` (the macOS 27 SDK adds a SwiftUI.Document protocol).
+typealias Document = CADCore.Document
