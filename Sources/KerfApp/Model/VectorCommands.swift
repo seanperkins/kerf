@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset, copyAlong
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset, copyAlong, vectorTexture
     var id: String { rawValue }
 }
 
@@ -315,6 +315,19 @@ enum VectorCommands {
             newIDs.append(n.id)
         }
         return newIDs
+    }
+
+    // MARK: Vector texture
+
+    /// Fills the selected closed shapes (together, even-odd) with a pattern; returns the new shape.
+    static func vectorTexture(_ ids: [UUID], options: VectorTexture.Options, in project: inout KerfProject) -> UUID? {
+        let shapes = project.document.shapes(ids: ids).filter { $0.paths.contains(where: \.isClosed) }
+        guard let first = shapes.first else { return nil }
+        let paths = VectorTexture.fill(shapes.flatMap(\.paths), options: options, tolerance: tolerance(project.document.units))
+        guard !paths.isEmpty else { return nil }
+        let s = Shape(name: "Texture", layerID: first.layerID, paths: paths, origin: .derived(operation: "vector texture"))
+        project.document.add(s)
+        return s.id
     }
 
     // MARK: Straight-wall inlay

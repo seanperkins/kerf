@@ -2,6 +2,47 @@ import CADCore
 import CAMCore
 import SwiftUI
 
+struct VectorTextureSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var options = VectorTexture.Options()
+
+    init(document: KerfDocument) {
+        self.document = document
+        var o = VectorTexture.Options()
+        if document.units == .millimeter {
+            o.spacing = 6; o.amplitude = 2.5; o.wavelength = 25
+        }
+        _options = State(initialValue: o)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let closed = document.selectedShapes.contains { $0.paths.contains(where: \.isClosed) }
+        let units = document.units
+        DrawingDialog(title: "Vector Texture", action: "Create Texture", disabled: !closed || options.spacing <= 0,
+                      note: "Fills the selected closed vectors with open pattern lines (one new shape) — e.g. for a V-bit or ball-nose texture with a Profile on the line or Fluting.",
+                      perform: {
+                          let o = options
+                          var id: UUID?
+                          document.perform("Vector Texture") { id = VectorCommands.vectorTexture(ids, options: o, in: &$0) }
+                          if let id { document.setSelection([id]) }
+                      }) {
+            Picker("Pattern", selection: $options.pattern) {
+                Text("Straight lines").tag(VectorTexture.Pattern.lines)
+                Text("Waves").tag(VectorTexture.Pattern.waves)
+                Text("Zigzag").tag(VectorTexture.Pattern.zigzag)
+            }
+            LengthField("Spacing", value: $options.spacing, units: units)
+            NumberField("Angle", value: $options.angle, unit: "°")
+            if options.pattern != .lines {
+                LengthField("Amplitude", value: $options.amplitude, units: units)
+                LengthField("Wavelength", value: $options.wavelength, units: units)
+                NumberField("Variation", value: $options.variation, help: "0 = regular, 1 = strongly varied (repeatable)")
+            }
+        }
+    }
+}
+
 struct CopyAlongSheet: View {
     @ObservedObject var document: KerfDocument
     @State private var bySpacing = false

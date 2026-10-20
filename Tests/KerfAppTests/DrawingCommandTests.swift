@@ -184,6 +184,16 @@ import Testing
         #expect(CopyAlong.count(along: guide.paths[0], spacing: 2.5) == 5)
     }
 
+    @Test func vectorTextureAddsOneShape() {
+        var p = AppTestSupport.project()
+        var o = VectorTexture.Options()
+        o.spacing = 0.2
+        let id = VectorCommands.vectorTexture([p.document.shapes[0].id], options: o, in: &p)
+        let s = p.document.shape(id: id!)!
+        #expect(s.paths.count >= 4 && s.paths.allSatisfy { !$0.isClosed })
+        #expect(VectorCommands.vectorTexture([], options: o, in: &p) == nil)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]
