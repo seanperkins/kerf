@@ -26,7 +26,7 @@ struct KerfCommands: Commands {
             Button("Recover Unsaved Work…") { RecoveryPrompt.offer(interactive: true) }
             Divider()
             Button("Import…") { runImportPanel() }
-                .keyboardShortcut("i", modifiers: .command)
+                .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(document == nil)
             Button("Import 3D Model as 2D Parts…") { document?.runModelPartsPanel() }
                 .disabled(document == nil)
@@ -65,7 +65,7 @@ struct KerfCommands: Commands {
             Button(document?.activeSide == .bottom ? "Show Top Side" : "Show Bottom Side") {
                 if let d = document { d.showSide(d.activeSide.other) }
             }
-            .keyboardShortcut("f", modifiers: [.command, .option])
+            .keyboardShortcut("b", modifiers: [.command, .shift])
             .disabled(!(document?.isTwoSided ?? false))
             SheetsMenu(document: document)
             Button("Document Variables…") { document?.sheet = .variables }
@@ -132,9 +132,9 @@ struct KerfCommands: Commands {
             Button("Mirror Horizontally") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: true, in: &p) } }
             Button("Mirror Vertically") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: false, in: &p) } }
             Button("Rotate 90° Left") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: 90, in: &p) } }
-                .keyboardShortcut("[", modifiers: .command)
+                .keyboardShortcut("[", modifiers: [.command, .option])
             Button("Rotate 90° Right") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: -90, in: &p) } }
-                .keyboardShortcut("]", modifiers: .command)
+                .keyboardShortcut("]", modifiers: [.command, .option])
             Button("Close Open Vectors") { withSelection("Close Vectors") { ids, p in DesignCommands.close(ids, in: &p) } }
             Divider()
             Menu("Layout") {
@@ -206,7 +206,7 @@ struct KerfCommands: Commands {
                 .disabled(document == nil)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
-                .keyboardShortcut("t", modifiers: [.command, .option])
+                .keyboardShortcut("p", modifiers: [.command, .option])
             Divider()
             Button("Tool Database…") { openWindow(id: ToolDatabaseView.windowID) }
                 .keyboardShortcut("t", modifiers: [.command, .shift])

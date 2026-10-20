@@ -344,7 +344,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .preview:
             return """
-            The **2D** view draws calculated toolpaths over the design: solid lines are cuts, dashed red lines are rapid moves. Toolpaths ▸ Show Toolpaths (⌥⌘T) hides them.
+            The **2D** view draws calculated toolpaths over the design: solid lines are cuts, dashed red lines are rapid moves. Toolpaths ▸ Show Toolpaths (⌥⌘P) hides them.
 
             The **3D** view simulates cutting the material. Press Play, scrub the timeline or change the speed. **2D | 3D** shows both side by side.
 
@@ -391,9 +391,10 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .shortcuts:
             return """
+            - **File**: ⇧⌘I import · ⌘P print
             - **Canvas tools**: V select · N nodes · R rectangle · C circle · E ellipse · L polyline · P pen · T text
-            - **View**: ⌘0 zoom to material · ⌘2 zoom to selection · ⌘= / ⌘- zoom · ⌥⌘1 2D · ⌥⌘2 2D and 3D · ⌥⌘3 3D · ⌥⌘T toolpaths
-            - **Design**: ⇧⌘J Job Setup · ⌘D duplicate · ⌘G / ⇧⌘G group / ungroup · ⌘[ / ⌘] rotate 90° · ⌘' snap to grid · ⇧⌘' snap to objects
+            - **View**: ⌘0 zoom to material · ⌘2 zoom to selection · ⌘= / ⌘- zoom · ⌥⌘1 2D · ⌥⌘2 2D and 3D · ⌥⌘3 3D · ⌥⌘P toolpaths
+            - **Design**: ⇧⌘J Job Setup · ⌘D duplicate · ⌘G / ⇧⌘G group / ungroup · ⌥⌘[ / ⌥⌘] rotate 90° · ⇧⌘B top / bottom side (two-sided jobs) · ⌘' snap to grid · ⇧⌘' snap to objects
             - **Canvas keyboard**: Tab / ⇧Tab select the next / previous shape (⌃Tab leaves the canvas) · arrow keys nudge (⇧ for ×10) · Delete removes · Esc clears
             - **Toolpaths**: ⌘R calculate all · ⇧⌘K check · ⇧⌘E export · ⌥⌘S save all · ⇧⌘T tool database
             - **Help**: ⌘? Kerf Help
