@@ -308,3 +308,10 @@
   Tapered engraving tools may be clearance tools: their wall clearance is tip radius + flat
   depth · max(0, tan(tool half-angle) − tan(V half-angle)), capped at the tool radius.
   New parameter fields are decoded with `decodeIfPresent`, so older `.kerf` files open unchanged.
+- **vcarve-parity** — Corner sharpening is a per-tool flag on the extra clearance tools
+  (`VCarveClearanceTool.cornerSharpen`, shown only for tools with an angle), as in Vectric where it
+  applies to second-or-later engraving tools. After its flat-depth clearing, the tool follows the
+  region's medial axis wherever it lies in the flat area but outside everything already swept,
+  at depth start + min(flat, (R − tip radius) / max(tan tool half-angle, tan V half-angle)), so the
+  cone never cuts the V walls. The V-bit still traces the flat boundary and full medial axis
+  afterwards, as before.

@@ -80,6 +80,7 @@ public struct InlayOperation: ToolpathOperation {
         engine.startDepth = start
         engine.flatDepth = params.pocketDepth - start
         engine.clearanceTools = clearance
+        engine.cornerSharpen = [false] + params.extraClearanceTools.map(\.cornerSharpen)
         let result = try engine.run()
         var meta = metadata
         meta["part"] = part.lowercased()

@@ -22,6 +22,7 @@ public struct VCarveOperation: ToolpathOperation {
         engine.flatDepth = params.flatDepth
         engine.clearanceTools = params.flatDepth == nil
             ? [] : try VCarveEngine.clearanceTools(params.clearanceTools.map(\.toolID), context: context)
+        engine.cornerSharpen = params.clearanceTools.map(\.cornerSharpen)
         engine.clearanceStrategy = params.flatClearanceStrategy
         engine.passDepth = params.passDepth
         let result = try engine.run()

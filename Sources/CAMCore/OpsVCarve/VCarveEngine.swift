@@ -18,6 +18,8 @@ struct VCarveEngine {
     /// Flat-area clearance tools in cutting order; each later tool only machines the part of
     /// the flat area the earlier ones could not reach.
     var clearanceTools: [Tool] = []
+    /// Per clearance tool (same indices): lift into corners it cannot reach at the flat depth.
+    var cornerSharpen: [Bool] = []
     var clearanceStrategy: PocketStrategy = .offset
     var passDepth: Double?
     var tolerance: Double
@@ -66,7 +68,7 @@ struct VCarveEngine {
             let flatRadius = tipRadius + limit * slope
             let flatArea = region.offset(by: -flatRadius, arcTolerance: tolerance)
             if !flatArea.isEmpty {
-                clearance = clearFlatArea(flatArea, bottom: bottom, vSlope: slope, warnings: &warnings)
+                clearance = clearFlatArea(flatArea, bottom: bottom, vSlope: slope, axis: axis, warnings: &warnings)
                 if !clearance.isEmpty {
                     vStrokes += VCarveStrokes.loops(flatArea.polygons, depth: bottom)
                 } else {
@@ -88,13 +90,13 @@ struct VCarveEngine {
     }
 
     /// Clears the flat area with the clearance tools in order (rest machining after the first).
-    private func clearFlatArea(_ flatArea: VCarveRegion, bottom: Double, vSlope: Double,
+    private func clearFlatArea(_ flatArea: VCarveRegion, bottom: Double, vSlope: Double, axis: VCarveMedialAxis,
                                warnings: inout [String]) -> [(tool: Tool, passes: [[VCarveStroke]])] {
         guard !clearanceTools.isEmpty else { return [] }
         let flatBelowStart = bottom - startDepth
         var out: [(tool: Tool, passes: [[VCarveStroke]])] = []
         var cleared: VCarveRegion?
-        for clr in clearanceTools {
+        for (index, clr) in clearanceTools.enumerated() {
             let reach = Self.wallClearance(of: clr, flatDepth: flatBelowStart, vSlope: vSlope)
             let foot = Self.floorRadius(of: clr)
             var centres = flatArea.offset(by: -reach, arcTolerance: tolerance)
@@ -110,15 +112,57 @@ struct VCarveEngine {
                 VCarvePocketing.strokes(region: centres, toolRadius: 0, stepover: step,
                                         strategy: clearanceStrategy, depth: level, arcTolerance: tolerance)
             }
-            guard !passes.allSatisfy(\.isEmpty) else {
+            let swept = centres.offset(by: foot, arcTolerance: tolerance)
+            let clearedNow = cleared.map { $0.combined(.union, with: swept) } ?? swept
+            var sharpen: [VCarveStroke] = []
+            if index < cornerSharpen.count, cornerSharpen[index] {
+                sharpen = Self.cornerStrokes(axis: axis, tool: clr, vSlope: vSlope, startDepth: startDepth,
+                                             bottom: bottom, flatArea: flatArea, cleared: clearedNow)
+                if sharpen.isEmpty, clr.angle == nil {
+                    warnings.append("Corner sharpening needs a tapered (V or engraving) tool; ignored for \(clr.name)")
+                }
+            }
+            var all = passes
+            if !sharpen.isEmpty { all += VCarveStrokes.multiPass(sharpen, levels: levels) }
+            guard !all.allSatisfy(\.isEmpty) else {
                 warnings.append(out.isEmpty
                     ? "Flat area is too narrow for the clearance tool; the V-bit clears it instead"
                     : "\(clr.name) has no remaining flat area to clear")
                 continue
             }
-            out.append((clr, passes))
-            let swept = centres.offset(by: foot, arcTolerance: tolerance)
-            cleared = cleared.map { $0.combined(.union, with: swept) } ?? swept
+            out.append((clr, all))
+            cleared = clearedNow
+        }
+        return out
+    }
+
+    /// Corner sharpening: the medial-axis runs inside the flat area that no clearance tool has
+    /// swept, cut with a tapered tool lifted so it never touches the V walls. With the tool's
+    /// centre R from the vectors, its cone (tip radius rt, slope tT) stays inside the walls
+    /// (slope tV, measured from the start depth) when depth ≤ (R − rt) / max(tT, tV).
+    static func cornerStrokes(axis: VCarveMedialAxis, tool: Tool, vSlope: Double, startDepth: Double, bottom: Double,
+                              flatArea: VCarveRegion, cleared: VCarveRegion) -> [VCarveStroke] {
+        guard let angle = tool.angle, angle > 0, angle < 180, tool.kind == .vBit || tool.kind == .engraving else { return [] }
+        let toolSlope = tan(angle / 2 * .pi / 180)
+        let rt = max(0, tool.tipDiameter / 2)
+        let grow = flatArea.offset(by: 1e-3 * max(1, rt), arcTolerance: 1e-4)
+        var out: [VCarveStroke] = []
+        for chain in axis.chains {
+            var run: [Vec3] = []
+            func flush() {
+                if run.count >= 2 { out.append(VCarveStroke(points: run, isClosed: false)) }
+                run = []
+            }
+            for p in chain {
+                let lift = (p.radius - rt) / max(toolSlope, vSlope)
+                let wanted = lift > 1e-6 && grow.contains(p.position) && !cleared.contains(p.position)
+                if wanted {
+                    run.append(Vec3(p.position, z: startDepth + min(lift, bottom - startDepth)))
+                } else {
+                    flush()
+                }
+            }
+            flush()
         }
         return out
     }

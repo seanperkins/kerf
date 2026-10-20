@@ -49,9 +49,21 @@ extension VCarveParameters {
 /// A flat-area clearance tool after the first one.
 public struct VCarveClearanceTool: Codable, Hashable, Sendable {
     public var toolID: UUID
+    /// Corner sharpening (tapered engraving / V tools only): after clearing what it can at the
+    /// flat depth, the tool follows the medial axis into corners it could not reach, lifted so
+    /// its tip fits without touching the carved walls.
+    public var cornerSharpen: Bool
 
-    public init(toolID: UUID) {
-        self.toolID = toolID
+    public init(toolID: UUID, cornerSharpen: Bool = false) {
+        self.toolID = toolID; self.cornerSharpen = cornerSharpen
+    }
+
+    private enum CodingKeys: String, CodingKey { case toolID, cornerSharpen }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(toolID: try c.decode(UUID.self, forKey: .toolID),
+                  cornerSharpen: try c.decodeIfPresent(Bool.self, forKey: .cornerSharpen) ?? false)
     }
 }
 

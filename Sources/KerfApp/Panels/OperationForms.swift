@@ -242,19 +242,7 @@ struct ClearanceToolList: View {
     private var choices: [Tool] { library.tools.filter { Self.kinds.contains($0.kind) } }
 
     var body: some View {
-        ForEach(tools.indices, id: \.self) { i in
-            HStack {
-                // Index-guarded bindings: SwiftUI may re-read a row after it was removed.
-                let id = i < tools.count ? tools[i].toolID : UUID()
-                Picker("Then tool \(i + 2)", selection: Binding(get: { i < tools.count ? tools[i].toolID : id },
-                                                                set: { if i < tools.count { tools[i].toolID = $0 } })) {
-                    if library.tool(id: id) == nil { Text("Missing tool").tag(id) }
-                    ForEach(choices) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
-                }
-                Button { if i < tools.count { tools.remove(at: i) } } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.borderless).help("Remove this clearance tool")
-            }
-        }
+        ForEach(tools.indices, id: \.self) { i in row(i) }
         Button("Add Smaller Clearance Tool") {
             if let t = choices.min(by: { $0.diameter < $1.diameter }) { tools.append(VCarveClearanceTool(toolID: t.id)) }
         }
@@ -262,6 +250,25 @@ struct ClearanceToolList: View {
         if !tools.isEmpty {
             Text("Tools run in this order; each one only clears what the tools before it could not reach.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// One extra tool. Bindings are index-guarded: SwiftUI may re-read a row after removal.
+    @ViewBuilder private func row(_ i: Int) -> some View {
+        let id = i < tools.count ? tools[i].toolID : UUID()
+        HStack {
+            Picker("Then tool \(i + 2)", selection: Binding(get: { i < tools.count ? tools[i].toolID : id },
+                                                            set: { if i < tools.count { tools[i].toolID = $0 } })) {
+                if library.tool(id: id) == nil { Text("Missing tool").tag(id) }
+                ForEach(choices) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
+            }
+            Button { if i < tools.count { tools.remove(at: i) } } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless).help("Remove this clearance tool")
+        }
+        if library.tool(id: id)?.angle != nil {
+            Toggle("Corner sharpen", isOn: Binding(get: { i < tools.count && tools[i].cornerSharpen },
+                                                   set: { if i < tools.count { tools[i].cornerSharpen = $0 } }))
+                .help("Lift this tapered tool into corners it cannot reach at the flat depth, so they finish crisp")
         }
     }
 }
