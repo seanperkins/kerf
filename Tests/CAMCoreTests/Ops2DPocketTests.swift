@@ -166,3 +166,12 @@ func ops2DPocketRasterStaysInsideWithProfilePass(angle: Double) throws {
     let op2 = PocketOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: sids))
     #expect(throws: CAMError.self) { try op2.generate(in: small) }
 }
+
+@Test(arguments: [PocketStrategy.offset, .raster(angle: 0, profilePass: true)])
+func ops2DPocketWarnsAboutRegionsTooNarrowForTheTool(strategy: PocketStrategy) throws {
+    // A 3" square and a 0.2" slot (narrower than the 1/4" tool).
+    let (tps, _) = try pocket([F.rect(0, 0, 3, 3), F.rect(6, 0, 0.2, 3)]) { $0.strategy = strategy }
+    #expect(tps.last?.metadata["warning"] == "1 region(s) too small for the tool")
+    let (ok, _) = try pocket([F.rect(0, 0, 3, 3)]) { $0.strategy = strategy }
+    #expect(ok.last?.metadata["warning"] == nil)
+}

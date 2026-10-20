@@ -33,6 +33,14 @@ public struct PocketPlanner: Sendable {
     /// Tool-centre boundary: region inset by radius + allowance.
     public var centerRegion: [[Vec2]] { inset(toolRadius + allowance) }
 
+    /// Number of region components (outer loops) the tool centre cannot enter at all.
+    public var unreachableComponents: Int {
+        let centers = centerRegion
+        return region.filter { Polygon2D.signedArea($0) > 0 }.filter { outer in
+            !centers.contains { c in c.contains { Polygon2D.contains(outer, $0) } }
+        }.count
+    }
+
     /// Concentric offset levels from the wall inwards (level 0 = finishing contour).
     public func offsetLevels() -> [[[Vec2]]] {
         var levels: [[[Vec2]]] = []

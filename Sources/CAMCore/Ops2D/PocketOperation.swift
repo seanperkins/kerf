@@ -45,7 +45,10 @@ public struct PocketOperation: ToolpathOperation {
         guard !groups.isEmpty else {
             throw CAMError.invalidGeometry("The tool does not fit inside the selected vectors")
         }
-        toolpaths.append(try emit(groups, planner: planner, tool: tool, context: context, name: setup.name))
+        var finish = try emit(groups, planner: planner, tool: tool, context: context, name: setup.name)
+        let missed = planner.unreachableComponents
+        if missed > 0 { finish.metadata["warning"] = "\(missed) region(s) too small for the tool" }
+        toolpaths.append(finish)
         return toolpaths
     }
 
