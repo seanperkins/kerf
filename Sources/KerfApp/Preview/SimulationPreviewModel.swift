@@ -102,8 +102,68 @@ final class SimulationPreviewModel: ObservableObject {
     private var lastFrame: SimulationFrame?
     private var configuredKey: Int?
     private(set) var appearance = StockAppearance.default
-    @Published var isMeasuring = false { didSet { if !isMeasuring { clearMeasurement() } } }
+    /// What a click on the 3D view does (select, draw, measure or nothing).
+    @Published var tool = Preview3DTool.none {
+        didSet {
+            guard tool != oldValue else { return }
+            if oldValue == .measure { clearMeasurement() }
+            if oldValue == .draw { cancelDrawing() }
+            // Drawing needs the existing vectors on screen (and for snapping).
+            if tool == .draw || tool == .select { showVectors = true }
+        }
+    }
+    var isMeasuring: Bool {
+        get { tool == .measure }
+        set { tool = newValue ? .measure : (tool == .measure ? .none : tool) }
+    }
     @Published private(set) var measurement = PreviewMeasurement()
+
+    // MARK: Drawing and picking in 3D
+
+    /// The polyline being drawn in the 3D view.
+    @Published private(set) var drawing = Preview3DDrawing()
+    /// Called with a finished drawing (material/document frame) and whether it is closed.
+    var onDrawShape: (([Vec2], Bool) -> Void)?
+    /// Called with the clicked material-frame point and a pick tolerance in select mode.
+    var onSelectAt: ((Vec2, Double) -> Void)?
+
+    /// A click on the 3D view, routed by the current tool.
+    func handle(_ pick: Preview3DPick) {
+        switch tool {
+        case .none: break
+        case .measure: if pick.onStock { self.pick(pick.point) }
+        case .select: onSelectAt?(pick.point.xy, pick.tolerance)
+        case .draw:
+            let targets = vectors.flatMap { $0 }
+            let result = drawing.click(pick.point.xy, tolerance: pick.tolerance, snapTargets: targets)
+            if case let .finished(points, closed) = result { onDrawShape?(points, closed) }
+            stockScene.showDraft(drawing.points)
+        }
+    }
+
+    /// Finishes the drawing as an open polyline (Return).
+    func finishDrawing() {
+        if let pts = drawing.finish() { onDrawShape?(pts, false) }
+        stockScene.showDraft([])
+    }
+
+    func undoDrawingPoint() {
+        drawing.undoLastPoint()
+        stockScene.showDraft(drawing.points)
+    }
+
+    func cancelDrawing() {
+        drawing.cancel()
+        stockScene.showDraft([])
+    }
+
+    /// Selected design vectors, drawn highlighted.
+    func setSelectedVectors(_ v: [[Vec2]]) {
+        guard v != selectedVectors else { return }
+        selectedVectors = v
+        applyOverlay()
+    }
+    private var selectedVectors: [[Vec2]] = []
 
     // MARK: Toolpath and vector lines
 
@@ -139,7 +199,7 @@ final class SimulationPreviewModel: ObservableObject {
 
     private func applyOverlay() {
         stockScene.showOverlay(toolpaths: showToolpathLines ? lines : nil, showRapids: showRapidLines,
-                               vectors: showVectors ? vectors : [])
+                               vectors: showVectors ? vectors : [], selected: showVectors ? selectedVectors : [])
     }
 
     /// A click on the stock while measuring (material frame, z = -depth).

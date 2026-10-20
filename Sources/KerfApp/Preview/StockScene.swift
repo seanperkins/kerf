@@ -11,7 +11,8 @@ import SceneKit
 final class StockScene {
     let scene = SCNScene()
     let cameraNode = SCNNode()
-    private let content = SCNNode()
+    /// Material-frame node (Z up, top at z = 0).
+    let content = SCNNode()
     private let stockNode = SCNNode()
     private let toolNode = SCNNode()
     private let measureNode = SCNNode()
@@ -187,14 +188,76 @@ final class StockScene {
     enum OverlayColor {
         static let rapid = CAMCore.RGBColor(1.0, 0.55, 0.05)
         static let vector = CAMCore.RGBColor(0.08, 0.08, 0.1)
+        static let selected = CAMCore.RGBColor(0.1, 0.45, 1.0)
+        static let draft = CAMCore.RGBColor(0.95, 0.15, 0.75)
+    }
+
+    // MARK: Drawing in 3D
+
+    private lazy var draftNode: SCNNode = {
+        let n = SCNNode()
+        content.addChildNode(n)
+        return n
+    }()
+
+    /// The polyline being drawn: lines plus a marker at each clicked point, on the material top.
+    func showDraft(_ points: [Vec2]) {
+        draftNode.childNodes.forEach { $0.removeFromParentNode() }
+        guard !points.isEmpty else { return }
+        var positions: [Float] = [], colors: [Float] = [], indices: [UInt32] = []
+        let c = OverlayColor.draft
+        for (k, p) in points.enumerated() {
+            positions += [Float(p.x), Float(p.y), 0]
+            colors += [c.r, c.g, c.b]
+            if k > 0 { indices += [UInt32(k - 1), UInt32(k)] }
+        }
+        if !indices.isEmpty {
+            let n = SCNNode(geometry: Self.lineGeometry(positions: positions, colors: colors, indices: indices))
+            n.renderingOrder = 12
+            draftNode.addChildNode(n)
+        }
+        let size = CGFloat(max(job.width, job.height, 1e-3)) * 0.003
+        let mat = SCNMaterial()
+        mat.diffuse.contents = NSColor(calibratedRed: CGFloat(c.r), green: CGFloat(c.g), blue: CGFloat(c.b), alpha: 1)
+        mat.lightingModel = .constant
+        mat.readsFromDepthBuffer = false
+        for p in points {
+            let s = SCNSphere(radius: size)
+            s.materials = [mat]
+            let n = SCNNode(geometry: s)
+            n.position = SCNVector3(p.x, p.y, 0)
+            n.renderingOrder = 12
+            draftNode.addChildNode(n)
+        }
+    }
+
+    /// Lines of the polyline being drawn (for tests).
+    var draftLineCount: Int {
+        draftNode.childNodes.compactMap { n -> Int? in
+            guard let e = n.geometry?.elements.first, e.primitiveType == .line else { return nil }
+            return e.primitiveCount
+        }.reduce(0, +)
+    }
+
+    /// Material-frame point on the material-top plane (z = 0) under a view point, or nil when the
+    /// view ray is parallel to it or points away.
+    func materialTopPoint(near: SCNVector3, far: SCNVector3) -> Vec3? {
+        let a = materialPoint(fromWorld: near), b = materialPoint(fromWorld: far)
+        let dz = b.z - a.z
+        guard abs(dz) > 1e-12 else { return nil }
+        let t = -a.z / dz
+        guard t >= 0 else { return nil }
+        return Vec3(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 0)
     }
 
     /// Draws toolpath centre lines (cuts coloured by depth, rapids red when `showRapids`) and
     /// design vectors on the material top. Lines are drawn over the stock so cuts stay visible
     /// inside the simulated grooves.
-    func showOverlay(toolpaths lines: ToolpathLines3D?, showRapids: Bool, vectors: [[Vec2]]) {
+    func showOverlay(toolpaths lines: ToolpathLines3D?, showRapids: Bool, vectors: [[Vec2]],
+                     selected: [[Vec2]] = []) {
         overlayNode.childNodes.forEach { $0.removeFromParentNode() }
-        if let g = Self.overlayGeometry(toolpaths: lines, showRapids: showRapids, vectors: vectors) {
+        if let g = Self.overlayGeometry(toolpaths: lines, showRapids: showRapids, vectors: vectors,
+                                        selected: selected) {
             let n = SCNNode(geometry: g)
             n.renderingOrder = 5
             overlayNode.addChildNode(n)
@@ -208,7 +271,7 @@ final class StockScene {
 
     /// One line-list geometry with per-vertex colours, or nil when there is nothing to draw.
     static func overlayGeometry(toolpaths lines: ToolpathLines3D?, showRapids: Bool,
-                                vectors: [[Vec2]]) -> SCNGeometry? {
+                                vectors: [[Vec2]], selected: [[Vec2]] = []) -> SCNGeometry? {
         var positions: [Float] = [], colors: [Float] = [], indices: [UInt32] = []
         func add(_ pts: [Vec3], color: (Vec3) -> CAMCore.RGBColor) {
             guard pts.count >= 2 else { return }
@@ -231,7 +294,13 @@ final class StockScene {
             }
         }
         for v in vectors { add(v.map { Vec3($0, z: 0) }) { _ in OverlayColor.vector } }
+        for v in selected { add(v.map { Vec3($0, z: 0) }) { _ in OverlayColor.selected } }
         guard !indices.isEmpty else { return nil }
+        return lineGeometry(positions: positions, colors: colors, indices: indices)
+    }
+
+    /// Unlit line list drawn over the stock (no depth test).
+    private static func lineGeometry(positions: [Float], colors: [Float], indices: [UInt32]) -> SCNGeometry {
         let n = positions.count / 3
         func source(_ values: [Float], _ semantic: SCNGeometrySource.Semantic) -> SCNGeometrySource {
             let data = values.withUnsafeBufferPointer { Data(buffer: $0) }
