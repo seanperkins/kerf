@@ -87,6 +87,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public var unitsCode: String { units == .inch ? "G20" : "G21" }
 
     public func comment(_ text: String) -> String {
+        let text = Self.asciiOnly(text)
         switch commentStyle {
         case .parentheses:
             // Parentheses cannot nest in G-code comments.
@@ -95,6 +96,16 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         case .semicolon:
             return "; \(text)"
         }
+    }
+
+    /// Controllers vary in how they treat non-ASCII bytes; keep comments plain ASCII.
+    public static func asciiOnly(_ text: String) -> String {
+        let replaced = text.replacingOccurrences(of: "°", with: " deg")
+            .replacingOccurrences(of: "–", with: "-").replacingOccurrences(of: "—", with: "-")
+            .replacingOccurrences(of: "“", with: "\"").replacingOccurrences(of: "”", with: "\"")
+            .replacingOccurrences(of: "‘", with: "'").replacingOccurrences(of: "’", with: "'")
+        let stripped = replaced.applyingTransform(.stripDiacritics, reverse: false) ?? replaced
+        return String(stripped.unicodeScalars.filter { $0.isASCII }.map(Character.init))
     }
 
     public func toJSON() throws -> Data {

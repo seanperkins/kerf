@@ -38,9 +38,21 @@ public struct TemplatePostProcessor: PostProcessor {
     public init(profile: PostProfile) { self.profile = profile }
 
     public func post(_ job: PostJob) throws -> String {
-        // TODO(post): header block, units + preamble, tool changes, spindle, moves with
-        // safe-Z enforcement, arcs per `profile.arcOutput`, footer.
-        throw PostError.notImplemented("TemplatePostProcessor.post")
+        try ProgramBuilder(profile: profile, job: job).build()
+    }
+
+    /// Combined export: toolpaths grouped by tool (first-appearance order) so each tool is
+    /// loaded once, then posted as one program.
+    public func postCombined(_ job: PostJob) throws -> String {
+        var grouped = job
+        grouped.toolpaths = ToolpathOrdering.groupedByTool(job.toolpaths)
+        return try post(grouped)
+    }
+
+    /// Suggested file name for a program: "<job name>.<profile extension>".
+    public func fileName(for jobName: String) -> String {
+        let base = jobName.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : jobName
+        return base + "." + profile.fileExtension
     }
 }
 
