@@ -31,6 +31,13 @@ struct OperationEditor: View {
                        preferred: OperationFactory.preferredToolKinds(for: draft.kind))
             if draft.kind != .relief3D && draft.kind != .photoVCarve {
                 vectorsRow
+                if !document.document.models.isEmpty || draft.setup.projectOntoModelID != nil {
+                    Picker("Project onto 3D", selection: setupBinding(\.projectOntoModelID)) {
+                        Text("None").tag(UUID?.none)
+                        ForEach(document.document.models) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .help("Cut this toolpath's depths below the 3D model's surface instead of the material top")
+                }
             }
         }
         Divider()

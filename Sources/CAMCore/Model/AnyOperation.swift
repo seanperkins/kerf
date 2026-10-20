@@ -32,6 +32,8 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID { setup.id }
 
     public func generate(in context: CAMContext) throws -> [Toolpath] {
-        try operation.generate(in: context)
+        let toolpaths = try operation.generate(in: context)
+        guard let modelID = setup.projectOntoModelID, kind != .relief3D else { return toolpaths }
+        return try ReliefProjection.project(toolpaths, ontoModel: modelID, in: context)
     }
 }

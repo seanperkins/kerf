@@ -129,14 +129,14 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `vc-vector-start-order` | vcarve | V-carve vector start points / selection order | done | P3 | VCarveParameters.useVectorStartPoints/useSelectionOrder, VCarveOrdering.swift; VCarveParityTests |
 | `vc-photo` | vcarve | PhotoVCarve (image to V-groove engraving) | done | P3 | PhotoVCarveOperation, PhotoImageLoader, Panels/PhotoVCarveForm.swift; VCarvePhotoTests |
 | `3d-import-place` | cam-3d | 3D model import, size, position and Z offset | done | P1 | Panels/ModelPlacementSheet.swift, CAMCore/Ops3D/ModelPlacement.swift; Relief3DTests |
-| `3d-multiple-models` | cam-3d | Multiple models / composite model | partial | P2 | Document holds many PlacedModels but each Relief3D op machines one model |
-| `3d-roughing` | cam-3d | 3D roughing (Z-level, raster) with allowance | partial | P1 | ReliefRoughing.swift raster only; offset strategy and profile pass ignored (DECISIONS cam-3d) |
+| `3d-multiple-models` | cam-3d | Multiple models / composite model | done | P2 | Relief3DParameters.additionalModelIDs, composite ReliefHeightmap.rasterize, inspector "Combine with"; ReliefCompositeTests |
+| `3d-roughing` | cam-3d | 3D roughing (Z-level, raster) with allowance | done | P1 | Ops3D/ReliefRoughing.swift + ReliefLevelRegions.swift: offset or raster (+ profile pass) per Z level; ReliefRoughingTests |
 | `3d-finish-raster` | cam-3d | 3D finishing raster | done | P1 | Ops3D/ReliefFinishing.swift, DropCutter.swift; Relief3DTests |
-| `3d-finish-offset` | cam-3d | 3D finishing offset / spiral strategies | missing | P2 | Raster only |
+| `3d-finish-offset` | cam-3d | 3D finishing offset / spiral strategies | done | P2 | FinishingSettings.strategy (raster/offset/spiral), Ops3D/ReliefFinishing.swift, inspector "Pattern"; ReliefFinishOffsetTests |
 | `3d-boundary` | cam-3d | Limit 3D machining to boundary vectors | done | P2 | Relief3DParameters.boundaryShapeIDs, OperationForms "Use Selection as Boundary" |
-| `3d-rest-machining` | cam-3d | 3D rest machining | missing | P3 | Not implemented |
-| `3d-project-2d` | cam-3d | Project 2D toolpaths onto 3D surface | missing | P3 | Not implemented |
-| `3d-two-sided` | cam-3d | Two-sided 3D machining | missing | P3 | Single-sided only |
+| `3d-rest-machining` | cam-3d | 3D rest machining | done | P3 | FinishingSettings.restToolID, Ops3D/ReliefRest.swift, inspector "Rest after"; ReliefRestTests |
+| `3d-project-2d` | cam-3d | Project 2D toolpaths onto 3D surface | done | P3 | OperationSetup.projectOntoModelID, Ops3D/ReliefProjection.swift, inspector "Project onto 3D"; ReliefProjectionTests |
+| `3d-two-sided` | cam-3d | Two-sided 3D machining | done | P3 | Relief3DParameters.twoSided (side, flip, split, web), Ops3D/ReliefTwoSided.swift, inspector "Two-Sided"; ReliefTwoSidedTests. No registration-pin toolpaths |
 | `3d-rotary` | cam-3d | Rotary / wrapped toolpaths | missing | P3 | Out of scope: Avid has no rotary axis |
 | `lay-nesting` | layout | True-shape nesting on sheets | missing | P1 | Not implemented |
 | `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | missing | P2 | Not implemented |

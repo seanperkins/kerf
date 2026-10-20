@@ -38,6 +38,9 @@ public struct OperationSetup: Codable, Hashable, Identifiable, Sendable {
     public var toolID: UUID
     /// Selected vectors.
     public var shapeIDs: [UUID]
+    /// When set, the generated 2D toolpaths are dropped onto this 3D model's surface: depths
+    /// become depths below the surface (see `ReliefProjection`). nil = cut from the material top.
+    public var projectOntoModelID: UUID?
 
     public init(id: UUID = UUID(), name: String, isEnabled: Bool = true, toolID: UUID, shapeIDs: [UUID] = []) {
         self.id = id; self.name = name; self.isEnabled = isEnabled; self.toolID = toolID; self.shapeIDs = shapeIDs

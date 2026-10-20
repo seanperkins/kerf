@@ -349,3 +349,63 @@
   by the bit; samples shallower than `minDepth` lift the bit. Lines alternate direction. No
   bitmap is drawn on the canvas yet; the toolpath overlay shows the placement. New Photo
   V-Carve toolpaths start centred at 80% of the material.
+## cam-3d parity round 1
+
+- **cam-3d** — **3D roughing offset strategy and profile pass (3d-roughing).** Each Z level's tool-centre
+  region is now contoured (marching squares) from a grid of flat-cutter drop depths computed for
+  the whole heightmap at once (`ReliefHeightmap.eroded`, row-wise sliding minima). The cutter is
+  grown by allowance + 1.5 cells so the contour is safe between grid points; saddle cells are
+  always split; contours are simplified within tolerance/2 and shrunk by the same amount, then
+  clipped to the boundary. The region is cleared with the 2D `PocketPlanner` (radius 0):
+  `.offset` = contour-parallel inside-out rings, `.raster` = zig-zag lines plus the region contour
+  when `profilePass` is on. Links stay inside the level's region (`RegionLinker`), other moves
+  retract. This replaces the earlier per-raster-line sampling, so raster roughing toolpaths changed.
+- **cam-3d** — **Composite models (3d-multiple-models).** `Relief3DParameters.additionalModelIDs`
+  (optional, so older files decode) lists models machined together with `modelID`. They are
+  rasterised into one heightmap where each cell keeps the shallowest point of any model (a union);
+  cells no model covers sit at the deepest model's bottom plane. The default area is the union of
+  the models' footprints. Missing combined models are skipped with a toolpath warning (a missing
+  primary model is still an error). The inspector lists the other models under "Combine with".
+- **cam-3d** — **Offset and spiral 3D finishing (3d-finish-offset).** `FinishingSettings.strategy`
+  (optional; nil = raster). Offset = the boundary region's inward rings (`PocketPlanner.offsetLevels`,
+  radius 0) cut outermost first, each started at the point nearest the tool and linked along the
+  surface when the next ring is within 2.5 × stepover. Spiral = each run of levels with exactly one
+  ring is blended into one path (going once round ring k while moving linearly onto ring k+1,
+  matched by arc-length fraction), ending with a full lap of the innermost ring; where the area
+  splits into several rings those levels are cut as offset rings. Every point is dropped with the
+  drop-cutter, so no pattern can gouge the model; on very non-convex boundaries a blended spiral
+  point may stray slightly outside the boundary between two rings.
+- **cam-3d** — **3D rest machining (3d-rest-machining).** `FinishingSettings.restToolID` names the
+  larger tool that already finished the surface ("Rest after" in the inspector). On the heightmap
+  grid (drop-cutter rule: each cell square reached at its point nearest the tool axis) Kerf drops
+  the larger tool at every cell, takes the upper envelope of its tip shape as the surface it left,
+  then drops the finishing tool onto that surface and onto the model. Cells where the finishing
+  tool sits deeper on the model by more than max(0.002 in / 0.05 mm, cell/2) form the rest mask
+  (the cell term absorbs the conservative heightmap's slope noise). The mask is grown by
+  max(stepover, tool radius / 2), contoured and clipped to the boundary, and the chosen finishing
+  pattern runs only there. It assumes the larger tool covered the whole area including its reach.
+  If nothing is left and the operation has no roughing toolpath, it fails with a clear message.
+- **cam-3d** — **Projecting 2D toolpaths onto a model (3d-project-2d).** `OperationSetup.projectOntoModelID`
+  (optional, additive) is honoured in `AnyOperation.generate` for every kind except 3D Relief, so
+  calculation, export and Check Toolpaths all see the projected moves. `ReliefProjection` (Ops3D)
+  linearises arcs, subdivides cutting moves to the heightmap cell (0.01 in / 0.25 mm, capped like
+  relief), and sets each point's depth to the toolpath tool's drop-cutter depth on the model plus
+  its original depth below the material top; points are thinned within the document tolerance.
+  XY rapids are unchanged (safe Z); vertical rapids below the material top are clamped to the top
+  so a pass never rapids into material that was cleared somewhere else before projection. Outside
+  the model's triangles the surface is its bottom plane (same as 3D Relief). Inspector:
+  "Project onto 3D" picker under the vectors row, shown when the document has models.
+- **cam-3d** — **Two-sided 3D machining (3d-two-sided).** `Relief3DParameters.twoSided` (optional): side
+  (top/bottom), flip (left-right = turned over about the vertical centre line, X mirrored;
+  top-bottom = Y mirrored), split depth (nil = halfway between the model's top and bottom) and
+  web. It is per toolpath: make one Relief3D toolpath per side. The bottom side is computed in the
+  flipped board's frame: models are mirrored in XY and Z with depths measured from the old bottom
+  face, boundary vectors are mirrored, and the result is ordinary top-down G-code for the flipped
+  board (same XY origin and Z-zero rules). The top side's surface is clamped at the split depth;
+  the bottom side stops `web` short of it (default 0.04 in / 1 mm), so the part stays attached by a
+  thin web instead of being released. Registration relies on stock cut exactly to the job size and
+  pushed against the same corner; there are no registration-pin toolpaths yet. This is independent
+  of a job-level two-sided setup (`io-two-sided-setup`), which is owned by another area.
+- **cam-3d** — **Rotary / wrapped toolpaths (3d-rotary): not implemented, by decision.** The Avid
+  PRO6096 has no rotary axis, the Mach4 post has no A-axis output and nothing could be tested on the
+  machine, so emitting wrapped A-axis G-code would be untestable and unsafe. Left as missing (P3).

@@ -411,11 +411,55 @@ struct Relief3DForm: View {
     var models: [PlacedModel]
     var selection: [UUID]
 
+    private func twoSidedBinding<T>(_ kp: WritableKeyPath<TwoSidedSettings, T>, default value: T) -> Binding<T> {
+        Binding(get: { params.twoSided?[keyPath: kp] ?? value }, set: { params.twoSided?[keyPath: kp] = $0 })
+    }
+
+    @ViewBuilder private var twoSidedSection: some View {
+        InspectorSection(title: "Two-Sided") {
+            Toggle("Machine from both sides", isOn: Binding(get: { params.twoSided != nil }, set: { on in
+                params.twoSided = on ? TwoSidedSettings(web: units == .inch ? 0.04 : 1) : nil
+            }))
+            if params.twoSided != nil {
+                Picker("This toolpath cuts", selection: twoSidedBinding(\.side, default: .top)) {
+                    Text("Top side").tag(TwoSidedSettings.Side.top)
+                    Text("Bottom side").tag(TwoSidedSettings.Side.bottom)
+                }
+                .pickerStyle(.segmented)
+                Picker("Flip board", selection: twoSidedBinding(\.flip, default: .leftRight)) {
+                    Text("Left to right").tag(TwoSidedSettings.Flip.leftRight)
+                    Text("Top to bottom").tag(TwoSidedSettings.Flip.topBottom)
+                }
+                OptionalLengthField(label: "Split depth", value: twoSidedBinding(\.splitDepth, default: nil), units: units,
+                                    defaultValue: units == .inch ? 0.25 : 6)
+                LengthField("Web", value: twoSidedBinding(\.web, default: 0), units: units,
+                            help: "Material left at the split plane so the part stays in the board")
+                Text("Make one toolpath per side (duplicate this one and switch the side). After the top side, turn the board over as chosen, keep it against the same corner (the stock must be exactly the job size) and zero Z on the new top.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Whether `id` is machined together with the primary model (composite surface).
+    private func combinedBinding(_ id: UUID) -> Binding<Bool> {
+        Binding(get: { params.additionalModelIDs?.contains(id) ?? false }, set: { on in
+            var ids = (params.additionalModelIDs ?? []).filter { $0 != id }
+            if on { ids.append(id) }
+            params.additionalModelIDs = ids.isEmpty ? nil : ids
+        })
+    }
+
     var body: some View {
         InspectorSection(title: "3D Model") {
             Picker("Model", selection: $params.modelID) {
                 if !models.contains(where: { $0.id == params.modelID }) { Text("Missing model").tag(params.modelID) }
                 ForEach(models) { Text($0.name).tag($0.id) }
+            }
+            if models.count > 1 {
+                Text("Combine with").font(.caption).foregroundStyle(.secondary)
+                ForEach(models.filter { $0.id != params.modelID }) { m in
+                    Toggle(m.name, isOn: combinedBinding(m.id))
+                }
             }
             LengthField("Resolution", value: $params.resolution, units: units, help: "Heightmap cell size")
             Text(params.boundaryShapeIDs.isEmpty ? "Boundary: whole model" : "Boundary: \(params.boundaryShapeIDs.count) vector(s)")
@@ -425,6 +469,8 @@ struct Relief3DForm: View {
                 Button("Clear") { params.boundaryShapeIDs = [] }.disabled(params.boundaryShapeIDs.isEmpty)
             }
         }
+        Divider()
+        twoSidedSection
         Divider()
         InspectorSection(title: "Roughing") {
             Toggle("Rough first", isOn: $params.roughing.isEnabled)
@@ -442,7 +488,22 @@ struct Relief3DForm: View {
             if params.finishing.isEnabled {
                 OptionalLengthField(label: "Stepover", value: $params.finishing.stepover, units: units,
                                     defaultValue: units == .inch ? 0.02 : 0.5)
-                NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
+                Picker("Pattern", selection: Binding(get: { params.finishing.strategy ?? .raster },
+                                                     set: { params.finishing.strategy = $0 })) {
+                    Text("Raster").tag(FinishingStrategy.raster)
+                    Text("Offset").tag(FinishingStrategy.offset)
+                    Text("Spiral").tag(FinishingStrategy.spiral)
+                }
+                .pickerStyle(.segmented)
+                if (params.finishing.strategy ?? .raster) == .raster {
+                    NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
+                }
+                OptionalToolPicker(title: "Rest after", toolID: $params.finishing.restToolID, library: library,
+                                   kinds: [.ballNose, .endMill, .vBit, .engraving])
+                if params.finishing.restToolID != nil {
+                    Text("Only the areas the larger tool could not reach are machined (run after its finishing toolpath).")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
