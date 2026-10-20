@@ -69,6 +69,17 @@ public struct VCarveClearanceTool: Codable, Hashable, Sendable {
 
 public enum InlayPart: String, Codable, CaseIterable, Sendable { case female, male, both }
 
+/// How far the plug's waste is cleared around the mirrored vectors.
+public enum InlayPlugBoundary: String, Codable, CaseIterable, Sendable {
+    /// The vectors' bounding box grown by `maleBoundaryMargin`.
+    case boundaryOffset
+    /// The vectors' own outline grown by `maleBoundaryMargin` (least material removed; the plug
+    /// may need freeing from the board).
+    case vectorOffset
+    /// The whole material sheet.
+    case sheetLimits
+}
+
 /// V-carve inlay pair. Female (pocket) is a flat-bottom V-carve to `pocketDepth`;
 /// male (plug) is a mirrored V-carve cut from `maleStartDepth` down with `glueGap`.
 public struct InlayParameters: Codable, Hashable, Sendable {
@@ -85,14 +96,25 @@ public struct InlayParameters: Codable, Hashable, Sendable {
     public var maleBoundaryMargin: Double
     /// Further flat-area clearance tools after `flatClearanceToolID` (rest machining, in order).
     public var extraClearanceTools: [VCarveClearanceTool]
+    /// Outer limit of the plug's waste clearing.
+    public var plugBoundary: InlayPlugBoundary
+    /// Plug "surface clearance": how far the plug board's cleared floor stays above the pocket
+    /// board's surface once seated (= the male carve's depth below its start depth).
+    /// nil = pocket depth − plug start depth.
+    public var surfaceClearance: Double?
 
     public init(part: InlayPart = .both, pocketDepth: Double = 0.2, maleStartDepth: Double = 0.1,
                 glueGap: Double = 0.02, flatClearanceToolID: UUID? = nil, mirrorMale: Bool = true,
-                maleBoundaryMargin: Double = 0.25, extraClearanceTools: [VCarveClearanceTool] = []) {
+                maleBoundaryMargin: Double = 0.25, extraClearanceTools: [VCarveClearanceTool] = [],
+                plugBoundary: InlayPlugBoundary = .boundaryOffset, surfaceClearance: Double? = nil) {
         self.part = part; self.pocketDepth = pocketDepth; self.maleStartDepth = maleStartDepth
         self.glueGap = glueGap; self.flatClearanceToolID = flatClearanceToolID; self.mirrorMale = mirrorMale
         self.maleBoundaryMargin = maleBoundaryMargin; self.extraClearanceTools = extraClearanceTools
+        self.plugBoundary = plugBoundary; self.surfaceClearance = surfaceClearance
     }
+
+    /// The plug's carve depth below its start depth (the effective surface clearance).
+    public var effectiveSurfaceClearance: Double { surfaceClearance ?? (pocketDepth - maleStartDepth) }
 
     /// Every clearance tool ID in cutting order (empty without a first clearance tool).
     public var clearanceToolIDs: [UUID] {
@@ -104,7 +126,7 @@ public struct InlayParameters: Codable, Hashable, Sendable {
 extension InlayParameters {
     private enum CodingKeys: String, CodingKey {
         case part, pocketDepth, maleStartDepth, glueGap, flatClearanceToolID, mirrorMale, maleBoundaryMargin
-        case extraClearanceTools
+        case extraClearanceTools, plugBoundary, surfaceClearance
     }
 
     public init(from decoder: Decoder) throws {
@@ -116,6 +138,8 @@ extension InlayParameters {
                   flatClearanceToolID: try c.decodeIfPresent(UUID.self, forKey: .flatClearanceToolID),
                   mirrorMale: try c.decode(Bool.self, forKey: .mirrorMale),
                   maleBoundaryMargin: try c.decode(Double.self, forKey: .maleBoundaryMargin),
-                  extraClearanceTools: try c.decodeIfPresent([VCarveClearanceTool].self, forKey: .extraClearanceTools) ?? [])
+                  extraClearanceTools: try c.decodeIfPresent([VCarveClearanceTool].self, forKey: .extraClearanceTools) ?? [],
+                  plugBoundary: try c.decodeIfPresent(InlayPlugBoundary.self, forKey: .plugBoundary) ?? .boundaryOffset,
+                  surfaceClearance: try c.decodeIfPresent(Double.self, forKey: .surfaceClearance))
     }
 }

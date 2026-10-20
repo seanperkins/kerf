@@ -232,6 +232,33 @@ struct VCarveForm: View {
     }
 }
 
+/// Plug outer boundary mode, its margin and the optional surface clearance.
+struct PlugBoundaryFields: View {
+    @Binding var boundary: InlayPlugBoundary
+    @Binding var margin: Double
+    @Binding var surfaceClearance: Double?
+    var defaultClearance: Double
+    var units: LengthUnit
+
+    var body: some View {
+        Picker("Plug boundary", selection: $boundary) {
+            Text("Boundary offset").tag(InlayPlugBoundary.boundaryOffset)
+            Text("Vector offset").tag(InlayPlugBoundary.vectorOffset)
+            Text("Sheet limits").tag(InlayPlugBoundary.sheetLimits)
+        }
+        if boundary != .sheetLimits {
+            LengthField(boundary == .vectorOffset ? "Outline margin" : "Box margin", value: $margin, units: units,
+                        help: boundary == .vectorOffset
+                            ? "Waste cleared around the plug's own outline (least material removed; free the plug afterwards)"
+                            : "Waste cleared out to the plug's bounding box grown by this margin")
+        }
+        OptionalLengthField(label: "Surface clearance", value: $surfaceClearance, units: units,
+                            defaultValue: max(defaultClearance, units == .inch ? 0.05 : 1))
+        Text("Surface clearance: how far the plug board stays above the pocket board when seated (default: pocket depth − plug start depth).")
+            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 /// Further flat-area clearance tools (after the first): each one only clears what the tools
 /// above it could not reach, so list them largest first.
 struct ClearanceToolList: View {
@@ -289,7 +316,9 @@ struct InlayForm: View {
             LengthField("Plug start depth", value: $params.maleStartDepth, units: units)
             LengthField("Glue gap", value: $params.glueGap, units: units)
             Toggle("Mirror plug", isOn: $params.mirrorMale)
-            LengthField("Plug boundary margin", value: $params.maleBoundaryMargin, units: units)
+            PlugBoundaryFields(boundary: $params.plugBoundary, margin: $params.maleBoundaryMargin,
+                               surfaceClearance: $params.surfaceClearance,
+                               defaultClearance: params.pocketDepth - params.maleStartDepth, units: units)
             OptionalToolPicker(title: "Flat area tool", toolID: $params.flatClearanceToolID, library: library,
                                kinds: ClearanceToolList.kinds)
             if params.flatClearanceToolID != nil {

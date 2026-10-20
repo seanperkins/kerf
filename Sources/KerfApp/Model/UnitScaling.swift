@@ -77,6 +77,7 @@ extension InlayParameters {
     func scaled(by f: Double) -> InlayParameters {
         var p = self
         p.pocketDepth *= f; p.maleStartDepth *= f; p.glueGap *= f; p.maleBoundaryMargin *= f
+        p.surfaceClearance = surfaceClearance.map { $0 * f }
         return p
     }
 }

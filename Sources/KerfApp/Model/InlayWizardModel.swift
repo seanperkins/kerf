@@ -15,6 +15,9 @@ struct InlayWizardModel: Equatable {
     var glueGap: Double
     var mirrorPlug: Bool
     var plugMargin: Double
+    var plugBoundary: InlayPlugBoundary = .boundaryOffset
+    /// nil = pocket depth − plug start depth.
+    var surfaceClearance: Double?
 
     init(project: KerfProject, library: ToolLibrary, shapeIDs: [UUID]) {
         let f = LengthUnit.inch.factor(to: project.document.units)
@@ -47,6 +50,7 @@ struct InlayWizardModel: Equatable {
         if plugStartDepth < 0 || glueGap < 0 || plugMargin < 0 {
             out.append("Start depth, glue gap and margin cannot be negative.")
         }
+        if let c = surfaceClearance, c <= 0 { out.append("Surface clearance must be greater than zero.") }
         if plugStartDepth + glueGap > pocketDepth + 1e-9 {
             out.append("Plug start depth + glue gap must not exceed the pocket depth.")
         }
@@ -55,7 +59,8 @@ struct InlayWizardModel: Equatable {
 
     func parameters(part: InlayPart) -> InlayParameters {
         InlayParameters(part: part, pocketDepth: pocketDepth, maleStartDepth: plugStartDepth, glueGap: glueGap,
-                        flatClearanceToolID: clearanceToolID, mirrorMale: mirrorPlug, maleBoundaryMargin: plugMargin)
+                        flatClearanceToolID: clearanceToolID, mirrorMale: mirrorPlug, maleBoundaryMargin: plugMargin,
+                        plugBoundary: plugBoundary, surfaceClearance: surfaceClearance)
     }
 
     /// Female pocket then male plug. The plug is generated in place over the pocket and is cut

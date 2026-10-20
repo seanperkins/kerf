@@ -315,3 +315,11 @@
   at depth start + min(flat, (R − tip radius) / max(tan tool half-angle, tan V half-angle)), so the
   cone never cuts the V walls. The V-bit still traces the flat boundary and full medial axis
   afterwards, as before.
+- **vcarve-parity** — Inlay plug boundary: `InlayParameters.plugBoundary` = `.boundaryOffset`
+  (the old behaviour: bounds grown by `maleBoundaryMargin`), `.vectorOffset` (outer loops of the
+  mirrored vectors grown by the margin, so counters are still cleared) or `.sheetLimits` (the
+  whole material rectangle; slow without a clearance tool on a big sheet, like any huge flat
+  area). `surfaceClearance` (nil = P − S, the old value) is the plug carve's depth below its
+  start depth, i.e. how far the plug board's cleared floor sits above the pocket board when
+  seated; it is reported as `boardGap`, must be > 0 and, when set, less than the material
+  thickness. The bottom (glue) gap stays P − S.

@@ -96,6 +96,64 @@ func vcarveCornerSharpenLiftsEngraverIntoCorners(sharpen: Bool) throws {
     F.expectSafeMotion(tps[1], coords: ctx.coords)
 }
 
+// MARK: vc-inlay-boundary-options
+
+private func plug(_ params: InlayParameters, _ paths: [Path] = [F.rect(4, 4, 1, 1)]) throws -> (Toolpath, CAMContext) {
+    var p = params
+    p.part = .male
+    var (ctx, setup) = F.context(paths)
+    ctx.document.job.width = 7     // small sheet keeps the sheet-limits plug quick
+    ctx.document.job.height = 6
+    let tps = try InlayOperation(setup: setup, params: p).generate(in: ctx)
+    return (try #require(tps.last), ctx)
+}
+
+@Test func inlayPlugBoundaryVectorOffsetHugsTheOutline() throws {
+    // A diamond: its bounding box corners are far from the outline.
+    let diamond = Path(points: [Vec2(5, 4), Vec2(6, 5), Vec2(5, 6), Vec2(4, 5)], closed: true)
+    let (box, ctx) = try plug(InlayParameters(maleBoundaryMargin: 0.2), [diamond])
+    let (hug, _) = try plug(InlayParameters(maleBoundaryMargin: 0.2, plugBoundary: .vectorOffset), [diamond])
+    let corner = Vec2(4.0, 4.0)   // bounding-box corner, 0.707 from the diamond
+    #expect(F.removedDepth(at: corner, by: F.cutPoints(box, coords: ctx.coords), slope: F.tan30) > 0.05)
+    #expect(F.removedDepth(at: corner, by: F.cutPoints(hug, coords: ctx.coords), slope: F.tan30) == 0)
+    // Every vector-offset cut stays within margin of the diamond (|dx| + |dy| ≤ 1 + margin·√2).
+    for p in F.cutPoints(hug, coords: ctx.coords) {
+        #expect(abs(p.xy.x - 5) + abs(p.xy.y - 5) <= 1 + 0.2 * 2.0.squareRoot() + 2e-3)
+    }
+    F.expectSafeMotion(hug, coords: ctx.coords)
+}
+
+@Test func inlayPlugBoundarySheetLimitsClearsToTheMaterialEdge() throws {
+    let (tp, ctx) = try plug(InlayParameters(maleBoundaryMargin: 0.2, plugBoundary: .sheetLimits))
+    let b = tp.xyBounds
+    let job = ctx.document.job
+    let shift = job.originInMaterialFrame
+    #expect(b.min.x < 0.1 - shift.x && b.max.x > job.width - 0.1 - shift.x)
+    #expect(b.min.y < 0.1 - shift.y && b.max.y > job.height - 0.1 - shift.y)
+}
+
+@Test func inlaySurfaceClearanceSetsPlugCarveDepth() throws {
+    let base = InlayParameters(pocketDepth: 0.2, maleStartDepth: 0.1, glueGap: 0.02, surfaceClearance: 0.05)
+    let (tp, ctx) = try plug(base)
+    let depths = F.cutPoints(tp, coords: ctx.coords).map(\.depth)
+    #expect(abs((depths.max() ?? 0) - 0.15) < 1e-6)
+    #expect(tp.metadata["boardGap"] == "0.0500")
+    #expect(tp.metadata["bottomGap"] == "0.1000")
+    var bad = base
+    bad.surfaceClearance = 0
+    #expect(throws: CAMError.self) { try plug(bad) }
+    bad.surfaceClearance = 2   // thicker than the 0.75" material
+    #expect(throws: CAMError.self) { try plug(bad) }
+}
+
+@Test func inlayParametersDecodeWithoutBoundaryFields() throws {
+    let data = try JSONEncoder().encode(InlayParameters())
+    var dict = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    for k in ["plugBoundary", "surfaceClearance", "extraClearanceTools"] { dict.removeValue(forKey: k) }
+    let p = try JSONDecoder().decode(InlayParameters.self, from: JSONSerialization.data(withJSONObject: dict))
+    #expect(p.plugBoundary == .boundaryOffset && p.surfaceClearance == nil && p.extraClearanceTools.isEmpty)
+}
+
 @Test func vcarveClearanceToolDecodesWithoutCornerSharpen() throws {
     let json = #"{"toolID":"00000000-0000-4000-8000-000000000002"}"#
     let t = try JSONDecoder().decode(VCarveClearanceTool.self, from: Data(json.utf8))

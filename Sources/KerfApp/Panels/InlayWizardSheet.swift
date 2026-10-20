@@ -39,7 +39,7 @@ struct InlayWizardSheet: View {
                 Section("Tools") {
                     ToolPicker(title: "V-bit", toolID: $model.vbitID, library: library, preferred: [.vBit, .engraving])
                     OptionalToolPicker(title: "Flat area tool", toolID: $model.clearanceToolID, library: library,
-                                       kinds: [.endMill, .ballNose])
+                                       kinds: ClearanceToolList.kinds)
                 }
                 Section("Pocket (female)") {
                     LengthField("Pocket depth", value: $model.pocketDepth, units: units,
@@ -49,10 +49,11 @@ struct InlayWizardSheet: View {
                     LengthField("Start depth", value: $model.plugStartDepth, units: units,
                                 help: "The plug's V-carve starts this far below the insert board's surface")
                     LengthField("Glue gap", value: $model.glueGap, units: units, help: "Minimum space left under the plug")
-                    LengthField("Boundary margin", value: $model.plugMargin, units: units,
-                                help: "Material cleared around the plug")
+                    PlugBoundaryFields(boundary: $model.plugBoundary, margin: $model.plugMargin,
+                                       surfaceClearance: $model.surfaceClearance, defaultClearance: model.bottomGap,
+                                       units: units)
                     Toggle("Mirror plug (cut face down)", isOn: $model.mirrorPlug)
-                    Text("Gap under the plug and plug board above the surface: \(RulerTicks.label((model.bottomGap * 1000).rounded() / 1000)) \(units.abbreviation)")
+                    Text("Gap under the plug: \(RulerTicks.label((model.bottomGap * 1000).rounded() / 1000)) \(units.abbreviation)")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if !problems.isEmpty {
