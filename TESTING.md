@@ -25,7 +25,10 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 2. **Job Setup** (⇧⌘J). Switch the Z zero between Material top and Spoilboard, and try a few XY
    origins (corners or centre). Leave the settings at Material top and lower left.
 3. **Preview.** Open the 3D preview (⌥⌘3) and press Play. The pocket, carved letters, holes and the
-   cut-out with tabs should look right. Try scrubbing and changing the speed. Switch back with ⌥⌘1.
+   cut-out with tabs should look right. Try scrubbing and changing the speed, stepping one move at a
+   time, and "run to next retract". Try the scope picker (all / visible / selected toolpaths), the
+   material palette (wood type, painted top), the ruler (click the stock twice to measure), the
+   camera button (save a PNG) and the stopwatch (acceleration and calibration). Switch back with ⌥⌘1.
 4. **Export.** File → Export G-code… (⇧⌘E) and save `test.tap`. It should match `samples/sign.tap`
    (only the date or job name may differ). Toolpaths → Check Toolpaths… (⇧⌘K) should report no errors.
 5. **Import.** Make a new document (⌘N). Use File → Import… (⌘I) to import `bracket-plate.dxf`.

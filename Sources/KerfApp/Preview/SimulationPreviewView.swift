@@ -112,6 +112,7 @@ struct SimulationPreviewView: View {
                 Text(emptyMessage).font(.callout.bold())
             } else {
                 Text(model.activeToolpathName ?? "—").font(.callout.bold())
+                if let m = model.moveLabel { Text(m).monospacedDigit() }
                 Text("Estimated time \(MachiningTimeEstimator.format(model.totalTime))")
                 Text(String(format: "Resolution %.3g %@", model.cellSize, units.abbreviation))
             }
@@ -160,6 +161,12 @@ struct SimulationPreviewView: View {
             }
             .keyboardShortcut(.space, modifiers: [])
             .help(model.isPlaying ? "Pause" : "Play")
+            Button(action: model.stepBackward) { Image(systemName: "backward.frame.fill") }
+                .help("Step back one move")
+            Button(action: model.stepForward) { Image(systemName: "forward.frame.fill") }
+                .help("Step forward one move")
+            Button(action: model.runToNextRetract) { Image(systemName: "arrow.up.to.line") }
+                .help("Run to the next retract")
             Button(action: model.jumpToEnd) { Image(systemName: "forward.end.fill") }
                 .help("Show finished result")
             Slider(value: Binding(get: { model.progress }, set: { model.pause(); model.progress = $0 }),

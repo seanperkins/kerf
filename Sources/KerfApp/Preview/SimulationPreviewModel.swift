@@ -76,7 +76,14 @@ enum PlaybackSpeed: Hashable, CaseIterable, Identifiable {
 
 @MainActor
 final class SimulationPreviewModel: ObservableObject {
-    @Published var time: TimeInterval = 0 { didSet { if time != oldValue { requestFrame() } } }
+    @Published var time: TimeInterval = 0 {
+        didSet { if time != oldValue { requestFrame(); updateMoveLabel() } }
+    }
+    /// "Move 12 / 340 · Feed" for the move in progress.
+    @Published private(set) var moveLabel: String?
+    private var moves: SimulationMoveIndex?
+    /// Playback stops here (run to next retract) instead of at the end.
+    private var stopTime: TimeInterval?
     @Published private(set) var totalTime: TimeInterval = 0
     @Published private(set) var isPlaying = false
     @Published var speed: PlaybackSpeed = .fit20s
@@ -147,6 +154,8 @@ final class SimulationPreviewModel: ObservableObject {
         let player = SimulationPlayer(job: job, toolpaths: toolpaths, rapidRate: rapidRate, cellSize: cell,
                                       toolChangeSeconds: timeSettings.toolChangeSeconds, motion: motion)
         totalTime = player.timeline.totalTime
+        moves = SimulationMoveIndex(timeline: player.timeline)
+        updateMoveLabel()
         engine = SimulationEngine(player: player, job: job, maxVertices: 200_000, appearance: appearance,
                                   unitsPerInch: LengthUnit.inch.factor(to: units))
         stockScene.configure(job: job)
@@ -162,6 +171,46 @@ final class SimulationPreviewModel: ObservableObject {
     func togglePlay() { isPlaying ? pause() : play() }
 
     func play() {
+        stopTime = nil
+        startPlayback()
+    }
+
+    // MARK: Stepping
+
+    /// Jumps to the end of the move in progress.
+    func stepForward() {
+        guard let moves else { return }
+        pause()
+        time = moves.nextBoundary(after: time)
+    }
+
+    /// Jumps back to the start of the move in progress (or the previous move).
+    func stepBackward() {
+        guard let moves else { return }
+        pause()
+        time = moves.previousBoundary(before: time)
+    }
+
+    /// Plays at the current speed until the tool next retracts.
+    func runToNextRetract() {
+        guard let moves, totalTime > 0 else { return }
+        if time >= totalTime { time = 0 }
+        stopTime = moves.nextRetract(after: time)
+        startPlayback()
+    }
+
+    private func updateMoveLabel() {
+        guard let moves, !moves.spans.isEmpty else { moveLabel = nil; return }
+        guard let i = moves.spanIndex(at: time) else {
+            moveLabel = "Move \(moves.spans.count) / \(moves.spans.count) · finished"
+            return
+        }
+        let s = moves.spans[i]
+        let kind = s.isRetract ? "Retract" : (s.isRapid ? "Rapid" : (s.rise < -1e-9 ? "Plunge" : "Feed"))
+        moveLabel = "Move \(i + 1) / \(moves.spans.count) · \(kind)"
+    }
+
+    private func startPlayback() {
         guard totalTime > 0 else { return }
         if time >= totalTime { time = 0 }
         isPlaying = true
@@ -175,8 +224,9 @@ final class SimulationPreviewModel: ObservableObject {
                 let dt = now.timeIntervalSince(last)
                 last = now
                 let next = self.time + dt * self.speed.multiplier(totalTime: self.totalTime)
-                if next >= self.totalTime {
-                    self.time = self.totalTime
+                let end = min(self.stopTime ?? self.totalTime, self.totalTime)
+                if next >= end {
+                    self.time = end
                     self.pause()
                     return
                 }
