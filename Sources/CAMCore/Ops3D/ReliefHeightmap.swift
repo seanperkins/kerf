@@ -42,24 +42,32 @@ public struct ReliefHeightmap: Sendable {
 
     /// Rasterises `model` over `area` (material frame) at `cellSize`.
     public static func rasterize(_ model: PlacedModel, over area: Rect2, cellSize: Double) throws -> ReliefHeightmap {
+        try rasterize([model], over: area, cellSize: cellSize)
+    }
+
+    /// Composite heightmap of several models: each cell keeps the shallowest point of any model
+    /// (a union of the solids). Cells no model covers hold the deepest model bottom plane.
+    public static func rasterize(_ models: [PlacedModel], over area: Rect2, cellSize: Double) throws -> ReliefHeightmap {
         guard cellSize > 0, cellSize.isFinite else { throw CAMError.invalidParameter("Heightmap resolution must be > 0") }
-        guard !area.isEmpty else { throw CAMError.noGeometry }
+        guard !area.isEmpty, !models.isEmpty else { throw CAMError.noGeometry }
         let cols = Int(ceil(area.width / cellSize)) + 1
         let rows = Int(ceil(area.height / cellSize)) + 1
         guard cols * rows <= maxCells else {
             throw CAMError.invalidParameter("Heightmap resolution too fine (\(cols)x\(rows) cells)")
         }
         var map = ReliefHeightmap(origin: area.min, cellSize: cellSize, columns: cols, rows: rows,
-                                  baseDepth: model.depth)
-        let depthOf = model.depthMapper()
-        let verts = model.mesh.vertices.map { v in Vec3(model.materialXY(v), z: depthOf(v.z)) }
-        let idx = model.mesh.indices
-        map.depths.withUnsafeMutableBufferPointer { buf in
-            var t = 0
-            while t + 2 < idx.count {
-                let tri = [verts[Int(idx[t])], verts[Int(idx[t + 1])], verts[Int(idx[t + 2])]]
-                t += 3
-                rasterTriangle(tri, origin: area.min, cs: cellSize, cols: cols, rows: rows, buf: buf)
+                                  baseDepth: models.map(\.depth).max()!)
+        for model in models {
+            let depthOf = model.depthMapper()
+            let verts = model.mesh.vertices.map { v in Vec3(model.materialXY(v), z: depthOf(v.z)) }
+            let idx = model.mesh.indices
+            map.depths.withUnsafeMutableBufferPointer { buf in
+                var t = 0
+                while t + 2 < idx.count {
+                    let tri = [verts[Int(idx[t])], verts[Int(idx[t + 1])], verts[Int(idx[t + 2])]]
+                    t += 3
+                    rasterTriangle(tri, origin: area.min, cs: cellSize, cols: cols, rows: rows, buf: buf)
+                }
             }
         }
         return map

@@ -307,3 +307,9 @@
   `.offset` = contour-parallel inside-out rings, `.raster` = zig-zag lines plus the region contour
   when `profilePass` is on. Links stay inside the level's region (`RegionLinker`), other moves
   retract. This replaces the earlier per-raster-line sampling, so raster roughing toolpaths changed.
+- **cam-3d** — **Composite models (3d-multiple-models).** `Relief3DParameters.additionalModelIDs`
+  (optional, so older files decode) lists models machined together with `modelID`. They are
+  rasterised into one heightmap where each cell keeps the shallowest point of any model (a union);
+  cells no model covers sit at the deepest model's bottom plane. The default area is the union of
+  the models' footprints. Missing combined models are skipped with a toolpath warning (a missing
+  primary model is still an error). The inspector lists the other models under "Combine with".

@@ -10,11 +10,20 @@ public struct Relief3DParameters: Codable, Hashable, Sendable {
     public var finishing: FinishingSettings
     /// Optional boundary vectors limiting the machined area (empty = model bounds + tool radius).
     public var boundaryShapeIDs: [UUID]
+    /// Further models combined with `modelID` into one composite surface (the shallowest model
+    /// wins where they overlap). nil/empty = machine `modelID` alone.
+    public var additionalModelIDs: [UUID]?
 
     public init(modelID: UUID, resolution: Double = 0.01, roughing: RoughingSettings = RoughingSettings(),
                 finishing: FinishingSettings = FinishingSettings(), boundaryShapeIDs: [UUID] = []) {
         self.modelID = modelID; self.resolution = resolution; self.roughing = roughing
         self.finishing = finishing; self.boundaryShapeIDs = boundaryShapeIDs
+    }
+
+    /// Primary model first, then the combined ones (duplicates removed).
+    public var allModelIDs: [UUID] {
+        var seen: Set<UUID> = [modelID]
+        return [modelID] + (additionalModelIDs ?? []).filter { seen.insert($0).inserted }
     }
 }
 

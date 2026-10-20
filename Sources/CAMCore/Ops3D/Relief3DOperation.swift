@@ -5,8 +5,9 @@ import Foundation
 ///
 /// Produces up to two toolpaths in cutting order: roughing (flat end mill, leaves
 /// `roughing.allowance`) then finishing (primary tool, drop-cutter raster). The machined area
-/// is the union of the closed boundary vectors, or the model's footprint when there are none;
-/// the tool centre stays inside it. Outside the model's triangles the surface is the model's
+/// is the union of the closed boundary vectors, or the models' footprints when there are none;
+/// the tool centre stays inside it. Several models (`additionalModelIDs`) are combined into one
+/// composite surface. Outside the models' triangles the surface is the deepest model's
 /// bottom plane (`PlacedModel.depth`).
 public struct Relief3DOperation: ToolpathOperation {
     public static let kind = OperationKind.relief3D
@@ -20,7 +21,10 @@ public struct Relief3DOperation: ToolpathOperation {
 
     public func generate(in context: CAMContext) throws -> [Toolpath] {
         guard let model = context.document.model(id: params.modelID) else { throw CAMError.missingModel(params.modelID) }
-        guard model.mesh.triangleCount > 0 else { throw CAMError.noGeometry }
+        let extraIDs = params.allModelIDs.dropFirst()
+        let extras = extraIDs.compactMap { context.document.model(id: $0) }
+        let models = ([model] + extras).filter { $0.mesh.triangleCount > 0 }
+        guard !models.isEmpty else { throw CAMError.noGeometry }
         guard params.roughing.isEnabled || params.finishing.isEnabled else {
             throw CAMError.invalidParameter("Enable roughing and/or finishing")
         }
@@ -32,18 +36,24 @@ public struct Relief3DOperation: ToolpathOperation {
 
         let boundaryShapes = context.document.shapes(ids: params.boundaryShapeIDs)
         var region = ReliefRegion.polygons(of: boundaryShapes, tolerance: context.tolerance)
-        if region.isEmpty { region = [ReliefRegion.rectangle(model.footprint)] }
+        if region.isEmpty {
+            region = GeomKernel.boolean(.union, subject: models.map { ReliefRegion.rectangle($0.footprint) }, clip: [],
+                                        fillRule: .nonZero)
+        }
         let regionBounds = Rect2(points: region.flatMap { $0 })
         guard !regionBounds.isEmpty, regionBounds.width > 0 || regionBounds.height > 0 else { throw CAMError.noGeometry }
 
         let reach = max(finishTool.radius, roughTool.radius + max(0, params.roughing.allowance))
         let area = regionBounds.insetBy(-(reach + 2 * params.resolution))
         var metadata: [String: String] = [:]
+        if extras.count < extraIDs.count {
+            metadata["warning"] = "\(extraIDs.count - extras.count) combined model(s) are missing and were skipped"
+        }
         let cellSize = Self.cellSize(requested: params.resolution, area: area)
         if cellSize > params.resolution * 1.0001 {
             metadata["warning"] = String(format: "Heightmap resolution coarsened to %.4g", cellSize)
         }
-        let map = try ReliefHeightmap.rasterize(model, over: area, cellSize: cellSize)
+        let map = try ReliefHeightmap.rasterize(models, over: area, cellSize: cellSize)
         if map.maxDepth > context.document.job.thickness + 1e-9 {
             metadata["warning"] = "Model is deeper than the material thickness"
         }

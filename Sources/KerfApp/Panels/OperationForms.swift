@@ -316,11 +316,26 @@ struct Relief3DForm: View {
     var models: [PlacedModel]
     var selection: [UUID]
 
+    /// Whether `id` is machined together with the primary model (composite surface).
+    private func combinedBinding(_ id: UUID) -> Binding<Bool> {
+        Binding(get: { params.additionalModelIDs?.contains(id) ?? false }, set: { on in
+            var ids = (params.additionalModelIDs ?? []).filter { $0 != id }
+            if on { ids.append(id) }
+            params.additionalModelIDs = ids.isEmpty ? nil : ids
+        })
+    }
+
     var body: some View {
         InspectorSection(title: "3D Model") {
             Picker("Model", selection: $params.modelID) {
                 if !models.contains(where: { $0.id == params.modelID }) { Text("Missing model").tag(params.modelID) }
                 ForEach(models) { Text($0.name).tag($0.id) }
+            }
+            if models.count > 1 {
+                Text("Combine with").font(.caption).foregroundStyle(.secondary)
+                ForEach(models.filter { $0.id != params.modelID }) { m in
+                    Toggle(m.name, isOn: combinedBinding(m.id))
+                }
             }
             LengthField("Resolution", value: $params.resolution, units: units, help: "Heightmap cell size")
             Text(params.boundaryShapeIDs.isEmpty ? "Boundary: whole model" : "Boundary: \(params.boundaryShapeIDs.count) vector(s)")
