@@ -40,6 +40,7 @@ enum DocumentSheet: Identifiable, Equatable {
     case tiling
     case partLabels
     case variables
+    case productionPlates
     /// Drawing-tool dialogs (dog-bones, arrays, validator, …).
     case drawing(DrawingSheet)
 
@@ -58,6 +59,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .tiling: return "tiling"
         case .partLabels: return "partLabels"
         case .variables: return "variables"
+        case .productionPlates: return "productionPlates"
         case .drawing(let d): return "drawing-\(d.rawValue)"
         }
     }
