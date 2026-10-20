@@ -1,0 +1,38 @@
+{
+  "formatVersion" : 1,
+  "document" : {
+    "name" : "Sign",
+    "units" : "inch",
+    "gridSpacing" : 0.25,
+    "job" : {
+      "width" : 24, "height" : 12, "thickness" : 0.75,
+      "xyOrigin" : "center", "zZero" : "spoilboard",
+      "safeZ" : 0.2, "homeZ" : 0.8, "home" : { "x" : 0, "y" : 0 }
+    },
+    "layers" : [
+      { "id" : "11111111-1111-4111-8111-111111111111", "name" : "Cut", "isVisible" : true, "isLocked" : false, "colorHex" : "#FF0000" }
+    ],
+    "shapes" : [
+      {
+        "id" : "22222222-2222-4222-8222-222222222222",
+        "name" : "Disc",
+        "layerID" : "11111111-1111-4111-8111-111111111111",
+        "isLocked" : false,
+        "origin" : { "circle" : { "radius" : 2 } },
+        "paths" : [
+          {
+            "start" : { "x" : 14, "y" : 6 },
+            "isClosed" : true,
+            "segments" : [
+              { "arc" : { "to" : { "x" : 10, "y" : 6 }, "center" : { "x" : 12, "y" : 6 }, "clockwise" : false } },
+              { "arc" : { "to" : { "x" : 14, "y" : 6 }, "center" : { "x" : 12, "y" : 6 }, "clockwise" : false } }
+            ]
+          }
+        ]
+      }
+    ],
+    "models" : []
+  },
+  "operations" : [],
+  "tools" : []
+}
