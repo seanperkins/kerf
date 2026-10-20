@@ -243,6 +243,13 @@ struct VCarveForm: View {
                 Text("Open vectors in the selection are ignored.").font(.caption).foregroundStyle(.secondary)
             }
         }
+        Divider()
+        InspectorSection(title: "Order") {
+            Toggle("Use vector start points", isOn: $params.useVectorStartPoints)
+                .help("Start outlines and engraved lines at each vector's start point")
+            Toggle("Use vector selection order", isOn: $params.useSelectionOrder)
+                .help("Carve the vectors in the order they were selected instead of the shortest route")
+        }
     }
 }
 

@@ -204,6 +204,58 @@ func vcarveEngravesOpenVectorAtConstantDepth(zZero: ZZeroMode) throws {
     #expect(pts.contains { $0.xy.x > 5 && abs($0.depth - 0.15 / F.tan30) < 1e-3 })
 }
 
+// MARK: vc-vector-start-order
+
+/// One shape per path, selected in the given order.
+private func separateShapes(_ paths: [Path], order: [Int]) -> (CAMContext, OperationSetup) {
+    var doc = Document(units: .inch)
+    let shapes = paths.map { Shape(layerID: doc.defaultLayerID, paths: [$0]) }
+    for s in shapes { doc.add(s) }
+    let setup = OperationSetup(name: "V", toolID: F.vbit60.id, shapeIDs: order.map { shapes[$0].id })
+    return (CAMContext(document: doc, tools: .seeded), setup)
+}
+
+/// The order in which the cut first reaches each of the given x ranges.
+private func visitOrder(_ tp: Toolpath, _ ctx: CAMContext, ranges: [ClosedRange<Double>]) -> [Int] {
+    var seen: [Int] = []
+    for p in F.cutPoints(tp, coords: ctx.coords, step: 0.05) where p.depth > 1e-6 {
+        if let i = ranges.firstIndex(where: { $0.contains(p.xy.x) }), !seen.contains(i) { seen.append(i) }
+    }
+    return seen
+}
+
+@Test func vcarveSelectionOrderIsHonoured() throws {
+    let rects = [F.rect(1, 1, 0.4, 0.3), F.rect(2, 1, 0.4, 0.3), F.rect(3, 1, 0.4, 0.3)]
+    let ranges = [0.9...1.5, 1.9...2.5, 2.9...3.5]
+    let (ctx, setup) = separateShapes(rects, order: [2, 0, 1])
+    let shortest = try #require(try VCarveOperation(setup: setup).generate(in: ctx).first)
+    #expect(visitOrder(shortest, ctx, ranges: ranges) == [0, 1, 2])
+    let ordered = try #require(try VCarveOperation(setup: setup, params: VCarveParameters(useSelectionOrder: true))
+        .generate(in: ctx).first)
+    #expect(visitOrder(ordered, ctx, ranges: ranges) == [2, 0, 1])
+    F.expectSafeMotion(ordered, coords: ctx.coords)
+}
+
+@Test func vcarveVectorStartPointKeepsEngravingDirection() throws {
+    let line = Path(points: [Vec2(3, 2), Vec2(1, 1)], closed: false)
+    let (ctx, setup) = separateShapes([line], order: [0])
+    func firstCut(_ params: VCarveParameters) throws -> Vec2 {
+        let tp = try #require(try VCarveOperation(setup: setup, params: params).generate(in: ctx).first)
+        let first = try #require(tp.moves.first { !$0.isRapid })
+        return ctx.coords.material(fromMachine: try #require(first.target)).xy
+    }
+    #expect(try firstCut(VCarveParameters(openVectorDepth: 0.05)).distance(to: Vec2(1, 1)) < 1e-6)
+    #expect(try firstCut(VCarveParameters(openVectorDepth: 0.05, useVectorStartPoints: true))
+        .distance(to: Vec2(3, 2)) < 1e-6)
+}
+
+@Test func vcarveStartPointRotatesLoops() {
+    let loop = VCarveStroke(points: [Vec3(0, 0, 0.1), Vec3(1, 0, 0.1), Vec3(1, 1, 0.1), Vec3(0, 1, 0.1), Vec3(0, 0, 0.1)],
+                            isClosed: true)
+    let rotated = VCarveOrdering.startingNear(loop, Vec2(1.1, 0.9))
+    #expect(rotated.points.map(\.xy) == [Vec2(1, 1), Vec2(0, 1), Vec2(0, 0), Vec2(1, 0), Vec2(1, 1)])
+}
+
 @Test func vcarveClearanceToolDecodesWithoutCornerSharpen() throws {
     let json = #"{"toolID":"00000000-0000-4000-8000-000000000002"}"#
     let t = try JSONDecoder().decode(VCarveClearanceTool.self, from: Data(json.utf8))

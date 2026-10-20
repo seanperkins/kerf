@@ -7,6 +7,9 @@ struct VCarveStroke: Hashable {
     var points: [Vec3]
     /// Closed loops repeat their first point at the end.
     var isClosed: Bool
+    /// Cut in the given direction only (ordering never reverses it), e.g. an engraved vector
+    /// honouring its start point.
+    var fixedDirection = false
 
     var maxDepth: Double { points.map(\.z).max() ?? 0 }
 }
@@ -36,7 +39,8 @@ enum VCarveStrokes {
         let eps = 1e-7
         let keep = s.points.map { $0.z > floor + eps }
         if keep.allSatisfy({ $0 }) {
-            return [VCarveStroke(points: s.points.map { Vec3($0.xy, z: min($0.z, level)) }, isClosed: s.isClosed)]
+            return [VCarveStroke(points: s.points.map { Vec3($0.xy, z: min($0.z, level)) }, isClosed: s.isClosed,
+                                 fixedDirection: s.fixedDirection)]
         }
         var out: [VCarveStroke] = []
         var i = 0
@@ -47,7 +51,7 @@ enum VCarveStrokes {
             while j + 1 < n, keep[j + 1] { j += 1 }
             let lo = max(0, i - 1), hi = min(n - 1, j + 1)
             let pts = s.points[lo...hi].map { Vec3($0.xy, z: min($0.z, level)) }
-            if pts.count >= 2 { out.append(VCarveStroke(points: pts, isClosed: false)) }
+            if pts.count >= 2 { out.append(VCarveStroke(points: pts, isClosed: false, fixedDirection: s.fixedDirection)) }
             i = j + 1
         }
         return out
@@ -84,7 +88,7 @@ enum VCarveStrokes {
             for (i, s) in pool.enumerated() {
                 let d0 = s.points[0].xy.distance(to: cursor)
                 if d0 < best.d { best = (i, false, d0) }
-                if !s.isClosed {
+                if !s.isClosed, !s.fixedDirection {
                     let d1 = s.points[s.points.count - 1].xy.distance(to: cursor)
                     if d1 < best.d { best = (i, true, d1) }
                 }

@@ -330,3 +330,12 @@
   strokes that start and end as points). The strokes join the V-bit's carve strokes, so pass
   depth, ordering and the move writer apply. A selection of only open vectors is valid when
   engraving is on. Closed vectors are still V-carved, never engraved along their outline.
+- **vcarve-parity** — V-Carve `useSelectionOrder` / `useVectorStartPoints` (Vectric's "Use
+  Vector Selection Order" / "Use Vector Start Points"). Strokes are assigned to the first selected
+  shape (selection order = `setup.shapeIDs`, which the app fills in click order) that contains
+  their middle point, or whose open path they lie on. Selection order cuts each shape's strokes
+  together, per pass, shapes in order; strokes in no shape go last. Start points rotate closed
+  loops (flat-area outlines, clearance rings) to begin at the vertex nearest the shape's first
+  path start, start each shape's walk there, and keep engraved open vectors in their drawn
+  direction. Medial-axis chains are not re-split at start points. Inlay does not offer these
+  options (its plug geometry is mirrored).

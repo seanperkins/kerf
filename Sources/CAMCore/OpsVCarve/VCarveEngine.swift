@@ -24,6 +24,8 @@ struct VCarveEngine {
     var passDepth: Double?
     /// Engraving strokes along open vectors, cut by the V-bit with the carve (already at depth).
     var engraveStrokes: [VCarveStroke] = []
+    /// Vector start points / selection order (nil = shortest-travel order).
+    var ordering: VCarveOrdering?
     var tolerance: Double
     var sampleStep: Double
 
@@ -88,13 +90,18 @@ struct VCarveEngine {
         let deepest = max(bottom, engraveBottom)
         let levels = VCarveStrokes.passLevels(total: deepest, passDepth: passDepth)
         let vPasses = VCarveStrokes.multiPass(vStrokes, levels: levels).map { pass in
-            VCarveStrokes.ordered(pass.map {
-                VCarveStroke(points: VCarveStrokes.simplified($0.points, tolerance: tolerance), isClosed: $0.isClosed)
+            order(pass.map {
+                VCarveStroke(points: VCarveStrokes.simplified($0.points, tolerance: tolerance), isClosed: $0.isClosed,
+                             fixedDirection: $0.fixedDirection)
             })
         }
         return Result(vbitPasses: vPasses,
-                      clearance: clearance.map { ($0.tool, $0.passes.map { VCarveStrokes.ordered($0) }) },
+                      clearance: clearance.map { ($0.tool, $0.passes.map { order($0) }) },
                       maxDepth: deepest, warnings: warnings)
+    }
+
+    private func order(_ strokes: [VCarveStroke]) -> [VCarveStroke] {
+        ordering?.order(strokes) ?? VCarveStrokes.ordered(strokes)
     }
 
     /// Clears the flat area with the clearance tools in order (rest machining after the first).

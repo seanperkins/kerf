@@ -34,6 +34,11 @@ public struct VCarveOperation: ToolpathOperation {
                                        tolerance: context.tolerance, step: engine.sampleStep)
             }
         }
+        if params.useVectorStartPoints || params.useSelectionOrder {
+            engine.ordering = VCarveOrdering(shapes: context.shapes(for: setup), useStartPoints: params.useVectorStartPoints,
+                                             useSelectionOrder: params.useSelectionOrder, tolerance: context.tolerance,
+                                             units: context.units)
+        }
         engine.startDepth = params.startDepth
         engine.flatDepth = params.flatDepth
         engine.clearanceTools = params.flatDepth == nil

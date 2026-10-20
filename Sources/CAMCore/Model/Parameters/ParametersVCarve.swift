@@ -19,15 +19,21 @@ public struct VCarveParameters: Codable, Hashable, Sendable {
     /// Fraction of each open vector's length (0…0.5) over which its ends rise smoothly to the
     /// surface, for tapered sketch-style strokes (0 = constant depth).
     public var openVectorTaper: Double
+    /// Start loops (flat-area outlines, clearance rings) and engraved lines at each vector's
+    /// start point.
+    public var useVectorStartPoints: Bool
+    /// Machine the vectors in the order they were selected instead of shortest travel.
+    public var useSelectionOrder: Bool
 
     public init(startDepth: Double = 0, flatDepth: Double? = nil, flatClearanceToolID: UUID? = nil,
                 flatClearanceStrategy: PocketStrategy = .offset, passDepth: Double? = nil,
                 extraClearanceTools: [VCarveClearanceTool] = [], openVectorDepth: Double? = nil,
-                openVectorTaper: Double = 0) {
+                openVectorTaper: Double = 0, useVectorStartPoints: Bool = false, useSelectionOrder: Bool = false) {
         self.startDepth = startDepth; self.flatDepth = flatDepth; self.flatClearanceToolID = flatClearanceToolID
         self.flatClearanceStrategy = flatClearanceStrategy; self.passDepth = passDepth
         self.extraClearanceTools = extraClearanceTools
         self.openVectorDepth = openVectorDepth; self.openVectorTaper = openVectorTaper
+        self.useVectorStartPoints = useVectorStartPoints; self.useSelectionOrder = useSelectionOrder
     }
 
     /// Every flat-area clearance tool in cutting order (empty without a flat depth tool).
@@ -41,7 +47,7 @@ extension VCarveParameters {
     // Decoder written out so fields added after format 1 default when missing.
     private enum CodingKeys: String, CodingKey {
         case startDepth, flatDepth, flatClearanceToolID, flatClearanceStrategy, passDepth, extraClearanceTools
-        case openVectorDepth, openVectorTaper
+        case openVectorDepth, openVectorTaper, useVectorStartPoints, useSelectionOrder
     }
 
     public init(from decoder: Decoder) throws {
@@ -53,7 +59,9 @@ extension VCarveParameters {
                   passDepth: try c.decodeIfPresent(Double.self, forKey: .passDepth),
                   extraClearanceTools: try c.decodeIfPresent([VCarveClearanceTool].self, forKey: .extraClearanceTools) ?? [],
                   openVectorDepth: try c.decodeIfPresent(Double.self, forKey: .openVectorDepth),
-                  openVectorTaper: try c.decodeIfPresent(Double.self, forKey: .openVectorTaper) ?? 0)
+                  openVectorTaper: try c.decodeIfPresent(Double.self, forKey: .openVectorTaper) ?? 0,
+                  useVectorStartPoints: try c.decodeIfPresent(Bool.self, forKey: .useVectorStartPoints) ?? false,
+                  useSelectionOrder: try c.decodeIfPresent(Bool.self, forKey: .useSelectionOrder) ?? false)
     }
 }
 
