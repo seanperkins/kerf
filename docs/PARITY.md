@@ -2,7 +2,9 @@
 
 Kerf against the public VCarve Pro 12.5 feature set, built from Vectric's public product page and online help only (see Sources). Status is judged from Kerf's code and tests: **done** = works end to end including the UI; **partial** = engine or UI only, or a subset of the options; **missing** = not implemented. Priority: **P1** = matters for typical Avid sign, part, inlay or 3D jobs; P2 = useful; P3 = niche or out of scope (for example rotary).
 
-Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 missing.
+Totals: 177 features. 156 done, 11 partial, 10 missing. P1: 64 done, 0 partial, 0 missing.
+
+Round 2 (2026-10-20): every partial and missing item was re-checked against the code and is unchanged; the full suite passed (774 tests). Fourteen items were added from the public feature list (marked *r2* in notes).
 
 | id | area | feature | status | priority | notes |
 |---|---|---|---|---|---|
@@ -36,16 +38,19 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `draw-array-circular` | drawing | Circular array copy | done | P2 | Circular array sheet |
 | `draw-copy-along` | drawing | Copy along vector | done | P3 | Copy along vector |
 | `draw-copy-paste` | drawing | Copy, cut, paste, duplicate, nudge | done | P1 | ShapeClipboard (EditingCommands.swift), CanvasEvents.keyDown nudge; EditingCommandTests |
+| `draw-selection-tools` | drawing | Selection helpers (select all, by layer, open vectors, duplicates, similar, invert) | partial | P3 | *r2* Edit > Select All and layer "Select Shapes on Layer" only; no select-open/duplicate/similar/invert commands |
 | `draw-join-close` | drawing | Join / close open vectors | done | P1 | DesignCommands.join/close, PathOps.joinOpenPaths |
 | `draw-curve-fit` | drawing | Fit curves to vectors (smooth polylines into arcs/Béziers) | done | P2 | Fits lines and arcs (not Béziers) |
 | `draw-vector-validator` | drawing | Vector validator (open, duplicate, self-intersecting, zero-length) | done | P1 | Vector validator with canvas highlight markers |
 | `draw-duplicate-overlap` | drawing | Find/remove duplicate and overlapping vectors | done | P2 | Duplicate / overlapping vector finder |
 | `draw-layers` | drawing | Layers (visibility, lock, colour, reorder, move-to-layer) | done | P1 | Panels/SidebarView.swift layers tab, CADCore Document layers; ProjectModelTests |
 | `draw-grouping` | drawing | Group / ungroup / combine / break apart | done | P1 | CADCore/Editing/Grouping.swift, DesignCommands.combine/explode |
+| `draw-lock-objects` | drawing | Lock / unlock individual objects | done | P2 | *r2* Shape.isLocked, inspector "Locked" toggle, sidebar lock icon; layer lock in SidebarView |
 | `draw-nested-groups` | drawing | Nested groups and deep ungroup | done | P3 | Shape.innerGroupIDs; Ungroup one level / Ungroup All Levels |
 | `draw-dimensions` | drawing | Dimension objects (linear, angular, radial) | done | P3 | Document.dimensions, CanvasTool.dimension |
 | `draw-text-basic` | drawing | Text in any installed font with cap-height sizing | done | P1 | CADCore/Geometry/TextOutliner.swift, DrawingTools text; TextOutlinerTests |
 | `draw-text-editable` | drawing | Editable text objects (re-open to change string/font/size, alignment, spacing) | done | P1 | Shape.text (TextSpec) live text, re-editable in the inspector |
+| `draw-text-to-curves` | drawing | Convert live text to curves | done | P1 | *r2* Vectors > Convert Text to Curves, VectorCommands.convertTextToCurves |
 | `draw-text-autolayout` | drawing | Auto-layout text to fit a box | done | P2 | Auto-layout text to a box |
 | `draw-text-on-curve` | drawing | Text on a curve / arc text / bend text | done | P2 | Text on a curve (output is plain vectors) |
 | `draw-single-line-fonts` | drawing | Single-stroke (engraving) fonts | done | P2 | Kerf Single Line stroke font (own design) |
@@ -60,6 +65,7 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `io-ai-pdf-import` | io | AI and PDF import (vectors, embedded images) | done | P2 | AI/PDF vector import |
 | `io-svg-text` | io | SVG text and image elements on import | done | P3 | SVG <text> imported as outlines |
 | `io-bitmap-import` | io | Bitmap import (JPG/PNG/BMP/TIF/GIF/WebP) | done | P2 | Document.images (PlacedImage), drawn under the vectors |
+| `io-image-crop` | io | Picture editing: position, size, crop and fade a placed bitmap | done | P3 | *r2* PlacedImage.crop/opacity, Panels/ImagePanels.swift image editor |
 | `io-stl-import` | io | STL 3D model import | done | P1 | CADCore/IO/STLImporter.swift, ModelPlacementSheet; STLImporterTests |
 | `io-obj-3d-import` | io | OBJ / other 3D formats import | done | P2 | OBJ model import |
 | `io-skp-import` | io | SketchUp import | partial | P3 | No .skp reader (needs Trimble SDK); COLLADA .dae importer instead, with guidance on .skp |
@@ -76,6 +82,8 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `io-units-convert` | io | Unit switching inch↔mm with conversion | done | P1 | KerfApp/Model/UnitScaling.swift; ProjectModelTests |
 | `io-setup-sheet` | io | Job / setup sheet (printable report) | done | P1 | Covered by lay-job-sheet (File > Export Job Sheet…); the io job-sheet variant was dropped at merge |
 | `io-print` | io | Print 2D design / 3D view | done | P3 | File > Print / Print at Actual Size (2D design only) |
+| `io-job-notes` | io | Job notes saved with the file (shown on open, printed on the setup sheet) | missing | P3 | *r2* JobSheet only lists per-toolpath warnings; no document notes field |
+| `io-clipart-library` | io | Clipart browser (local folders and online clipart) | missing | P3 | *r2* no browser for the user's own vector/3D clipart folders |
 | `io-post-processors` | io | Post processor selection and custom posts | done | P1 | PostCore/Profiles/BuiltInPosts.swift, PostProfileStore; PostGoldenTests, PostProfileTests |
 | `io-gcode-validator` | io | G-code safety validation | done | P1 | PostCore/Validation/GCodeValidator.swift, ValidationSheet; PostValidatorTests |
 | `io-save-toolpaths` | io | Save toolpaths (single, combined, per tool) | done | P1 | Panels/SaveAllToolpathsSheet.swift, Model/GCodeBatchExport.swift; AdvancedToolpathDocumentTests |
@@ -107,15 +115,19 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `tp-texture` | toolpaths-2d | Texture toolpath | done | P3 | CAMCore/Ops2D/TextureOperation.swift; Ops2DFlutingTextureTests |
 | `tp-templates` | toolpaths-2d | Toolpath templates (save/load, auto vector selection) | done | P2 | CAMCore/Templates/ToolpathTemplate.swift, TemplateService, Toolpaths menu; Tests/KerfAppTests/ToolpathTemplateTests.swift |
 | `tp-merge` | toolpaths-2d | Merge toolpaths | done | P3 | MergeOperation, Merge With Next / Split Merged commands; MergeToolpathTests |
+| `tp-import-toolpaths` | toolpaths-2d | Import toolpaths from another job | partial | P3 | *r2* Toolpath templates bring toolpath sets across jobs (TemplateService.apply); no G-code import for preview |
 | `tp-array-copy` | toolpaths-2d | Array copy toolpath | done | P3 | OperationSetup.arrayCopy, ToolpathArray; Array Copies inspector section; Ops2DArrayCopyTests |
 | `tp-order-visibility` | toolpaths-2d | Toolpath list: reorder, duplicate, enable, show/hide, recalc, stale status | done | P1 | Panels/SidebarView.swift ToolpathsSidebar/ToolpathRow; ProjectModelTests |
 | `tp-tool-database` | toolpaths-2d | Tool database (kinds, cutting data, units, numbers) | done | P1 | CADCore/Model/ToolLibrary.swift, Panels/ToolDatabaseView.swift |
 | `tp-tool-groups-materials` | toolpaths-2d | Tool groups and per-material cutting data | done | P2 | Tool.group, Tool.materials, JobSetup.material, CAMContext.tool; ToolDataSections; Ops2DToolDataTests, ToolGroupingTests |
 | `tp-feeds-calculator` | toolpaths-2d | Feeds and speeds calculator (chip load) | done | P2 | CAMCore/Tools/FeedsAndSpeeds.swift; tool editor calculator section; Ops2DToolDataTests |
+| `tp-tool-db-import-export` | toolpaths-2d | Tool database import/export and sharing between machines | partial | P2 | *r2* ToolLibraryModel.importTools copies tools from an opened project; no file import/export of the library |
+| `tp-tool-shapes` | toolpaths-2d | Extra cutter shapes: radiused (bull-nose) end mill, tapered ball nose, form tools | missing | P2 | *r2* Tool.Kind has endMill, ballNose, vBit (with flat tip), engraving, drill only |
 | `tp-tool-edit-per-toolpath` | toolpaths-2d | Per-toolpath tool parameter override | done | P2 | OperationSetup.toolOverride via CAMContext.toolOverrides; ToolOverrideSection; Ops2DToolDataTests |
 | `tp-arc-output` | toolpaths-2d | Arc (G2/G3) and helical arc output | done | P2 | ArcFitter.swift; PostProfile arcOutput/helicalArcs; PostGoldenTests |
 | `tp-tiling` | toolpaths-2d | Toolpath tiling for jobs larger than the bed | done | P3 | Covered by lay-tiling (Toolpaths > Save Tiled G-code…) |
 | `tp-keepout` | toolpaths-2d | Keep-out zones | partial | P2 | Document.keepOutZones, KeepOut.violations as export/Check errors, Keep-Out Zones sheet, canvas hatching; toolpaths are checked, not re-routed; Ops2DKeepOutTests, KeepOutZoneTests |
+| `tp-laser` | toolpaths-2d | Laser add-on toolpaths (line, fill, image) and laser posts | missing | P3 | *r2* No laser operations or posts; the Avid build is spindle only |
 | `vc-basic` | vcarve | V-carve (medial-axis depth from V angle) | done | P1 | CAMCore/OpsVCarve/VCarveOperation.swift, VCarveMedialAxis.swift; VCarveTests |
 | `vc-flat-depth` | vcarve | Flat depth with flat-area clearance (offset/raster) | done | P1 | VCarvePocketing.swift, VCarveParameters.flatDepth/flatClearanceToolID; VCarveTests |
 | `vc-multi-clearance` | vcarve | Multiple clearance tools for flat areas | done | P2 | VCarveParameters.extraClearanceTools, VCarveEngine.clearFlatArea (rest machining); VCarveParityTests |
@@ -137,7 +149,7 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `3d-rest-machining` | cam-3d | 3D rest machining | done | P3 | FinishingSettings.restToolID, Ops3D/ReliefRest.swift, inspector "Rest after"; ReliefRestTests |
 | `3d-project-2d` | cam-3d | Project 2D toolpaths onto 3D surface | done | P3 | OperationSetup.projectOntoModelID, Ops3D/ReliefProjection.swift, inspector "Project onto 3D"; ReliefProjectionTests |
 | `3d-two-sided` | cam-3d | Two-sided 3D machining | done | P3 | Relief3DParameters.twoSided (side, flip, split, web), Ops3D/ReliefTwoSided.swift, inspector "Two-Sided"; ReliefTwoSidedTests. No registration-pin toolpaths |
-| `3d-rotary` | cam-3d | Rotary / wrapped toolpaths | missing | P3 | Won't do: no rotary axis on the Avid and no A-axis post output (DECISIONS cam-3d) |
+| `3d-rotary` | cam-3d | Rotary / wrapped toolpaths (rotary job setup, wrapped and spiral toolpaths, rotary model import) | missing | P3 | Won't do: no rotary axis on the Avid and no A-axis post output (DECISIONS cam-3d) |
 | `lay-nesting` | layout | True-shape nesting on sheets | done | P1 | CADCore/Layout/Nesting.swift, Panels/NestingSheet.swift; LayoutNestingTests |
 | `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | done | P2 | CADCore/Layout/NestSheets.swift, Nest Parts overflow + Layout > Sheet on Material; LayoutMultiSheetTests |
 | `lay-tiling` | layout | Tiling large jobs | done | P3 | CAMCore/Layout/ToolpathTiling.swift, Toolpaths > Save Tiled G-code…; LayoutTilingTests, LayoutTiledExportTests |
@@ -145,6 +157,7 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | done | P2 | CADCore/Layout/Fixtures.swift, Panels/FixturesSheet.swift, LayoutChecks.keepOut; LayoutFixture*Tests, LayoutKeepOutTests |
 | `lay-material-validation` | layout | Material-size and travel validation | done | P1 | PostCore/Validation/LayoutChecks.swift, Check Toolpaths "Material and machine"; LayoutChecksTests |
 | `lay-part-labels` | layout | Part labelling (IDs/names engraved or printed on parts) | done | P3 | Model/PartLabelCommands.swift, Layout > Label Parts…, job sheet part list; LayoutPartLabel*Tests |
+| `lay-production-plates` | layout | Production plate engraving: one design arrayed with text from a spreadsheet/CSV, toolpaths included | missing | P3 | *r2* No CSV/variable-text merge; plate maker, arrays and toolpath array copy exist |
 | `pv-3d-sim` | preview | 3D material removal simulation | done | P1 | CAMCore/Simulation/MaterialSimulator.swift, Preview/SimulationPreviewView.swift; SimMaterialSimulatorTests |
 | `pv-playback` | preview | Playback controls (play/pause, scrub, speed, jump to end, reset) | done | P1 | SimulationPreviewView.swift (rewind/play/end/slider/speed); SimTimelineTests |
 | `pv-show-tool` | preview | Show tool during preview | done | P2 | SimulationPreviewModel.showTool |
@@ -156,6 +169,8 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `pv-2d-overlay` | preview | 2D toolpath overlay with rapids | done | P1 | Preview/ToolpathOverlayRenderer.swift, CanvasDrawing; RenderSmokeTests |
 | `pv-save-image` | preview | Save preview image | done | P3 | Offscreen PNG of the 3D view |
 | `pv-step-control` | preview | Single-step / run-to-retract simulation control | done | P3 | SimulationMoveIndex step back/forward, run to next retract |
+| `pv-3d-views` | preview | Standard 3D view directions (top/front/side/iso) and orthographic mode | missing | P2 | *r2* StockScene has one perspective orbit camera and a reset button only |
+| `pv-3d-toolpath-vectors` | preview | Toolpath lines and vectors shown in the 3D view (and drawing there) | missing | P2 | *r2* 3D view shows only the simulated stock, tool and measure markers; toolpath lines are on the 2D overlay |
 | `ux-menus-shortcuts` | app-ux | Menus and keyboard shortcuts | done | P1 | App/KerfCommands.swift, DrawingTools.shortcut |
 | `ux-preferences` | app-ux | Preferences window (default units, grid, post, snapping, colours) | done | P2 | Panels/PreferencesView.swift, Model/AppPreferences.swift; PreferencesTests |
 | `ux-undo` | app-ux | Undo/redo for every document edit | done | P1 | KerfDocument.perform snapshot undo; DocumentTests |
@@ -169,6 +184,7 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 | `ux-async-calc` | app-ux | Background toolpath calculation with progress and cancel | done | P1 | KerfDocument.calculateAndWait, Panels/CalculationProgressView.swift |
 | `ux-zoom-pan` | app-ux | Zoom/pan (fit material, fit selection, trackpad pinch) | done | P1 | CanvasViewport.swift, CanvasEvents scroll/magnify |
 | `ux-split-view` | app-ux | Side-by-side 2D and 3D views | done | P3 | CenterMode.split in ContentView (⌥⌘2); AppUXRenderTests |
+| `ux-gadgets` | app-ux | Gadgets / scripting API for add-on tools | missing | P3 | *r2* No scripting host; numeric variables/expressions only |
 
 ## Sources
 
@@ -182,3 +198,4 @@ Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 
 - https://docs.vectric.com/docs/V12.5/VCarvePro/ENU/Help/form/ChamferStrategy/index.html: Chamfer toolpath
 - https://docs.vectric.com/docs/V12.5/VCarvePro/ENU/Help/form/Preview%20Toolpaths/index.html: Preview Toolpaths
 - https://docs.vectric.com/docs/V12.5/VCarvePro/ENU/Help/form/material-setup-flat/index.html: Material Setup
+- https://community.carbide3d.com/t/awesome-vectric-vcarve-aspire-feature/12684: public forum description of production plate (variable data) arrays
