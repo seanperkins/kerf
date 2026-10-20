@@ -107,6 +107,15 @@ extension ChamferParameters {
     }
 }
 
+extension HoleMillParameters {
+    func scaled(by f: Double) -> HoleMillParameters {
+        var p = self
+        p.startDepth *= f; p.cutDepth *= f; p.holeDiameter = holeDiameter.map { $0 * f }
+        p.helixPitch = helixPitch.map { $0 * f }; p.threadPitch *= f
+        return p
+    }
+}
+
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
         switch self {
@@ -120,6 +129,7 @@ extension AnyOperation {
         case .relief3D(var o): o.params = o.params.scaled(by: f); return .relief3D(o)
         case .engrave(var o): o.params = o.params.scaled(by: f); return .engrave(o)
         case .chamfer(var o): o.params = o.params.scaled(by: f); return .chamfer(o)
+        case .holeMill(var o): o.params = o.params.scaled(by: f); return .holeMill(o)
         }
     }
 }

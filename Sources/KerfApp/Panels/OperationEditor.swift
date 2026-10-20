@@ -97,6 +97,9 @@ struct OperationEditor: View {
         case .chamfer(let o):
             ChamferForm(params: paramsBinding(o.params) { .chamfer(ChamferOperation(setup: draft.setup, params: $0)) },
                         units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+        case .holeMill(let o):
+            HoleMillForm(params: paramsBinding(o.params) { .holeMill(HoleMillOperation(setup: draft.setup, params: $0)) },
+                         units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
         case .relief3D(let o):
             Relief3DForm(params: paramsBinding(o.params) { .relief3D(Relief3DOperation(setup: draft.setup, params: $0)) },
                          units: units, library: library, models: document.document.models,

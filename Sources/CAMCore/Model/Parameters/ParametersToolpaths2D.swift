@@ -63,3 +63,33 @@ public struct ChamferParameters: Codable, Hashable, Sendable {
         self.startDepth = startDepth; self.passDepth = passDepth; self.direction = direction
     }
 }
+
+public enum HoleMillMode: String, Codable, CaseIterable, Sendable {
+    /// Helical boring: spiral down to the cut depth at the hole radius, then a flat lap.
+    case helical
+    /// Internal thread milling with a thread mill (needs a pilot hole).
+    case thread
+}
+
+/// Hole milling: helical bores and internal threads at each selected circle.
+public struct HoleMillParameters: Codable, Hashable, Sendable {
+    public var mode: HoleMillMode
+    public var startDepth: Double
+    public var cutDepth: Double
+    /// Hole (or thread major) diameter; nil = each vector's own diameter.
+    public var holeDiameter: Double?
+    /// Helical boring: depth per revolution; nil = the tool's stepdown.
+    public var helixPitch: Double?
+    /// Thread pitch (distance per turn), e.g. 1/16 in for 16 TPI.
+    public var threadPitch: Double
+    public var rightHandThread: Bool
+    public var direction: CutDirection
+
+    public init(mode: HoleMillMode = .helical, startDepth: Double = 0, cutDepth: Double = 0.5,
+                holeDiameter: Double? = nil, helixPitch: Double? = nil, threadPitch: Double = 0.0625,
+                rightHandThread: Bool = true, direction: CutDirection = .climb) {
+        self.mode = mode; self.startDepth = startDepth; self.cutDepth = cutDepth; self.holeDiameter = holeDiameter
+        self.helixPitch = helixPitch; self.threadPitch = threadPitch; self.rightHandThread = rightHandThread
+        self.direction = direction
+    }
+}

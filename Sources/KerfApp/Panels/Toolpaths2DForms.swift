@@ -172,3 +172,39 @@ struct PassEditor: View {
         }
     }
 }
+
+struct HoleMillForm: View {
+    @Binding var params: HoleMillParameters
+    var units: LengthUnit
+    var tool: Tool?
+
+    var body: some View {
+        InspectorSection(title: "Hole Milling") {
+            Picker("Mode", selection: $params.mode) {
+                Text("Helical bore").tag(HoleMillMode.helical)
+                Text("Thread mill").tag(HoleMillMode.thread)
+            }
+            .pickerStyle(.segmented)
+            LengthField("Start depth", value: $params.startDepth, units: units)
+            LengthField("Cut depth", value: $params.cutDepth, units: units)
+            OptionalLengthField(label: params.mode == .thread ? "Major diameter" : "Hole diameter",
+                                value: $params.holeDiameter, units: units, defaultValue: units == .inch ? 0.5 : 12)
+            if params.mode == .helical {
+                OptionalLengthField(label: "Depth per turn", value: $params.helixPitch, units: units,
+                                    defaultValue: tool?.stepdown ?? (units == .inch ? 0.05 : 1.25))
+            } else {
+                LengthField("Thread pitch", value: $params.threadPitch, units: units, help: "Distance per turn")
+                if units == .inch, params.threadPitch > 0 {
+                    Text("\(RulerTicks.label((1 / params.threadPitch * 10).rounded() / 10)) threads per inch")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Toggle("Right-hand thread", isOn: $params.rightHandThread)
+            }
+            DirectionPicker(direction: $params.direction)
+            Text(params.mode == .helical
+                 ? "Spirals down at each selected circle's size (or the diameter above), then cleans the bottom with a flat lap. Holes smaller than the tool are skipped."
+                 : "Plunges at the centre of each circle (drill a pilot hole first), moves out and cuts one turn per pitch. Use a thread mill; its diameter is the tool diameter.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}

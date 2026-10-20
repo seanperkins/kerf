@@ -13,6 +13,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     case relief3D(Relief3DOperation)
     case engrave(EngraveOperation)
     case chamfer(ChamferOperation)
+    case holeMill(HoleMillOperation)
 
     public var operation: any ToolpathOperation {
         switch self {
@@ -26,6 +27,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .relief3D(let o): return o
         case .engrave(let o): return o
         case .chamfer(let o): return o
+        case .holeMill(let o): return o
         }
     }
 
