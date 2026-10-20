@@ -20,6 +20,8 @@ struct KerfCommands: Commands {
             Button("Export G-code…") { document?.sheet = .exportGCode(.all) }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Export Job Sheet…") { document?.exportJobSheet() }
+                .disabled(document == nil)
         }
         CommandGroup(after: .pasteboard) {
             Button("Duplicate") { document?.duplicateSelection() }

@@ -141,7 +141,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `lay-nesting` | layout | True-shape nesting on sheets | done | P1 | CADCore/Layout/Nesting.swift, Panels/NestingSheet.swift; LayoutNestingTests |
 | `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | missing | P2 | Not implemented |
 | `lay-tiling` | layout | Tiling large jobs | missing | P3 | Not implemented |
-| `lay-job-sheet` | layout | Job sheets / operator setup sheet | missing | P1 | See io-setup-sheet; only sidebar summary exists |
+| `lay-job-sheet` | layout | Job sheets / operator setup sheet | done | P1 | Model/JobSheet.swift (HTML), File > Export Job Sheet…; LayoutJobSheetTests |
 | `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | missing | P2 | Not implemented |
 | `lay-material-validation` | layout | Material-size and travel validation | partial | P1 | GCodeValidator checks travel span and spoilboard depth; no warning for vectors outside the material |
 | `lay-part-labels` | layout | Part labelling (IDs/names engraved or printed on parts) | missing | P3 | Not implemented |
