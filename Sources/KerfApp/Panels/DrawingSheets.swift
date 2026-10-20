@@ -23,6 +23,7 @@ struct DrawingSheetHost: View {
         case .distort: DistortSheet(document: document)
         case .offsetOpen: OpenOffsetSheet(document: document)
         case .inlayOffset: StraightInlaySheet(document: document)
+        case .copyAlong: CopyAlongSheet(document: document)
         }
     }
 }

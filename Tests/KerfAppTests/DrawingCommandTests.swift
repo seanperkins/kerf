@@ -170,6 +170,20 @@ import Testing
         #expect(plug.bounds().min.x > pocket.bounds().max.x)
     }
 
+    @Test func copyAlongOpenGuide() {
+        var p = AppTestSupport.project()
+        let obj = p.document.shapes[0]  // centre (2, 1.5)
+        let guide = Shape(layerID: p.document.defaultLayerID, paths: [Path(points: [Vec2(0, 10), Vec2(0, 20)], closed: false)])
+        p.document.add(guide)
+        let ids = VectorCommands.copyAlong([obj.id, guide.id], count: 3, rotate: true, keepOriginal: false, in: &p)
+        #expect(ids.count == 3 && p.document.shape(id: obj.id) == nil)
+        let centres = ids.map { p.document.shape(id: $0)!.bounds().center }
+        #expect(centres[1].isApproximatelyEqual(to: Vec2(0, 15), tolerance: 1e-9))
+        // Rotated 90° to follow the vertical guide: the 2-wide rectangle is now 2 tall.
+        #expect(abs(p.document.shape(id: ids[0])!.bounds().height - 2) < 1e-9)
+        #expect(CopyAlong.count(along: guide.paths[0], spacing: 2.5) == 5)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]

@@ -2,6 +2,47 @@ import CADCore
 import CAMCore
 import SwiftUI
 
+struct CopyAlongSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var bySpacing = false
+    @State private var count = 5
+    @State private var spacing: Double
+    @State private var rotate = true
+    @State private var keepOriginal = false
+
+    init(document: KerfDocument) {
+        self.document = document
+        _spacing = State(initialValue: document.units == .inch ? 1 : 25)
+    }
+
+    var body: some View {
+        let order = document.selectedShapes.map(\.id)
+        let guide = document.selectedShapes.last
+        let n = bySpacing ? (guide?.paths.first.map { CopyAlong.count(along: $0, spacing: spacing) } ?? 0) : count
+        DrawingDialog(title: "Copy Along Vector", action: "Copy", disabled: order.count < 2 || n < 1,
+                      note: order.count < 2 ? "Select the objects, then shift-click the guide vector last."
+                          : "Guide: the last selected vector\(guide.map { $0.name.isEmpty ? "" : " (\($0.name))" } ?? ""). \(n) cop\(n == 1 ? "y" : "ies") centred on evenly spaced points; open guides get one at each end.",
+                      perform: {
+                          let (c, r, k) = (n, rotate, keepOriginal)
+                          var ids: [UUID] = []
+                          document.perform("Copy Along Vector") { ids = VectorCommands.copyAlong(order, count: c, rotate: r, keepOriginal: k, in: &$0) }
+                          if !ids.isEmpty { document.setSelection(ids) }
+                      }) {
+            Picker("Spacing", selection: $bySpacing) {
+                Text("Number of copies").tag(false)
+                Text("Distance apart").tag(true)
+            }
+            if bySpacing {
+                LengthField("Distance", value: $spacing, units: document.units)
+            } else {
+                IntField("Copies", value: $count, range: 1...1000)
+            }
+            Toggle("Rotate copies to follow the vector", isOn: $rotate)
+            Toggle("Keep the original", isOn: $keepOriginal)
+        }
+    }
+}
+
 struct CircularArraySheet: View {
     enum CenterChoice: String, CaseIterable, Identifiable {
         case material, custom

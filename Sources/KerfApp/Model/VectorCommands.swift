@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset, copyAlong
     var id: String { rawValue }
 }
 
@@ -466,6 +466,21 @@ enum VectorCommands {
         let ts = ArrayLayout.circular(count: count, center: center, stepDegrees: stepDegrees, rotateCopies: rotateCopies,
                                       selectionCenter: selCenter)
         return arrayCopies(ids, transforms: ts, in: &project)
+    }
+
+    /// Copies the selection (all but the last selected shape) to `count` points along the last
+    /// selected shape. The originals are deleted unless `keepOriginal`. Returns the copies.
+    static func copyAlong(_ order: [UUID], count: Int, rotate: Bool, keepOriginal: Bool,
+                          in project: inout KerfProject) -> [UUID] {
+        guard order.count >= 2, let guideID = order.last, let guide = project.document.shape(id: guideID)?.paths.first else { return [] }
+        let objects = project.document.expandToGroups(Array(order.dropLast())).filter { $0 != guideID }
+        guard !objects.isEmpty else { return [] }
+        let c = project.bounds(of: Set(objects)).center
+        let ts = CopyAlong.transforms(along: guide, count: count, objectCenter: c, rotate: rotate,
+                                      tolerance: tolerance(project.document.units) / 4)
+        let ids = arrayCopies(objects, transforms: ts, in: &project)
+        if !keepOriginal { project.deleteShapes(Set(objects)) }
+        return ids
     }
 
     /// Rectangular array: rows × columns including the original.

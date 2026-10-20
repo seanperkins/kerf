@@ -24,6 +24,7 @@ struct VectorMenuCommands: Commands {
             Divider()
             sheetButton("Rectangular Array…", .arrayLinear)
             sheetButton("Circular Array…", .arrayCircular)
+            sheetButton("Copy Along Vector…", .copyAlong)
             Divider()
             Button("Trim Tool") { document?.activeTool = .trim }.disabled(document == nil)
             sheetButton("Trim to Boundary…", .trimBoundary)
