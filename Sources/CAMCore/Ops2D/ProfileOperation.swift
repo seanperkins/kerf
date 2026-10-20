@@ -101,13 +101,14 @@ public struct ProfileOperation: ToolpathOperation {
             var pts = pass.points
             if useLeads {
                 let t0 = alc.tangent(at: s0), t1 = alc.tangent(at: pass.endS)
-                let inPts = Leads.leadIn(to: alc.point(at: s0), tangent: t0,
-                                         waste: wasteRegion.normal(at: alc.point(at: s0), tangent: t0),
-                                         settings: params.lead, tolerance: tol)
+                let isWaste = { (p: Vec2) in wasteRegion.isWaste(p, slack: tol) }
+                let inPts = Leads.safeLeadIn(to: alc.point(at: s0), tangent: t0,
+                                             waste: wasteRegion.normal(at: alc.point(at: s0), tangent: t0),
+                                             settings: params.lead, tolerance: tol, isWaste: isWaste)
                 let endP = alc.point(at: pass.endS)
-                let outPts = Leads.leadOut(from: endP, tangent: t1,
-                                           waste: wasteRegion.normal(at: endP, tangent: t1),
-                                           settings: params.lead, tolerance: tol)
+                let outPts = Leads.safeLeadOut(from: endP, tangent: t1,
+                                               waste: wasteRegion.normal(at: endP, tangent: t1),
+                                               settings: params.lead, tolerance: tol, isWaste: isWaste)
                 pts = inPts.map { CutPoint($0, depth: d) } + pts + outPts.map { CutPoint($0, depth: d) }
             }
             // With leads every pass re-enters at the same lead-in, already cut to `prev`.
@@ -132,6 +133,13 @@ public struct WasteSide: Sendable {
         let left = t.perpendicular
         let leftInside = Polygon2D.regionContains(region, p + left * probe)
         return leftInside == wasteInside ? left : -left
+    }
+
+    /// True when a tool centre at `p` stays on the waste side (no gouge), allowing `slack`
+    /// of numerical error at the loop itself.
+    public func isWaste(_ p: Vec2, slack: Double) -> Bool {
+        if Polygon2D.regionContains(region, p) == wasteInside { return true }
+        return region.contains { Polygon2D.distance(from: p, toLoop: $0) <= slack }
     }
 }
 

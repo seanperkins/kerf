@@ -247,3 +247,22 @@ func ops2DProfileLeadInStartsInWaste(type: LeadType) throws {
     let (on, _) = try profile([open], side: .on)
     #expect(on.metadata["warning"] == nil)
 }
+
+@Test(arguments: [LeadType.linear, .arc])
+func ops2DProfileInsideLeadsNeverGougeThePart(type: LeadType) throws {
+    // Inside loops have sharp corners; the loop starts at one (nearest home).
+    let rect = Rect2(x: 2, y: 2, width: 6, height: 4)
+    let (tp, ctx) = try profile([F.rect(2, 2, 6, 4)], side: .inside, depth: 0.25) {
+        $0.lead = LeadSettings(type: type, distance: 0.25, overcut: 0.1)
+    }
+    #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
+    let cutXY = F.densePoints(tp.moves).filter { $0.z < -1e-9 }.map(\.xy)
+    #expect(!cutXY.isEmpty)
+    for p in cutXY {
+        #expect(rect.contains(p))
+        #expect(F.distanceToRectBoundary(p, rect) >= F.endMill.radius - 0.002)
+    }
+    // A lead still exists: the plunge point is off the cut loop, inside the waste.
+    guard let plunge = tp.moves.first(where: { !$0.isRapid })?.target else { Issue.record("no cut"); return }
+    #expect(F.distanceToRectBoundary(plunge.xy, rect) > F.endMill.radius + 0.05)
+}

@@ -45,6 +45,51 @@ public enum Leads {
         }
     }
 
+    /// Lead-in that stays in the waste: tries the configured lead, then straight approaches
+    /// (diagonal back, diagonal forward, pure normal), shrinking the length until every point
+    /// of the lead satisfies `isWaste`. Returns no lead when nothing fits (e.g. a sharp inside
+    /// corner where the configured lead would back through the wall).
+    public static func safeLeadIn(to start: Vec2, tangent t: Vec2, waste n: Vec2, settings: LeadSettings,
+                                  tolerance: Double, isWaste: (Vec2) -> Bool) -> [Vec2] {
+        fitted(anchor: start, settings: settings, candidates: [n - t, n + t, n], isWaste: isWaste) { s in
+            leadIn(to: start, tangent: t, waste: n, settings: s, tolerance: tolerance)
+        }
+    }
+
+    /// Lead-out counterpart of `safeLeadIn`.
+    public static func safeLeadOut(from end: Vec2, tangent t: Vec2, waste n: Vec2, settings: LeadSettings,
+                                   tolerance: Double, isWaste: (Vec2) -> Bool) -> [Vec2] {
+        fitted(anchor: end, settings: settings, candidates: [n + t, n - t, n], isWaste: isWaste) { s in
+            leadOut(from: end, tangent: t, waste: n, settings: s, tolerance: tolerance)
+        }
+    }
+
+    private static func fitted(anchor: Vec2, settings: LeadSettings, candidates: [Vec2],
+                               isWaste: (Vec2) -> Bool, configured: (LeadSettings) -> [Vec2]) -> [Vec2] {
+        guard settings.type != .none, settings.distance > 0 else { return [] }
+        for scale in [1.0, 0.5, 0.25, 0.125] {
+            var s = settings
+            s.distance = settings.distance * scale
+            let pts = configured(s)
+            if allWaste(anchor: anchor, pts, isWaste) { return pts }
+            for c in candidates where c.length > 1e-12 {
+                let lp = [anchor + c.normalized * s.distance]
+                if allWaste(anchor: anchor, lp, isWaste) { return lp }
+            }
+        }
+        return []
+    }
+
+    /// Samples the polyline anchor → pts (excluding the anchor itself).
+    private static func allWaste(anchor: Vec2, _ pts: [Vec2], _ isWaste: (Vec2) -> Bool) -> Bool {
+        var prev = anchor
+        for q in pts {
+            for k in 1...16 where !isWaste(prev + (q - prev) * (Double(k) / 16)) { return false }
+            prev = q
+        }
+        return true
+    }
+
     static func segments(radius: Double, tolerance: Double) -> Int {
         let step = 2 * acos(max(-1, min(1, 1 - tolerance / max(radius, tolerance))))
         return max(4, Int(ceil((Double.pi / 2) / max(step, 1e-3))))
