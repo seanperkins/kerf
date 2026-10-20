@@ -28,6 +28,15 @@ extension AnyOperation {
         }
     }
 
+    /// The operation with its operator pause removed, to compare what affects the toolpath.
+    var withoutPause: AnyOperation {
+        var copy = self
+        var s = copy.editableSetup
+        s.pauseAfter = nil
+        copy.editableSetup = s
+        return copy
+    }
+
     /// Every library tool the operation references (primary + clearance/roughing tools).
     var referencedToolIDs: [UUID] {
         var ids = [setup.toolID]

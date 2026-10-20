@@ -136,6 +136,16 @@ public struct GCodeValidator: Sendable {
                 switch m {
                 case 3, 4: spindleOn = true
                 case 5: spindleOn = false
+                case 0, 1:
+                    // An unknown Z (nothing moved yet) is not a problem; a custom post's pause template might be.
+                    if spindleOn {
+                        carried.add("stop-spindle-on", .warning, line: b.line,
+                                    "Program stops (M\(Int(m))) with the spindle running")
+                    }
+                    if let z, z < check.safeZ - check.eps {
+                        carried.add("stop-below-safe-z", .warning, line: b.line,
+                                    "Program stops (M\(Int(m))) with the tool below safe Z")
+                    }
                 case 2, 30: sawEnd = true
                 default: break
                 }

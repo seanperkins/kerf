@@ -252,6 +252,29 @@ struct ArrayCopyForm: View {
     }
 }
 
+/// An operator stop after the toolpath (`OperationSetup.pauseAfter`): the program lifts to safe Z,
+/// stops the spindle, shows the message and waits for Cycle Start.
+struct PauseStepForm: View {
+    @Binding var pause: PauseStep?
+    var toolpathName: String
+
+    var body: some View {
+        Toggle("Pause the machine after this toolpath", isOn: Binding(get: { pause != nil }, set: { on in
+            pause = on ? PauseStep() : nil
+        }))
+        .help("Lift to safe Z, stop the spindle and wait for Cycle Start: flip the part, add clamps, clear chips")
+        if let p = pause {
+            TextField("Message", text: Binding(get: { pause?.message ?? "" }, set: { pause?.message = $0 }),
+                      prompt: Text(PauseStep().text(afterToolpath: toolpathName)))
+                .help("Shown on the controller while the machine waits")
+            Toggle("Optional stop (M1)", isOn: Binding(get: { pause?.isOptionalStop ?? false }, set: { pause?.isOptionalStop = $0 }))
+                .help("Stops only when Optional Stop is switched on at the controller; otherwise the program runs straight through")
+            Text("The program stops (\(p.stopCode)) between this toolpath and the next one, and the next toolpath restarts the spindle. Nothing is added after the last toolpath. No recalculation is needed.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 /// A merged toolpath: its parts in cutting order and a Split button.
 struct MergeForm: View {
     var operation: MergeOperation

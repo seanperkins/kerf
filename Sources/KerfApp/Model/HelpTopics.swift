@@ -222,6 +222,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Select vectors, then Toolpaths ▸ New Toolpath. The toolpath appears in the Toolpaths sidebar and its settings in the inspector. Edits apply straight away; **Revert** undoes them.
 
             A toolpath shows as stale (faded) after its settings or the design change. Press **Calculate** or ⌘R to recalculate. Toolpaths are cut in sidebar order unless "Group by tool" is on in the export sheet. Untick "Include in export" to leave a toolpath out.
+
+            **Pause** (at the bottom of the inspector) stops the machine after a toolpath, to flip the part, add clamps or clear chips: the program lifts to safe Z, stops the spindle, shows your message on the controller and waits for Cycle Start; the next toolpath restarts the spindle. "Optional stop" writes M1, which stops only when Optional Stop is switched on at the controller. Nothing is added after the last toolpath, and "Group by tool" never moves a toolpath across a pause.
             """
         case .profile:
             return """

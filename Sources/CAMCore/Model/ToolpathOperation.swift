@@ -54,6 +54,9 @@ public struct OperationSetup: Codable, Hashable, Identifiable, Sendable {
     public var toolOverride: ToolOverride?
     /// Repeat the generated toolpath on a grid (toolpaths-2d addition; nil = once).
     public var arrayCopy: ArrayCopySettings?
+    /// Stop the machine for the operator after this toolpath (nil = run straight on). Applied when
+    /// the program is posted, so changing it never needs a recalculation.
+    public var pauseAfter: PauseStep?
 
     public init(id: UUID = UUID(), name: String, isEnabled: Bool = true, toolID: UUID, shapeIDs: [UUID] = []) {
         self.id = id; self.name = name; self.isEnabled = isEnabled; self.toolID = toolID; self.shapeIDs = shapeIDs

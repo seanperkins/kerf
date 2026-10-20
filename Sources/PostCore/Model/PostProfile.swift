@@ -60,6 +60,10 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// Rapid traverse speed in output units per minute (for time estimates).
     public var rapidRate: Double
     public var maxFeed: Double
+    /// Lines emitted for an operator pause (see `PauseStep`), after the post lifts to safe Z. Placeholders:
+    /// {MESSAGE} (the pause's text, comment-safe) and {STOP} (M0, or M1 for an optional stop).
+    /// nil = `defaultPause`, which stops the spindle first. Optional so older saved posts still load.
+    public var pause: [String]?
 
     public init(id: String, name: String, version: String = "1.0", fileExtension: String = "tap",
                 units: LengthUnit, commentStyle: CommentStyle = .parentheses, lineNumbers: Bool = false,
@@ -70,7 +74,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
                 minRPM: Double, maxRPM: Double, rapid: String = "G0", linear: String = "G1",
                 arcCW: String = "G2", arcCCW: String = "G3", arcOutput: ArcOutput = .incrementalIJ,
                 arcTolerance: Double, helicalArcs: Bool = true, modal: Bool = true, footer: [String],
-                limits: MachineLimits, rapidRate: Double, maxFeed: Double) {
+                limits: MachineLimits, rapidRate: Double, maxFeed: Double, pause: [String]? = nil) {
         self.id = id; self.name = name; self.version = version; self.fileExtension = fileExtension
         self.units = units; self.commentStyle = commentStyle; self.lineNumbers = lineNumbers
         self.decimals = decimals; self.feedDecimals = feedDecimals; self.headerComments = headerComments
@@ -80,8 +84,18 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         self.minRPM = minRPM; self.maxRPM = maxRPM; self.rapid = rapid; self.linear = linear
         self.arcCW = arcCW; self.arcCCW = arcCCW; self.arcOutput = arcOutput; self.arcTolerance = arcTolerance
         self.helicalArcs = helicalArcs; self.modal = modal; self.footer = footer; self.limits = limits
-        self.rapidRate = rapidRate; self.maxFeed = maxFeed
+        self.rapidRate = rapidRate; self.maxFeed = maxFeed; self.pause = pause
     }
+
+    /// Spindle off, the message where the controller shows it, then the stop. The message is a
+    /// parenthesised MSG comment (Mach3/4 and LinuxCNC display it; GRBL senders echo the comment
+    /// when they stop), or a `;` comment in a post that writes its comments that way.
+    public static func defaultPause(for style: CommentStyle) -> [String] {
+        ["M5", style == .semicolon ? "; {MESSAGE}" : "(MSG, {MESSAGE})", "{STOP}"]
+    }
+
+    /// The pause template in effect.
+    public var pauseLines: [String] { pause ?? Self.defaultPause(for: commentStyle) }
 
     /// "G20" or "G21".
     public var unitsCode: String { units == .inch ? "G20" : "G21" }
@@ -105,7 +119,11 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
             .replacingOccurrences(of: "“", with: "\"").replacingOccurrences(of: "”", with: "\"")
             .replacingOccurrences(of: "‘", with: "'").replacingOccurrences(of: "’", with: "'")
         let stripped = replaced.applyingTransform(.stripDiacritics, reverse: false) ?? replaced
-        return String(stripped.unicodeScalars.filter { $0.isASCII }.map(Character.init))
+        // A line break or other control character would end the comment and start a new G-code line.
+        let plain = stripped.unicodeScalars.filter { $0.isASCII }.map { s -> Character in
+            s.value < 0x20 || s.value == 0x7F ? " " : Character(s)
+        }
+        return String(plain)
     }
 
     public func toJSON() throws -> Data {

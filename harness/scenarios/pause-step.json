@@ -1,0 +1,51 @@
+{
+  "name": "the Pause section of the inspector and the sidebar marker, on a project whose first toolpath pauses",
+  "window": [
+    1280,
+    1400
+  ],
+  "steps": [
+    {
+      "op": "size",
+      "size": [
+        1280,
+        1400
+      ]
+    },
+    {
+      "op": "project",
+      "name": "harness/projects/sign-pause.kerf"
+    },
+    {
+      "op": "tab",
+      "value": "toolpaths"
+    },
+    {
+      "op": "calculate"
+    },
+    {
+      "op": "selectToolpath",
+      "name": "Pocket 1"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "capture",
+      "name": "pause-on"
+    },
+    {
+      "op": "selectToolpath",
+      "name": "V-Carve 1"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "capture",
+      "name": "pause-off"
+    }
+  ]
+}

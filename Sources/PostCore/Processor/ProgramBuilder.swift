@@ -45,17 +45,12 @@ struct ProgramBuilder {
 
         var currentTool: UUID?
         var currentRPM: Double?
-        for tp in active {
+        for (index, tp) in active.enumerated() {
             if tp.tool.id != currentTool {
                 if currentTool != nil { w.retract(to: coords.safeZ) }
                 writeToolChange(tp, into: &w)
                 currentTool = tp.tool.id
                 currentRPM = nil
-                // Cross to the first point at the approach height; the toolpath's own first
-                // move then only descends.
-                if approachZ > coords.safeZ + 1e-9, let first = tp.moves.first(where: { $0.target != nil })?.target {
-                    w.rapid(to: Vec3(first.xy, z: approachZ))
-                }
             }
             if tp.spindleRPM != currentRPM {
                 writeSpindleStart(tp, into: &w)
@@ -63,6 +58,14 @@ struct ProgramBuilder {
             }
             w.comment("Toolpath: \(tp.name) [\(tp.kind.displayName)]")
             writeMoves(tp.moves, into: &w)
+            // A stop belongs between toolpaths: the program's own end already stops the machine.
+            if let pause = tp.pauseAfter, index + 1 < active.count {
+                let next = active[index + 1]
+                writePause(pause, after: tp, into: &w)
+                currentRPM = nil   // the pause stops the spindle
+                // A tool change that follows re-enters the work itself.
+                if next.tool.id == tp.tool.id { reenter(before: next, into: &w) }
+            }
         }
 
         w.retract(to: coords.safeZ)
@@ -122,6 +125,14 @@ struct ProgramBuilder {
         for tp in toolpaths {
             w.comment("  \(tp.name) [\(tp.kind.displayName), T\(tp.tool.number), S\(NumberFormat.fixed(tp.spindleRPM, decimals: 0))]")
         }
+        // The last toolpath is skipped: the program's own end stops the machine (see `build`).
+        let stops = toolpaths.dropLast().compactMap { tp in tp.pauseAfter.map { (tp, $0) } }
+        if !stops.isEmpty {
+            w.comment("Pauses - the machine waits for Cycle Start:")
+            for (tp, pause) in stops {
+                w.comment("  after \(tp.name): \(pause.text(afterToolpath: tp.name)) [\(pause.stopCode)]")
+            }
+        }
         let seconds = PostTimeEstimator.estimate(toolpaths, rapidRate: profile.rapidRate,
                                                  spindleDwell: profile.spindleDwellSeconds)
         w.comment("Estimated time: \(NumberFormat.duration(seconds))")
@@ -132,9 +143,28 @@ struct ProgramBuilder {
         if profile.useToolLengthOffset {
             w.code(render([profile.toolLengthOffset], tool: tp)[0])
         }
-        // The controller may have moved during the change: restate everything.
+        reenter(before: tp, into: &w)
+    }
+
+    /// Retract, stop the spindle, show the message and wait for the operator (M0, or M1 for an optional stop).
+    private func writePause(_ pause: PauseStep, after tp: Toolpath, into w: inout GCodeWriter) {
+        w.retract(to: coords.safeZ)
+        w.comment("Pause after toolpath: \(tp.name)")
+        var values = baseValues()
+        values["MESSAGE"] = TemplateRenderer.commentSafe(pause.text(afterToolpath: tp.name))
+        values["STOP"] = pause.stopCode
+        for line in TemplateRenderer(values: values).render(profile.pauseLines) { w.code(line) }
+    }
+
+    /// After a tool change or a stop the controller may have moved (a tool-change macro, the operator
+    /// jogging): restate everything, climb to the approach height and cross to the next toolpath at
+    /// that height, so the traverse still clears clamps and keep-out zones taller than safe Z.
+    private func reenter(before next: Toolpath, into w: inout GCodeWriter) {
         w.resetModalState()
         w.forceRapidZ(approachZ)
+        if approachZ > coords.safeZ + 1e-9, let first = next.moves.first(where: { $0.target != nil })?.target {
+            w.rapid(to: Vec3(first.xy, z: approachZ))
+        }
     }
 
     private func writeSpindleStart(_ tp: Toolpath, into w: inout GCodeWriter) {

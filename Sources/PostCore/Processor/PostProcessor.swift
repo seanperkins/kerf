@@ -66,6 +66,7 @@ public enum ToolpathOrdering {
     ///  * an earlier toolpath of its own operation (clearance before primary, flat before V);
     ///  * an earlier toolpath whose XY footprint (padded by both tool radii) overlaps its own
     ///    (rest machining, carving after pocketing, etc.);
+    ///  * a toolpath followed by an operator pause, or any toolpath that would jump over one;
     /// and profile toolpaths never move at all (a through-cut or final profile stays where the
     /// user put it). Otherwise the user's order is kept.
     public static func groupedByTool(_ toolpaths: [Toolpath]) -> [Toolpath] {
@@ -92,6 +93,9 @@ public enum ToolpathOrdering {
 
     static func canMove(_ tp: Toolpath, aheadOf others: [Toolpath]) -> Bool {
         if tp.kind == .profile { return false }
+        // An operator stop is a fixed point in the program: nothing before it may run after it
+        // (the flipped part, the new clamp) and nothing after it may run before it.
+        if tp.pauseAfter != nil || others.contains(where: { $0.pauseAfter != nil }) { return false }
         let r = tp.tool.diameter / 2
         let box = tp.xyBounds.insetBy(-r)
         for o in others {

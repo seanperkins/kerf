@@ -27,6 +27,8 @@ struct JobSheet: Equatable {
         var maxDepth: String
         var time: String
         var notes: [String]
+        /// The operator pause the program makes after this step ("Flip the part"), or nil.
+        var pauseAfter: String? = nil
     }
 
     /// One piece of material: its outline, the vectors on it and the parts list.
@@ -59,6 +61,8 @@ struct JobSheet: Equatable {
     var layerColors: [UUID: String]
     /// The document's job notes (io), printed under the setup table.
     var notes: String = ""
+    /// Operator pauses in the program (steps with `pauseAfter`).
+    var pauses: Int = 0
 
     /// One entry per nesting sheet (shapes moved onto the material frame), or nil when the
     /// document has a single sheet.
@@ -108,16 +112,19 @@ struct JobSheet: Equatable {
         var steps: [Step] = []
         var toolRows: [ToolRow] = []
         var lastTool: UUID?
-        for tp in toolpaths {
+        for (i, tp) in toolpaths.enumerated() {
             let t = tp.tool.converted(to: u)
             let depth = tp.minZ.map { coords.depth(ofMachineZ: $0) }
             var notes: [String] = []
             if let w = tp.metadata["warning"] { notes.append(w) }
+            // As in the post: no stop after the last toolpath, the program ends there.
+            let pause = i + 1 < toolpaths.count ? tp.pauseAfter : nil
             steps.append(Step(index: steps.count + 1, name: tp.name, kind: tp.kind.displayName,
                               tool: JobSummary.label(tp.tool), toolChange: lastTool != tp.tool.id,
                               maxDepth: depth.map { fmt(max(0, $0), u) } ?? "—",
                               time: ToolpathCalculator.formatDuration(ToolpathStats(tp).estimatedSeconds(rapidRate: rapidRate)),
-                              notes: notes))
+                              notes: notes,
+                              pauseAfter: pause.map { $0.text(afterToolpath: tp.name) + ($0.isOptionalStop ? " (optional stop, M1)" : "") }))
             lastTool = tp.tool.id
             if let i = toolRows.firstIndex(where: { $0.number == t.number && $0.name == t.name }) {
                 if !toolRows[i].usedBy.contains(tp.name) { toolRows[i].usedBy.append(tp.name) }
@@ -176,7 +183,8 @@ struct JobSheet: Equatable {
             warnings: warnings, sheets: sheets ?? [defaultSheet],
             materialSize: Vec2(job.width, job.height),
             layerColors: Dictionary(uniqueKeysWithValues: doc.layers.map { ($0.id, $0.colorHex) }),
-            notes: doc.jobNotes)
+            notes: doc.jobNotes,
+            pauses: steps.filter { $0.pauseAfter != nil }.count)
     }
 }
 
@@ -196,14 +204,14 @@ enum JobSheetHTML {
         body{font:13px -apple-system,Helvetica,Arial,sans-serif;color:#111;margin:24px;}
         h1{font-size:20px;margin:0 0 4px} h2{font-size:15px;margin:22px 0 6px;border-bottom:1px solid #999}
         table{border-collapse:collapse;width:100%} th,td{border:1px solid #bbb;padding:4px 6px;text-align:left;vertical-align:top}
-        th{background:#eee} .muted{color:#555} .change{font-weight:bold;color:#b00}
+        th{background:#eee} .muted{color:#555} .change{font-weight:bold;color:#b00} .pause td{background:#fff3c4;font-weight:bold}
         .setup td:first-child{width:150px;font-weight:bold} .warn{color:#b35c00}
         svg{border:1px solid #888;background:#fafafa;max-width:100%;height:auto}
         .sheet{page-break-inside:avoid} input{margin-right:6px}
         @media print{body{margin:10mm}}
         </style></head><body>
         <h1>Job sheet: \(e(js.jobName))</h1>
-        <div class="muted">\(e(js.date)) · Post: \(e(js.postName)) · Estimated time \(e(js.totalTime)) · \(js.toolChanges) tool change\(js.toolChanges == 1 ? "" : "s")</div>
+        <div class="muted">\(e(js.date)) · Post: \(e(js.postName)) · Estimated time \(e(js.totalTime)) · \(js.toolChanges) tool change\(js.toolChanges == 1 ? "" : "s")\(js.pauses > 0 ? " · \(js.pauses) pause\(js.pauses == 1 ? "" : "s")" : "")</div>
         <h2>Setup</h2>
         <table class="setup">
         <tr><td>Material</td><td>\(e(js.material))</td></tr>
@@ -229,6 +237,9 @@ enum JobSheetHTML {
             let tool = s.toolChange ? "<span class=\"change\">Load \(e(s.tool))</span>" : e(s.tool)
             let notes = s.notes.isEmpty ? "" : "<div class=\"warn\">" + s.notes.map(e).joined(separator: "<br>") + "</div>"
             h += "<tr><td><input type=\"checkbox\"></td><td>\(s.index)</td><td>\(e(s.name))\(notes)</td><td>\(e(s.kind))</td><td>\(tool)</td><td>\(e(s.maxDepth))</td><td>\(e(s.time))</td></tr>\n"
+            if let p = s.pauseAfter {
+                h += "<tr class=\"pause\"><td><input type=\"checkbox\"></td><td></td><td colspan=\"5\">Pause: \(e(p)) &mdash; the machine waits for Cycle Start</td></tr>\n"
+            }
         }
         if js.steps.isEmpty { h += "<tr><td colspan=\"7\" class=\"muted\">No calculated toolpaths.</td></tr>\n" }
         h += "</table>\n"

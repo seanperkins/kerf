@@ -56,6 +56,10 @@ struct OperationEditor: View {
         InspectorSection(title: "Array Copies", collapsedByDefault: true) {
             ArrayCopyForm(array: setupBinding(\.arrayCopy), units: units)
         }
+        Divider()
+        InspectorSection(title: "Pause") {
+            PauseStepForm(pause: setupBinding(\.pauseAfter), toolpathName: draft.setup.name)
+        }
     }
 
     private var actionRow: some View {

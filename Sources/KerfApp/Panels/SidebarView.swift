@@ -337,7 +337,14 @@ struct ToolpathRow: View {
             .accessibilityLabel(document.hiddenToolpaths.contains(operation.id) ? "Show \(operation.setup.name) on canvas" : "Hide \(operation.setup.name) on canvas")
             Circle().fill(Color(nsColor: ToolpathColors.color(forIndex: colorIndex))).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 1) {
-                Text(operation.setup.name).lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(operation.setup.name).lineLimit(1)
+                    if let pause = operation.setup.pauseAfter {
+                        Image(systemName: "pause.circle").foregroundStyle(.secondary)
+                            .help("The machine pauses after this toolpath: " + pause.text(afterToolpath: operation.setup.name))
+                            .accessibilityLabel("Pauses after \(operation.setup.name)")
+                    }
+                }
                 // The time goes first when the sidebar is narrow: the tool number matters more.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 4) {
