@@ -64,6 +64,22 @@ final class ToolLibraryModel: ObservableObject {
         return t
     }
 
+    /// Adds a tool of `kind` with a special outline (bull nose, tapered ball nose, form).
+    @discardableResult
+    func add(kind: ToolKind, shape: ToolShapeChoice, units: LengthUnit = .inch) -> Tool {
+        var t = Self.template(kind: kind, units: units, number: nextToolNumber)
+        t.shape = shape.defaultShape(for: t)
+        switch shape {
+        case .bullNose: t.name = "New Bull Nose"
+        case .tapered: t.name = "New Tapered Ball Nose"; t.diameter *= 0.5
+                       t.shape = shape.defaultShape(for: t); t.stepover = t.diameter * 0.1
+        case .form: t.name = "New Form Tool"; t.diameter *= 2; t.shape = shape.defaultShape(for: t)
+        case .standard: break
+        }
+        mutate { $0.upsert(t) }
+        return t
+    }
+
     func update(_ tool: Tool) { mutate { $0.upsert(tool) } }
 
     @discardableResult
@@ -88,6 +104,29 @@ final class ToolLibraryModel: ObservableObject {
         let missing = tools.filter { library.tool(id: $0.id) == nil }
         guard !missing.isEmpty else { return }
         mutate { lib in missing.forEach { lib.upsert($0) } }
+    }
+
+    /// Tools in a `.kerftools`/`tools.json`/`.csv` file, and which of them would overwrite a
+    /// different library tool with the same id.
+    func readImport(_ url: URL) throws -> (tools: [Tool], conflicts: [Tool]) {
+        let tools = try ToolLibraryExchange.read(url)
+        return (tools, library.conflicts(with: tools))
+    }
+
+    /// Merges imported tools into the library (see `ToolLibrary.merge`).
+    @discardableResult
+    func importTools(_ tools: [Tool], policy: ToolImportPolicy) -> ToolImportReport {
+        var lib = library
+        let report = lib.merge(tools, policy: policy)
+        guard lib != library else { return report }
+        mutate { $0 = lib }
+        return report
+    }
+
+    /// Writes the tools with `ids` (all tools when nil) in the format of `url`'s extension.
+    func export(ids: Set<UUID>?, to url: URL) throws {
+        let tools = ids.map { ids in library.tools.filter { ids.contains($0.id) } } ?? library.tools
+        try ToolLibraryExchange.write(tools, to: url)
     }
 
     private func mutate(_ change: (inout ToolLibrary) -> Void) {

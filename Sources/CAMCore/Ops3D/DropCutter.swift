@@ -9,6 +9,8 @@ public struct CutterProfile: Hashable, Sendable {
         case ball
         /// Included angle in degrees, flat tip diameter.
         case vee(angle: Double, tipDiameter: Double)
+        /// Bull nose, tapered ball nose or form tool (toolpaths-2d addition).
+        case shaped(CutterShape)
     }
 
     public var shape: Shape
@@ -18,6 +20,7 @@ public struct CutterProfile: Hashable, Sendable {
 
     /// Profile matching a library tool (end mills/drills are flat, engraving bits are V).
     public init(tool: Tool) {
+        if let s = tool.effectiveShape { self.init(shape: .shaped(s), radius: tool.radius); return }
         switch tool.kind {
         case .endMill, .drill: self.init(shape: .flat, radius: tool.radius)
         case .ballNose: self.init(shape: .ball, radius: tool.radius)
@@ -36,6 +39,8 @@ public struct CutterProfile: Hashable, Sendable {
         case .vee(let angle, let tip):
             let half = min(max(angle, 1), 179) / 2 * .pi / 180
             return max(0, r - tip / 2) / tan(half)
+        case .shaped(let s):
+            return s.heightAboveTip(atRadius: min(r, radius), toolRadius: radius) ?? 0
         }
     }
 }

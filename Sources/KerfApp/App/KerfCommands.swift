@@ -200,6 +200,8 @@ struct KerfCommands: Commands {
             .disabled(document.flatMap { $0.operation($0.selectedOperationID)?.kind } != .merge)
             Button("Save Tiled G-code…") { document?.sheet = .tiling }
                 .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Preview G-code File…") { if let d = document { GCodePreviewWindow.run(for: d) } }
+                .disabled(document == nil)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("t", modifiers: [.command, .option])

@@ -45,13 +45,17 @@ public struct Tool: Codable, Hashable, Identifiable, Sendable {
     public var group: String?
     /// Cutting data per material; the job's material picks one (toolpaths-2d addition).
     public var materials: [MaterialCuttingData]?
+    /// Special outline (bull nose, tapered ball nose, form tool); nil = the plain shape of
+    /// `kind` (toolpaths-2d addition). See `effectiveShape`.
+    public var shape: CutterShape?
 
     public init(id: UUID = UUID(), name: String, kind: ToolKind, units: LengthUnit = .inch,
                 number: Int = 1, diameter: Double, flutes: Int = 2, angle: Double? = nil,
                 tipDiameter: Double = 0, fluteLength: Double? = nil, stepdown: Double,
                 stepover: Double, spindleRPM: Double = 18000, feedRate: Double, plungeRate: Double,
-                notes: String = "", group: String? = nil, materials: [MaterialCuttingData]? = nil) {
-        self.group = group; self.materials = materials
+                notes: String = "", group: String? = nil, materials: [MaterialCuttingData]? = nil,
+                shape: CutterShape? = nil) {
+        self.group = group; self.materials = materials; self.shape = shape
         self.id = id; self.name = name; self.kind = kind; self.units = units; self.number = number
         self.diameter = diameter; self.flutes = flutes; self.angle = angle
         self.tipDiameter = tipDiameter; self.fluteLength = fluteLength
@@ -70,6 +74,7 @@ public struct Tool: Codable, Hashable, Identifiable, Sendable {
         t.diameter *= f; t.tipDiameter *= f; t.fluteLength = fluteLength.map { $0 * f }
         t.stepdown *= f; t.stepover *= f; t.feedRate *= f; t.plungeRate *= f
         t.materials = materials?.map { $0.scaled(by: f) }
+        t.shape = shape?.scaled(by: f)
         return t
     }
 

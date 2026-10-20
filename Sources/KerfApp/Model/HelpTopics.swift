@@ -336,12 +336,18 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .toolDatabase:
             return """
             Toolpaths ▸ Tool Database (⇧⌘T) lists your cutters. Each tool has a type, diameter, angle (V-bits), stepdown, stepover, spindle speed, feed and plunge rates. Tools are shared by all jobs and saved in Application Support/Kerf/tools.json; jobs also keep a copy of the tools they use.
+
+            End mills and ball noses have a **Shape**: Bull Nose (an end mill with a corner radius), Tapered (a ball tip of the given radius on a cone that widens at the taper angle per side, up to the diameter) or Form (any turned outline such as a roundover, entered as radius at each height above the tip). The 3D preview, 3D finishing, Moulding and Quick Engrave widths use the real outline; 2D Profile and Pocket offsets still use the diameter. Undercuts on a form tool are treated as seen from below.
+
+            To move tools to another Mac, use **Share ▸ Export All Tools…** (or Export Selected Tool…) and save a `.kerftools` file, then **Share ▸ Import Tools…** on the other machine. Import also reads another Mac's `tools.json` and CSV files (columns name, type, diameter, plus optional units, number, flutes, angle, stepdown, stepover, rpm, feed, plunge, group, notes). If an imported tool already exists with different settings, choose Replace Existing, Keep Both or Keep Existing. Clashing tool numbers are changed to a free number.
             """
         case .preview:
             return """
             The **2D** view draws calculated toolpaths over the design: solid lines are cuts, dashed red lines are rapid moves. Toolpaths ▸ Show Toolpaths (⌥⌘T) hides them.
 
             The **3D** view simulates cutting the material. Press Play, scrub the timeline or change the speed. **2D | 3D** shows both side by side.
+
+            **Toolpaths ▸ Preview G-code File…** simulates a saved program (.tap, .nc, …) from another job on this job's material, in its own window. It assumes the program uses this job's XY origin and Z zero. Tools named in a Kerf header are recognised; otherwise set each tool's type and diameter in the window. Nothing is added to the job. To reuse toolpath settings across jobs, use a toolpath template instead.
             """
         case .checkToolpaths:
             return """

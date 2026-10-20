@@ -53,7 +53,17 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         if let array = setup.arrayCopy {
             tps = ToolpathArray.apply(array, to: tps, coords: ctx.coords, tolerance: ctx.tolerance)
         }
-        guard let modelID = setup.projectOntoModelID, kind != .relief3D else { return tps }
-        return try ReliefProjection.project(tps, ontoModel: modelID, in: ctx)
+        if let modelID = setup.projectOntoModelID, kind != .relief3D {
+            tps = try ReliefProjection.project(tps, ontoModel: modelID, in: ctx)
+        }
+        return Self.liftOverKeepOutZones(tps, in: ctx)
+    }
+
+    /// Re-routes over keep-out zones marked "lift over" (last, so it sees the final Z).
+    static func liftOverKeepOutZones(_ tps: [Toolpath], in ctx: CAMContext) -> [Toolpath] {
+        guard let zones = ctx.document.keepOutZones, zones.contains(where: { $0.liftOver == true }) else { return tps }
+        let margin = ctx.units == .inch ? 0.05 : 1.0 // same clearance the export check uses
+        return KeepOutAvoidance.apply(tps, zones: zones, coords: ctx.coords, margin: margin,
+                                      tolerance: ctx.tolerance).toolpaths
     }
 }

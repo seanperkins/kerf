@@ -1,12 +1,16 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Tool Database window: list of tools + editor. Changes save to tools.json immediately.
 struct ToolDatabaseView: View {
     static let windowID = "tool-database"
     @EnvironmentObject var library: ToolLibraryModel
     @State private var selectedID: UUID?
+    @State private var pendingImport: [Tool]?
+    @State private var pendingConflicts = 0
+    @State private var importMessage: String?
 
     var body: some View {
         NavigationSplitView {
@@ -33,6 +37,10 @@ struct ToolDatabaseView: View {
                         ForEach(ToolKind.allCases, id: \.self) { kind in
                             Button(kind.displayName) { selectedID = library.add(kind: kind).id }
                         }
+                        Divider()
+                        Button("Bull Nose End Mill") { selectedID = library.add(kind: .endMill, shape: .bullNose).id }
+                        Button("Tapered Ball Nose") { selectedID = library.add(kind: .ballNose, shape: .tapered).id }
+                        Button("Form Tool") { selectedID = library.add(kind: .endMill, shape: .form).id }
                     } label: { Label("Add Tool", systemImage: "plus") }
                 }
             }
@@ -43,6 +51,15 @@ struct ToolDatabaseView: View {
                     Button("Delete") { if let id = selectedID { library.delete(id: id); selectedID = nil } }
                         .disabled(selectedID == nil)
                     Spacer()
+                    Menu("Share") {
+                        Button("Import Tools…") { runImport() }
+                        Divider()
+                        Button("Export All Tools…") { runExport(ids: nil) }
+                        Button("Export Selected Tool…") { if let id = selectedID { runExport(ids: [id]) } }
+                            .disabled(selectedID == nil)
+                    }
+                    .fixedSize()
+                    .help("Import or export tools as a .kerftools file (or CSV) to share them between machines")
                     Button("Restore Defaults") { library.restoreDefaults() }
                         .help("Re-adds any missing default tools")
                 }
@@ -56,10 +73,67 @@ struct ToolDatabaseView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 520)
+        .confirmationDialog("\(pendingConflicts) imported tool\(pendingConflicts == 1 ? "" : "s") already exist with different settings",
+                            isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
+            Button("Replace Existing") { finishImport(.replace) }
+            Button("Keep Both") { finishImport(.keepBoth) }
+            Button("Keep Existing (Skip)") { finishImport(.skip) }
+            Button("Cancel", role: .cancel) { pendingImport = nil }
+        } message: {
+            Text("Replace overwrites your tools with the imported ones. Keep Both adds the imported tools as new tools.")
+        }
+        .alert("Import Tools", isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
+            Button("OK") { importMessage = nil }
+        } message: { Text(importMessage ?? "") }
         .overlay(alignment: .bottom) {
             if let e = library.lastError {
                 Text(e).font(.caption).foregroundStyle(.red).padding(6).background(.regularMaterial)
             }
+        }
+    }
+}
+
+extension ToolDatabaseView {
+    private static var exchangeTypes: [UTType] {
+        [UTType(filenameExtension: ToolLibraryExchange.fileExtension, conformingTo: .json), .json, .commaSeparatedText]
+            .compactMap { $0 }
+    }
+
+    private func runImport() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = Self.exchangeTypes
+        panel.message = "Import tools from a .kerftools file, another Mac's tools.json, or a CSV file"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let (tools, conflicts) = try library.readImport(url)
+            if conflicts.isEmpty {
+                importMessage = library.importTools(tools, policy: .keepBoth).summary
+            } else {
+                pendingConflicts = conflicts.count
+                pendingImport = tools
+            }
+        } catch {
+            importMessage = "Could not import \(url.lastPathComponent): \(error.localizedDescription)"
+        }
+    }
+
+    private func finishImport(_ policy: ToolImportPolicy) {
+        guard let tools = pendingImport else { return }
+        pendingImport = nil
+        importMessage = library.importTools(tools, policy: policy).summary
+    }
+
+    private func runExport(ids: Set<UUID>?) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = Self.exchangeTypes
+        let base = ids.flatMap { $0.first }.flatMap { library.library.tool(id: $0)?.name } ?? "Kerf Tools"
+        panel.nameFieldStringValue = base.replacingOccurrences(of: "/", with: "-") + "." + ToolLibraryExchange.fileExtension
+        panel.message = "Export tools (.kerftools keeps everything; .csv for spreadsheets — choose by file extension)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do { try library.export(ids: ids, to: url) } catch {
+            importMessage = "Could not export: \(error.localizedDescription)"
         }
     }
 }
@@ -122,6 +196,7 @@ struct ToolEditor: View {
                     Text("The Avid 2.2 kW spindle runs 6000–24000 RPM.").font(.caption).foregroundStyle(.orange)
                 }
             }
+            ToolShapeSection(tool: $tool)
             FeedsCalculatorSection(tool: $tool)
             MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools))
             ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted())
