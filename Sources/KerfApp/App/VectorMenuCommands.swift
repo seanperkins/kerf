@@ -1,3 +1,4 @@
+import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
@@ -26,6 +27,15 @@ struct VectorMenuCommands: Commands {
             Divider()
             Button("Trim Tool") { document?.activeTool = .trim }.disabled(document == nil)
             sheetButton("Trim to Boundary…", .trimBoundary)
+            Button("Extend to Nearest Vector") {
+                guard let doc = document else { return }
+                let ids = doc.selectedShapes.map(\.id)
+                var n = 0
+                doc.perform("Extend") { n = VectorCommands.extendToBoundaries(ids, in: &$0) }
+                if n == 0 { NSSound.beep() }
+            }
+            .disabled(noSelection)
+            .help("Extend the ends of the selected open vectors until they meet another vector")
             Divider()
             sheetButton("Trace Bitmap…", .traceBitmap, needsSelection: false)
             sheetButton("Fit Curves to Vectors…", .curveFit)

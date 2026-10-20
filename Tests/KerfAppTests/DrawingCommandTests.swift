@@ -147,6 +147,15 @@ import Testing
         #expect(doc.project.document.shape(id: id)!.paths[0].segments.count > 4)
     }
 
+    @Test func extendOpenVectorToRectangles() {
+        var p = AppTestSupport.project()  // rectangles x 1...3 and 5...7, y 1...2
+        let stub = Shape(layerID: p.document.defaultLayerID, paths: [Path(points: [Vec2(3.5, 1.5), Vec2(4.5, 1.5)], closed: false)])
+        p.document.add(stub)
+        #expect(VectorCommands.extendToBoundaries([stub.id], in: &p) == 1)
+        let e = p.document.shape(id: stub.id)!.paths[0]
+        #expect(e.start.isApproximatelyEqual(to: Vec2(3, 1.5), tolerance: 1e-9) && e.end.isApproximatelyEqual(to: Vec2(5, 1.5), tolerance: 1e-9))
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]

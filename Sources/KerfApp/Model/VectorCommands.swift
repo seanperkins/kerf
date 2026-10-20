@@ -277,6 +277,31 @@ enum VectorCommands {
         return changed
     }
 
+    // MARK: Extend
+
+    /// Extends the open vectors of the selection to the nearest other visible vector. Returns
+    /// the number of paths changed.
+    @discardableResult
+    static func extendToBoundaries(_ ids: [UUID], in project: inout KerfProject) -> Int {
+        let tol = tolerance(project.document.units)
+        let m = project.document.job.materialBounds
+        let reach = max(m.width, m.height) * 2
+        var changed = 0
+        for s in editableShapes(ids, in: project) where s.paths.contains(where: { !$0.isClosed }) {
+            var paths = s.paths
+            for (i, p) in s.paths.enumerated() where !p.isClosed {
+                var others: [Path] = []
+                for o in project.document.shapes where project.isVisible(o) {
+                    for (j, q) in o.paths.enumerated() where !(o.id == s.id && j == i) { others.append(q) }
+                }
+                let e = Extend.toBoundaries(p, boundaries: others, maxDistance: reach, tolerance: tol)
+                if e != p { paths[i] = e; changed += 1 }
+            }
+            if paths != s.paths { replacePaths(s.id, with: paths, operation: "extend", in: &project) }
+        }
+        return changed
+    }
+
     // MARK: Shear / distort
 
     static func shear(_ ids: [UUID], xDegrees: Double, yDegrees: Double, in project: inout KerfProject) {

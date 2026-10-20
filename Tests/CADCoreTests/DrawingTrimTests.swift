@@ -43,6 +43,22 @@ import Testing
         #expect(out[0].segments.allSatisfy { if case .arc = $0 { return true }; return false })
     }
 
+    @Test func extendBothEndsToWalls() {
+        let wallL = Path(points: [Vec2(0, -5), Vec2(0, 5)], closed: false)
+        let wallR = Path(points: [Vec2(10, -5), Vec2(10, 5)], closed: false)
+        let stub = Path(points: [Vec2(3, 0), Vec2(5, 0), Vec2(6, 0)], closed: false)
+        let e = Extend.toBoundaries(stub, boundaries: [wallL, wallR], maxDistance: 100, tolerance: tol)
+        #expect(e.start.isApproximatelyEqual(to: Vec2(0, 0), tolerance: 1e-9))
+        #expect(e.end.isApproximatelyEqual(to: Vec2(10, 0), tolerance: 1e-9))
+        #expect(e.segments.count == 2)
+        // Nothing in the way: unchanged.
+        #expect(Extend.toBoundaries(stub, boundaries: [], maxDistance: 100, tolerance: tol) == stub)
+        // A curved end gains a straight extension.
+        let hook = Path(start: Vec2(5, -2), segments: [.arc(to: Vec2(7, 0), center: Vec2(5, 0), clockwise: false)])
+        let h = Extend.toBoundaries(hook, boundaries: [Path(points: [Vec2(0, 3), Vec2(10, 3)], closed: false)], maxDistance: 100, tolerance: tol)
+        #expect(h.end.isApproximatelyEqual(to: Vec2(7, 3), tolerance: 1e-3) && h.segments.count == 2)
+    }
+
     @Test func boundaryKeepsInsideOrOutside() {
         let box = Path(points: [Vec2(2, -2), Vec2(8, -2), Vec2(8, 2), Vec2(2, 2)], closed: true)
         let inside = Trim.toBoundary(line, boundary: [box], keepInside: true, tolerance: tol)
