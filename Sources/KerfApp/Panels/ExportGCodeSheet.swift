@@ -86,7 +86,7 @@ struct ExportGCodeSheet: View {
             }
             if !r.issues.isEmpty {
                 List(Array(r.issues.enumerated()), id: \.offset) { _, issue in
-                    Label(issue.description, systemImage: issue.severity == .error ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
+                    Label(issue.displayText, systemImage: issue.severity == .error ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(issue.severity == .error ? .red : .orange)
                 }
                 .frame(minHeight: 80, maxHeight: 140)
