@@ -26,6 +26,9 @@ struct VectorMenuCommands: Commands {
                 .disabled(document?.document.guides?.isEmpty ?? true)
             Divider()
             sheetButton("Validate Vectors…", .validator, needsSelection: false)
+            Button("Delete Duplicate Vectors") { document?.deleteDuplicateVectors() }
+                .disabled(document?.document.shapes.isEmpty ?? true)
+                .help("Delete vectors lying on top of others (selection, or the whole design)")
             Button("Clear Problem Markers") { document?.highlightMarkers = [] }
                 .disabled(document?.highlightMarkers.isEmpty ?? true)
         }

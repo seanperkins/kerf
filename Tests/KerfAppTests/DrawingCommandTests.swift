@@ -85,6 +85,17 @@ import Testing
         #expect(p.document.shape(id: b)!.paths[0].segments.filter { if case .arc = $0 { return true }; return false }.count == 4)
     }
 
+    @Test func deleteDuplicatesOnDocument() {
+        var p = AppTestSupport.project()
+        var copy = p.document.shapes[1]
+        copy.id = UUID()
+        p.document.add(copy)
+        let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
+        doc.deleteDuplicateVectors()
+        #expect(doc.project.document.shapes.count == 2)
+        #expect(doc.alert?.message.contains("Deleted 1") == true)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]
