@@ -101,3 +101,59 @@ import Testing
         #expect(doc.tabEditingOperationID == nil)
     }
 }
+
+/// Toolpath editor write-through: edits are live, merged into one undo step per session.
+@Suite struct LiveOperationEditTests {
+    func makeDoc() -> (KerfDocument, UndoManager, AnyOperation) {
+        let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
+        let um = UndoManager()
+        um.groupsByEvent = false
+        doc.undoManager = um
+        let op = OperationFactory.make(kind: .profile, project: doc.project, library: .seeded,
+                                       shapeIDs: [doc.document.shapes[0].id])!
+        step(um) { doc.updateOperation(op) }
+        um.removeAllActions()
+        return (doc, um, op)
+    }
+
+    func step(_ um: UndoManager, _ body: () -> Void) {
+        um.beginUndoGrouping(); body(); um.endUndoGrouping()
+    }
+
+    func renamed(_ op: AnyOperation, _ name: String) -> AnyOperation {
+        var o = op
+        var s = o.editableSetup
+        s.name = name
+        o.editableSetup = s
+        return o
+    }
+
+    @Test func editsAreCommittedImmediatelyAndMergeIntoOneUndoStep() {
+        let (doc, um, op) = makeDoc()
+        step(um) { doc.updateOperationLive(renamed(op, "A")) }
+        // Merged edits register nothing (an undo grouping would be needed otherwise).
+        for name in ["AB", "ABC"] { doc.updateOperationLive(renamed(op, name)) }
+        #expect(doc.operation(op.id)?.setup.name == "ABC")
+        um.undo()
+        #expect(doc.operation(op.id)?.setup.name == op.setup.name)
+        #expect(!um.canUndo)
+        um.redo()
+        #expect(doc.operation(op.id)?.setup.name == "ABC")
+    }
+
+    @Test func anInterveningChangeStartsANewUndoStep() {
+        let (doc, um, op) = makeDoc()
+        step(um) { doc.updateOperationLive(renamed(op, "A")) }
+        step(um) { doc.perform("Other") { $0.document.job.safeZ += 0.1 } }
+        step(um) { doc.updateOperationLive(renamed(op, "B")) }
+        um.undo()
+        #expect(doc.operation(op.id)?.setup.name == "A")
+    }
+
+    @Test func liveEditNeverResurrectsADeletedOperation() {
+        let (doc, um, op) = makeDoc()
+        step(um) { doc.deleteOperation(op.id) }
+        doc.updateOperationLive(renamed(op, "Ghost"))
+        #expect(doc.operation(op.id) == nil)
+    }
+}

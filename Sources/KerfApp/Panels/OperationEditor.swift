@@ -2,17 +2,22 @@ import CADCore
 import CAMCore
 import SwiftUI
 
-/// Edits a draft copy of an operation; "Save" commits it (one undo step), "Calculate" also
-/// generates the toolpath.
+/// Edits an operation. Every change is written through to the document immediately (merged
+/// into one undo step), so nothing is lost when the selection changes and Calculate All /
+/// export / save use exactly what the form shows. "Revert" restores the operation as it was
+/// when the editor opened.
 struct OperationEditor: View {
     @ObservedObject var document: KerfDocument
     let original: AnyOperation
     @State private var draft: AnyOperation
+    /// The operation when the editor opened (for Revert).
+    @State private var initial: AnyOperation
 
     init(document: KerfDocument, original: AnyOperation) {
         self.document = document
         self.original = original
         _draft = State(initialValue: original)
+        _initial = State(initialValue: original)
     }
 
     private var units: LengthUnit { document.units }
@@ -36,13 +41,15 @@ struct OperationEditor: View {
             Button("Calculate") { save(); document.calculate([draft.id]) }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(.borderedProminent)
-            Button("Save") { save() }.disabled(draft == original)
-            Button("Revert") { draft = original }.disabled(draft == original)
+            Button("Revert") { draft = initial }.disabled(draft == initial)
+                .help("Undo every change made since this toolpath was selected")
             Spacer()
             Button(role: .destructive) { document.deleteOperation(draft.id) } label: { Image(systemName: "trash") }
                 .help("Delete toolpath")
         }
-        .onChange(of: original) { _, new in draft = new }
+        .onChange(of: draft) { _, _ in save() }
+        .onChange(of: original) { _, new in if new != draft { draft = new } }
+        .onDisappear { save() }
     }
 
     private var vectorsRow: some View {
@@ -156,7 +163,7 @@ struct OperationEditor: View {
     }
 
     private func save() {
-        if draft != original { document.updateOperation(draft) }
+        if draft != original { document.updateOperationLive(draft) }
     }
 }
 

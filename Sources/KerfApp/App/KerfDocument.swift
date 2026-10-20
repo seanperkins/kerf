@@ -105,6 +105,10 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var cursorPosition: Vec2?
 
     weak var undoManager: UndoManager?
+    /// Bumped by every undoable change (including undo/redo).
+    private var editSerial = 0
+    /// The operation whose live edits are being merged into the current undo step.
+    private var liveOperationEdit: (id: UUID, serial: Int)?
     let toolLibrary: ToolLibraryModel
     private var cancellables: Set<AnyCancellable> = []
 
@@ -127,6 +131,8 @@ final class KerfDocument: ReferenceFileDocument {
     }
 
     func snapshot(contentType: UTType) throws -> KerfProject {
+        // After a save, the next live toolpath edit opens a new undo step (re-dirtying the file).
+        liveOperationEdit = nil
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
         return p
@@ -147,6 +153,7 @@ final class KerfDocument: ReferenceFileDocument {
     }
 
     private func replaceProject(_ new: KerfProject, actionName: String) {
+        editSerial += 1
         let old = project
         if old.document != new.document { designRevision += 1 }
         project = new
@@ -347,6 +354,22 @@ final class KerfDocument: ReferenceFileDocument {
 
     func updateOperation(_ op: AnyOperation) {
         perform("Edit Toolpath") { $0.upsertOperation(op) }
+    }
+
+    /// Live edit from the toolpath editor: committed immediately so Calculate All, export and
+    /// save always see what the form shows. Consecutive edits of the same operation, with no
+    /// other change (or save) in between, merge into one "Edit Toolpath" undo step.
+    func updateOperationLive(_ op: AnyOperation) {
+        guard operation(op.id) != nil else { return }  // deleted meanwhile: never resurrect it
+        if let live = liveOperationEdit, live.id == op.id, live.serial == editSerial {
+            var p = project
+            p.upsertOperation(op)
+            guard p != project else { return }
+            project = p  // the open undo step already restores the state before the first edit
+            return
+        }
+        perform("Edit Toolpath") { $0.upsertOperation(op) }
+        liveOperationEdit = (op.id, editSerial)
     }
 
     /// Adds several operations as one undo step and selects the first.
