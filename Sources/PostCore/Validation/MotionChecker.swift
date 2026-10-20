@@ -1,0 +1,109 @@
+import CADCore
+import CAMCore
+import Foundation
+
+/// Machine envelope and per-move safety rules, expressed in one unit system. Shared by the
+/// toolpath and G-code validators so both enforce exactly the same rules.
+struct MotionChecker {
+    let coords: MachineCoordinates
+    let limits: MachineLimits
+    let maxFeed: Double
+    let units: LengthUnit
+    let eps: Double
+
+    var issues = IssueCollector()
+    private var minP = Vec3(.infinity, .infinity, .infinity)
+    private var maxP = Vec3(-.infinity, -.infinity, -.infinity)
+
+    /// `job` is in `jobUnits`; everything is converted to `units`.
+    init(profile: PostProfile, job: JobSetup, jobUnits: LengthUnit, units: LengthUnit) {
+        self.units = units
+        coords = MachineCoordinates(job: job.scaled(by: jobUnits.factor(to: units)))
+        let f = profile.units.factor(to: units)
+        limits = MachineLimits(xTravel: profile.limits.xTravel * f, yTravel: profile.limits.yTravel * f,
+                               zTravel: profile.limits.zTravel * f,
+                               maxSpoilboardCut: profile.limits.maxSpoilboardCut * f)
+        maxFeed = profile.maxFeed * f
+        eps = units == .inch ? 0.0005 : 0.01
+    }
+
+    var topZ: Double { coords.materialTopZ }
+    var safeZ: Double { coords.safeZ }
+    /// Deepest machine Z allowed: material bottom minus the permitted spoilboard cut.
+    var allowedMinZ: Double { coords.materialBottomZ - limits.maxSpoilboardCut }
+
+    private func f(_ v: Double) -> String { NumberFormat.fixed(v, decimals: units == .inch ? 4 : 3) }
+
+    // MARK: Rules
+
+    /// `xyMove`: the rapid changes (or may change, when the start XY is unknown) X/Y.
+    mutating func rapid(from start: Vec3?, to target: Vec3, xyMove: Bool, line: Int?) {
+        if xyMove {
+            guard let s = start else {
+                issues.add("rapid-unknown-z", .warning, line: line,
+                           "Rapid XY move before the Z height is known; retract to safe Z first")
+                visit(target, line: line)
+                return
+            }
+            let low = min(s.z, target.z)
+            if low < topZ - eps {
+                issues.add("rapid-in-material", .error, line: line,
+                           "Rapid XY move inside the material at Z\(f(low)) (material top Z\(f(topZ)))")
+            } else if low < safeZ - eps {
+                issues.add("rapid-below-safe", .warning, line: line,
+                           "Rapid XY move below safe Z (Z\(f(low)) < Z\(f(safeZ)))")
+            }
+        } else if let s = start, target.z < s.z - eps, target.z < topZ - eps {
+            issues.add("rapid-plunge", .warning, line: line,
+                       "Rapid plunge below the material top to Z\(f(target.z)); use a feed move")
+        }
+        visit(target, line: line)
+    }
+
+    mutating func feedMove(from start: Vec3?, path: [Vec3], feed: Double?, spindleOn: Bool, line: Int?) {
+        guard let feed else {
+            issues.add("feed-missing", .error, line: line, "Feed move without a feed rate (F)")
+            path.forEach { visit($0, line: line) }
+            return
+        }
+        if feed <= 0 {
+            issues.add("feed-zero", .error, line: line, "Feed move with a zero or negative feed rate")
+        } else if feed > maxFeed + eps {
+            issues.add("feed-high", .warning, line: line,
+                       "Feed rate F\(NumberFormat.compact(feed, maxDecimals: 1)) exceeds the machine maximum \(NumberFormat.compact(maxFeed, maxDecimals: 1))")
+        }
+        let low = ([start?.z].compactMap { $0 } + path.map(\.z)).min() ?? .infinity
+        if !spindleOn, low < topZ - eps {
+            issues.add("spindle-off", .error, line: line, "Cutting move with the spindle off (no M3 before cutting)")
+        }
+        path.forEach { visit($0, line: line) }
+    }
+
+    mutating func rpm(_ s: Double, min lo: Double, max hi: Double, line: Int?) {
+        if s < lo - 1e-9 || s > hi + 1e-9 {
+            issues.add("rpm-range", .error, line: line,
+                       "Spindle speed S\(NumberFormat.compact(s, maxDecimals: 0)) outside \(NumberFormat.compact(lo, maxDecimals: 0))–\(NumberFormat.compact(hi, maxDecimals: 0)) RPM")
+        }
+    }
+
+    /// Depth check + travel extents for a reached point.
+    mutating func visit(_ p: Vec3, line: Int?) {
+        if p.z < allowedMinZ - eps {
+            issues.add("too-deep", .error, line: line,
+                       "Cut to Z\(f(p.z)) is below the allowed depth Z\(f(allowedMinZ)) (material bottom Z\(f(coords.materialBottomZ)) minus \(f(limits.maxSpoilboardCut)) spoilboard allowance)")
+        }
+        minP = Vec3(min(minP.x, p.x), min(minP.y, p.y), min(minP.z, p.z))
+        maxP = Vec3(max(maxP.x, p.x), max(maxP.y, p.y), max(maxP.z, p.z))
+    }
+
+    /// Travel-extent checks; call once after all moves.
+    mutating func finish() {
+        guard minP.x.isFinite else { return }
+        let spans = [("X", maxP.x - minP.x, limits.xTravel), ("Y", maxP.y - minP.y, limits.yTravel),
+                     ("Z", maxP.z - minP.z, limits.zTravel)]
+        for (axis, span, travel) in spans where span > travel + eps {
+            issues.add("travel-\(axis)", .error, line: nil,
+                       "\(axis) travel \(f(span)) \(units.abbreviation) exceeds the machine's \(axis) travel \(f(travel)) \(units.abbreviation)")
+        }
+    }
+}
