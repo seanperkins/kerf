@@ -21,6 +21,7 @@ extension AnyOperation {
             case .holeMill(var o): o.setup = newValue; self = .holeMill(o)
             case .prism(var o): o.setup = newValue; self = .prism(o)
             case .merge(var o): o.setup = newValue; self = .merge(o)
+            case .straightInlay(var o): o.setup = newValue; self = .straightInlay(o)
             }
         }
     }
@@ -44,11 +45,15 @@ extension AnyOperation {
 /// in inches; millimetre documents get them scaled by 25.4).
 enum OperationFactory {
     /// Kinds offered in the "New toolpath" menu, in VCarve-like order.
-    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .fluting, .texture, .relief3D]
+    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .straightInlay, .fluting, .texture, .relief3D]
 
     /// Title in the "New toolpath" menus (Inlay opens the pocket + plug wizard).
     static func menuTitle(_ kind: OperationKind) -> String {
-        kind == .inlay ? "Inlay (Pocket + Plug)…" : kind.displayName
+        switch kind {
+        case .inlay: return "Inlay (Pocket + Plug)…"
+        case .straightInlay: return "Straight-Wall Inlay (Pocket + Plug)"
+        default: return kind.displayName
+        }
     }
 
     /// Label of the primary tool picker for an operation kind.
@@ -66,6 +71,7 @@ enum OperationFactory {
     static func preferredToolKinds(for kind: OperationKind) -> [ToolKind] {
         switch kind {
         case .profile, .pocket, .holeMill, .merge: return [.endMill, .ballNose]
+        case .straightInlay: return [.endMill]
         case .drill: return [.drill, .endMill]
         case .vcarve, .inlay, .chamfer, .prism: return [.vBit, .engraving]
         case .engrave: return [.engraving, .vBit, .ballNose, .endMill]
@@ -126,6 +132,10 @@ enum OperationFactory {
             return .chamfer(ChamferOperation(setup: setup, params: ChamferParameters().scaled(by: f)))
         case .merge:
             return nil
+        case .straightInlay:
+            var p = StraightInlayParameters().scaled(by: f)
+            p.plugDepth = min(p.plugDepth, thickness)
+            return .straightInlay(StraightInlayOperation(setup: setup, params: p))
         case .prism:
             return .prism(PrismOperation(setup: setup, params: PrismParameters().scaled(by: f)))
         case .holeMill:

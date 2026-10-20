@@ -343,6 +343,7 @@ final class KerfDocument: ReferenceFileDocument {
 
     func addOperation(_ kind: OperationKind) {
         if kind == .inlay { sheet = .inlayWizard; return }
+        if kind == .straightInlay { addStraightInlayPair(); return }
         guard let op = OperationFactory.make(kind: kind, project: project, library: mergedLibrary,
                                              shapeIDs: selectionOrder) else {
             alert = AlertMessage(title: "No 3D model",

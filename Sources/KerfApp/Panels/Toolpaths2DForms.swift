@@ -266,3 +266,31 @@ struct MergeForm: View {
         }
     }
 }
+
+struct StraightInlayForm: View {
+    @Binding var params: StraightInlayParameters
+    var units: LengthUnit
+
+    var body: some View {
+        InspectorSection(title: "Straight-Wall Inlay") {
+            Picker("Part", selection: $params.part) {
+                Text("Pocket").tag(InlayPart.female)
+                Text("Plug").tag(InlayPart.male)
+                Text("Both").tag(InlayPart.both)
+            }
+            .pickerStyle(.segmented)
+            LengthField("Pocket depth", value: $params.pocketDepth, units: units)
+            LengthField("Plug depth", value: $params.plugDepth, units: units, help: "Depth of the cut round the plug")
+            LengthField("Clearance", value: $params.clearance, units: units, help: "Gap all round between plug and pocket")
+            Toggle("Mirror plug", isOn: $params.mirrorPlug)
+            OptionalLengthField(label: "Pass depth", value: $params.passDepth, units: units,
+                                defaultValue: units == .inch ? 0.125 : 3)
+            Text("Both parts use the same outline with every corner rounded to the end mill's radius, so the plug drops into the pocket. Cut the pocket and the plug on separate boards (export them separately).")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if params.plugDepth < params.pocketDepth {
+                Text("The plug depth is less than the pocket depth; the plug will not fill the pocket.")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+        }
+    }
+}

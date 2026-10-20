@@ -133,6 +133,14 @@ extension ToolOverride {
     }
 }
 
+extension StraightInlayParameters {
+    func scaled(by f: Double) -> StraightInlayParameters {
+        var p = self
+        p.pocketDepth *= f; p.plugDepth *= f; p.clearance *= f; p.passDepth = passDepth.map { $0 * f }
+        return p
+    }
+}
+
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
         let op = scaledParameters(by: f)
@@ -159,6 +167,7 @@ extension AnyOperation {
         case .holeMill(var o): o.params = o.params.scaled(by: f); return .holeMill(o)
         case .prism(var o): o.params = o.params.scaled(by: f); return .prism(o)
         case .merge(var o): o.params.children = o.params.children.map { $0.scaled(by: f) }; return .merge(o)
+        case .straightInlay(var o): o.params = o.params.scaled(by: f); return .straightInlay(o)
         }
     }
 }

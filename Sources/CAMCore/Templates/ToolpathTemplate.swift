@@ -142,6 +142,7 @@ extension AnyOperation {
         case .holeMill(var o): o.setup = setup; return .holeMill(o)
         case .prism(var o): o.setup = setup; return .prism(o)
         case .merge(var o): o.setup = setup; return .merge(o)
+        case .straightInlay(var o): o.setup = setup; return .straightInlay(o)
         }
     }
 

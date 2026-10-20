@@ -172,3 +172,25 @@ public struct MergeParameters: Codable, Hashable, Sendable {
 
     public init(children: [AnyOperation] = []) { self.children = children }
 }
+
+/// Straight-wall (end mill) inlay: a pocket and a matching plug cut round the same outline, with
+/// every corner rounded to what the end mill can cut on both parts (toolpaths-2d addition).
+public struct StraightInlayParameters: Codable, Hashable, Sendable {
+    /// Pocket, plug or both (both = one program; normally cut each part on its own board).
+    public var part: InlayPart
+    public var pocketDepth: Double
+    /// Depth of the plug's outside profile (usually a little more than the pocket depth).
+    public var plugDepth: Double
+    /// Gap all round between plug and pocket wall (the plug is made this much smaller).
+    public var clearance: Double
+    /// Mirror the plug left-right (for plugs glued in face down).
+    public var mirrorPlug: Bool
+    /// Max depth per pass; nil = the tool's stepdown.
+    public var passDepth: Double?
+
+    public init(part: InlayPart = .female, pocketDepth: Double = 0.125, plugDepth: Double = 0.1875,
+                clearance: Double = 0.003, mirrorPlug: Bool = false, passDepth: Double? = nil) {
+        self.part = part; self.pocketDepth = pocketDepth; self.plugDepth = plugDepth; self.clearance = clearance
+        self.mirrorPlug = mirrorPlug; self.passDepth = passDepth
+    }
+}

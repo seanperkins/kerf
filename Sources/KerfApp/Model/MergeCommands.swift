@@ -51,3 +51,26 @@ extension KerfDocument {
         if let first { selectedOperationID = first }
     }
 }
+
+extension KerfDocument {
+    /// New Toolpath → Straight-Wall Inlay: a pocket operation and a (disabled) plug operation on
+    /// the selected vectors, so each board's program is saved on its own.
+    func addStraightInlayPair() {
+        guard case .straightInlay(var pocket) = OperationFactory.make(kind: .straightInlay, project: project,
+                                                                      library: mergedLibrary, shapeIDs: selectionOrder)
+        else { return }
+        let base = pocket.setup.name
+        pocket.setup.name = "\(base) Pocket"
+        pocket.params.part = .female
+        var plug = pocket
+        plug.setup = OperationSetup(name: "\(base) Plug", isEnabled: false, toolID: pocket.setup.toolID,
+                                    shapeIDs: pocket.setup.shapeIDs)
+        plug.params.part = .male
+        perform("New Straight-Wall Inlay") { p in
+            p.upsertOperation(.straightInlay(pocket))
+            p.upsertOperation(.straightInlay(plug))
+        }
+        sidebarTab = .toolpaths
+        selectedOperationID = pocket.setup.id
+    }
+}

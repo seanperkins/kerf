@@ -112,6 +112,9 @@ struct OperationEditor: View {
         case .prism(let o):
             PrismForm(params: paramsBinding(o.params) { .prism(PrismOperation(setup: draft.setup, params: $0)) },
                       units: units)
+        case .straightInlay(let o):
+            StraightInlayForm(params: paramsBinding(o.params) { .straightInlay(StraightInlayOperation(setup: draft.setup, params: $0)) },
+                              units: units)
         case .merge(let o):
             MergeForm(operation: o, onSplit: { document.splitMergedOperation(o.setup.id) })
         case .relief3D(let o):
