@@ -104,6 +104,26 @@ public struct TabLayout: Sendable {
         centers = (0..<n).map { (Double($0) + 0.5) * L / Double(n) }
     }
 
+    /// User-placed tabs at the given loop parameters (in [0, length)).
+    public init(loopLength L: Double, centers: [Double], settings: TabSettings, toolDiameter: Double,
+                cutDepth: Double) {
+        self.init(loopLength: L, settings: settings, toolDiameter: toolDiameter, cutDepth: cutDepth)
+        let wrapped = centers.map { c -> Double in
+            let r = L > 0 ? c.truncatingRemainder(dividingBy: L) : 0
+            return r < 0 ? r + L : r
+        }.sorted()
+        // Overlapping tabs would produce crossing rise/drop breaks: keep the first of each cluster.
+        var kept: [Double] = []
+        for c in wrapped {
+            let clash = kept.contains { k in
+                let d = abs(c - k)
+                return min(d, L - d) < 2 * halfWidth
+            }
+            if !clash { kept.append(c) }
+        }
+        self.centers = kept
+    }
+
     /// Raised-depth limit at unwrapped parameter s (nil outside tabs).
     func limit(at s: Double, strict: Bool = false) -> Double? {
         let u = local(s)
