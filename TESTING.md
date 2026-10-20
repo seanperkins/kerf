@@ -25,7 +25,10 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 2. **Job Setup** (⇧⌘J). Switch the Z zero between Material top and Spoilboard, and try a few XY
    origins (corners or centre). Leave the settings at Material top and lower left.
 3. **Preview.** Open the 3D preview (⌥⌘3) and press Play. The pocket, carved letters, holes and the
-   cut-out with tabs should look right. Try scrubbing and changing the speed. Switch back with ⌥⌘1.
+   cut-out with tabs should look right. Try scrubbing and changing the speed, stepping one move at a
+   time, and "run to next retract". Try the scope picker (all / visible / selected toolpaths), the
+   material palette (wood type, painted top), the ruler (click the stock twice to measure), the
+   camera button (save a PNG) and the stopwatch (acceleration and calibration). Switch back with ⌥⌘1.
 4. **Export.** File → Export G-code… (⇧⌘E) and save `test.tap`. It should match `samples/sign.tap`
    (only the date or job name may differ). Toolpaths → Check Toolpaths… (⇧⌘K) should report no errors.
 5. **Import.** Make a new document (⌘N). Use File → Import… (⌘I) to import `bracket-plate.dxf`.
@@ -88,5 +91,7 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 - Inlay plugs are generated in place over the pocket. Export the plug as its own program and cut
   it on a separate board.
 - Tool changes are manual (M5, comment, T#M6). G43 H# is off unless you turn it on in the profile.
-- Time estimates do not include tool-change time or acceleration.
+- App time estimates model acceleration (default 15 in/s², one value for all axes) and allow 90 s per tool
+  change; calibrate them in the 3D preview (stopwatch button). The estimate in the G-code header is
+  still length / feed.
 - The GRBL profile is untested on real hardware.

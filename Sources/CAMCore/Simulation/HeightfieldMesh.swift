@@ -52,7 +52,10 @@ public struct HeightfieldMesh: Sendable {
 
     /// - Parameters:
     ///   - maxVertices: the top surface is decimated (by striding the grid) to stay under this.
-    public init(heightfield hf: Heightfield, thickness: Double, maxVertices: Int = 250_000) {
+    ///   - appearance: material colours, grain, paint and machined-area colour.
+    ///   - unitsPerInch: 1 for inch documents, 25.4 for mm (scales the grain).
+    public init(heightfield hf: Heightfield, thickness: Double, maxVertices: Int = 250_000,
+                appearance: StockAppearance = .default, unitsPerInch: Double = 1) {
         let stride = Self.stride(columns: hf.columns, rows: hf.rows, maxVertices: maxVertices)
         let xs = Self.samples(count: hf.columns, stride: stride)
         let ys = Self.samples(count: hf.rows, stride: stride)
@@ -86,7 +89,8 @@ public struct HeightfieldMesh: Sendable {
                 let dzdy = (-depth(k, lt) + depth(k, lb)) / max(gy[lt] - gy[lb], 1e-9)
                 let n = Self.normalize(-dzdx, -dzdy, 1)
                 normals += [n.0, n.1, n.2]
-                let c = DepthColorRamp.material(normalizedDepth: Double(d / thick))
+                let c = appearance.topColor(x: Double(gx[k]), y: Double(gy[l]), depth: Double(d),
+                                            thickness: Double(thick), unitsPerInch: unitsPerInch)
                 colors += [c.r, c.g, c.b]
             }
         }
@@ -98,13 +102,16 @@ public struct HeightfieldMesh: Sendable {
         }
 
         // Side walls: each edge strip from the carved top down to the bottom.
-        let side = RGBColor(0.80, 0.64, 0.42)
+        func side(_ x: Float, _ y: Float, _ z: Float) -> RGBColor {
+            appearance.sideColor(x: Double(x), y: Double(y), z: Double(z), unitsPerInch: unitsPerInch)
+        }
         func wall(_ tops: [(Float, Float, Float)], normal: (Float, Float, Float), flip: Bool) {
             let base = UInt32(vertexCount)
             for (x, y, z) in tops {
                 positions += [x, y, z, x, y, -thick]
                 normals += [normal.0, normal.1, normal.2, normal.0, normal.1, normal.2]
-                colors += [side.r, side.g, side.b, side.r, side.g, side.b]
+                let ct = side(x, y, z), cb = side(x, y, -thick)
+                colors += [ct.r, ct.g, ct.b, cb.r, cb.g, cb.b]
             }
             for q in 0..<(tops.count - 1) {
                 let t0 = base + UInt32(2 * q), b0 = t0 + 1, t1 = t0 + 2, b1 = t0 + 3
@@ -121,7 +128,8 @@ public struct HeightfieldMesh: Sendable {
         for (x, y) in [(Float(0), Float(0)), (width, 0), (width, height), (0, height)] {
             positions += [x, y, -thick]
             normals += [0, 0, -1]
-            colors += [side.r, side.g, side.b]
+            let c = appearance.side
+            colors += [c.r, c.g, c.b]
         }
         indices += [base, base + 2, base + 1, base, base + 3, base + 2]
     }

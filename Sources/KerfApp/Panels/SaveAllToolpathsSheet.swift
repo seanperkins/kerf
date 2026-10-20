@@ -74,7 +74,7 @@ struct SaveAllToolpathsSheet: View {
 
     private func fileRow(_ file: PlannedGCodeFile, _ r: GCodeExportResult) -> some View {
         let loads = JobSummary.sequence(of: file.toolpaths)
-        let secs = MachiningTimeEstimator.estimate(file.toolpaths, rapidRate: document.rapidRateInDocumentUnits)
+        let secs = document.estimateSeconds(file.toolpaths)
         let errors = r.issues.filter { $0.severity == .error }.count
         let warnings = r.issues.count - errors
         return VStack(alignment: .leading, spacing: 3) {

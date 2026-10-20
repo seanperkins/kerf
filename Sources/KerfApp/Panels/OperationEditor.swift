@@ -123,7 +123,7 @@ struct OperationEditor: View {
                         .font(.caption).foregroundStyle(.secondary)
                     if r.toolpaths.count > 1 {
                         ForEach(r.toolpaths) { tp in
-                            let secs = MachiningTimeEstimator.estimate([tp], rapidRate: document.rapidRateInDocumentUnits)
+                            let secs = document.estimateSeconds([tp])
                             Text("• \(tp.name): T\(tp.tool.number), \(ToolpathCalculator.formatDuration(secs))")
                                 .font(.caption).foregroundStyle(.secondary)
                         }

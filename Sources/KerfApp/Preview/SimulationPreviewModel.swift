@@ -18,18 +18,28 @@ actor SimulationEngine {
     private let thickness: Double
     private let coords: MachineCoordinates
     private let maxVertices: Int
+    private var appearance: StockAppearance
+    private let unitsPerInch: Double
 
-    init(player: SimulationPlayer, job: JobSetup, maxVertices: Int) {
+    init(player: SimulationPlayer, job: JobSetup, maxVertices: Int, appearance: StockAppearance = .default,
+         unitsPerInch: Double = 1) {
         self.player = player
         thickness = job.thickness
         coords = MachineCoordinates(job: job)
         self.maxVertices = maxVertices
+        self.appearance = appearance
+        self.unitsPerInch = unitsPerInch
     }
+
+    func setAppearance(_ a: StockAppearance) { appearance = a }
+
+    /// `p` with its depth read from the current simulated stock.
+    func refine(_ p: Vec3) -> Vec3 { PreviewMeasurement.refined(p, heightfield: player.heightfield) }
 
     func frame(at time: TimeInterval) -> SimulationFrame {
         player.seek(to: time)
         let mesh = HeightfieldMesh(heightfield: player.heightfield, thickness: thickness,
-                                   maxVertices: maxVertices)
+                                   maxVertices: maxVertices, appearance: appearance, unitsPerInch: unitsPerInch)
         guard let pos = player.timeline.toolPosition(at: time) else {
             return SimulationFrame(mesh: mesh)
         }
@@ -66,7 +76,14 @@ enum PlaybackSpeed: Hashable, CaseIterable, Identifiable {
 
 @MainActor
 final class SimulationPreviewModel: ObservableObject {
-    @Published var time: TimeInterval = 0 { didSet { if time != oldValue { requestFrame() } } }
+    @Published var time: TimeInterval = 0 {
+        didSet { if time != oldValue { requestFrame(); updateMoveLabel() } }
+    }
+    /// "Move 12 / 340 · Feed" for the move in progress.
+    @Published private(set) var moveLabel: String?
+    private var moves: SimulationMoveIndex?
+    /// Playback stops here (run to next retract) instead of at the end.
+    private var stopTime: TimeInterval?
     @Published private(set) var totalTime: TimeInterval = 0
     @Published private(set) var isPlaying = false
     @Published var speed: PlaybackSpeed = .fit20s
@@ -84,24 +101,63 @@ final class SimulationPreviewModel: ObservableObject {
     private var playTask: Task<Void, Never>?
     private var lastFrame: SimulationFrame?
     private var configuredKey: Int?
+    private(set) var appearance = StockAppearance.default
+    @Published var isMeasuring = false { didSet { if !isMeasuring { clearMeasurement() } } }
+    @Published private(set) var measurement = PreviewMeasurement()
+
+    /// A click on the stock while measuring (material frame, z = -depth).
+    func pick(_ p: Vec3) {
+        guard isMeasuring, let engine else { return }
+        Task { [weak self] in
+            let refined = await engine.refine(p)
+            guard let self, self.isMeasuring else { return }
+            self.measurement.add(refined)
+            self.stockScene.showMeasurement(self.measurement.points)
+        }
+    }
+
+    func clearMeasurement() {
+        measurement.clear()
+        stockScene.showMeasurement([])
+    }
+
+    /// Recolours the stock without re-simulating.
+    func setAppearance(_ a: StockAppearance) {
+        guard a != appearance else { return }
+        appearance = a
+        stockScene.shininess = a.shininess
+        guard let engine else { return }
+        Task { [weak self] in
+            await engine.setAppearance(a)
+            self?.requestFrame()
+        }
+    }
 
     /// Rebuilds the simulation when the inputs change (cheap no-op otherwise).
-    func configure(job: JobSetup, toolpaths: [Toolpath], rapidRate: Double, units: LengthUnit) {
+    func configure(job: JobSetup, toolpaths: [Toolpath], rapidRate: Double, units: LengthUnit,
+                   timeSettings: TimeEstimateSettings = TimeEstimateSettings()) {
+        let motion = timeSettings.motion(units: units)
         var hasher = Hasher()
         hasher.combine(job); hasher.combine(toolpaths); hasher.combine(rapidRate)
+        hasher.combine(motion); hasher.combine(timeSettings.toolChangeSeconds)
         let key = hasher.finalize()
         guard key != configuredKey else { return }
         configuredKey = key
         pause()
+        clearMeasurement()
         self.toolpaths = toolpaths
         shapes = toolpaths.map { ToolShape(tool: $0.tool) }
         let minCell = units == .inch ? 0.004 : 0.1
         let cell = Heightfield.automaticCellSize(width: job.width, height: job.height,
                                                  targetCells: 800_000, minimum: minCell)
         cellSize = cell
-        let player = SimulationPlayer(job: job, toolpaths: toolpaths, rapidRate: rapidRate, cellSize: cell)
+        let player = SimulationPlayer(job: job, toolpaths: toolpaths, rapidRate: rapidRate, cellSize: cell,
+                                      toolChangeSeconds: timeSettings.toolChangeSeconds, motion: motion)
         totalTime = player.timeline.totalTime
-        engine = SimulationEngine(player: player, job: job, maxVertices: 200_000)
+        moves = SimulationMoveIndex(timeline: player.timeline)
+        updateMoveLabel()
+        engine = SimulationEngine(player: player, job: job, maxVertices: 200_000, appearance: appearance,
+                                  unitsPerInch: LengthUnit.inch.factor(to: units))
         stockScene.configure(job: job)
         // Show the finished result by default; scrub back to watch it being cut.
         if time == totalTime { requestFrame() } else { time = totalTime }
@@ -115,6 +171,46 @@ final class SimulationPreviewModel: ObservableObject {
     func togglePlay() { isPlaying ? pause() : play() }
 
     func play() {
+        stopTime = nil
+        startPlayback()
+    }
+
+    // MARK: Stepping
+
+    /// Jumps to the end of the move in progress.
+    func stepForward() {
+        guard let moves else { return }
+        pause()
+        time = moves.nextBoundary(after: time)
+    }
+
+    /// Jumps back to the start of the move in progress (or the previous move).
+    func stepBackward() {
+        guard let moves else { return }
+        pause()
+        time = moves.previousBoundary(before: time)
+    }
+
+    /// Plays at the current speed until the tool next retracts.
+    func runToNextRetract() {
+        guard let moves, totalTime > 0 else { return }
+        if time >= totalTime { time = 0 }
+        stopTime = moves.nextRetract(after: time)
+        startPlayback()
+    }
+
+    private func updateMoveLabel() {
+        guard let moves, !moves.spans.isEmpty else { moveLabel = nil; return }
+        guard let i = moves.spanIndex(at: time) else {
+            moveLabel = "Move \(moves.spans.count) / \(moves.spans.count) · finished"
+            return
+        }
+        let s = moves.spans[i]
+        let kind = s.isRetract ? "Retract" : (s.isRapid ? "Rapid" : (s.rise < -1e-9 ? "Plunge" : "Feed"))
+        moveLabel = "Move \(i + 1) / \(moves.spans.count) · \(kind)"
+    }
+
+    private func startPlayback() {
         guard totalTime > 0 else { return }
         if time >= totalTime { time = 0 }
         isPlaying = true
@@ -128,8 +224,9 @@ final class SimulationPreviewModel: ObservableObject {
                 let dt = now.timeIntervalSince(last)
                 last = now
                 let next = self.time + dt * self.speed.multiplier(totalTime: self.totalTime)
-                if next >= self.totalTime {
-                    self.time = self.totalTime
+                let end = min(self.stopTime ?? self.totalTime, self.totalTime)
+                if next >= end {
+                    self.time = end
                     self.pause()
                     return
                 }

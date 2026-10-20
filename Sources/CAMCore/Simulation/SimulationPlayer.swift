@@ -19,13 +19,13 @@ public struct SimulationPlayer: Sendable {
 
     public init(job: JobSetup, toolpaths: [Toolpath], rapidRate: Double, cellSize: Double,
                 toolChangeSeconds: TimeInterval = MachiningTimeEstimator.defaultToolChangeSeconds,
-                maxCheckpoints: Int = 12) {
+                maxCheckpoints: Int = 12, motion: MachineMotion = .instant) {
         let sim = MaterialSimulator(job: job, cellSize: cellSize)
         simulator = sim
         blank = sim.heightfield
         timeline = SimulationTimeline(toolpaths: toolpaths, rapidRate: rapidRate,
                                       toolChangeSeconds: toolChangeSeconds,
-                                      arcTolerance: sim.arcTolerance)
+                                      arcTolerance: sim.arcTolerance, motion: motion)
         checkpointInterval = max(64, timeline.steps.count / max(1, maxCheckpoints))
     }
 
