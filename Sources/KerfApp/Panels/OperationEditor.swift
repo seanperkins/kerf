@@ -30,7 +30,8 @@ struct OperationEditor: View {
                 .fieldHelp("Include in export")
             if draft.kind != .merge {
                 ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID),
-                           library: library, preferred: OperationFactory.preferredToolKinds(for: draft.kind))
+                           library: library, preferred: OperationFactory.preferredToolKinds(for: draft.kind),
+                           jobMaterial: document.document.job.material)
                 ToolOverrideSection(override: setupBinding(\.toolOverride),
                                     tool: library.tool(id: draft.setup.toolID)?.forMaterial(document.document.job.material)
                                         .converted(to: units), units: units)
@@ -229,6 +230,8 @@ struct ToolPicker: View {
     @Binding var toolID: UUID
     var library: ToolLibrary
     var preferred: [ToolKind]
+    /// The job's material, handed to the Tool Database so its feeds calculator starts from the right preset.
+    var jobMaterial: String? = nil
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -241,7 +244,10 @@ struct ToolPicker: View {
                 if library.tool(id: toolID) == nil { Text("Missing tool").tag(toolID) }
                 ForEach(sorted) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
-            Button { openWindow(id: ToolDatabaseView.windowID) } label: { Image(systemName: "wrench.and.screwdriver") }
+            Button {
+                ToolLibraryModel.shared.jobMaterial = jobMaterial
+                openWindow(id: ToolDatabaseView.windowID)
+            } label: { Image(systemName: "wrench.and.screwdriver") }
                 .buttonStyle(.icon).help("Tool Database").accessibilityLabel("Open Tool Database")
         }
         if let t = library.tool(id: toolID) {

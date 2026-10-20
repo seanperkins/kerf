@@ -138,7 +138,10 @@ struct ContentView: View {
                 .help("Snap to grid")
         }
         ToolbarItem(id: "tools") {
-            Button { openWindow(id: ToolDatabaseView.windowID) } label: { Label("Tools", systemImage: "wrench.and.screwdriver") }
+            Button {
+                toolLibrary.jobMaterial = document.document.job.material
+                openWindow(id: ToolDatabaseView.windowID)
+            } label: { Label("Tools", systemImage: "wrench.and.screwdriver") }
                 .help("Tool Database")
         }
         ToolbarItem(id: "calculate", placement: .primaryAction) {

@@ -205,7 +205,7 @@ struct ToolEditor: View {
                 }
             }
             ToolShapeSection(tool: $tool)
-            FeedsCalculatorSection(tool: $tool)
+            FeedsCalculatorSection(tool: $tool, jobMaterial: library.jobMaterial)
             MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools))
             ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted())
             Section("Notes") {
