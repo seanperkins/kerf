@@ -22,3 +22,20 @@
   position on the bed is unknown to Kerf).
 - **scaffold** — Swift targets use Swift 5 language mode under tools-version 6.0 to avoid
   strict-concurrency friction; public model types are still `Sendable`.
+- **preview** — Simulation sweeps each flattened motion segment analytically: every cell near
+  the segment is cut by the tool profile (flat/ball/V) centred at the closest XY point of the
+  segment. Segments are split so each piece descends ≤ one cell, which keeps ramps and helices
+  accurate. Cuts are clamped to the material thickness, so spoilboard cuts are not shown.
+- **preview** — Drill tools with an `angle` are simulated as a V point; without one, they are
+  simulated as flat. Engraving tools are simulated as a V with a flat tip.
+- **preview** — `MachiningTimeEstimator.estimate` gained a defaulted `toolChangeSeconds`
+  parameter (default 90 s per manual change). Arcs are timed by their true helical length.
+  There is no acceleration model.
+- **preview** — The 3D preview uses SceneKit. The heightfield becomes a vertex-coloured mesh,
+  decimated to ≤ 200k vertices. The cell size is automatic (~800k cells, min 0.004 in /
+  0.1 mm). Scrubbing backwards restores the nearest checkpoint (every ~1/12 of the steps)
+  and replays from there. The preview opens on the finished result.
+- **preview** — App shell integration point: `ToolpathPreviewPanel(document:toolpaths:postProfile:)`
+  provides the 2D/3D tabs. The canvas overlay uses
+  `ToolpathOverlayRenderer.draw(ToolpathOverlay(toolpaths:coords:), in:transform:)`.
+  `PreviewSamples.demo()` provides demo toolpaths.

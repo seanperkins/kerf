@@ -22,8 +22,8 @@ public enum DepthColorRamp {
 
     /// Stock surface: light wood at the top, darker as it gets deeper.
     public static func material(normalizedDepth t: Double) -> RGBColor {
-        let stops: [RGBColor] = [RGBColor(0.87, 0.72, 0.50), RGBColor(0.74, 0.55, 0.33),
-                                 RGBColor(0.52, 0.36, 0.20)]
+        let stops: [RGBColor] = [RGBColor(0.90, 0.76, 0.54), RGBColor(0.66, 0.47, 0.27),
+                                 RGBColor(0.40, 0.26, 0.14)]
         return sample(stops, t)
     }
 
