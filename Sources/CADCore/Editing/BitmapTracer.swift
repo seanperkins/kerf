@@ -150,6 +150,9 @@ public enum BitmapTracer {
         return Array(a.dropLast()) + Array(b.dropLast())
     }
 
+    /// Douglas–Peucker simplification of an open polyline (ends kept).
+    public static func simplifyPolyline(_ pts: [Vec2], tolerance: Double) -> [Vec2] { dp(pts, tolerance) }
+
     static func dp(_ pts: [Vec2], _ tol: Double) -> [Vec2] {
         guard pts.count > 2 else { return pts }
         var keep = [Bool](repeating: false, count: pts.count)

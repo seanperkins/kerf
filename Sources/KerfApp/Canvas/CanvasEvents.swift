@@ -61,6 +61,8 @@ extension CanvasNSView {
         case .measure:
             let p = docPoint(event)
             drawingState.measureDrag = (p, p)
+        case .freehand:
+            drawingState.freehand = [docPoint(event)]
         case .arc:
             clickPoints.append(docPoint(event))
             if clickPoints.count >= 3 { finishClickShape() }

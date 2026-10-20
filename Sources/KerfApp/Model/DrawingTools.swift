@@ -3,7 +3,7 @@ import Foundation
 
 /// Canvas interaction modes.
 enum CanvasTool: String, CaseIterable, Identifiable {
-    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, arc, text, trim, measure
+    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, arc, freehand, text, trim, measure
 
     var id: String { rawValue }
 
@@ -22,6 +22,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .curve: return "Smooth Curve"
         case .arc: return "Arc"
         case .trim: return "Trim"
+        case .freehand: return "Freehand"
         case .measure: return "Measure"
         case .text: return "Text"
         }
@@ -42,6 +43,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .curve: return "scribble"
         case .arc: return "circle.bottomhalf.filled"
         case .trim: return "scissors"
+        case .freehand: return "hand.draw"
         case .measure: return "ruler"
         case .text: return "textformat"
         }
@@ -182,6 +184,19 @@ enum DrawingTools {
         let p = fromCenter ? ArcConstruction.centerStartEnd(center: points[0], start: points[1], endDirection: points[2])
                            : ArcConstruction.threePoint(start: points[0], end: points[1], through: points[2])
         return p.map { Shape(name: "Arc", layerID: layerID, paths: [$0]) }
+    }
+
+    /// Freehand stroke: the dragged points are simplified (`tolerance`) and smoothed into Bézier
+    /// curves; the stroke closes when it ends within `closeTolerance` of its start.
+    static func freehand(points: [Vec2], tolerance: Double, closeTolerance: Double, layerID: UUID) -> Shape? {
+        guard points.count >= 2 else { return nil }
+        var pts = BitmapTracer.simplifyPolyline(points, tolerance: max(tolerance, 1e-9))
+        guard pts.count >= 2, pts.first!.distance(to: pts.last!) > 0 || pts.count > 2 else { return nil }
+        let closes = pts.count >= 4 && pts.last!.distance(to: pts[0]) <= closeTolerance
+        if closes { pts[pts.count - 1] = pts[0] }
+        guard var s = smoothCurve(points: pts, closeTolerance: closes ? closeTolerance : 0, layerID: layerID) else { return nil }
+        s.name = "Freehand"
+        return s
     }
 
     /// Polyline from clicked points; closes when the last point returns to the first.

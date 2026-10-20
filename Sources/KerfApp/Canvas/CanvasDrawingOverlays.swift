@@ -9,6 +9,7 @@ extension CanvasNSView {
         drawHighlightMarkers(ctx, doc)
         if doc.activeTool == .nodeEdit { drawStartMarkers(ctx, doc) }
         drawMeasurement(ctx, doc)
+        drawFreehand(ctx)
         drawQuickEntry(doc)
     }
 

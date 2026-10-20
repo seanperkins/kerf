@@ -12,6 +12,8 @@ struct CanvasDrawingState {
     var axisHint: AxisSnap.Result?
     /// Measure tool drag (start, current).
     var measureDrag: (Vec2, Vec2)?
+    /// Freehand stroke being drawn (document points, nil when not drawing).
+    var freehand: [Vec2]?
 }
 
 /// Trim and measure tools, typed entry ("quick keys") while drawing.
@@ -19,6 +21,14 @@ extension CanvasNSView {
     /// Drags owned by the drawing extras (guides, measure). True when handled.
     func extrasMouseDragged(_ event: NSEvent) -> Bool {
         if guideMouseDragged(event) { return true }
+        if var pts = drawingState.freehand {
+            let p = viewport.toDocument(viewPoint(event))
+            if let last = pts.last, viewport.toView(last).distance(to: viewport.toView(p)) >= 1.5 { pts.append(p) }
+            drawingState.freehand = pts
+            hoverDoc = p
+            needsDisplay = true
+            return true
+        }
         if let (a, _) = drawingState.measureDrag {
             updateHover(event)
             let b = docPoint(event)
@@ -32,6 +42,15 @@ extension CanvasNSView {
 
     func extrasMouseUp(_ event: NSEvent) -> Bool {
         if guideMouseUp(event) { return true }
+        if let pts = drawingState.freehand, let doc = document {
+            drawingState.freehand = nil
+            if let s = DrawingTools.freehand(points: pts, tolerance: viewport.documentLength(1.5),
+                                             closeTolerance: viewport.documentLength(8), layerID: doc.currentLayerID) {
+                doc.addShape(s, actionName: "Draw Freehand")
+            }
+            needsDisplay = true
+            return true
+        }
         guard let (a, b) = drawingState.measureDrag, let doc = document else { return false }
         drawingState.measureDrag = nil
         if viewport.toView(a).distance(to: viewport.toView(b)) < dragThreshold {
@@ -48,6 +67,20 @@ extension CanvasNSView {
         }
         needsDisplay = true
         return true
+    }
+
+    /// Freehand stroke in progress.
+    func drawFreehand(_ ctx: CGContext) {
+        guard let pts = drawingState.freehand, let f = pts.first else { return }
+        ctx.saveGState()
+        ctx.setStrokeColor(NSColor.systemBlue.cgColor)
+        ctx.setLineWidth(1.5)
+        ctx.beginPath()
+        let v0 = viewport.toView(f)
+        ctx.move(to: CGPoint(x: v0.x, y: v0.y))
+        for p in pts.dropFirst() { let v = viewport.toView(p); ctx.addLine(to: CGPoint(x: v.x, y: v.y)) }
+        ctx.strokePath()
+        ctx.restoreGState()
     }
 
     /// Measure line and readout.
