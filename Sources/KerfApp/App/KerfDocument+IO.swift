@@ -24,9 +24,7 @@ extension KerfDocument {
     }
 
     func jobSheetHTML(notes: String = "") -> String {
-        var shown = outputProject.document
-        shown.shapes = shown.shapes.filter { isOnActiveSide($0) }
-        let png = DesignSnapshot.png(document: shown, toolpaths: calculatedToolpaths,
+        let png = DesignSnapshot.png(document: shownDocument, toolpaths: calculatedToolpaths,
                                      size: CGSize(width: 900, height: 600))
         return makeJobSheet(notes: notes).html(previewPNG: png)
     }
@@ -101,5 +99,62 @@ struct TemplateMenu: View {
         }
         Button("Save as Template…") { document?.runSaveTemplatePanel() }
             .disabled(document == nil)
+    }
+}
+
+// MARK: Print
+
+/// Printable 2D design: material, visible vectors, tracing images, calculated toolpaths of the
+/// current sheet/side. `actualSize` draws at 1:1 (tiled over pages); otherwise it fits the page.
+final class DesignPrintView: NSView {
+    let document: Document
+    let toolpaths: [Toolpath]
+    let actualSize: Bool
+
+    init(document: Document, toolpaths: [Toolpath], actualSize: Bool, pageSize: NSSize) {
+        self.document = document; self.toolpaths = toolpaths; self.actualSize = actualSize
+        let frame: NSRect
+        if actualSize {
+            let b = document.job.materialBounds.union(document.bounds)
+            let s = document.units.convert(1, to: .inch) * 72
+            frame = NSRect(x: 0, y: 0, width: b.width * s, height: b.height * s)
+        } else {
+            frame = NSRect(origin: .zero, size: pageSize)
+        }
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        DesignSnapshot.draw(document: document, toolpaths: toolpaths, in: ctx, size: bounds.size,
+                            margin: actualSize ? 0 : 16)
+    }
+}
+
+extension KerfDocument {
+    /// Document as shown: current sheet/side only.
+    var shownDocument: Document {
+        var d = outputProject.document
+        d.shapes = d.shapes.filter { isOnActiveSide($0) }
+        return d
+    }
+
+    func printDesign(actualSize: Bool) {
+        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
+        info.horizontalPagination = actualSize ? .automatic : .fit
+        info.verticalPagination = actualSize ? .automatic : .fit
+        let d = shownDocument
+        if !actualSize { info.orientation = d.job.width >= d.job.height ? .landscape : .portrait }
+        let page = info.imageablePageBounds.size
+        let view = DesignPrintView(document: d, toolpaths: showToolpaths ? calculatedToolpaths : [],
+                                   actualSize: actualSize, pageSize: page)
+        let op = NSPrintOperation(view: view, printInfo: info)
+        op.jobTitle = document.name
+        op.showsPrintPanel = true
+        op.run()
     }
 }

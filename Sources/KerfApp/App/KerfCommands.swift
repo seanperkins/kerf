@@ -12,6 +12,13 @@ struct KerfCommands: Commands {
     @Environment(\.newDocument) private var newDocument
 
     var body: some Commands {
+        CommandGroup(replacing: .printItem) {
+            Button("Print…") { document?.printDesign(actualSize: false) }
+                .keyboardShortcut("p", modifiers: .command)
+                .disabled(document == nil)
+            Button("Print at Actual Size…") { document?.printDesign(actualSize: true) }
+                .disabled(document == nil)
+        }
         CommandGroup(after: .newItem) {
             TemplateMenu(document: document) { project in newDocument { KerfDocument(project: project) } }
         }

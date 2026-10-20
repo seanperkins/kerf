@@ -200,11 +200,11 @@ enum DesignSnapshot {
     }
 
     /// Draws into a y-down context of `size`.
-    static func draw(document: Document, toolpaths: [Toolpath], in cg: CGContext, size: CGSize) {
+    static func draw(document: Document, toolpaths: [Toolpath], in cg: CGContext, size: CGSize, margin: CGFloat = 16) {
         cg.setFillColor(CGColor(gray: 1, alpha: 1))
         cg.fill(CGRect(origin: .zero, size: size))
         let bounds = document.job.materialBounds.union(document.bounds)
-        let t = ToolpathOverlayRenderer.fitTransform(bounds: bounds, in: size)
+        let t = ToolpathOverlayRenderer.fitTransform(bounds: bounds, in: size, margin: margin)
         let m = document.job.materialBounds
         let r = CGRect(x: m.min.x, y: m.min.y, width: m.width, height: m.height).applying(t)
         cg.setFillColor(CGColor(red: 0.97, green: 0.93, blue: 0.85, alpha: 1))
