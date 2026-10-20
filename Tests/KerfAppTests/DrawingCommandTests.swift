@@ -36,6 +36,20 @@ import Testing
         #expect(p.document.shape(id: s.id)!.text == nil)
     }
 
+    @Test func fitTextToBoundary() throws {
+        var p = AppTestSupport.project()
+        let s = try TextOutliner().shape(for: TextSpec(string: "WIDE", fontName: "Helvetica", size: 1, anchor: Vec2(20, 20)),
+                                         layerID: p.document.defaultLayerID)
+        p.document.add(s)
+        let box = p.document.shapes[0]  // 2 x 1 at (1,1)
+        #expect(VectorCommands.fitTextToBox([s.id, box.id], margin: 0.1, stretch: false, in: &p))
+        let b = p.document.shape(id: s.id)!.bounds()
+        #expect(abs(b.width - 1.8) < 1e-6 || abs(b.height - 0.8) < 1e-6)
+        #expect(b.center.isApproximatelyEqual(to: Vec2(2, 1.5), tolerance: 1e-6))
+        #expect(p.document.shape(id: s.id)!.text != nil)
+        #expect(!VectorCommands.fitTextToBox([box.id], margin: 0, stretch: false, in: &p))
+    }
+
     @Test func repairDeletesDuplicatesAndPrunesOperations() {
         var p = AppTestSupport.project()
         let orig = p.document.shapes[0]

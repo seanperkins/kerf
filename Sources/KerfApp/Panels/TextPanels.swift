@@ -3,6 +3,35 @@ import CADCore
 import CAMCore
 import SwiftUI
 
+/// Fit text to a box: scales and centres the selected text in another selected vector's
+/// bounding box (or the material).
+struct TextFitSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var margin: Double
+    @State private var stretch = false
+
+    init(document: KerfDocument) {
+        self.document = document
+        _margin = State(initialValue: document.units == .inch ? 0.25 : 6)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let hasText = document.selectedShapes.contains { $0.text != nil }
+        let hasBox = document.selectedShapes.contains { $0.text == nil }
+        DrawingDialog(title: "Fit Text to Box", action: "Fit", disabled: !hasText,
+                      note: !hasText ? "Select live text (and optionally a boundary vector)."
+                          : hasBox ? "The text fills the selected boundary's bounding box." : "No boundary selected: the text fills the material.",
+                      perform: {
+                          let (m, s) = (margin, stretch)
+                          document.perform("Fit Text") { VectorCommands.fitTextToBox(ids, margin: m, stretch: s, in: &$0) }
+                      }) {
+            LengthField("Margin", value: $margin, units: document.units)
+            Toggle("Stretch to fill (change proportions)", isOn: $stretch)
+        }
+    }
+}
+
 /// Justification, line spacing and letter spacing fields (text tool and text inspector).
 struct TextLayoutFields: View {
     @Binding var alignment: CADCore.TextAlignment

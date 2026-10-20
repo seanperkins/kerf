@@ -11,6 +11,14 @@ struct VectorMenuCommands: Commands {
         CommandMenu("Vectors") {
             sheetButton("Mirror…", .mirror)
             Divider()
+            sheetButton("Fit Text to Box…", .textFit)
+            Button("Convert Text to Curves") {
+                guard let doc = document else { return }
+                let ids = doc.selection
+                doc.perform("Convert to Curves") { VectorCommands.convertTextToCurves(ids, in: &$0) }
+            }
+            .disabled(!(document?.selectedShapes.contains { $0.text != nil } ?? false))
+            Divider()
             sheetButton("Rectangular Array…", .arrayLinear)
             sheetButton("Circular Array…", .arrayCircular)
             Divider()

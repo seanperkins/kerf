@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit
     var id: String { rawValue }
 }
 
@@ -41,6 +41,26 @@ enum VectorCommands {
             s.name = rebuilt.name
         }
         project.document.shapes[i] = s
+    }
+
+    /// Scales and centres the text shapes among `ids` to fill the bounding box of the first
+    /// other selected shape (or the material when there is none), inset by `margin`.
+    /// `stretch` fills both directions; otherwise proportions are kept. Returns false if nothing fitted.
+    @discardableResult
+    static func fitTextToBox(_ ids: [UUID], margin: Double, stretch: Bool, in project: inout KerfProject) -> Bool {
+        let shapes = project.document.shapes(ids: ids)
+        let texts = shapes.filter { $0.text != nil && project.isEditable($0) }
+        guard !texts.isEmpty else { return false }
+        let textIDs = Set(project.document.expandToGroups(texts.map(\.id)))
+        let boundary = shapes.first { !textIDs.contains($0.id) }
+        let box = (boundary?.bounds() ?? project.document.job.materialBounds).insetBy(margin)
+        let b = project.bounds(of: textIDs)
+        guard box.width > 0, box.height > 0, b.width > 1e-12, b.height > 1e-12 else { return false }
+        var sx = box.width / b.width, sy = box.height / b.height
+        if !stretch { sx = min(sx, sy); sy = sx }
+        let t = Transform2D.scale(sx, sy, about: b.center).concatenating(.translation(box.center - b.center))
+        project.transformShapes(textIDs, by: t)
+        return true
     }
 
     /// Turns live text into plain vectors (no further text editing).
