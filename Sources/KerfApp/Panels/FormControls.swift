@@ -249,3 +249,25 @@ struct ActionRow: View {
         }
     }
 }
+
+/// The one button of a dialog that only dismisses (Done, Close): Return and Escape both press it. SwiftUI binds
+/// each keyboard shortcut to one button, and a sheet with a single `.defaultAction` button ignored Escape.
+struct DismissButton: View {
+    var title: String
+    var action: () -> Void
+
+    init(_ title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
+    }
+
+    var body: some View {
+        Button(title, action: action)
+            .keyboardShortcut(.defaultAction)
+            .background(
+                Button("", action: action)
+                    .keyboardShortcut(.cancelAction)
+                    .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+            )
+    }
+}

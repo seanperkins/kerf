@@ -113,7 +113,7 @@ struct JobSetupSheet: View {
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("OK") { document.applyJobSetup(form); dismiss() }
+                Button("Apply") { document.applyJobSetup(form); dismiss() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!form.problems.isEmpty)
             }

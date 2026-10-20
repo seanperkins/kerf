@@ -178,7 +178,7 @@ struct DocumentVariablesSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("OK") {
+                Button("Apply") {
                     let new = rows, newLinks = links
                     document.perform("Edit Variables") {
                         $0.document.userVariables = new

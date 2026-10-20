@@ -65,10 +65,10 @@ struct JobNotesSheet: View {
             HStack {
                 Spacer()
                 if openedWithFile {
-                    Button("Close") { save(); dismiss() }.keyboardShortcut(.defaultAction)
+                    DismissButton("Close") { save(); dismiss() }
                 } else {
                     Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                    Button("OK") { save(); dismiss() }.keyboardShortcut(.defaultAction)
+                    Button("Save") { save(); dismiss() }.keyboardShortcut(.defaultAction)
                 }
             }
         }

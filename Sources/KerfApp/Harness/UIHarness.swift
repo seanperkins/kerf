@@ -188,6 +188,18 @@ final class UIHarness {
         case "closeSheet":
             doc.sheet = nil
             await settle()
+        case "key":
+            guard let key = HarnessScenario.keys[step.value ?? ""] else { throw HarnessError(message: "unknown key") }
+            let target = try requireWindow().attachedSheet ?? requireWindow()
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+                                                   timestamp: ProcessInfo.processInfo.systemUptime,
+                                                   windowNumber: target.windowNumber, context: nil, characters: key.chars,
+                                                   charactersIgnoringModifiers: key.chars, isARepeat: false,
+                                                   keyCode: key.code) else { continue }
+                target.sendEvent(event)
+            }
+            await settle(0.7)
         case "expand":
             UserDefaults.standard.set(true, forKey: SectionState.key(for: step.name ?? ""))
             await settle()

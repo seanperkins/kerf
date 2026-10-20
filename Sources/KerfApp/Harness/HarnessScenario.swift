@@ -34,6 +34,9 @@ struct HarnessScenario: Decodable {
     static let tabs: Set<String> = ["design", "toolpaths"]
     static let appearances: Set<String> = ["light", "dark", "system"]
     static let samples: Set<String> = ["sign"]
+    static let keys: [String: (code: UInt16, chars: String)] = [
+        "escape": (53, "\u{1b}"), "return": (36, "\r"), "tab": (48, "\t"), "space": (49, " "),
+    ]
     static let sheets: Set<String> = [
         "jobSetup", "exportGCode", "saveAllToolpaths", "validation", "keepOutZones", "nesting", "fixtures",
         "tiling", "partLabels", "variables", "productionPlates", "offset", "inlayWizard",
@@ -53,6 +56,7 @@ struct HarnessScenario: Decodable {
         "sheet": "value: " + sheets.sorted().joined(separator: " | "),
         "closeSheet": "close the open sheet",
         "press": "name: click the first control whose label, title, help or id contains this text; value: optional role such as AXButton. Does not toggle disclosure groups: use expand",
+        "key": "value: escape | return | tab | space, sent to the open sheet (or the window)",
         "expand": "name: open a collapsible inspector section by its title (Last Pass, Ramps, Array Copies...)",
         "wait": "seconds: let the UI settle",
         "capture": "name: the window as <name>.png, its accessibility tree as <name>.ax.txt",
@@ -103,6 +107,8 @@ struct HarnessScenario: Decodable {
             guard let v = step.value, sheets.contains(v) else { throw fail("value must be one of \(sheets.sorted())") }
         case "press":
             guard step.name?.isEmpty == false else { throw fail("name must say which control to press") }
+        case "key":
+            guard let v = step.value, keys[v] != nil else { throw fail("value must be one of \(keys.keys.sorted())") }
         case "expand":
             guard step.name?.isEmpty == false else { throw fail("name must be the section's title") }
         case "wait":

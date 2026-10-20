@@ -79,7 +79,7 @@ struct KeepOutZonesSheet: View {
                 }
                 .disabled(document.selectedShapes.isEmpty)
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                DismissButton("Done") { dismiss() }
             }
             .padding(20)
         }

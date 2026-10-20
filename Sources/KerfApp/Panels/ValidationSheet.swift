@@ -58,7 +58,7 @@ struct ValidationSheet: View {
                 Toggle("Combined program grouped by tool", isOn: $groupByTool)
                 Spacer()
                 Button("Recheck") { run() }
-                Button("Close") { dismiss() }.keyboardShortcut(.defaultAction)
+                DismissButton("Close") { dismiss() }
             }
         }
         .padding(20)
