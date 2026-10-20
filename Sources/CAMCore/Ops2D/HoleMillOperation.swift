@@ -56,7 +56,9 @@ public struct HoleMillOperation: ToolpathOperation {
                          moves: builder.finish(), metadata: meta)]
     }
 
-    /// Helix down at `radius` around the centre, a flat lap at the bottom, then back to the centre.
+    /// Helix down at `radius` around the centre and a flat lap at the bottom. When the tool path
+    /// clears the whole hole (diameter up to twice the tool) the tool then moves to the centre to lift
+    /// clear of the wall; for bigger holes a core is left standing in the middle, so it lifts in place.
     private func bore(_ hole: Hole, radius: Double, tool: Tool, tolerance tol: Double, builder: inout ToolpathBuilder) {
         let c = hole.centre
         guard radius > tol else {
@@ -73,7 +75,7 @@ public struct HoleMillOperation: ToolpathOperation {
                              turns: turns, ccw: ccw, tolerance: tol)
         pts += Self.helix(centre: c, radius: radius, fromDepth: params.cutDepth, toDepth: params.cutDepth,
                           turns: 1, ccw: ccw, tolerance: tol).dropFirst()
-        pts.append(CutPoint(c, depth: params.cutDepth))
+        if Self.leavesNoCore(hole, tool: tool, tolerance: tol) { pts.append(CutPoint(c, depth: params.cutDepth)) }
         builder.cutChain(pts)
     }
 
@@ -94,6 +96,11 @@ public struct HoleMillOperation: ToolpathOperation {
         builder.cutChain([CutPoint(c, depth: from)])
         let pts = Self.helix(centre: c, radius: radius, fromDepth: from, toDepth: to, turns: turns, ccw: ccw, tolerance: tol)
         builder.feed(to: pts + [CutPoint(c, depth: to)])
+    }
+
+    /// True when a ring at radius (D - d)/2 sweeps the whole hole, so nothing is left at the centre.
+    static func leavesNoCore(_ hole: Hole, tool: Tool, tolerance: Double) -> Bool {
+        hole.diameter <= 2 * tool.diameter + tolerance
     }
 
     /// Helix samples starting at angle 0 (centre + (radius, 0)).

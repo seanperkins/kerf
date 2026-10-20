@@ -81,3 +81,21 @@ func ops2DHoleMillHelicalBoreStaysOnTheHoleRadius(mode: ZZeroMode) throws {
     let (tp, _) = try holeMill(p)
     #expect(abs(tp.minZ! + 0.45) < 1e-9)
 }
+
+@Test func ops2DHoleMillNeverFeedsThroughTheUncutCore() throws {
+    // 1" hole, 1/4" tool: the ring leaves a 0.5" core standing in the middle.
+    let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.5))
+    #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
+    let atDepth = F.densePoints(tp.moves).filter { ctx.coords.depth(ofMachineZ: $0.z) > 1e-9 }
+    #expect(!atDepth.isEmpty)
+    for q in atDepth { #expect(q.xy.distance(to: Vec2(3, 3)) > 0.375 - 0.001) }
+
+    // 1/2" hole, 1/4" tool: no core, so the tool may move to the centre before lifting.
+    var small = HoleMillParameters(cutDepth: 0.3)
+    small.holeDiameter = 0.5
+    let (tp2, ctx2) = try holeMill(small)
+    let centre = F.densePoints(tp2.moves).filter {
+        ctx2.coords.depth(ofMachineZ: $0.z) > 1e-9 && $0.xy.distance(to: Vec2(3, 3)) < 1e-9
+    }
+    #expect(!centre.isEmpty)
+}

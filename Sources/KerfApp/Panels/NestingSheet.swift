@@ -9,6 +9,8 @@ struct NestingSheet: View {
     @State private var options: NestingOptions
     @State private var running = false
     @State private var report: NestingReport?
+    /// The nesting run in progress; cancelled when the sheet closes so its result is never applied.
+    @State private var job: Task<Void, Never>?
 
     init(document: KerfDocument) {
         self.document = document
@@ -60,7 +62,7 @@ struct NestingSheet: View {
             HStack {
                 if running { ProgressView().controlSize(.small); Text("Nesting…").foregroundStyle(.secondary) }
                 Spacer()
-                Button(report == nil ? "Cancel" : "Done") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(report == nil ? "Cancel" : "Done") { job?.cancel(); dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Nest") { run() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(running || targetIDs.isEmpty)
@@ -68,18 +70,22 @@ struct NestingSheet: View {
         }
         .padding(20)
         .frame(width: 420)
+        .onDisappear { job?.cancel() }
     }
 
     private func run() {
         let ids = targetIDs, opts = options, start = document.project
         running = true
-        Task.detached(priority: .userInitiated) {
+        job = Task.detached(priority: .userInitiated) {
             var p = start
             let r = NestingCommands.nest(ids, options: opts, in: &p)
             let result = p
             await MainActor.run {
+                // Cancelled (the sheet was closed): the user chose not to nest, so drop the result.
+                guard !Task.isCancelled else { return }
                 running = false
                 report = r
+                job = nil
                 // The sheet is modal, but never overwrite a project that changed meanwhile.
                 guard document.project == start else { return }
                 document.perform("Nest Parts") { $0 = result }

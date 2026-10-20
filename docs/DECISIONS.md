@@ -530,3 +530,12 @@
 - Help: new topics for Quick Engrave, Chamfer, Hole Milling, Prism Carve, Merged, Straight Inlay, Moulding and Photo V-Carve, so every toolpath kind's "?" opens its own page.
 - PARITY: tp-tiling is marked done because lay-tiling covers it; io-setup-sheet is done through lay-job-sheet. tp-drill-bank and 3d-rotary stay missing on purpose.
 - drawing-r1's TODO(cam-2d) about the start point is closed: Profile's "Vector start node" option (tp-profile-start-point) starts at node 0, which "Set Start" moves.
+
+## review fixes (round 1)
+
+- **Hole milling** no longer feeds back to the hole centre at full depth when the hole is more than twice the tool diameter: the ring leaves a core there, so the tool lifts in place from the bottom lap. Holes up to 2 x tool diameter (no core) still move to the centre before lifting, to clear the wall. Concentric clearing rings were not added; use a Pocket for a fully cleared hole.
+- **Two-sided 3D relief**: `GCodeValidator.validate(toolpaths:)` raises `relief-mixed-sides` (error) when relief toolpaths with different `side` metadata share one program, matching the inlay pocket/plug check. Export each side as its own file (Save All "one file per toolpath" already does).
+- **Built-in post footers** lift to `{HOME_Z}` (not Safe Z) before parking at home XY. Job Setup refuses Home Z below Safe Z, so this never lowers the tool. User profiles keep their own footers.
+- **Arc-centre mode**: the Avid Mach4 preambles state `G91.1` (incremental I/J), since Mach4 keeps the IJ mode as a controller setting. GRBL's profile is unchanged (incremental is its only mode). When a profile uses absolute I/J and its preamble does not already say `G90.1`, ProgramBuilder writes `G90.1` after the preamble.
+- **Nest Parts**: Cancel (or closing the sheet) cancels the running nest and its result is discarded. The nester itself has no cancellation points, so the background work runs to completion but is never applied.
+- **Trace Bitmap**: tracing, and re-decoding after a resolution change, run off the main thread about 100 ms after the last option change; only the newest run publishes its result. "Create Vectors" is disabled while a trace is pending so the created vectors always match the shown options.

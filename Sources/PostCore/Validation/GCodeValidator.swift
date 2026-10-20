@@ -75,6 +75,12 @@ public struct GCodeValidator: Sendable {
                              "Inlay pocket (female) and plug (male) are in the same program. The plug is cut in place "
                                  + "over the pocket, so cut each part on its own board and export them separately.")
         }
+        let reliefSides = Set(toolpaths.filter { $0.kind == .relief3D }.compactMap { $0.metadata["side"] })
+        if reliefSides.count > 1 {
+            check.issues.add("relief-mixed-sides", .error, line: nil,
+                             "Two-sided 3D relief: the top and bottom sides are in the same program. The bottom side "
+                                 + "is cut after turning the board over, so export each side as its own file.")
+        }
         return check.issues.issues
     }
 

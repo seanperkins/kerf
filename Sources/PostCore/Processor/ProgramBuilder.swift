@@ -34,6 +34,10 @@ struct ProgramBuilder {
         if profile.headerComments { writeHeader(into: &w, toolpaths: active) }
         w.code(profile.unitsCode)
         for line in render(profile.preamble) { w.code(line) }
+        // Absolute arc centres are never a controller's default: state the mode unless the preamble does.
+        if profile.arcOutput == .absoluteIJ, !profile.preamble.contains(where: { $0.contains("G90.1") }) {
+            w.code("G90.1")
+        }
 
         var currentTool: UUID?
         var currentRPM: Double?

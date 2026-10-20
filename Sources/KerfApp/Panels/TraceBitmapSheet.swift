@@ -15,6 +15,10 @@ struct TraceBitmapSheet: View {
     @State private var width: Double
     @State private var traced: [Path] = []
     @State private var sourceData: Data?
+    /// Background trace (debounced); only the newest one may publish its result.
+    @State private var traceTask: Task<Void, Never>?
+    @State private var generation = 0
+    @State private var busy = false
 
     init(document: KerfDocument) {
         self.document = document
@@ -46,18 +50,21 @@ struct TraceBitmapSheet: View {
                     IntField("Resolution (longest side)", value: $resolution, range: 100...3000)
                     LengthField("Width", value: $width, units: document.units, help: "Size of the traced vectors (height follows)")
                 }
-                Text("\(traced.count) outline\(traced.count == 1 ? "" : "s"), \(img.width)×\(img.height) px. Placed on the centre of the material.")
-                    .font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    if busy { ProgressView().controlSize(.small) }
+                    Text("\(traced.count) outline\(traced.count == 1 ? "" : "s"), \(img.width)×\(img.height) px. Placed on the centre of the material.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             } else {
                 Text("Choose a PNG, JPEG, TIFF or other image. Dark areas become filled regions (closed vectors) ready for pocketing, V-carving or profiling.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { traceTask?.cancel(); dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Create Vectors") { create() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(traced.isEmpty || width <= 0)
+                    .disabled(busy || traced.isEmpty || width <= 0)
             }
         }
         .padding(20)
@@ -67,7 +74,8 @@ struct TraceBitmapSheet: View {
         .onChange(of: options.minArea) { _, _ in retrace() }
         .onChange(of: options.simplify) { _, _ in retrace() }
         .onChange(of: options.smoothing) { _, _ in retrace() }
-        .onChange(of: resolution) { _, _ in reload() }
+        .onChange(of: resolution) { _, _ in schedule(decode: true) }
+        .onDisappear { traceTask?.cancel() }
     }
 
     private func preview(_ img: GrayBitmap) -> some View {
@@ -105,9 +113,27 @@ struct TraceBitmapSheet: View {
         retrace()
     }
 
-    private func retrace() {
-        guard let img = image else { traced = []; return }
-        traced = BitmapTracer.trace(img, options: options)
+    private func retrace() { schedule(decode: false) }
+
+    /// Traces (and, after a resolution change, re-decodes) off the main thread, ~100 ms after the
+    /// last change, so dragging the threshold slider never blocks the UI. Stale runs are dropped.
+    private func schedule(decode: Bool) {
+        traceTask?.cancel()
+        guard let data = sourceData, let current = image else { traced = []; busy = false; return }
+        generation += 1
+        let gen = generation, opts = options, maxSide = resolution
+        busy = true
+        traceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            let result = await Task.detached(priority: .userInitiated) { () -> (GrayBitmap, [Path])? in
+                guard let img = decode ? GrayBitmap.decode(data, maxSide: maxSide) : current else { return nil }
+                return (img, BitmapTracer.trace(img, options: opts))
+            }.value
+            guard !Task.isCancelled, gen == generation else { return }
+            if let (img, paths) = result { image = img; traced = paths }
+            busy = false
+        }
     }
 
     private func create() {

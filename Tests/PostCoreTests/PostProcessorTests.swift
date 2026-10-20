@@ -212,3 +212,27 @@ private func body(_ program: String) -> [String] {
     #expect(NumberFormat.duration(3725) == "1h 02m 05s")
     #expect(PostProfile.asciiOnly("90° café") == "90 deg cafe")
 }
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func footerParksAtHomeZBeforeHomeXY(mode: ZZeroMode) throws {
+    let pj = PostFixtures.postJob(zZero: mode)
+    let out = lines(try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(pj))
+    let end = try #require(out.lastIndex(of: "M30"))
+    let zi = try #require(out[..<end].lastIndex { $0.hasPrefix("G0 Z") })
+    let lastZ = out[zi]
+    let homeZ = MachineCoordinates(job: pj.job).homeZ
+    #expect(lastZ == "G0 Z" + NumberFormat.fixed(homeZ, decimals: 4))
+    #expect(abs(homeZ - MachineCoordinates(job: pj.job).safeZ) > 1e-6, "fixture must tell Home Z and Safe Z apart")
+    let xy = try #require(out.lastIndex(of: "G0 X0.0000 Y0.0000"))
+    #expect(zi < xy)
+}
+
+@Test func programsStateTheArcCentreMode() throws {
+    let out = lines(try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(PostFixtures.postJob()))
+    #expect(out.contains("G91.1") && !out.contains("G90.1"))
+    var absolute = BuiltInPosts.avidMach4Inch
+    absolute.arcOutput = .absoluteIJ
+    absolute.preamble = ["G90", "G17"]
+    let absOut = lines(try TemplatePostProcessor(profile: absolute).post(PostFixtures.postJob()))
+    #expect(absOut.contains("G90.1"))
+}

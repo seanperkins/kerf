@@ -64,6 +64,7 @@ private let goldenAvidInch = #"""
 ( Estimated time: 0m 14s )
 G20
 G90
+G91.1
 G17
 G40
 G49
@@ -94,7 +95,7 @@ G0 X5.0000 Y5.0000
 G1 Z-0.1000 F30.0
 X6.0000 F80.0
 G0 Z0.2000
-G0 Z0.2000
+G0 Z0.8000
 M5
 G0 X0.0000 Y0.0000
 M30
@@ -117,6 +118,7 @@ private let goldenAvidInchSpoilboard = #"""
 ( Estimated time: 0m 14s )
 G20
 G90
+G91.1
 G17
 G40
 G49
@@ -147,7 +149,7 @@ G0 X5.0000 Y5.0000
 G1 Z0.6500 F30.0
 X6.0000 F80.0
 G0 Z0.9500
-G0 Z0.9500
+G0 Z1.5500
 M5
 G0 X0.0000 Y0.0000
 M30
@@ -170,6 +172,7 @@ private let goldenAvidMM = #"""
 ( Estimated time: 0m 14s )
 G21
 G90
+G91.1
 G17
 G40
 G49
@@ -200,7 +203,7 @@ G0 X127.000 Y127.000
 G1 Z-2.540 F762
 X152.400 F2032
 G0 Z5.080
-G0 Z5.080
+G0 Z20.320
 M5
 G0 X0.000 Y0.000
 M30
@@ -250,7 +253,7 @@ G0 X127.000 Y127.000
 G1 Z-2.540 F762
 X152.400 F2032
 G0 Z5.080
-G0 Z5.080
+G0 Z20.320
 M5
 G0 X0.000 Y0.000
 M2

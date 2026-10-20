@@ -194,3 +194,17 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
     #expect(has(v.validate(toolpaths: [part("female"), part("male")]), "same program"))
     #expect(!has(v.validate(toolpaths: [part("female")]), "same program"))
 }
+
+@Test func flagsBothReliefSidesInOneProgram() {
+    let tool = ToolLibrary.seeded.tools[0]
+    func side(_ name: String?) -> Toolpath {
+        Toolpath(name: name ?? "one", kind: .relief3D, tool: tool,
+                 moves: [.rapid(to: Vec3(1, 1, 0.5)), .linear(to: Vec3(1, 1, -0.1), feed: 20),
+                         .rapid(to: Vec3(1, 1, 0.5))],
+                 metadata: name.map { ["side": $0] } ?? [:])
+    }
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job(zZero: .materialTop), units: .inch)
+    #expect(has(v.validate(toolpaths: [side("top"), side("bottom")]), "same program"))
+    #expect(!has(v.validate(toolpaths: [side("top"), side("top")]), "same program"))
+    #expect(!has(v.validate(toolpaths: [side("bottom"), side(nil)]), "same program"))
+}
