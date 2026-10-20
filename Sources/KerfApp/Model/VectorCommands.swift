@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone
+    case dogbone, arrayLinear
     var id: String { rawValue }
 }
 
@@ -46,5 +46,33 @@ enum VectorCommands {
             replacePaths(s.id, with: paths, operation: "dog-bone", in: &project)
         }
         return count
+    }
+
+    // MARK: Arrays
+
+    /// Adds one copy of the selection per transform (fresh IDs, each copy's groups remapped).
+    /// Returns the new shape IDs.
+    static func arrayCopies(_ ids: [UUID], transforms: [Transform2D], in project: inout KerfProject) -> [UUID] {
+        let shapes = project.document.expandToGroups(ids).compactMap { project.document.shape(id: $0) }
+        guard !shapes.isEmpty else { return [] }
+        let layers = Set(project.document.layers.map(\.id))
+        var newIDs: [UUID] = []
+        for t in transforms {
+            for var c in ShapeClipboard.copies(of: shapes, offset: .zero, layers: layers, fallbackLayer: shapes[0].layerID) {
+                c = c.transformed(t)
+                if !t.isConformal { c.origin = .derived(operation: "transform") }
+                project.document.add(c)
+                newIDs.append(c.id)
+            }
+        }
+        return newIDs
+    }
+
+    /// Rectangular array: rows × columns including the original.
+    static func rectangularArray(_ ids: [UUID], rows: Int, columns: Int, x: Double, y: Double,
+                                 spacing: ArrayLayout.Spacing, in project: inout KerfProject) -> [UUID] {
+        let size = project.bounds(of: Set(project.document.expandToGroups(ids))).size
+        let offsets = ArrayLayout.rectangular(rows: rows, columns: columns, x: x, y: y, spacing: spacing, size: size)
+        return arrayCopies(ids, transforms: offsets.map { .translation($0) }, in: &project)
     }
 }

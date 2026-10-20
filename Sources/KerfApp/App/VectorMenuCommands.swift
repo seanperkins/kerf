@@ -9,6 +9,8 @@ struct VectorMenuCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Vectors") {
+            sheetButton("Rectangular Array…", .arrayLinear)
+            Divider()
             sheetButton("Dog-bone Fillets…", .dogbone)
         }
     }
