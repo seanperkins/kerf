@@ -141,15 +141,8 @@ struct KerfCommands: Commands {
                 if !newIDs.isEmpty { doc.setSelection(newIDs) }
             }
             .disabled(!arrange.any)
-            Button("Join Open Vectors") {
-                guard let doc = document else { return }
-                let order = doc.selectedShapes.map(\.id)
-                let tol = doc.units == .inch ? 0.001 : 0.025
-                var newID: UUID?
-                doc.perform("Join") { newID = DesignCommands.join(order, tolerance: tol, in: &$0) }
-                if let id = newID { doc.setSelection([id]) }
-            }
-            .disabled(!arrange.any)
+            Button("Join Open Vectors…") { document?.sheet = .drawing(.joinVectors) }
+                .disabled(!arrange.any)
             Button("Edit Nodes") { document?.activeTool = .nodeEdit }
                 .disabled(!arrange.any)
             Divider()

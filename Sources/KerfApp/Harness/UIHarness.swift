@@ -251,6 +251,7 @@ final class UIHarness {
         case "variables": return .variables
         case "productionPlates": return .productionPlates
         case "offset": return .offset
+        case "joinVectors": return .drawing(.joinVectors)
         case "inlayWizard": return .inlayWizard
         default: throw HarnessError(message: "unknown sheet \"\(name)\"")
         }

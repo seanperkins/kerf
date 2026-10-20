@@ -79,7 +79,7 @@ public struct DXFImporter: VectorImporter {
 
     /// Open ends further apart than the join tolerance but within this many times it are reported:
     /// that is a slip in the drawing, where a lone open line (engraving, a V-carve centerline) is not.
-    static let nearMissFactor = 100.0
+    public static let nearMissFactor = 100.0
 
     /// "Layer "Cabinet": 2 open vectors have ends that nearly meet, 0.1 to 0.4 mm apart. ..."
     static func gapWarning(layer: String, gaps: PathOps.EndGapReport, joinTolerance: Double, units: LengthUnit) -> String {

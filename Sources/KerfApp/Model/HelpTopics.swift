@@ -211,7 +211,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .transforms:
             return """
-            The Arrange menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors, closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
+            The Arrange menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors (**Join Open Vectors…** shows how far ends will move and lets you raise the tolerance), closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
 
             Drag the selection box handles to scale (Shift keeps proportions, Option scales about the center). The round handle above the box rotates (Shift snaps to 15°).
 

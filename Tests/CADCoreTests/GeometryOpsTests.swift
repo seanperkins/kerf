@@ -43,6 +43,42 @@ import Testing
         #expect(approx(joined[0].signedArea(tolerance: 1e-5), .pi / 2, 1e-3))
     }
 
+    @Test func reportsTheLargestGapItClosed() {
+        let lines = [
+            Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+            Path(points: [Vec2(1, 0.0002), Vec2(1, 1)], closed: false),    // 0.0002 from the first
+            Path(points: [Vec2(1, 1), Vec2(0, 1)], closed: false),         // meets the second exactly
+            Path(points: [Vec2(0, 1), Vec2(0, 0.0004)], closed: false),    // stops 0.0004 short of the first's start
+        ]
+        let r = PathOps.joinOpenPathsReporting(lines, tolerance: 0.001)
+        #expect(r.paths.count == 1 && r.paths[0].isClosed)
+        #expect(approx(r.largestGapClosed, 0.0004, 1e-9))
+    }
+
+    @Test func reportsNothingMovedWhenEndsAlreadyTouchOrNothingJoins() {
+        let touching = [Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+                        Path(points: [Vec2(1, 0), Vec2(2, 0)], closed: false)]
+        let a = PathOps.joinOpenPathsReporting(touching, tolerance: 0.001)
+        #expect(a.paths.count == 1 && a.largestGapClosed == 0)
+        let apart = [Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+                     Path(points: [Vec2(1.3, 0), Vec2(2, 0)], closed: false)]
+        let b = PathOps.joinOpenPathsReporting(apart, tolerance: 0.001)
+        #expect(b.paths.count == 2 && b.largestGapClosed == 0)
+    }
+
+    @Test func theGapThatClosesALoopCounts() {
+        let p = Path(points: [Vec2(0, 0), Vec2(10, 0), Vec2(10, 10), Vec2(0, 10), Vec2(0, 0.0007)], closed: false)
+        let r = PathOps.joinOpenPathsReporting([p], tolerance: 0.001)
+        #expect(r.paths.count == 1 && r.paths[0].isClosed)
+        #expect(approx(r.largestGapClosed, 0.0007, 1e-9))
+    }
+
+    @Test func plainJoinStillReturnsJustThePaths() {
+        let lines = [Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+                     Path(points: [Vec2(1, 0.0004), Vec2(2, 0)], closed: false)]
+        #expect(PathOps.joinOpenPaths(lines, tolerance: 0.001) == PathOps.joinOpenPathsReporting(lines, tolerance: 0.001).paths)
+    }
+
     @Test func closeIfNearlyClosed() {
         let p = Path(points: [Vec2(0, 0), Vec2(1, 0), Vec2(1, 1), Vec2(0.0001, 0)], closed: false)
         let c = PathOps.closeIfNearlyClosed(p, tolerance: 0.001)

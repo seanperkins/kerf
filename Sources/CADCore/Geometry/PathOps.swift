@@ -56,20 +56,36 @@ public enum PathOps {
     /// unchanged. A chain whose ends meet within `tolerance` is closed.
     /// Output: closed inputs first, then chains in the order of their first member.
     public static func joinOpenPaths(_ paths: [Path], tolerance: Double) -> [Path] {
+        joinOpenPathsReporting(paths, tolerance: tolerance).paths
+    }
+
+    /// The joined paths, and the largest gap that joining closed by moving ends together.
+    public struct JoinResult: Equatable, Sendable {
+        public var paths: [Path]
+        /// Zero when every joined pair of ends already touched (or nothing joined).
+        public var largestGapClosed: Double
+    }
+
+    /// `joinOpenPaths`, also reporting how far the ends moved: the largest distance between two
+    /// ends that were snapped together, counting the gap that closes a loop.
+    public static func joinOpenPathsReporting(_ paths: [Path], tolerance: Double) -> JoinResult {
         var result = paths.filter(\.isClosed)
         let open = paths.filter { !$0.isClosed && !$0.isEmpty }
         var used = [Bool](repeating: false, count: open.count)
         let tol = max(tolerance, 0)
+        var largestGap = 0.0
 
         for i in open.indices where !used[i] {
             used[i] = true
             var chain = open[i]
             while !isLoop(chain, tol) {
-                if let (j, endMatched) = bestMatch(for: chain.end, in: open, used: used, tolerance: tol) {
+                if let (j, endMatched, gap) = bestMatch(for: chain.end, in: open, used: used, tolerance: tol) {
                     used[j] = true
+                    largestGap = max(largestGap, gap)
                     append(endMatched ? open[j].reversed() : open[j], to: &chain)
-                } else if let (j, endMatched) = bestMatch(for: chain.start, in: open, used: used, tolerance: tol) {
+                } else if let (j, endMatched, gap) = bestMatch(for: chain.start, in: open, used: used, tolerance: tol) {
                     used[j] = true
+                    largestGap = max(largestGap, gap)
                     var front = endMatched ? open[j] : open[j].reversed()
                     append(chain, to: &front)
                     chain = front
@@ -77,9 +93,14 @@ public enum PathOps {
                     break
                 }
             }
-            result.append(isLoop(chain, tol) ? closing(chain) : chain)
+            if isLoop(chain, tol) {
+                largestGap = max(largestGap, chain.end.distance(to: chain.start))
+                result.append(closing(chain))
+            } else {
+                result.append(chain)
+            }
         }
-        return result
+        return JoinResult(paths: result, largestGapClosed: largestGap)
     }
 
     /// How many open vectors have ends that nearly meet, and how far apart those ends are.
@@ -197,14 +218,14 @@ public enum PathOps {
     }
 
     /// Nearest unused open path with an endpoint within tolerance of `p`.
-    /// Returns (index, true if its END matched).
-    private static func bestMatch(for p: Vec2, in open: [Path], used: [Bool], tolerance: Double) -> (Int, Bool)? {
-        var best: (Int, Bool)?
+    /// Returns (index, true if its END matched, the distance to that endpoint).
+    private static func bestMatch(for p: Vec2, in open: [Path], used: [Bool], tolerance: Double) -> (Int, Bool, Double)? {
+        var best: (Int, Bool, Double)?
         var bestD = Double.infinity
         for (j, q) in open.enumerated() where !used[j] {
             let ds = q.start.distance(to: p), de = q.end.distance(to: p)
-            if ds <= tolerance, ds < bestD { best = (j, false); bestD = ds }
-            if de <= tolerance, de < bestD { best = (j, true); bestD = de }
+            if ds <= tolerance, ds < bestD { best = (j, false, ds); bestD = ds }
+            if de <= tolerance, de < bestD { best = (j, true, de); bestD = de }
         }
         return best
     }

@@ -113,6 +113,22 @@ enum DesignCommands {
         return newIDs
     }
 
+    /// How close two ends must be for Join Open Vectors to treat them as meeting, unless the user sets another.
+    static func defaultJoinTolerance(_ units: LengthUnit) -> Double { units == .inch ? 0.001 : 0.025 }
+
+    /// What `join` would do to the selection at `tolerance`, for the Join dialog. Nil when the
+    /// selection has no unlocked open vectors.
+    static func joinPreview(_ ids: [UUID], tolerance: Double, in project: KerfProject) -> JoinPreview? {
+        let open = project.document.shapes(ids: ids).filter { !$0.isLocked }
+            .flatMap(\.paths).filter { !$0.isClosed && !$0.isEmpty }
+        guard !open.isEmpty else { return nil }
+        let r = PathOps.joinOpenPathsReporting(open, tolerance: tolerance)
+        let stillOpen = r.paths.filter { !$0.isClosed }
+        let next = PathOps.nearlyMeetingEnds(stillOpen, beyond: tolerance, upTo: tolerance * DXFImporter.nearMissFactor)
+        return JoinPreview(openPieces: open.count, closedAfter: r.paths.count - stillOpen.count,
+                           openAfter: stillOpen.count, largestGapClosed: r.largestGapClosed, nextGap: next?.smallestGap)
+    }
+
     /// Joins open vectors of the selection into as few paths as possible (one new shape).
     static func join(_ ids: [UUID], tolerance: Double, in project: inout KerfProject) -> UUID? {
         let shapes = project.document.shapes(ids: ids).filter { !$0.isLocked }
@@ -188,5 +204,41 @@ enum TransformCommands {
         let c = project.bounds(of: ids).center
         // horizontalAxis: true mirrors across a horizontal line (flips Y).
         project.transformShapes(ids, by: .mirror(horizontalAxis: !horizontally, about: c))
+    }
+}
+
+/// What joining the selected open vectors would do at a tolerance: shown in the Join dialog so the
+/// user sees how far ends will move before anything changes.
+struct JoinPreview: Equatable {
+    /// Open paths in the selection (locked shapes excluded).
+    var openPieces: Int
+    /// Vectors that close once joined.
+    var closedAfter: Int
+    /// Vectors that stay open once joined.
+    var openAfter: Int
+    /// The largest distance two ends are moved to meet; zero when none needed to move.
+    var largestGapClosed: Double
+    /// The nearest ends that are still apart but close enough to be a slip, if any.
+    var nextGap: Double?
+
+    var vectors: Int { closedAfter + openAfter }
+
+    /// The dialog's summary, one sentence per line.
+    func lines(units: LengthUnit) -> [String] {
+        func length(_ v: Double) -> String { String(format: "%.2g", v) + " " + units.abbreviation }
+        var out = ["\(vectors) vector\(vectors == 1 ? "" : "s") from \(openPieces) open piece\(openPieces == 1 ? "" : "s"): "
+            + "\(closedAfter) closed, \(openAfter) still open."]
+        let joinedAny = vectors < openPieces || closedAfter > 0
+        if !joinedAny {
+            out.append("No ends meet within this tolerance.")
+        } else if largestGapClosed > 0 {
+            out.append("Ends within this tolerance move to meet; the largest move is \(length(largestGapClosed)).")
+        } else {
+            out.append("The joined ends already touch.")
+        }
+        if openAfter > 0, let next = nextGap {
+            out.append("Closest ends still apart: \(length(next)). Raise the tolerance above that to join them.")
+        }
+        return out
     }
 }

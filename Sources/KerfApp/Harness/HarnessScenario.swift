@@ -39,7 +39,7 @@ struct HarnessScenario: Decodable {
     ]
     static let sheets: Set<String> = [
         "jobSetup", "exportGCode", "saveAllToolpaths", "validation", "keepOutZones", "nesting", "fixtures",
-        "tiling", "partLabels", "variables", "productionPlates", "offset", "inlayWizard",
+        "tiling", "partLabels", "variables", "productionPlates", "offset", "joinVectors", "inlayWizard",
     ]
 
     /// Each op and what it needs; `capture` and friends write `<name>.png` and `<name>.ax.txt`.

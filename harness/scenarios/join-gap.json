@@ -1,0 +1,12 @@
+{
+  "name": "importing a DXF outline with a small gap, then the Join dialog",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "import", "name": "Tests/Fixtures/CADCore/outline-with-gap.dxf"},
+    {"op": "capture", "name": "after-import"},
+    {"op": "captureSheet", "name": "import-alert"},
+    {"op": "closeSheet"},
+    {"op": "sheet", "value": "joinVectors"},
+    {"op": "captureSheet", "name": "join-sheet"}
+  ]
+}

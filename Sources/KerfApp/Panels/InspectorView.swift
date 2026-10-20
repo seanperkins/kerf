@@ -257,7 +257,6 @@ struct EditVectorButtons: View {
 
     var body: some View {
         let order = document.selectedShapes.map(\.id)
-        let tol = document.units == .inch ? 0.001 : 0.025
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 ForEach(BooleanMode.allCases) { mode in
@@ -271,11 +270,7 @@ struct EditVectorButtons: View {
             }
             HStack {
                 Button("Offset…") { document.sheet = .offset }
-                Button("Join") {
-                    var newID: UUID?
-                    document.perform("Join") { newID = DesignCommands.join(order, tolerance: tol, in: &$0) }
-                    if let id = newID { document.setSelection([id]) }
-                }
+                Button("Join…") { document.sheet = .drawing(.joinVectors) }
                 Button("Close") { let ids = Set(order); document.perform("Close Vectors") { DesignCommands.close(ids, in: &$0) } }
             }
             HStack {
