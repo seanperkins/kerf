@@ -128,6 +128,12 @@ extension Document {
         d.shapes = shapes.map { $0.transformed(.scale(f, f)) }
         d.models = models.map { $0.scaled(by: f) }
         d.guides = guides?.map { GuideLine(isVertical: $0.isVertical, position: $0.position * f) }
+        d.dimensions = dimensions?.map { dim in
+            var c = dim
+            c.points = dim.points.map { $0 * f }
+            c.offset = dim.offset * f
+            return c
+        }
         return d
     }
 }

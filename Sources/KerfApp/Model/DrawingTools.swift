@@ -3,7 +3,7 @@ import Foundation
 
 /// Canvas interaction modes.
 enum CanvasTool: String, CaseIterable, Identifiable {
-    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, arc, freehand, text, trim, measure
+    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, arc, freehand, text, trim, measure, dimension
 
     var id: String { rawValue }
 
@@ -24,6 +24,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .trim: return "Trim"
         case .freehand: return "Freehand"
         case .measure: return "Measure"
+        case .dimension: return "Dimension"
         case .text: return "Text"
         }
     }
@@ -45,6 +46,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .trim: return "scissors"
         case .freehand: return "hand.draw"
         case .measure: return "ruler"
+        case .dimension: return "arrow.left.and.right"
         case .text: return "textformat"
         }
     }
@@ -70,7 +72,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
     static func forShortcut(_ c: Character) -> CanvasTool? { allCases.first { $0.shortcut == c } }
 
     /// Tools whose shapes are built from successive clicks.
-    var isClickBuilt: Bool { self == .polyline || self == .curve || self == .pen || self == .arc }
+    var isClickBuilt: Bool { self == .polyline || self == .curve || self == .pen || self == .arc || self == .dimension }
 
     /// Tools created by click-dragging a box/radius.
     var isDragShape: Bool {
@@ -99,6 +101,7 @@ struct DrawingOptions: Equatable {
     var arcRadius = 2.0
     var arcStartAngle = 0.0
     var arcEndAngle = 90.0
+    var dimensionKind = DimensionAnnotation.Kind.aligned
     /// Shift-drag style constraint (square/circle) applied by the canvas.
     var constrain = false
     /// Numeric creation (inspector): centre and size in document units. Circles, polygons and

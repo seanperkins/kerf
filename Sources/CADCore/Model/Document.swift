@@ -13,6 +13,8 @@ public struct Document: Codable, Hashable, Sendable {
     public var gridSpacing: Double
     /// Construction guides (optional so older files decode; nil = none).
     public var guides: [GuideLine]?
+    /// Reference dimensions (never cut; optional so older files decode).
+    public var dimensions: [DimensionAnnotation]?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

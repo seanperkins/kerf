@@ -6,6 +6,7 @@ import CAMCore
 extension CanvasNSView {
     func drawDrawingOverlays(_ ctx: CGContext, _ doc: KerfDocument) {
         drawGuides(ctx, doc)
+        drawDimensions(ctx, doc)
         drawHighlightMarkers(ctx, doc)
         if doc.activeTool == .nodeEdit { drawStartMarkers(ctx, doc) }
         drawMeasurement(ctx, doc)

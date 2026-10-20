@@ -68,6 +68,8 @@ struct DrawingOptionsView: View {
                 TrimToolOptions(document: document)
             case .measure:
                 MeasureToolOptions(document: document)
+            case .dimension:
+                DimensionToolOptions(document: document)
             case .freehand:
                 Text("Drag to sketch. The stroke is smoothed into curves when you let go; end near the start to close it.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

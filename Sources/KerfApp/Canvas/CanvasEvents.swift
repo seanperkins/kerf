@@ -63,6 +63,8 @@ extension CanvasNSView {
             drawingState.measureDrag = (p, p)
         case .freehand:
             drawingState.freehand = [docPoint(event)]
+        case .dimension:
+            dimensionClick(event, doc)
         case .arc:
             clickPoints.append(docPoint(event))
             if clickPoints.count >= 3 { finishClickShape() }
@@ -307,6 +309,8 @@ extension CanvasNSView {
             shape = DrawingTools.smoothCurve(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
         case .arc:
             shape = DrawingTools.arc(points: clickPoints, fromCenter: doc.drawingOptions.arcFromCenter, layerID: doc.currentLayerID)
+        case .dimension:
+            shape = nil
         default:
             shape = DrawingTools.polyline(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
         }

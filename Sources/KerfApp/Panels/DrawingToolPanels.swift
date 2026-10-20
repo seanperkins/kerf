@@ -26,6 +26,52 @@ struct QuickEntryHelp: View {
     }
 }
 
+/// Dimension tool: kind, help and the list of dimensions.
+struct DimensionToolOptions: View {
+    @ObservedObject var document: KerfDocument
+
+    var body: some View {
+        Picker("Kind", selection: $document.drawingOptions.dimensionKind) {
+            Text("Aligned").tag(DimensionAnnotation.Kind.aligned)
+            Text("Horizontal").tag(DimensionAnnotation.Kind.horizontal)
+            Text("Vertical").tag(DimensionAnnotation.Kind.vertical)
+            Text("Radius").tag(DimensionAnnotation.Kind.radius)
+            Text("Diameter").tag(DimensionAnnotation.Kind.diameter)
+            Text("Angle").tag(DimensionAnnotation.Kind.angle)
+        }
+        Text(help).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        let dims = document.document.dimensions ?? []
+        if !dims.isEmpty {
+            Text("Dimensions").font(.subheadline.bold())
+            ForEach(dims) { d in
+                HStack {
+                    Text(DimensionBuilder.label(d, units: document.units)).monospacedDigit()
+                    Spacer()
+                    Button(role: .destructive) {
+                        document.perform("Delete Dimension") { p in
+                            p.document.dimensions?.removeAll { $0.id == d.id }
+                            if p.document.dimensions?.isEmpty == true { p.document.dimensions = nil }
+                        }
+                    } label: { Image(systemName: "trash") }
+                    .buttonStyle(.borderless)
+                }
+            }
+            Button("Delete All Dimensions") { document.perform("Delete Dimensions") { $0.document.dimensions = nil } }
+        }
+    }
+
+    private var help: String {
+        switch document.drawingOptions.dimensionKind {
+        case .aligned, .horizontal, .vertical:
+            return "Click the two points to measure (they snap), then where the dimension line goes."
+        case .radius, .diameter:
+            return "Click an arc or circle."
+        case .angle:
+            return "Click the corner, then a point on each arm."
+        }
+    }
+}
+
 /// Measure tool help and the last reading.
 struct MeasureToolOptions: View {
     @ObservedObject var document: KerfDocument
