@@ -13,9 +13,10 @@
 #
 # --active   make the app active so the window is drawn as the key window (it steals focus briefly)
 # --no-build reuse the last build
-# Set KERF_BUILD_FLAGS="--disable-sandbox" when running inside a sandbox that blocks SwiftPM's own.
+# Works inside a sandboxed agent shell (see swiftpm-env.sh); KERF_BUILD_FLAGS adds extra swift build flags.
 set -euo pipefail
 cd "${0:A:h}/.."
+source scripts/swiftpm-env.sh
 
 scenario=""; out=""; extra=(); build=1
 while (( $# )); do
@@ -35,8 +36,8 @@ done
 [[ -f "$scenario" ]] || { echo "no such scenario: $scenario (scenarios: $(ls harness/scenarios | sed 's/\.json//' | tr '\n' ' '))" >&2; exit 2; }
 [[ -n "$out" ]] || out=".tmp/ui/$(basename "${scenario%.json}")-$(date +%H%M%S)"
 
-(( build )) && swift build -c debug --product Kerf ${=KERF_BUILD_FLAGS:-} 2>&1 | grep -E 'error|Compiling|Build complete' | tail -3
-BIN="$(swift build -c debug --show-bin-path ${=KERF_BUILD_FLAGS:-})/Kerf"
+(( build )) && swift build "${SWIFTPM_FLAGS[@]}" -c debug --product Kerf ${=KERF_BUILD_FLAGS:-} 2>&1 | grep -E 'error|Compiling|Build complete' | tail -3
+BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c debug --show-bin-path ${=KERF_BUILD_FLAGS:-})/Kerf"
 mkdir -p "$out/home"
 out="${out:A}"
 echo "scenario: $scenario -> $out"
