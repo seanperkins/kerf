@@ -20,6 +20,7 @@ struct DrawingSheetHost: View {
         case .textFit: TextFitSheet(document: document)
         case .textOnCurve: TextOnCurveSheet(document: document)
         case .traceBitmap: TraceBitmapSheet(document: document)
+        case .distort: DistortSheet(document: document)
         }
     }
 }

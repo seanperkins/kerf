@@ -26,6 +26,20 @@ import Testing
         #expect(tr[0].apply(Vec2(1, 0)).isApproximatelyEqual(to: Vec2(-1, 0), tolerance: 1e-9))
     }
 
+    @Test func shearAndEnvelope() {
+        let t = Distort.shear(xDegrees: 45, yDegrees: 0, about: .zero)
+        #expect(t.apply(Vec2(0, 1)).isApproximatelyEqual(to: Vec2(1, 1), tolerance: 1e-12))
+        #expect(t.apply(Vec2(1, 0)) == Vec2(1, 0))
+        let box = Rect2(x: 0, y: 0, width: 2, height: 2)
+        // Taper: upper corners pulled in by 0.5.
+        let quad = [Vec2(0, 0), Vec2(2, 0), Vec2(1.5, 2), Vec2(0.5, 2)]
+        #expect(Distort.envelopeMap(Vec2(2, 2), box: box, quad: quad) == Vec2(1.5, 2))
+        #expect(Distort.envelopeMap(Vec2(1, 1), box: box, quad: quad) == Vec2(1, 1))
+        let sq = Path(points: [Vec2(0, 0), Vec2(2, 0), Vec2(2, 2), Vec2(0, 2)], closed: true)
+        let out = Distort.envelope([sq], box: box, quad: quad, tolerance: 0.001)
+        #expect(abs(abs(out[0].signedArea()) - 3) < 1e-6)  // trapezoid (2 + 1) / 2 × 2
+    }
+
     @Test func evenStepOverFullCircleDoesNotRepeatFirst() {
         #expect(ArrayLayout.evenStep(count: 6, sweepDegrees: 360) == 60)
         #expect(ArrayLayout.evenStep(count: 3, sweepDegrees: 90) == 45)

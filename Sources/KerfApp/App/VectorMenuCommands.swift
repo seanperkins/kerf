@@ -10,6 +10,7 @@ struct VectorMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Vectors") {
             sheetButton("Mirror…", .mirror)
+            sheetButton("Shear / Distort…", .distort)
             Divider()
             sheetButton("Fit Text to Box…", .textFit)
             sheetButton("Text on Curve / Arc…", .textOnCurve)

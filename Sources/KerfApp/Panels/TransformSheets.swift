@@ -26,6 +26,47 @@ struct TrimBoundarySheet: View {
     }
 }
 
+struct DistortSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var envelope = false
+    @State private var shearX = 15.0
+    @State private var shearY = 0.0
+    @State private var offsets = [Vec2](repeating: .zero, count: 4)
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let units = document.units
+        DrawingDialog(title: "Shear / Distort", action: envelope ? "Distort" : "Shear", disabled: ids.isEmpty,
+                      note: envelope ? "Moves the corners of the selection's bounding box and bends the vectors to follow (curves are refitted as lines and arcs; live text becomes curves)."
+                          : "Slants the selection about its centre. Positive X slants the top to the right; positive Y raises the right side.",
+                      perform: {
+                          if envelope {
+                              let o = offsets
+                              document.perform("Distort") { VectorCommands.envelope(ids, offsets: o, in: &$0) }
+                          } else {
+                              let (x, y) = (shearX, shearY)
+                              document.perform("Shear") { VectorCommands.shear(ids, xDegrees: x, yDegrees: y, in: &$0) }
+                          }
+                      }) {
+            Picker("Mode", selection: $envelope) {
+                Text("Shear").tag(false)
+                Text("Envelope").tag(true)
+            }
+            .pickerStyle(.segmented)
+            if envelope {
+                ForEach(0..<4, id: \.self) { i in
+                    let name = ["Lower left", "Lower right", "Upper right", "Upper left"][i]
+                    LengthField("\(name) X", value: $offsets[i].x, units: units)
+                    LengthField("\(name) Y", value: $offsets[i].y, units: units)
+                }
+            } else {
+                NumberField("Shear X", value: $shearX, unit: "°")
+                NumberField("Shear Y", value: $shearY, unit: "°")
+            }
+        }
+    }
+}
+
 struct MirrorSheet: View {
     @ObservedObject var document: KerfDocument
     @State private var horizontally = true

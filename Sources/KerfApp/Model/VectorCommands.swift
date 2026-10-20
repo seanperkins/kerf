@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort
     var id: String { rawValue }
 }
 
@@ -275,6 +275,30 @@ enum VectorCommands {
             if paths.isEmpty { project.deleteShapes([s.id]) } else { replacePaths(s.id, with: paths, operation: "trim", in: &project) }
         }
         return changed
+    }
+
+    // MARK: Shear / distort
+
+    static func shear(_ ids: [UUID], xDegrees: Double, yDegrees: Double, in project: inout KerfProject) {
+        let all = Set(project.document.expandToGroups(ids))
+        let b = project.bounds(of: all)
+        guard !b.isEmpty, abs(xDegrees) < 89, abs(yDegrees) < 89 else { return }
+        project.transformShapes(all, by: Distort.shear(xDegrees: xDegrees, yDegrees: yDegrees, about: b.center))
+    }
+
+    /// Moves the selection's bounding-box corners by `offsets` (lower-left, lower-right,
+    /// upper-right, upper-left) and bends the vectors to follow.
+    static func envelope(_ ids: [UUID], offsets: [Vec2], in project: inout KerfProject) {
+        guard offsets.count == 4 else { return }
+        let shapes = editableShapes(project.document.expandToGroups(ids), in: project)
+        let box = project.bounds(of: Set(shapes.map(\.id)))
+        guard !box.isEmpty, box.width > 0, box.height > 0 else { return }
+        let corners = [box.min, Vec2(box.max.x, box.min.y), box.max, Vec2(box.min.x, box.max.y)]
+        let quad = zip(corners, offsets).map { $0 + $1 }
+        let tol = tolerance(project.document.units)
+        for s in shapes {
+            replacePaths(s.id, with: Distort.envelope(s.paths, box: box, quad: quad, tolerance: tol), operation: "distort", in: &project)
+        }
     }
 
     // MARK: Mirror
