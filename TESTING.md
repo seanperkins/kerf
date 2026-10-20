@@ -44,6 +44,9 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
      (the plug is disabled; export it as its own file).
    - **Fluting** on an open line, and **Texture** on a rectangle.
    - **3D:** import `relief.stl`. The "Place 3D Model" dialog creates Roughing and Finishing toolpaths.
+     In the inspector, try Offset roughing, the Offset/Spiral finishing patterns, "Rest after" a
+     larger ball nose, "Combine with" a second model, and "Two-Sided" (one toolpath per side).
+     On a Fluting or Profile toolpath, "Project onto 3D" drops it onto the model's surface.
    Press Calculate All, then check the 2D overlay and the 3D preview for each one.
 8. **Save All Toolpaths…** (⌥⌘S): try "one file per toolpath" in a scratch folder.
 9. **Tool Database** (⇧⌘T): add or edit a tool. Tools are stored in
