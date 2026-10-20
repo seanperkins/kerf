@@ -4,8 +4,21 @@ import SwiftUI
 /// Number style used by all length/feed fields.
 let decimalFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...4)).grouping(.never)
 
+/// Set by inspector sections: outside a `Form`, a `LabeledContent` row puts its field right after the
+/// label, so the fields of different rows start at different x positions. Filling the row right-aligns
+/// them on one edge. Forms (the sheets) align their own columns and leave this off.
+private struct NumberFieldsFillRowKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var numberFieldsFillRow: Bool {
+        get { self[NumberFieldsFillRowKey.self] }
+        set { self[NumberFieldsFillRowKey.self] = newValue }
+    }
+}
+
 /// Labelled numeric field with a trailing unit.
 struct NumberField: View {
+    static let fieldWidth: CGFloat = 96
+    @Environment(\.numberFieldsFillRow) private var fillRow
     var label: String
     @Binding var value: Double
     var unit: String = ""
@@ -18,14 +31,16 @@ struct NumberField: View {
     var body: some View {
         LabeledContent(label) {
             HStack(spacing: 4) {
+                // A fixed width, so the fields of every row share their right edge.
                 ExpressionTextField(label: label, value: $value)
                     .labelsHidden()
                     .multilineTextAlignment(.trailing)
-                    .frame(minWidth: 60, maxWidth: 110)
+                    .frame(width: NumberField.fieldWidth)
                 if !unit.isEmpty {
-                    Text(unit).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
+                    Text(unit).foregroundStyle(.secondary).frame(minWidth: 34, alignment: .leading).fixedSize()
                 }
             }
+            .frame(maxWidth: fillRow ? .infinity : nil, alignment: .trailing)
         }
         .help(help ?? FieldHelp.text(for: label) ?? label)
         .accessibilityHint(unit)
@@ -61,7 +76,7 @@ struct OptionalLengthField: View {
                 ExpressionTextField(label: label, value: Binding(get: { value ?? defaultValue }, set: { value = $0 }))
                     .labelsHidden()
                     .multilineTextAlignment(.trailing)
-                    .frame(minWidth: 60, maxWidth: 110)
+                    .frame(width: NumberField.fieldWidth)
                 Text(units.abbreviation).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
             }
         }
@@ -132,6 +147,7 @@ struct InspectorSection<Content: View>: View {
             }
             content
         }
+        .environment(\.numberFieldsFillRow, true)
         .padding(.vertical, 4)
     }
 }
@@ -161,4 +177,23 @@ struct IconButtonStyle: ButtonStyle {
 
 extension ButtonStyle where Self == IconButtonStyle {
     static var icon: IconButtonStyle { IconButtonStyle() }
+}
+
+/// A button under the fields it acts on, aligned to their trailing edge: Rotate, Move and Scale apply
+/// a value on demand, unlike the fields above them that apply as they are edited.
+struct ActionRow: View {
+    var title: String
+    var action: () -> Void
+
+    init(_ title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
+    }
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Button(title, action: action)
+        }
+    }
 }

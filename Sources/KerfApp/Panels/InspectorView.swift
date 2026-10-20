@@ -108,7 +108,6 @@ struct DrawingOptionsView: View {
 
 struct ShapeInspector: View {
     @ObservedObject var document: KerfDocument
-    @State private var box = Rect2(x: 0, y: 0, width: 1, height: 1)
     @State private var keepAspect = true
     @State private var rotation = 90.0
     @State private var name = ""
@@ -141,29 +140,21 @@ struct ShapeInspector: View {
             TextEditSection(document: document, shape: s).id(s.id)
         }
         Divider()
+        // Applies as you type (on Return or leaving the field), like the toolpath inspector; Undo reverts it.
         InspectorSection(title: "Position & Size") {
-            LengthField("X (left)", value: $box.min.x, units: units)
-            LengthField("Y (bottom)", value: $box.min.y, units: units)
-            LengthField("Width", value: Binding(get: { box.width }, set: { setSize(w: $0, h: nil) }), units: units)
-            LengthField("Height", value: Binding(get: { box.height }, set: { setSize(w: nil, h: $0) }), units: units)
+            LengthField("X (left)", value: boxBinding(BoxEdit.x, action: "Move", read: { $0.min.x }), units: units)
+            LengthField("Y (bottom)", value: boxBinding(BoxEdit.y, action: "Move", read: { $0.min.y }), units: units)
+            LengthField("Width", value: boxBinding(BoxEdit.width, action: "Resize", read: { $0.width }), units: units)
+            LengthField("Height", value: boxBinding(BoxEdit.height, action: "Resize", read: { $0.height }), units: units)
             Toggle("Keep proportions", isOn: $keepAspect)
-            HStack {
-                Button("Apply") {
-                    let target = box
-                    document.perform("Resize") { TransformCommands.fit(ids, to: target, keepAspect: false, in: &$0) }
-                }
-                Button("Revert") { box = bounds }
-            }
         }
-        .onAppear { box = bounds; name = shapes.first?.name ?? "" }
-        .onChange(of: document.project) { _, _ in box = bounds; name = document.selectedShapes.first?.name ?? "" }
-        .onChange(of: document.selection) { _, _ in box = bounds; name = document.selectedShapes.first?.name ?? "" }
+        .onAppear { name = shapes.first?.name ?? "" }
+        .onChange(of: document.project) { _, _ in name = document.selectedShapes.first?.name ?? "" }
+        .onChange(of: document.selection) { _, _ in name = document.selectedShapes.first?.name ?? "" }
         Divider()
         InspectorSection(title: "Transform") {
-            HStack {
-                NumberField("Rotate", value: $rotation, unit: "°")
-                Button("Apply") { let r = rotation; document.perform("Rotate") { TransformCommands.rotate(ids, degrees: r, in: &$0) } }
-            }
+            NumberField("Rotate by", value: $rotation, unit: "°")
+            ActionRow("Rotate") { let r = rotation; document.perform("Rotate") { TransformCommands.rotate(ids, degrees: r, in: &$0) } }
             MoveScaleFields(document: document)
             HStack {
                 Button("Mirror ↔") { document.perform("Mirror") { TransformCommands.mirror(ids, horizontally: true, in: &$0) } }
@@ -186,13 +177,15 @@ struct ShapeInspector: View {
         }
     }
 
-    private func setSize(w: Double?, h: Double?) {
-        let b = box
-        var nw = w ?? b.width, nh = h ?? b.height
-        if keepAspect, b.width > 0, b.height > 0 {
-            if let w { nh = b.height * w / b.width } else if let h { nw = b.width * h / b.height }
-        }
-        box = Rect2(x: b.min.x, y: b.min.y, width: max(nw, 1e-6), height: max(nh, 1e-6))
+    /// A field of the selection's bounding box that applies as soon as it is edited.
+    private func boxBinding(_ edit: @escaping (Double) -> BoxEdit, action: String,
+                            read: @escaping (Rect2) -> Double) -> Binding<Double> {
+        Binding(get: { read(bounds) }, set: { v in
+            let change = edit(v)
+            guard change.changes(bounds) else { return }
+            let target = change.apply(to: bounds, keepAspect: keepAspect)
+            document.perform(action) { TransformCommands.fit(ids, to: target, keepAspect: false, in: &$0) }
+        })
     }
 
     private func describe(_ s: Shape) -> String {

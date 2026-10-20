@@ -123,21 +123,15 @@ struct MoveScaleFields: View {
 
     var body: some View {
         let units = document.units
-        HStack {
-            LengthField("Move X", value: $delta.x, units: units)
-        }
-        HStack {
-            LengthField("Move Y", value: $delta.y, units: units)
-            Button("Move") { document.translateSelection(by: delta, actionName: "Move") }
-        }
+        LengthField("Move X", value: $delta.x, units: units)
+        LengthField("Move Y", value: $delta.y, units: units)
+        ActionRow("Move") { document.translateSelection(by: delta, actionName: "Move") }
         NumberField("Scale X", value: $scaleX, unit: "%")
-        HStack {
-            NumberField("Scale Y", value: $scaleY, unit: "%")
-            Button("Scale") {
-                guard scaleX != 0, scaleY != 0 else { return }
-                let c = document.project.bounds(of: document.selection).center
-                document.transformSelection(by: .scale(scaleX / 100, scaleY / 100, about: c), actionName: "Scale")
-            }
+        NumberField("Scale Y", value: $scaleY, unit: "%")
+        ActionRow("Scale") {
+            guard scaleX != 0, scaleY != 0 else { return }
+            let c = document.project.bounds(of: document.selection).center
+            document.transformSelection(by: .scale(scaleX / 100, scaleY / 100, about: c), actionName: "Scale")
         }
     }
 }
