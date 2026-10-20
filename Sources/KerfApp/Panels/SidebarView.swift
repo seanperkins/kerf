@@ -86,6 +86,15 @@ struct DesignSidebar: View {
                 PlacedImagesSection(document: document)
             }
             .listStyle(.sidebar)
+            .overlay {
+                if document.document.shapes.isEmpty && document.document.models.isEmpty && document.document.placedImages.isEmpty {
+                    ContentUnavailableView {
+                        Label(EmptyState.noObjects.title, systemImage: EmptyState.noObjects.systemImage)
+                    } description: {
+                        Text(EmptyState.noObjects.detail)
+                    }
+                }
+            }
             .contextMenu(forSelectionType: UUID.self) { ids in
                 if !ids.isEmpty {
                     Menu("Move to Layer") {
@@ -254,14 +263,13 @@ struct ToolpathsSidebar: View {
             }
             .padding(8)
             if document.project.operations.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Text("No toolpaths").font(.headline)
-                    Text("Select vectors on the canvas, then choose New Toolpath.")
-                        .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Spacer()
+                ContentUnavailableView {
+                    Label(EmptyState.noToolpaths.title, systemImage: EmptyState.noToolpaths.systemImage)
+                } description: {
+                    Text(EmptyState.noToolpaths.detail)
                 }
-                .padding()
+                // Fill the column: unlike the Spacers it replaces, it would otherwise let the whole stack centre.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(selection: selectedOp) {
                     ForEach(Array(document.project.operations.enumerated()), id: \.element.id) { i, op in
@@ -391,4 +399,16 @@ enum ToolpathRowText {
         for t in tools where !unique.contains(t) { unique.append(t) }
         return unique.isEmpty ? kind : "\(kind) · \(unique.joined(separator: "+"))"
     }
+}
+
+/// The wording of the sidebar's empty states: what is missing and the next step.
+struct EmptyState {
+    var title: String
+    var systemImage: String
+    var detail: String
+
+    static let noToolpaths = EmptyState(title: "No Toolpaths", systemImage: "square.stack.3d.up",
+                                        detail: "Select vectors on the canvas, then choose New Toolpath.")
+    static let noObjects = EmptyState(title: "No Objects", systemImage: "scribble.variable",
+                                      detail: "Draw with the tool palette, or bring in vectors with File ▸ Import….")
 }

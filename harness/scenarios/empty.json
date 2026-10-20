@@ -1,0 +1,9 @@
+{
+  "name": "an empty document: the sidebar's empty states on both tabs",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "capture", "name": "design-empty"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "capture", "name": "toolpaths-empty"}
+  ]
+}
