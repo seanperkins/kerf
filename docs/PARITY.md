@@ -2,84 +2,84 @@
 
 Kerf against the public VCarve Pro 12.5 feature set, built from Vectric's public product page and online help only (see Sources). Status is judged from Kerf's code and tests: **done** = works end to end including the UI; **partial** = engine or UI only, or a subset of the options; **missing** = not implemented. Priority: **P1** = matters for typical Avid sign, part, inlay or 3D jobs; P2 = useful; P3 = niche or out of scope (for example rotary).
 
-Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8 missing.
+Totals: 163 features. 153 done, 8 partial, 2 missing. P1: 63 done, 0 partial, 0 missing.
 
 | id | area | feature | status | priority | notes |
 |---|---|---|---|---|---|
 | `draw-basic-shapes` | drawing | Basic shape tools (rectangle, rounded rect, circle, ellipse, polygon, star) | done | P1 | Sources/KerfApp/Model/DrawingTools.swift, Sources/CADCore/Geometry/ShapeFactory.swift; EditingPanels numeric create; Tests/KerfAppTests/CanvasModelTests.swift |
 | `draw-line-polyline` | drawing | Line / polyline tool | done | P1 | DrawingTools.polyline; CanvasEvents click-built tools |
-| `draw-arc-tool` | drawing | Arc drawing tool (3-point / centre-radius) | missing | P2 | CanvasTool has no arc case (DrawingTools.swift) |
+| `draw-arc-tool` | drawing | Arc drawing tool (3-point / centre-radius) | done | P2 | CanvasTool.arc |
 | `draw-bezier-curve` | drawing | Bézier pen and smooth curve | done | P2 | Sources/CADCore/Editing/PenPath.swift, DrawingTools.smoothCurve; EditingTests |
-| `draw-freehand` | drawing | Freehand sketch tool | missing | P3 | No freehand tool in CanvasTool |
-| `draw-quick-keys` | drawing | Typed quick-key entry while drawing (length/angle, W,H, radius) | partial | P2 | Inspector numeric creation + Move/Scale fields (EditingPanels.swift); no in-gesture typed entry |
+| `draw-freehand` | drawing | Freehand sketch tool | done | P3 | CanvasTool.freehand |
+| `draw-quick-keys` | drawing | Typed quick-key entry while drawing (length/angle, W,H, radius) | done | P2 | Typed length/angle/size entry while drawing |
 | `draw-node-edit` | drawing | Node editing (move/insert/delete nodes, smooth/corner, line↔curve, break) | done | P1 | Sources/CADCore/Editing/PathNodes.swift, Canvas/CanvasNodeEvents.swift, Panels/EditingPanels.swift; EditingTests, EditingRenderTests |
-| `draw-node-set-start` | drawing | Set vector start point in node edit | missing | P2 | No start-point command in PathNodes/EditingPanels |
-| `draw-node-span-arc` | drawing | Convert span to arc / join and align nodes (match X/Y) | missing | P3 | PathNodes converts line↔cubic only |
+| `draw-node-set-start` | drawing | Set vector start point in node edit | done | P2 | Node inspector "Set Start"; Profile honours it via ProfileStartPoint.vectorStart |
+| `draw-node-span-arc` | drawing | Convert span to arc / join and align nodes (match X/Y) | partial | P3 | "To Arc" and Align X/Y done; no mirror-mode node editing |
 | `draw-transform-handles` | drawing | On-canvas move / scale / rotate handles | done | P1 | Sources/CADCore/Editing/TransformHandles.swift, Canvas/CanvasEditingOverlay.swift; EditingRenderTests |
 | `draw-numeric-transform` | drawing | Numeric move / set size / rotate / scale | done | P1 | Panels/InspectorView.swift, TransformCommands (DesignCommands.swift) |
-| `draw-distort-shear` | drawing | Distort / shear / skew | missing | P3 | No shear/distort command |
-| `draw-mirror` | drawing | Mirror (selection, copy, about material centre) | partial | P2 | TransformCommands.mirror about selection centre only; no mirror-copy or material-centre mode |
+| `draw-distort-shear` | drawing | Distort / shear / skew | partial | P3 | Shear works; envelope corners are numeric, not draggable |
+| `draw-mirror` | drawing | Mirror (selection, copy, about material centre) | done | P2 | Mirror copy and about material centre |
 | `draw-align-distribute` | drawing | Align and distribute | done | P1 | DesignCommands.align/distribute/distributeSpacing; KerfCommands Align menu; EditingCommandTests |
 | `draw-booleans` | drawing | Weld / subtract / intersect | done | P1 | DesignCommands.boolean, CADCore/Geometry/PathOps.swift; GeometryOpsTests |
-| `draw-trim` | drawing | Interactive trim and trim-to-boundary | missing | P2 | No trim command in DesignCommands/PathOps |
-| `draw-extend` | drawing | Extend vectors to boundary | missing | P3 | Not implemented |
+| `draw-trim` | drawing | Interactive trim and trim-to-boundary | done | P2 | CanvasTool.trim and trim to boundary |
+| `draw-extend` | drawing | Extend vectors to boundary | done | P3 | Extend to boundary |
 | `draw-offset` | drawing | Offset vectors (inside/outside, round/sharp) | done | P1 | DesignCommands.offset, OffsetSheet in ExportGCodeSheet.swift; GeometryOpsTests |
-| `draw-offset-open` | drawing | Offset open vectors (one side / both sides) | partial | P3 | PathOps.offsetOpen exists (CADCore) but the Offset sheet only offsets closed shapes |
-| `draw-inlay-offset` | drawing | Inlay offset helper (offset for traditional end-mill inlays) | missing | P3 | Only V-carve inlay; no straight-wall inlay helper |
-| `draw-fillet-chamfer` | drawing | Fillet and chamfer corners | missing | P2 | No fillet/chamfer in CADCore/Editing or DesignCommands |
-| `draw-dogbone` | drawing | Dog-bone / T-bone fillets | missing | P1 | Not implemented; important for joinery/slot parts |
+| `draw-offset-open` | drawing | Offset open vectors (one side / both sides) | done | P3 | Offset sheet handles open vectors (one side / both) |
+| `draw-inlay-offset` | drawing | Inlay offset helper (offset for traditional end-mill inlays) | done | P3 | Inlay offset helper |
+| `draw-fillet-chamfer` | drawing | Fillet and chamfer corners | done | P2 | Fillet and chamfer corners |
+| `draw-dogbone` | drawing | Dog-bone / T-bone fillets | done | P1 | Dog-bone / T-bone fillets (Vectors menu, drawing sheet); DrawingDogboneTests |
 | `draw-smart-snap` | drawing | Smart snapping (nodes, midpoints, centres, grid) | done | P1 | Sources/CADCore/Editing/SnapEngine.swift; EditingTests |
-| `draw-guides` | drawing | Guide lines and snap to guide/extension lines | missing | P2 | Rulers are drawn (CanvasDrawing.drawRulers) but no guides |
+| `draw-guides` | drawing | Guide lines and snap to guide/extension lines | done | P2 | Document.guides, snap to guides and node extension lines |
 | `draw-rulers-grid` | drawing | Rulers, grid and cursor readout | done | P2 | CanvasDrawing.drawRulers, JobSetupSheet grid spacing, ContentView cursor readout |
-| `draw-measure` | drawing | Measure tool (distance, angle, radius) | missing | P2 | No measure tool; only live W×H while dragging |
-| `draw-array-linear` | drawing | Rectangular array copy | missing | P1 | Only Duplicate (⌘D) in EditingCommands.swift |
-| `draw-array-circular` | drawing | Circular array copy | missing | P2 | Not implemented |
-| `draw-copy-along` | drawing | Copy along vector | missing | P3 | Not implemented |
+| `draw-measure` | drawing | Measure tool (distance, angle, radius) | done | P2 | CanvasTool.measure (distance, angle, radius) |
+| `draw-array-linear` | drawing | Rectangular array copy | done | P1 | Rectangular array sheet (Vectors menu) |
+| `draw-array-circular` | drawing | Circular array copy | done | P2 | Circular array sheet |
+| `draw-copy-along` | drawing | Copy along vector | done | P3 | Copy along vector |
 | `draw-copy-paste` | drawing | Copy, cut, paste, duplicate, nudge | done | P1 | ShapeClipboard (EditingCommands.swift), CanvasEvents.keyDown nudge; EditingCommandTests |
 | `draw-join-close` | drawing | Join / close open vectors | done | P1 | DesignCommands.join/close, PathOps.joinOpenPaths |
-| `draw-curve-fit` | drawing | Fit curves to vectors (smooth polylines into arcs/Béziers) | missing | P2 | ArcFitter exists only for toolpaths (CAMCore/Ops2D/Support/ArcFitter.swift) |
-| `draw-vector-validator` | drawing | Vector validator (open, duplicate, self-intersecting, zero-length) | missing | P1 | ValidationSheet checks G-code only (Panels/ValidationSheet.swift); no design-vector checks |
-| `draw-duplicate-overlap` | drawing | Find/remove duplicate and overlapping vectors | missing | P2 | Not implemented |
+| `draw-curve-fit` | drawing | Fit curves to vectors (smooth polylines into arcs/Béziers) | done | P2 | Fits lines and arcs (not Béziers) |
+| `draw-vector-validator` | drawing | Vector validator (open, duplicate, self-intersecting, zero-length) | done | P1 | Vector validator with canvas highlight markers |
+| `draw-duplicate-overlap` | drawing | Find/remove duplicate and overlapping vectors | done | P2 | Duplicate / overlapping vector finder |
 | `draw-layers` | drawing | Layers (visibility, lock, colour, reorder, move-to-layer) | done | P1 | Panels/SidebarView.swift layers tab, CADCore Document layers; ProjectModelTests |
 | `draw-grouping` | drawing | Group / ungroup / combine / break apart | done | P1 | CADCore/Editing/Grouping.swift, DesignCommands.combine/explode |
-| `draw-nested-groups` | drawing | Nested groups and deep ungroup | missing | P3 | Groups are flat (DECISIONS drawing) |
-| `draw-dimensions` | drawing | Dimension objects (linear, angular, radial) | missing | P3 | Not implemented |
+| `draw-nested-groups` | drawing | Nested groups and deep ungroup | done | P3 | Shape.innerGroupIDs; Ungroup one level / Ungroup All Levels |
+| `draw-dimensions` | drawing | Dimension objects (linear, angular, radial) | done | P3 | Document.dimensions, CanvasTool.dimension |
 | `draw-text-basic` | drawing | Text in any installed font with cap-height sizing | done | P1 | CADCore/Geometry/TextOutliner.swift, DrawingTools text; TextOutlinerTests |
-| `draw-text-editable` | drawing | Editable text objects (re-open to change string/font/size, alignment, spacing) | missing | P1 | Text is outlined to paths at placement; no re-edit, alignment or spacing options |
-| `draw-text-autolayout` | drawing | Auto-layout text to fit a box | missing | P2 | Not implemented |
-| `draw-text-on-curve` | drawing | Text on a curve / arc text / bend text | missing | P2 | Not implemented |
-| `draw-single-line-fonts` | drawing | Single-stroke (engraving) fonts | missing | P2 | TextOutliner only produces closed outlines |
-| `draw-kerning` | drawing | Interactive kerning / character spacing | missing | P3 | Not implemented |
-| `draw-trace-bitmap` | drawing | Trace bitmap (image → vectors) | missing | P2 | No bitmap support anywhere |
-| `draw-vector-texture` | drawing | Vector texture generator | missing | P3 | Texture toolpath exists but no vector texture |
-| `draw-boundary-vector` | drawing | Create boundary around selection | missing | P3 | Not implemented |
-| `draw-plate-maker` | drawing | Plaque / plate border generator | missing | P3 | Not implemented |
+| `draw-text-editable` | drawing | Editable text objects (re-open to change string/font/size, alignment, spacing) | done | P1 | Shape.text (TextSpec) live text, re-editable in the inspector |
+| `draw-text-autolayout` | drawing | Auto-layout text to fit a box | done | P2 | Auto-layout text to a box |
+| `draw-text-on-curve` | drawing | Text on a curve / arc text / bend text | done | P2 | Text on a curve (output is plain vectors) |
+| `draw-single-line-fonts` | drawing | Single-stroke (engraving) fonts | done | P2 | Kerf Single Line stroke font (own design) |
+| `draw-kerning` | drawing | Interactive kerning / character spacing | partial | P3 | TextSpec.letterAdjustments edited numerically in the inspector, not by dragging |
+| `draw-trace-bitmap` | drawing | Trace bitmap (image → vectors) | done | P2 | BitmapTracer + Trace Bitmap sheet (image not kept in the document) |
+| `draw-vector-texture` | drawing | Vector texture generator | done | P3 | Vector texture generator |
+| `draw-boundary-vector` | drawing | Create boundary around selection | done | P3 | Boundary vector around selection |
+| `draw-plate-maker` | drawing | Plaque / plate border generator | done | P3 | Plate maker |
 | `io-svg-import` | io | SVG import | done | P1 | CADCore/IO/SVGImporter.swift; IOSVGTests |
 | `io-dxf-import` | io | DXF import | done | P1 | CADCore/IO/DXFImporter.swift; IODXFTests; samples/bracket-plate.dxf |
 | `io-eps-import` | io | EPS import | done | P2 | CADCore/IO/EPSImporter.swift; IOEPSTests |
-| `io-ai-pdf-import` | io | AI and PDF import (vectors, embedded images) | missing | P2 | PDF-based .ai is rejected with a message (DECISIONS cad-io); no PDF import |
-| `io-svg-text` | io | SVG text and image elements on import | missing | P3 | <text>/<image> skipped with a warning (DECISIONS cad-io) |
-| `io-bitmap-import` | io | Bitmap import (JPG/PNG/BMP/TIF/GIF/WebP) | missing | P2 | ImportService accepts SVG/DXF/EPS/STL only |
+| `io-ai-pdf-import` | io | AI and PDF import (vectors, embedded images) | done | P2 | AI/PDF vector import |
+| `io-svg-text` | io | SVG text and image elements on import | done | P3 | SVG <text> imported as outlines |
+| `io-bitmap-import` | io | Bitmap import (JPG/PNG/BMP/TIF/GIF/WebP) | done | P2 | Document.images (PlacedImage), drawn under the vectors |
 | `io-stl-import` | io | STL 3D model import | done | P1 | CADCore/IO/STLImporter.swift, ModelPlacementSheet; STLImporterTests |
-| `io-obj-3d-import` | io | OBJ / other 3D formats import | missing | P2 | Only STL importer exists |
-| `io-skp-import` | io | SketchUp import | missing | P3 | Not implemented |
+| `io-obj-3d-import` | io | OBJ / other 3D formats import | done | P2 | OBJ model import |
+| `io-skp-import` | io | SketchUp import | partial | P3 | No .skp reader (needs Trimble SDK); COLLADA .dae importer instead, with guidance on .skp |
 | `io-vector-export` | io | Vector export (SVG, DXF) | done | P1 | CADCore/IO/SVGExporter.swift, DXFExporter.swift; KerfCommands Export Vectors |
-| `io-eps-ai-export` | io | EPS / AI / PDF vector export | missing | P3 | Only SVG and DXF exporters |
+| `io-eps-ai-export` | io | EPS / AI / PDF vector export | done | P3 | EPS / AI export |
 | `io-project-file` | io | Native project file with versioning | done | P1 | CADCore/Persistence/KerfFile.swift; IOKerfFileTests, DocumentTests |
-| `io-job-templates` | io | Job templates (saved material setup + layers + toolpaths) | missing | P2 | New documents use JobSetup.defaults only |
-| `io-two-sided-setup` | io | Two-sided job setup (flip axis, per-side Z zero, both-sides view) | missing | P2 | JobSetup is single-sided (CADCore/Model/JobSetup.swift) |
+| `io-job-templates` | io | Job templates (saved material setup + layers + toolpaths) | done | P2 | File > New from Template / Save as Template |
+| `io-two-sided-setup` | io | Two-sided job setup (flip axis, per-side Z zero, both-sides view) | done | P2 | JobSetup.twoSided, Layer.side, side switching; preview simulates one side |
 | `io-material-setup` | io | Material setup (size, thickness, Z zero top/bed, XY datum, safe Z, home) | done | P1 | CADCore/Model/JobSetup.swift, Panels/JobSetupSheet.swift; MachineCoordinatesTests |
-| `io-material-plunge-z` | io | Separate plunge Z (Z2) and XY datum offset | missing | P2 | JobSetup has safeZ/homeZ only; no plunge-gap or datum offset fields |
-| `io-model-position` | io | Model position in material (gap above/below) | partial | P2 | ModelPlacementSheet sets model Z height and offset below top; no unified gap UI |
-| `io-multiple-sheets` | io | Multiple sheets per job (different sizes/thicknesses) | missing | P2 | Single material per document |
-| `io-document-variables` | io | Document variables in numeric fields | missing | P3 | Not implemented |
+| `io-material-plunge-z` | io | Separate plunge Z (Z2) and XY datum offset | done | P2 | JobSetup.plungeGap |
+| `io-model-position` | io | Model position in material (gap above/below) | done | P2 | Model placement sheet position/datum; JobSetup.datumOffset |
+| `io-multiple-sheets` | io | Multiple sheets per job (different sizes/thicknesses) | done | P2 | Document.otherSheets / MaterialSheet; 3D models and relief stay on the primary sheet |
+| `io-document-variables` | io | Document variables in numeric fields | partial | P3 | Expressions and variables evaluated when typed; fields do not stay linked |
 | `io-units-convert` | io | Unit switching inch↔mm with conversion | done | P1 | KerfApp/Model/UnitScaling.swift; ProjectModelTests |
-| `io-setup-sheet` | io | Job / setup sheet (printable report) | missing | P1 | Only sidebar ToolChangeSummaryView; no printable sheet |
-| `io-print` | io | Print 2D design / 3D view | missing | P3 | No print command |
+| `io-setup-sheet` | io | Job / setup sheet (printable report) | done | P1 | Covered by lay-job-sheet (File > Export Job Sheet…); the io job-sheet variant was dropped at merge |
+| `io-print` | io | Print 2D design / 3D view | done | P3 | File > Print / Print at Actual Size (2D design only) |
 | `io-post-processors` | io | Post processor selection and custom posts | done | P1 | PostCore/Profiles/BuiltInPosts.swift, PostProfileStore; PostGoldenTests, PostProfileTests |
 | `io-gcode-validator` | io | G-code safety validation | done | P1 | PostCore/Validation/GCodeValidator.swift, ValidationSheet; PostValidatorTests |
 | `io-save-toolpaths` | io | Save toolpaths (single, combined, per tool) | done | P1 | Panels/SaveAllToolpathsSheet.swift, Model/GCodeBatchExport.swift; AdvancedToolpathDocumentTests |
-| `io-file-thumbnails` | io | File thumbnails / Quick Look | missing | P3 | Not implemented |
+| `io-file-thumbnails` | io | File thumbnails / Quick Look | partial | P3 | Finder custom icon set on save (no Quick Look extension under SwiftPM) |
 | `tp-profile-basic` | toolpaths-2d | Profile: inside/outside/on, climb/conventional, allowance, multi-pass | done | P1 | CAMCore/Ops2D/ProfileOperation.swift; Ops2DProfileTests; e2e sign |
 | `tp-profile-open-sides` | toolpaths-2d | Profile open vectors left/right | done | P2 | ProfileParameters.openVectorSide, Ops2D/Support/OpenOffset.swift; Ops2DOpenSideTests |
 | `tp-profile-last-pass` | toolpaths-2d | Separate last pass (allowance, reverse direction) | done | P1 | ProfileParameters.lastPass (allowance, reverse, full depth); ProfileOperation; Tests/CAMCoreTests/Ops2DLastPassTests.swift |
@@ -96,7 +96,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `tp-pocket-multi-tool` | toolpaths-2d | Pocket with multiple clearance tools (rest machining) | done | P1 | PocketParameters.clearanceToolIDs, PocketPlanner.restClearing(fullWalls:); ClearanceToolsEditor; Ops2DPocketMultiToolTests |
 | `tp-pocket-ramp-allowance` | toolpaths-2d | Pocket ramp plunges and pocket allowance | done | P1 | PocketParameters.ramp/allowance; Ops2DPocketTests |
 | `tp-drilling` | toolpaths-2d | Drilling with peck, dwell, retract | done | P1 | CAMCore/Ops2D/DrillOperation.swift; Ops2DDrillTests |
-| `tp-drill-bank` | toolpaths-2d | Drill bank / multi-spindle drilling | missing | P3 | Avid has a single spindle; not needed |
+| `tp-drill-bank` | toolpaths-2d | Drill bank / multi-spindle drilling | missing | P3 | Won't do: the Avid has a single spindle (DECISIONS toolpaths-2d) |
 | `tp-helical-hole` | toolpaths-2d | Helical hole milling / thread milling | done | P2 | HoleMillOperation (helical bore + internal thread milling); Ops2DHoleMillTests |
 | `tp-quick-engrave` | toolpaths-2d | Quick engrave (follow vector on centreline) | done | P1 | EngraveOperation (OperationKind.engrave), groove width in form + metadata; Ops2DEngraveChamferTests |
 | `tp-chamfer` | toolpaths-2d | Chamfer toolpath | done | P1 | ChamferOperation (width or depth, tip clearance, side); ChamferForm; Ops2DEngraveChamferTests |
@@ -114,7 +114,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `tp-feeds-calculator` | toolpaths-2d | Feeds and speeds calculator (chip load) | done | P2 | CAMCore/Tools/FeedsAndSpeeds.swift; tool editor calculator section; Ops2DToolDataTests |
 | `tp-tool-edit-per-toolpath` | toolpaths-2d | Per-toolpath tool parameter override | done | P2 | OperationSetup.toolOverride via CAMContext.toolOverrides; ToolOverrideSection; Ops2DToolDataTests |
 | `tp-arc-output` | toolpaths-2d | Arc (G2/G3) and helical arc output | done | P2 | ArcFitter.swift; PostProfile arcOutput/helicalArcs; PostGoldenTests |
-| `tp-tiling` | toolpaths-2d | Toolpath tiling for jobs larger than the bed | missing | P3 | Avid 60x96 bed is large; not implemented |
+| `tp-tiling` | toolpaths-2d | Toolpath tiling for jobs larger than the bed | done | P3 | Covered by lay-tiling (Toolpaths > Save Tiled G-code…) |
 | `tp-keepout` | toolpaths-2d | Keep-out zones | partial | P2 | Document.keepOutZones, KeepOut.violations as export/Check errors, Keep-Out Zones sheet, canvas hatching; toolpaths are checked, not re-routed; Ops2DKeepOutTests, KeepOutZoneTests |
 | `vc-basic` | vcarve | V-carve (medial-axis depth from V angle) | done | P1 | CAMCore/OpsVCarve/VCarveOperation.swift, VCarveMedialAxis.swift; VCarveTests |
 | `vc-flat-depth` | vcarve | Flat depth with flat-area clearance (offset/raster) | done | P1 | VCarvePocketing.swift, VCarveParameters.flatDepth/flatClearanceToolID; VCarveTests |
@@ -137,7 +137,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `3d-rest-machining` | cam-3d | 3D rest machining | done | P3 | FinishingSettings.restToolID, Ops3D/ReliefRest.swift, inspector "Rest after"; ReliefRestTests |
 | `3d-project-2d` | cam-3d | Project 2D toolpaths onto 3D surface | done | P3 | OperationSetup.projectOntoModelID, Ops3D/ReliefProjection.swift, inspector "Project onto 3D"; ReliefProjectionTests |
 | `3d-two-sided` | cam-3d | Two-sided 3D machining | done | P3 | Relief3DParameters.twoSided (side, flip, split, web), Ops3D/ReliefTwoSided.swift, inspector "Two-Sided"; ReliefTwoSidedTests. No registration-pin toolpaths |
-| `3d-rotary` | cam-3d | Rotary / wrapped toolpaths | missing | P3 | Out of scope: Avid has no rotary axis |
+| `3d-rotary` | cam-3d | Rotary / wrapped toolpaths | missing | P3 | Won't do: no rotary axis on the Avid and no A-axis post output (DECISIONS cam-3d) |
 | `lay-nesting` | layout | True-shape nesting on sheets | done | P1 | CADCore/Layout/Nesting.swift, Panels/NestingSheet.swift; LayoutNestingTests |
 | `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | done | P2 | CADCore/Layout/NestSheets.swift, Nest Parts overflow + Layout > Sheet on Material; LayoutMultiSheetTests |
 | `lay-tiling` | layout | Tiling large jobs | done | P3 | CAMCore/Layout/ToolpathTiling.swift, Toolpaths > Save Tiled G-code…; LayoutTilingTests, LayoutTiledExportTests |
@@ -148,14 +148,14 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `pv-3d-sim` | preview | 3D material removal simulation | done | P1 | CAMCore/Simulation/MaterialSimulator.swift, Preview/SimulationPreviewView.swift; SimMaterialSimulatorTests |
 | `pv-playback` | preview | Playback controls (play/pause, scrub, speed, jump to end, reset) | done | P1 | SimulationPreviewView.swift (rewind/play/end/slider/speed); SimTimelineTests |
 | `pv-show-tool` | preview | Show tool during preview | done | P2 | SimulationPreviewModel.showTool |
-| `pv-preview-selected` | preview | Preview selected / visible toolpaths only | missing | P2 | Preview3DHost always uses all enabled calculated toolpaths |
-| `pv-material-texture` | preview | Realistic shading and material textures (wood, colours, painted surface) | partial | P2 | Vertex-coloured SceneKit mesh (StockScene.swift); no material/texture choice |
-| `pv-measure` | preview | Measure in 3D preview | missing | P3 | Not implemented |
-| `pv-time-accel` | preview | Machining time estimate with acceleration and scale factor | partial | P1 | PostTimeEstimator/ToolpathStats: length/feed + rapids + tool changes; no acceleration or scale factor |
+| `pv-preview-selected` | preview | Preview selected / visible toolpaths only | done | P2 | PreviewScope all / visible / selected |
+| `pv-material-texture` | preview | Realistic shading and material textures (wood, colours, painted surface) | done | P2 | StockAppearance presets, per-vertex colours |
+| `pv-measure` | preview | Measure in 3D preview | done | P3 | Preview ruler: 3D, XY and depth distances |
+| `pv-time-accel` | preview | Machining time estimate with acceleration and scale factor | done | P1 | CAMCore/Simulation/MotionPlanner.swift; G-code header estimate unchanged (TODO(post)) |
 | `pv-toolpath-summary` | preview | Toolpath summary (tools, times, tool-change sequence) | done | P1 | Panels/ToolChangeSummaryView.swift, Model/JobSummary.swift |
 | `pv-2d-overlay` | preview | 2D toolpath overlay with rapids | done | P1 | Preview/ToolpathOverlayRenderer.swift, CanvasDrawing; RenderSmokeTests |
-| `pv-save-image` | preview | Save preview image | missing | P3 | Not implemented |
-| `pv-step-control` | preview | Single-step / run-to-retract simulation control | missing | P3 | Continuous playback and scrubbing only |
+| `pv-save-image` | preview | Save preview image | done | P3 | Offscreen PNG of the 3D view |
+| `pv-step-control` | preview | Single-step / run-to-retract simulation control | done | P3 | SimulationMoveIndex step back/forward, run to next retract |
 | `ux-menus-shortcuts` | app-ux | Menus and keyboard shortcuts | done | P1 | App/KerfCommands.swift, DrawingTools.shortcut |
 | `ux-preferences` | app-ux | Preferences window (default units, grid, post, snapping, colours) | done | P2 | Panels/PreferencesView.swift, Model/AppPreferences.swift; PreferencesTests |
 | `ux-undo` | app-ux | Undo/redo for every document edit | done | P1 | KerfDocument.perform snapshot undo; DocumentTests |
