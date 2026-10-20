@@ -2,9 +2,11 @@
 
 Kerf against the public VCarve Pro 12.5 feature set, built from Vectric's public product page and online help only (see Sources). Status is judged from Kerf's code and tests: **done** = works end to end including the UI; **partial** = engine or UI only, or a subset of the options; **missing** = not implemented. Priority: **P1** = matters for typical Avid sign, part, inlay or 3D jobs; P2 = useful; P3 = niche or out of scope (for example rotary).
 
-Totals: 177 features. 156 done, 11 partial, 10 missing. P1: 64 done, 0 partial, 0 missing.
+Totals: 177 features. 171 done, 3 partial, 3 missing. P1: 64 done, 0 partial, 0 missing.
 
 Round 2 (2026-10-20): every partial and missing item was re-checked against the code and is unchanged; the full suite passed (774 tests). Fourteen items were added from the public feature list (marked *r2* in notes).
+
+Round 2 merge (2026-10-20): the drawing, io, toolpaths-2d, cam-3d, layout, preview and app-ux round-2 branches were merged into main; the full suite passed (888 tests in 135 suites), scripts/bundle.sh built dist/Kerf.app with the Quick Look extension, and the app launched and quit cleanly with no crash reports. Remaining partials: io-skp-import, io-clipart-library, pv-3d-toolpath-vectors. Remaining missing items are won't-do for this machine: tp-drill-bank, tp-laser, 3d-rotary.
 
 | id | area | feature | status | priority | notes |
 |---|---|---|---|---|---|
@@ -16,10 +18,10 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `draw-quick-keys` | drawing | Typed quick-key entry while drawing (length/angle, W,H, radius) | done | P2 | Typed length/angle/size entry while drawing |
 | `draw-node-edit` | drawing | Node editing (move/insert/delete nodes, smooth/corner, line↔curve, break) | done | P1 | Sources/CADCore/Editing/PathNodes.swift, Canvas/CanvasNodeEvents.swift, Panels/EditingPanels.swift; EditingTests, EditingRenderTests |
 | `draw-node-set-start` | drawing | Set vector start point in node edit | done | P2 | Node inspector "Set Start"; Profile honours it via ProfileStartPoint.vectorStart |
-| `draw-node-span-arc` | drawing | Convert span to arc / join and align nodes (match X/Y) | partial | P3 | "To Arc" and Align X/Y done; no mirror-mode node editing |
+| `draw-node-span-arc` | drawing | Convert span to arc / join and align nodes (match X/Y) | done | P3 | "To Arc", Align X/Y and mirror-mode node editing (CADCore/Editing/NodeMirror.swift, node inspector Mirror picker); DrawingNodeMirrorTests |
 | `draw-transform-handles` | drawing | On-canvas move / scale / rotate handles | done | P1 | Sources/CADCore/Editing/TransformHandles.swift, Canvas/CanvasEditingOverlay.swift; EditingRenderTests |
 | `draw-numeric-transform` | drawing | Numeric move / set size / rotate / scale | done | P1 | Panels/InspectorView.swift, TransformCommands (DesignCommands.swift) |
-| `draw-distort-shear` | drawing | Distort / shear / skew | partial | P3 | Shear works; envelope corners are numeric, not draggable |
+| `draw-distort-shear` | drawing | Distort / shear / skew | done | P3 | Shear, plus envelope corners dragged on the canvas with live preview (EnvelopeEdit, Vectors > Distort Envelope on Canvas); DrawingEnvelopeEditTests |
 | `draw-mirror` | drawing | Mirror (selection, copy, about material centre) | done | P2 | Mirror copy and about material centre |
 | `draw-align-distribute` | drawing | Align and distribute | done | P1 | DesignCommands.align/distribute/distributeSpacing; KerfCommands Align menu; EditingCommandTests |
 | `draw-booleans` | drawing | Weld / subtract / intersect | done | P1 | DesignCommands.boolean, CADCore/Geometry/PathOps.swift; GeometryOpsTests |
@@ -38,7 +40,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `draw-array-circular` | drawing | Circular array copy | done | P2 | Circular array sheet |
 | `draw-copy-along` | drawing | Copy along vector | done | P3 | Copy along vector |
 | `draw-copy-paste` | drawing | Copy, cut, paste, duplicate, nudge | done | P1 | ShapeClipboard (EditingCommands.swift), CanvasEvents.keyDown nudge; EditingCommandTests |
-| `draw-selection-tools` | drawing | Selection helpers (select all, by layer, open vectors, duplicates, similar, invert) | partial | P3 | *r2* Edit > Select All and layer "Select Shapes on Layer" only; no select-open/duplicate/similar/invert commands |
+| `draw-selection-tools` | drawing | Selection helpers (select all, by layer, open vectors, duplicates, similar, invert) | done | P3 | *r2* Edit > Select submenu: Open Vectors, Duplicate Vectors, Similar Vectors, Invert Selection, All on Layer (CADCore/Editing/SelectionQueries.swift); DrawingSelectionTests, DrawingSelectCommandTests |
 | `draw-join-close` | drawing | Join / close open vectors | done | P1 | DesignCommands.join/close, PathOps.joinOpenPaths |
 | `draw-curve-fit` | drawing | Fit curves to vectors (smooth polylines into arcs/Béziers) | done | P2 | Fits lines and arcs (not Béziers) |
 | `draw-vector-validator` | drawing | Vector validator (open, duplicate, self-intersecting, zero-length) | done | P1 | Vector validator with canvas highlight markers |
@@ -54,7 +56,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `draw-text-autolayout` | drawing | Auto-layout text to fit a box | done | P2 | Auto-layout text to a box |
 | `draw-text-on-curve` | drawing | Text on a curve / arc text / bend text | done | P2 | Text on a curve (output is plain vectors) |
 | `draw-single-line-fonts` | drawing | Single-stroke (engraving) fonts | done | P2 | Kerf Single Line stroke font (own design) |
-| `draw-kerning` | drawing | Interactive kerning / character spacing | partial | P3 | TextSpec.letterAdjustments edited numerically in the inspector, not by dragging |
+| `draw-kerning` | drawing | Interactive kerning / character spacing | done | P3 | Kern on Canvas: drag letters (Shift = rest of line), arrow-key nudges, undoable (TextKerning.letters/moving, KerfDocument.kerningShapeID); letter rotation still numeric; DrawingKerningTests, DrawingKerningEditTests |
 | `draw-trace-bitmap` | drawing | Trace bitmap (image → vectors) | done | P2 | BitmapTracer + Trace Bitmap sheet (image not kept in the document) |
 | `draw-vector-texture` | drawing | Vector texture generator | done | P3 | Vector texture generator |
 | `draw-boundary-vector` | drawing | Create boundary around selection | done | P3 | Boundary vector around selection |
