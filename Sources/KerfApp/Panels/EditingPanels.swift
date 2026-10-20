@@ -51,6 +51,14 @@ struct NodeInspector: View {
                 GridRow {
                     Button("Fillet…") { document.sheet = .drawing(.filletChamfer) }
                         .help("Round or bevel the selected corner nodes")
+                    Button("To Arc") { document.convertSpansToArcs() }
+                        .help("Make the segment after each selected node a circular arc")
+                }
+                GridRow {
+                    Button("Align X") { document.alignSelectedNodes(onX: true) }.disabled(nodes.count < 2)
+                        .help("Line the selected nodes up vertically (same X)")
+                    Button("Align Y") { document.alignSelectedNodes(onX: false) }.disabled(nodes.count < 2)
+                        .help("Line the selected nodes up horizontally (same Y)")
                 }
             }
             .disabled(nodes.isEmpty)

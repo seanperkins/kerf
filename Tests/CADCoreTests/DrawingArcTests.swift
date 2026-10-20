@@ -18,6 +18,18 @@ import Testing
     }
 }
 
+@Suite struct DrawingSpanToArcTests {
+    @Test func lineSpanBulgesIntoArc() throws {
+        let sq = Path(points: [Vec2(0, 0), Vec2(2, 0), Vec2(2, 2), Vec2(0, 2)], closed: true)
+        let p = try #require(PathNodes.spanToArc(sq, segment: 0))
+        #expect(p.segments.count >= 4 && p.start == Vec2(0, 0))
+        // The bottom edge now bows a quarter of its length to its left (+Y, into the square).
+        let b = Path(start: .zero, segments: Array(p.segments.prefix(p.segments.count - 3))).bounds(tolerance: 1e-5)
+        #expect(abs(b.max.y - 0.5) < 1e-3)
+        #expect(PathNodes.spanToArc(sq, segment: 9) == nil)
+    }
+}
+
 @Suite struct DrawingArcTests {
     @Test func threePointArcPassesThroughAllPoints() throws {
         let p = try #require(ArcConstruction.threePoint(start: Vec2(1, 0), end: Vec2(-1, 0), through: Vec2(0, 1)))

@@ -133,6 +133,20 @@ import Testing
         #expect(p.document.shape(id: id!)?.name == "Trace logo")
     }
 
+    @Test func alignNodesOnAverage() {
+        let p = AppTestSupport.project()
+        let id = p.document.shapes[0].id  // corners (1,1) (3,1) (3,2) (1,2)
+        let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
+        doc.activeTool = .nodeEdit
+        doc.nodeSelection = [NodeRef(shapeID: id, path: 0, node: 0), NodeRef(shapeID: id, path: 0, node: 2)]
+        doc.alignSelectedNodes(onX: true)
+        #expect(doc.project.nodePosition(NodeRef(shapeID: id, path: 0, node: 0))?.x == 2)
+        #expect(doc.project.nodePosition(NodeRef(shapeID: id, path: 0, node: 2))?.x == 2)
+        doc.nodeSelection = [NodeRef(shapeID: id, path: 0, node: 1)]
+        doc.convertSpansToArcs()
+        #expect(doc.project.document.shape(id: id)!.paths[0].segments.count > 4)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]
