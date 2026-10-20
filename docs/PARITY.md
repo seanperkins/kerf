@@ -82,7 +82,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `io-units-convert` | io | Unit switching inch↔mm with conversion | done | P1 | KerfApp/Model/UnitScaling.swift; ProjectModelTests |
 | `io-setup-sheet` | io | Job / setup sheet (printable report) | done | P1 | Covered by lay-job-sheet (File > Export Job Sheet…); the io job-sheet variant was dropped at merge |
 | `io-print` | io | Print 2D design / 3D view | done | P3 | File > Print / Print at Actual Size (2D design only) |
-| `io-job-notes` | io | Job notes saved with the file (shown on open, printed on the setup sheet) | missing | P3 | *r2* JobSheet only lists per-toolpath warnings; no document notes field |
+| `io-job-notes` | io | Job notes saved with the file (shown on open, printed on the setup sheet) | done | P3 | Document.notes / showNotesOnOpen, File > Job Notes…, JobSheet "Notes" section; IOJobNotesTests |
 | `io-clipart-library` | io | Clipart browser (local folders and online clipart) | missing | P3 | *r2* no browser for the user's own vector/3D clipart folders |
 | `io-post-processors` | io | Post processor selection and custom posts | done | P1 | PostCore/Profiles/BuiltInPosts.swift, PostProfileStore; PostGoldenTests, PostProfileTests |
 | `io-gcode-validator` | io | G-code safety validation | done | P1 | PostCore/Validation/GCodeValidator.swift, ValidationSheet; PostValidatorTests |

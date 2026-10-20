@@ -37,6 +37,8 @@ struct KerfCommands: Commands {
                 .disabled(document?.project.operations.isEmpty ?? true)
             Button("Export Job Sheet…") { document?.exportJobSheet() }
                 .disabled(document == nil)
+            Button("Job Notes…") { document?.sheet = .io(.jobNotes(openedWithFile: false)) }
+                .disabled(document == nil)
         }
         CommandGroup(after: .pasteboard) {
             Button("Duplicate") { document?.duplicateSelection() }

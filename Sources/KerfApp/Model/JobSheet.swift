@@ -57,6 +57,8 @@ struct JobSheet: Equatable {
     var sheets: [Sheet]
     var materialSize: Vec2
     var layerColors: [UUID: String]
+    /// The document's job notes (io), printed under the setup table.
+    var notes: String = ""
 
     /// One entry per nesting sheet (shapes moved onto the material frame), or nil when the
     /// document has a single sheet.
@@ -173,7 +175,8 @@ struct JobSheet: Equatable {
             toolChanges: max(0, JobSummary.sequence(of: toolpaths).count - 1),
             warnings: warnings, sheets: sheets ?? [defaultSheet],
             materialSize: Vec2(job.width, job.height),
-            layerColors: Dictionary(uniqueKeysWithValues: doc.layers.map { ($0.id, $0.colorHex) }))
+            layerColors: Dictionary(uniqueKeysWithValues: doc.layers.map { ($0.id, $0.colorHex) }),
+            notes: doc.jobNotes)
     }
 }
 
@@ -211,6 +214,9 @@ enum JobSheetHTML {
         </table>
 
         """
+        if !js.notes.isEmpty {
+            h += "<h2>Notes</h2><div style=\"white-space:pre-wrap\">\(e(js.notes))</div>\n"
+        }
         if !js.warnings.isEmpty {
             h += "<h2>Warnings</h2><ul>" + js.warnings.map { "<li class=\"warn\">\(e($0))</li>" }.joined() + "</ul>\n"
         }

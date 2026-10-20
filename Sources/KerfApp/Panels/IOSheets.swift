@@ -7,10 +7,13 @@ import UniformTypeIdentifiers
 /// Dialogs added by the io workstream, shown through `DocumentSheet.io`.
 enum IOSheet: Equatable {
     case modelParts(ModelPartsForm)
+    /// File > Job Notes…; `openedWithFile` = shown automatically as the file opened.
+    case jobNotes(openedWithFile: Bool)
 
     var id: String {
         switch self {
         case .modelParts(let f): return "parts-\(f.id)"
+        case .jobNotes: return "notes"
         }
     }
 }
@@ -22,7 +25,58 @@ struct IOSheetHost: View {
     var body: some View {
         switch sheet {
         case .modelParts(let form): ModelPartsSheet(document: document, form: form)
+        case .jobNotes(let opened): JobNotesSheet(document: document, openedWithFile: opened)
         }
+    }
+}
+
+// MARK: Job notes
+
+struct JobNotesSheet: View {
+    @ObservedObject var document: KerfDocument
+    var openedWithFile: Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String
+    @State private var showOnOpen: Bool
+
+    init(document: KerfDocument, openedWithFile: Bool) {
+        self.document = document
+        self.openedWithFile = openedWithFile
+        _text = State(initialValue: document.document.jobNotes)
+        _showOnOpen = State(initialValue: document.document.showsNotesOnOpen)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(openedWithFile ? "Notes for \(document.document.name)" : "Job Notes").font(.title2.bold())
+            Text("Saved with the file and printed on the job sheet: material, fixturing, which side goes up, anything the next person at the machine should know.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $text)
+                .font(.body)
+                .frame(minHeight: 200)
+                .border(Color.secondary.opacity(0.4))
+                .accessibilityLabel("Job notes")
+            Toggle("Show these notes when the file is opened", isOn: $showOnOpen)
+            HStack {
+                Spacer()
+                if openedWithFile {
+                    Button("Close") { save(); dismiss() }.keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                    Button("OK") { save(); dismiss() }.keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 480, height: 400)
+    }
+
+    /// Writes only real changes, so just reading the notes never dirties the document.
+    private func save() {
+        let d = document.document
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines) != d.jobNotes || showOnOpen != d.showsNotesOnOpen else { return }
+        document.setJobNotes(text, showOnOpen: showOnOpen)
     }
 }
 

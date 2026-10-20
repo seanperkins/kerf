@@ -29,6 +29,10 @@ public struct Document: Codable, Hashable, Sendable {
     public var dimensions: [DimensionAnnotation]?
     /// Parameters tied to expressions with variables (io; optional so older files decode).
     public var variableLinks: [VariableLink]?
+    /// Free-text job notes saved with the file (io; nil = none), shown on open when
+    /// `showNotesOnOpen` is true and printed on the job sheet.
+    public var notes: String?
+    public var showNotesOnOpen: Bool?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

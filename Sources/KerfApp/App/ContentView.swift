@@ -38,6 +38,7 @@ struct ContentView: View {
         .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
         .onAppear { document.fileURL = documentConfiguration?.fileURL }
+        .onAppear { document.showJobNotesOnOpenIfNeeded() }
         .onChange(of: documentConfiguration?.fileURL) { _, url in
             document.fileURL = url
             document.scheduleFileThumbnail()
