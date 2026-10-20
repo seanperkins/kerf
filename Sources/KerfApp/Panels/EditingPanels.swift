@@ -45,6 +45,8 @@ struct NodeInspector: View {
                 }
                 GridRow {
                     Button("Break Here") { document.breakAtSelectedNode() }.disabled(single == nil)
+                    Button("Set Start") { document.setStartAtSelectedNode() }.disabled(single == nil)
+                        .help("Make this node the start point of its closed vector (green marker)")
                 }
             }
             .disabled(nodes.isEmpty)
