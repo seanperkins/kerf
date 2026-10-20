@@ -184,7 +184,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `ux-async-calc` | app-ux | Background toolpath calculation with progress and cancel | done | P1 | KerfDocument.calculateAndWait, Panels/CalculationProgressView.swift |
 | `ux-zoom-pan` | app-ux | Zoom/pan (fit material, fit selection, trackpad pinch) | done | P1 | CanvasViewport.swift, CanvasEvents scroll/magnify |
 | `ux-split-view` | app-ux | Side-by-side 2D and 3D views | done | P3 | CenterMode.split in ContentView (⌥⌘2); AppUXRenderTests |
-| `ux-gadgets` | app-ux | Gadgets / scripting API for add-on tools | missing | P3 | *r2* No scripting host; numeric variables/expressions only |
+| `ux-gadgets` | app-ux | Gadgets / scripting API for add-on tools | done | P3 | JavaScriptCore host: Sources/KerfApp/Model/Gadgets/, Gadgets menu (GadgetPanels.swift); Tests/KerfAppTests/GadgetTests.swift. No custom gadget UI or Lua/Vectric compatibility |
 
 ## Sources
 
