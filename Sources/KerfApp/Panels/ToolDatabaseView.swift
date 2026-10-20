@@ -3,7 +3,8 @@ import CAMCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Tool Database window: list of tools + editor. Changes save to tools.json immediately.
+/// Tool Database window: list of tools + editor. Edits save to tools.json as they are made
+/// (and once more when the editor closes), so switching tools or closing the window never drops them.
 struct ToolDatabaseView: View {
     static let windowID = "tool-database"
     @EnvironmentObject var library: ToolLibraryModel
@@ -140,6 +141,7 @@ extension ToolDatabaseView {
 
 struct ToolEditor: View {
     @EnvironmentObject var library: ToolLibraryModel
+    /// The tool as it was when this editor opened (what Revert goes back to).
     let original: Tool
     @State private var tool: Tool
 
@@ -206,10 +208,10 @@ struct ToolEditor: View {
             Section {
                 HStack {
                     Spacer()
-                    Button("Revert") { tool = original }.disabled(tool == original)
-                    Button("Save") { library.update(tool) }
-                        .keyboardShortcut("s", modifiers: .command)
-                        .buttonStyle(.borderedProminent)
+                    Text(tool == original ? "Changes save automatically." : "Changes saved.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("Revert Changes") { tool = original }
+                        .help("Go back to the settings this tool had when you selected it")
                         .disabled(tool == original)
                 }
             }
@@ -218,5 +220,7 @@ struct ToolEditor: View {
         .onChange(of: tool.kind) { _, k in
             if (k == .vBit || k == .engraving) && tool.angle == nil { tool.angle = 60 }
         }
+        .onChange(of: tool) { _, t in library.commitEdit(t) }
+        .onDisappear { library.commitEdit(tool) }
     }
 }

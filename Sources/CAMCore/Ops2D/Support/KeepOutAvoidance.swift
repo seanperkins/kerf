@@ -45,6 +45,52 @@ public enum KeepOutAvoidance {
         return Result(toolpaths: out, lifts: total)
     }
 
+    /// Raises the travel between consecutive toolpaths (the post's rapid from one toolpath's
+    /// last point to the next one's first point, same tool) over lift-over zones that are taller
+    /// than that travel. `apply` only sees one operation at a time, so this runs on the final,
+    /// ordered list just before posting. After a tool change the position is unknown (the
+    /// controller may have moved), so that travel is left alone; `KeepOut.violations` does the same.
+    public static func link(_ toolpaths: [Toolpath], zones: [KeepOutZone], coords: MachineCoordinates,
+                            margin: Double, tolerance: Double) -> [Toolpath] {
+        let active = zones.filter { $0.liftOver == true && $0.outline.count > 2 }
+        guard !active.isEmpty else { return toolpaths }
+        let m = max(margin, 0)
+        let clearZ = max(coords.safeZ, active.map { coords.z(aboveTop: $0.height + 2 * m) }.max() ?? coords.safeZ)
+        let topZ = active.map { coords.z(aboveTop: $0.height + m) }.max() ?? coords.safeZ
+        let loops = active.map { z -> [Vec2] in
+            let o = z.outline.map { coords.machineXY($0) }
+            return Polygon2D.signedArea(o) < 0 ? o.reversed() : o
+        }
+        var out = toolpaths
+        var last: (end: Vec3, tool: UUID)?
+        for i in out.indices {
+            let tp = out[i]
+            guard let first = tp.moves.first(where: { $0.target != nil })?.target,
+                  let end = tp.moves.last(where: { $0.target != nil })?.target else { continue }
+            defer { last = (end, tp.tool.id) }
+            guard let prev = last, prev.tool == tp.tool.id, prev.end.xy.distance(to: first.xy) > 1e-9 else { continue }
+            let r = tp.tool.radius + m + 4 * max(tolerance, 1e-6)
+            let region = GeomKernel.offset(loops, by: r, join: .round, arcTolerance: tolerance)
+            guard !region.isEmpty else { continue }
+            var router = Router(region: region, box: Rect2(points: region.flatMap { $0 }), topZ: topZ, clearZ: clearZ,
+                                approachZ: coords.z(aboveTop: m), plunge: tp.tool.plungeRate, tolerance: tolerance)
+            // The post climbs to safe Z before moving XY when it is lower.
+            let travelZ = max(prev.end.z, coords.safeZ)
+            let routed = router.route([.rapid(to: prev.end), .rapid(to: Vec3(prev.end.xy, z: travelZ)), .rapid(to: first)])
+            guard router.raisedRapids > 0 else { continue }
+            var lead: [Move] = []
+            var at = prev.end
+            for mv in routed.dropFirst() {
+                guard let t = mv.target, t.distance(to: at) > 1e-9, t.distance(to: first) > 1e-9 else { continue }
+                lead.append(mv); at = t
+            }
+            out[i].moves = lead + tp.moves
+            let n = Int(tp.metadata["keep-out lifts"] ?? "0") ?? 0
+            out[i].metadata["keep-out lifts"] = String(n + router.raisedRapids)
+        }
+        return out
+    }
+
     struct Router {
         let region: [[Vec2]]
         let box: Rect2
@@ -56,7 +102,12 @@ public enum KeepOutAvoidance {
         var lifts = 0
         var raisedRapids = 0
         private var out: [Move] = []
+        /// Where the tool really is (lifted to clearZ after a lift).
         private var cur: Vec3?
+        /// Where the original program would be: the previous move's own target. Moves are
+        /// re-routed from here, never from the lifted `cur`, so a cut after a lift resumes at
+        /// its real start and depth instead of ramping down from the clearance height.
+        private var prev: Vec3?
 
         init(region: [[Vec2]], box: Rect2, topZ: Double, clearZ: Double, approachZ: Double, plunge: Double,
              tolerance: Double) {
@@ -65,10 +116,11 @@ public enum KeepOutAvoidance {
         }
 
         mutating func route(_ moves: [Move]) -> [Move] {
-            out = []; cur = nil
+            out = []; cur = nil; prev = nil
             for mv in moves {
                 guard let target = mv.target else { out.append(mv); continue }
-                guard let from = cur else { out.append(mv); cur = target; continue }
+                guard let from = prev else { out.append(mv); cur = target; prev = target; continue }
+                defer { prev = target }
                 if mv.isRapid {
                     rapid(from: from, to: target)
                 } else if mv.isArc {

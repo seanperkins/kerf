@@ -82,6 +82,15 @@ final class ToolLibraryModel: ObservableObject {
 
     func update(_ tool: Tool) { mutate { $0.upsert(tool) } }
 
+    /// Saves an edit from the Tool Database editor when it differs from the stored tool.
+    /// A tool deleted meanwhile is not brought back. Returns whether anything was written.
+    @discardableResult
+    func commitEdit(_ tool: Tool) -> Bool {
+        guard let stored = library.tool(id: tool.id), stored != tool else { return false }
+        update(tool)
+        return true
+    }
+
     @discardableResult
     func duplicate(id: UUID) -> Tool? {
         guard var t = library.tool(id: id) else { return nil }

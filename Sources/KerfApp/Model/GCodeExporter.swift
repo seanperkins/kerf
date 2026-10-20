@@ -49,6 +49,15 @@ enum GCodeExporter {
         }
     }
 
+    /// Raises the post's travel between toolpaths over "lift over" keep-out zones.
+    static func linkOverKeepOutZones(_ toolpaths: [Toolpath], document doc: Document) -> [Toolpath] {
+        guard let zones = doc.keepOutZones, zones.contains(where: { $0.liftOver == true }) else { return toolpaths }
+        let margin = doc.units == .inch ? 0.05 : 1.0
+        let tol = doc.units == .inch ? 0.0005 : 0.01
+        return KeepOutAvoidance.link(toolpaths, zones: zones, coords: MachineCoordinates(job: doc.job), margin: margin,
+                                     tolerance: tol)
+    }
+
     static func materialDescription(_ doc: Document) -> String {
         let j = doc.job
         func f(_ v: Double) -> String { RulerTicks.label(v) }
@@ -62,6 +71,9 @@ enum GCodeExporter {
             return GCodeExportResult(text: nil, issues: [], errorMessage: "There are no calculated toolpaths to export.",
                                      toolpathCount: 0)
         }
+        // Travel between toolpaths crosses lift-over zones at safe Z unless raised here: each
+        // operation was re-routed on its own, so only the final order shows these moves.
+        let toolpaths = linkOverKeepOutZones(toolpaths, document: doc)
         let validator = GCodeValidator(profile: profile, job: doc.job, units: doc.units)
         var issues = validator.validate(toolpaths: toolpaths)
         issues += keepOutIssues(toolpaths, document: doc)

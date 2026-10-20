@@ -32,3 +32,33 @@ import Testing
     #expect(mm.keepOutZones?[0].outline[1] == Vec2(50.8, 25.4))
     #expect(mm.keepOutZones?[0].height == 25.4)
 }
+
+/// Each operation is re-routed alone; the exporter must lift the travel between them too.
+@Test func keepOutLiftOverRaisesTravelBetweenOperationsOnExport() throws {
+    var project = AppTestSupport.project() // 2x1 rectangles at (1,1) and (5,1)
+    let ids = project.document.shapes.map(\.id)
+    let tool = ToolLibrary.seeded.tools[0].id
+    let a = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "A", toolID: tool, shapeIDs: [ids[0]])))
+    let b = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "B", toolID: tool, shapeIDs: [ids[1]])))
+    var zone = KeepOutZone(name: "TallClamp", outline: [Vec2(3.4, 0.5), Vec2(4.6, 0.5), Vec2(4.6, 2.5), Vec2(3.4, 2.5)],
+                           height: 1, liftOver: true)
+    project.document.keepOutZones = [zone]
+    let ctx = CAMContext(document: project.document, tools: .seeded)
+    let tps = try a.generate(in: ctx) + b.generate(in: ctx)
+    let profile = BuiltInPosts.avidMach4Inch
+    let lifted = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+    #expect(!lifted.issues.contains { $0.message.contains("keep-out") })
+    let text = try #require(lifted.text)
+    let lines = text.split(separator: "\n").map(String.init)
+    let start = try #require(lines.firstIndex { $0.contains("Toolpath: B") })
+    let firstXY = try #require(lines[start...].firstIndex { $0.contains("X") && $0.contains("Y") })
+    #expect(lines[start..<firstXY].contains { $0.contains("Z1.1000") }, "\(lines[start...firstXY])")
+
+    // Check-only: the same travel is reported as an error.
+    zone.liftOver = nil
+    project.document.keepOutZones = [zone]
+    let ctx2 = CAMContext(document: project.document, tools: .seeded)
+    let plain = try a.generate(in: ctx2) + b.generate(in: ctx2)
+    let blocked = GCodeExporter.export(project: project, toolpaths: plain, profile: profile, jobName: "T")
+    #expect(blocked.issues.contains { $0.severity == .error && $0.message.contains("B rapids over keep-out zone") })
+}

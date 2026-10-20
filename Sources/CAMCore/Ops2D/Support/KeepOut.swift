@@ -17,7 +17,13 @@ public enum KeepOut {
         let usable = zones.filter { $0.outline.count > 2 }
         guard !usable.isEmpty else { return [] }
         var out: [Violation] = []
-        for tp in toolpaths {
+        // The program is one move stream: the post travels from one toolpath's last point to
+        // the next one's first, so that travel is checked too. After a tool change the XY is
+        // unknown (the controller may have moved), so checking restarts there.
+        var cur: Vec3?
+        var lastTool: UUID?
+        for tp in toolpaths where tp.moves.contains(where: { $0.target != nil }) {
+            if tp.tool.id != lastTool { cur = nil; lastTool = tp.tool.id }
             let r = tp.tool.radius + max(margin, 0)
             // Zone outlines grown by the tool radius + margin, as machine-frame regions.
             let grown: [(zone: KeepOutZone, region: [[Vec2]], topZ: Double, box: Rect2)] = usable.map { z in
@@ -28,7 +34,6 @@ public enum KeepOut {
                 return (z, region, topZ, Rect2(points: region.flatMap { $0 }))
             }
             var reported = Set<UUID>()
-            var cur: Vec3?
             // Any segment that crosses a zone crosses its grown outline for at least 2r: sampling
             // every 0.9r cannot step over it.
             let step = max(r * 0.9, tolerance * 10)
@@ -36,7 +41,14 @@ public enum KeepOut {
                 guard let target = m.target else { continue }
                 defer { cur = target }
                 guard let from = cur else { continue }
-                let pts = samples(from: from, move: m, step: step)
+                // The post climbs to safe Z before an XY rapid from below it.
+                var pts = samples(from: from, move: m, step: step)
+                if m.isRapid, from.z < coords.safeZ - 1e-9, from.xy.distance(to: target.xy) > 1e-9 {
+                    let up = Vec3(from.xy, z: max(coords.safeZ, target.z))
+                    pts = samples(from: from, move: .rapid(to: up), step: step)
+                        + samples(from: up, move: .rapid(to: Vec3(target.xy, z: up.z)), step: step)
+                        + [target]
+                }
                 for g in grown where !reported.contains(g.zone.id) {
                     for p in pts where p.z < g.topZ - 1e-9 && g.box.contains(p.xy) && Polygon2D.regionContains(g.region, p.xy) {
                         reported.insert(g.zone.id)

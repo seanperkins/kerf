@@ -85,7 +85,12 @@ public enum LayoutChecks {
         let coords = MachineCoordinates(job: job)
         let eps = units == .inch ? 0.0005 : 0.01
         var issues: [GCodeIssue] = []
-        for tp in toolpaths {
+        // The travel between toolpaths with the same tool is checked too (from the previous
+        // toolpath's last point); after a tool change the position is unknown.
+        var lastEnd: (point: Vec3, tool: UUID)?
+        for tp in toolpaths where tp.moves.contains(where: { $0.target != nil }) {
+            defer { lastEnd = tp.moves.last(where: { $0.target != nil })?.target.map { ($0, tp.tool.id) } }
+            let entry = lastEnd.flatMap { $0.tool == tp.tool.id ? $0.point : nil }
             let r = tp.tool.converted(to: units).radius
             for zone in zones {
                 let clean = GeomKernel.boolean(.union, subject: zone.loops, clip: [], fillRule: .evenOdd)
@@ -93,7 +98,7 @@ public enum LayoutChecks {
                 let box = Rect2(points: grown.joined())
                 let top = coords.materialTopZ + zone.height
                 var hitCut = false, hitRapid = false
-                var prev: Vec3?
+                var prev: Vec3? = entry
                 for move in tp.moves {
                     guard let target = move.target else { continue }
                     var pts: [Vec3] = []
