@@ -157,18 +157,21 @@ struct ExportGCodeSheet: View {
         let panel = NSSavePanel()
         var opName: String?
         if case .operation(let id) = scope { opName = document.operation(id)?.setup.name }
-        panel.nameFieldStringValue = GCodeExporter.suggestedFileName(jobName: document.document.name,
-                                                                     operationName: opName, profile: profile)
+        panel.nameFieldStringValue = SavePanelName.suggested(
+            GCodeExporter.suggestedFileName(jobName: document.document.name, operationName: opName, profile: profile),
+            allowedExtension: profile.fileExtension)
         if let t = UTType(filenameExtension: profile.fileExtension) { panel.allowedContentTypes = [t] }
         panel.allowsOtherFileTypes = true
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try text.write(to: url, atomically: true, encoding: .utf8)
-            if document.project.postProfileID != profileID { document.setPostProfile(profileID) }
-            dismiss()
-        } catch {
-            document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+        PanelRunner.present(panel) { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+                if document.project.postProfileID != profileID { document.setPostProfile(profileID) }
+                dismiss()
+            } catch {
+                document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+            }
         }
     }
 }

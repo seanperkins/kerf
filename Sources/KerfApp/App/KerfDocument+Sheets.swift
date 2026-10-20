@@ -37,23 +37,27 @@ extension KerfDocument {
         guard document.isMultiSheet,
               let other = document.allSheets.first(where: { $0.id != document.currentSheetID }) else { return }
         let doomed = document.currentSheetID
-        let a = NSAlert()
-        a.messageText = "Delete \"\(document.currentSheetName)\"?"
-        a.informativeText = "Its layers and vectors are deleted too. You can undo this."
-        a.addButton(withTitle: "Delete")
-        a.addButton(withTitle: "Cancel")
-        guard a.runModal() == .alertFirstButtonReturn else { return }
-        clearSelection()
-        perform("Delete Sheet") { p in
-            p.document.switchToSheet(other.id)
-            let removed = p.document.removeSheet(doomed)
-            p.deleteShapes(removed)
-            p.ensureSheetLayer()
+        let alert = NSAlert()
+        alert.messageText = "Delete \"\(document.currentSheetName)\"?"
+        alert.informativeText = "Its layers and vectors are deleted too. You can undo this."
+        // Cancel is the default (Return); the destructive choice has to be clicked.
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Delete").hasDestructiveAction = true
+        PanelRunner.present(alert) { [self] response in
+            guard response == .alertSecondButtonReturn else { return }
+            clearSelection()
+            perform("Delete Sheet") { p in
+                p.document.switchToSheet(other.id)
+                let removed = p.document.removeSheet(doomed)
+                p.deleteShapes(removed)
+                p.ensureSheetLayer()
+            }
+            activeSide = .top
+            requestCanvas(.fit)
         }
-        activeSide = .top
-        requestCanvas(.fit)
     }
 }
+
 
 extension KerfProject {
     /// The current sheet always has at least one layer to draw on.

@@ -230,19 +230,22 @@ struct KerfCommands: Commands {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = ImportService.allowedContentTypes
         panel.message = "Import vectors (SVG, DXF, EPS, AI, PDF), a tracing image or a 3D model"
-        guard panel.runModal() == .OK else { return }
-        doc.importFiles(panel.urls)
+        PanelRunner.present(panel) { response in
+            guard response == .OK else { return }
+            doc.importFiles(panel.urls)
+        }
     }
 
     private func runExportVectorsPanel() {
         guard let doc = document else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = ["svg", "dxf", "pdf", "eps", "ai"].compactMap { UTType(filenameExtension: $0) }
-        panel.nameFieldStringValue = doc.document.name + ".svg"
-        panel.message = (doc.selection.isEmpty ? "Export all vectors" : "Export the selected vectors")
-            + " (SVG, DXF, PDF, EPS or AI — choose by file extension)"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        doc.exportVectors(to: url, selectionOnly: !doc.selection.isEmpty)
+        let format = VectorFormatAccessory(panel: panel, fileName: VectorExportFormat.svg.fileName(from: doc.document.name))
+        panel.message = doc.selection.isEmpty ? "Export all vectors" : "Export the selected vectors"
+        PanelRunner.present(panel) { response in
+            _ = format  // the accessory must outlive the panel
+            guard response == .OK, let url = panel.url else { return }
+            doc.exportVectors(to: url, selectionOnly: !doc.selection.isEmpty)
+        }
     }
 
     private func openPostFolder() {
