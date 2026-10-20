@@ -108,7 +108,7 @@ extension CanvasNSView {
         let e = ShapeNodes.editable(s)
         guard e.paths.indices.contains(r.path) else { return nil }
         let smooth = PathNodes.isSmooth(e.paths[r.path], r.node) && !flags.contains(.option)
-        return ShapeNodes.moveHandle(e, r, h, to: p, keepSmooth: smooth)
+        return NodeMirror.moveHandle(e, r, h, to: p, keepSmooth: smooth, mode: document?.drawingOptions.nodeMirror ?? .off)
     }
 
     // MARK: Pen

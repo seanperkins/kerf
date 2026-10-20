@@ -28,6 +28,7 @@ extension CanvasNSView {
         if spaceHeld || event.modifierFlags.contains(.option) && doc.activeTool == .select && !tabEditing {
             drag = .pan(lastView: v); NSCursor.closedHand.set(); return
         }
+        if envelopeMouseDown(event, doc) || kerningMouseDown(event, doc) { needsDisplay = true; return }
         if !tabEditing, guideMouseDown(event, doc) { needsDisplay = true; return }
         if tabEditing {
             tabMouseDown(event, doc)
@@ -247,7 +248,7 @@ extension CanvasNSView {
 
     override func keyDown(with event: NSEvent) {
         guard let doc = document else { return super.keyDown(with: event) }
-        if handleDrawingToolKey(event, doc) { needsDisplay = true; return }
+        if kerningKeyDown(event, doc) || handleDrawingToolKey(event, doc) { needsDisplay = true; return }
         let step = doc.document.gridSpacing * (event.modifierFlags.contains(.shift) ? 10 : 1)
         let nodeMode = doc.activeTool == .nodeEdit && !doc.nodeSelection.isEmpty
         func nudge(_ d: Vec2) {
@@ -264,9 +265,10 @@ extension CanvasNSView {
             else if nodeMode { doc.deleteSelectedNodes() }
             else { doc.deleteSelection() }
         case 53: // escape
-            if doc.tabEditingOperationID != nil { doc.tabEditingOperationID = nil } else { cancelOrStepBack(doc) }
+            if doc.envelopeEdit != nil { doc.cancelEnvelopeEdit() }
+            else if doc.tabEditingOperationID != nil { doc.tabEditingOperationID = nil } else { cancelOrStepBack(doc) }
         case 36, 76: // return, enter
-            finishClickShape()
+            if doc.envelopeEdit != nil { doc.applyEnvelopeEdit() } else { finishClickShape() }
         case 123: nudge(Vec2(-step, 0))
         case 124: nudge(Vec2(step, 0))
         case 125: nudge(Vec2(0, -step))

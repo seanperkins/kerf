@@ -188,6 +188,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             - Drag to draw shapes; type exact sizes in the inspector afterwards.
             - Polylines and curves: click points, double-click or press Return to finish, Esc to cancel.
             - Text uses any installed font; the size is the height of capital letters.
+            - To kern, select one text object and choose **Kern on Canvas** in the inspector (or Vectors ▸ Kern Text on Canvas): drag letters, Shift-drag to move a letter and the rest of its line, arrows nudge the clicked letter. The text stays editable.
             - Snapping to the grid (⌘') and to object points (⇧⌘') can be paused by holding ⌘ while dragging.
             - Drag a box left→right to select shapes fully inside it, right→left to select anything it touches.
             """
@@ -196,18 +197,24 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Press **N** (or Design ▸ Edit Nodes) to edit the points of a vector. Drag nodes or curve handles; Shift-click to select several. The inspector can make nodes smooth or corners, convert segments between lines and curves, insert nodes and break a path.
 
             The first node edit turns arcs into curves and the shape becomes a plain drawn vector (it loses its rectangle/circle settings).
+
+            **Mirror** in the inspector edits symmetrically: moving a node or handle also moves its partner on the other side of the vector's centre line (Left – Right, Top – Bottom or Both). Nodes on a centre line only slide along it, so a symmetric shape stays symmetric.
             """
         case .layers:
             return """
             Layers live in the Design sidebar. Hide a layer to keep its vectors out of the way, lock it to stop accidental edits, and give it a colour. New shapes go to the layer of the current selection.
 
             **Group** (⌘G) keeps shapes together when selecting; **Ungroup** (⇧⌘G) splits them again. **Combine Vectors** merges shapes into one; **Break Apart** splits a multi-path shape.
+
+            **Edit ▸ Select** picks vectors by property: open vectors, duplicate copies lying on top of another vector, vectors similar in size and outline to the selection, everything on a layer, or the inverse of the selection. Locked and hidden layers are skipped.
             """
         case .transforms:
             return """
             The Design menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors, closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
 
             Drag the selection box handles to scale (Shift keeps proportions, Option scales about the centre). The round handle above the box rotates (Shift snaps to 15°).
+
+            **Vectors ▸ Distort Envelope on Canvas** puts four corner handles on the selection's box: drag them and the vectors are previewed bending to follow; Return or **Apply** makes the change, Esc cancels. Typed corner offsets are under **Values…** or in Vectors ▸ Shear / Distort….
             """
         case .toolpathsOverview:
             return """

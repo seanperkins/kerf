@@ -54,6 +54,13 @@ struct DistortSheet: View {
             }
             .pickerStyle(.segmented)
             if envelope {
+                Button("Drag Corners on Canvas") {
+                    let o = offsets
+                    document.sheet = nil
+                    document.beginEnvelopeEdit(offsets: o)
+                }
+                .disabled(ids.isEmpty)
+                .help("Close this dialog and drag the four corners on the design; the vectors are previewed as they bend")
                 ForEach(0..<4, id: \.self) { i in
                     let name = ["Lower left", "Lower right", "Upper right", "Upper left"][i]
                     LengthField("\(name) X", value: $offsets[i].x, units: units)

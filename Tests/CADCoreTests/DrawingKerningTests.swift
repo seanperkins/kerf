@@ -30,4 +30,32 @@ import Testing
         let json = try JSONEncoder().encode(TextSpec(string: "A", fontName: "Helvetica", size: 1))
         #expect(!String(decoding: json, as: UTF8.self).contains("letterAdjustments"))
     }
+
+    @Test func lettersHitAndDrag() throws {
+        let spec = TextSpec(string: "A B\nC", fontName: "Helvetica", size: 1, anchor: Vec2(10, 10))
+        let letters = try TextKerning.letters(for: spec)
+        #expect(letters.count == 4)
+        #expect(letters.map(\.line) == [0, 0, 0, 1])
+        #expect(letters[1].paths.isEmpty) // the space
+        let b = letters[2].bounds
+        #expect(TextKerning.letter(at: b.center, in: letters, tolerance: 0)?.index == 2)
+        #expect(TextKerning.letter(at: Vec2(0, 0), in: letters, tolerance: 0.01) == nil)
+        // Moving letter 2 by +1 in X shifts only its outline.
+        let moved = TextKerning.moving(spec, letters: [2], byDocumentDelta: Vec2(1, 0))
+        let after = try TextKerning.letters(for: moved)
+        #expect(after[2].bounds.min.isApproximatelyEqual(to: b.min + Vec2(1, 0), tolerance: 1e-6))
+        #expect(after[0].bounds == letters[0].bounds)
+        // Moving it back drops the adjustment entirely.
+        #expect(TextKerning.moving(moved, letters: [2], byDocumentDelta: Vec2(-1, 0)).letterAdjustments == nil)
+    }
+
+    @Test func dragFollowsScaledRotatedText() throws {
+        var spec = TextSpec(string: "AB", fontName: "Helvetica", size: 1)
+        spec.transform = Transform2D.scale(2, 2).concatenating(.rotation(.pi / 2))
+        let before = try TextKerning.letters(for: spec)[1].bounds
+        let moved = TextKerning.moving(spec, letters: [1], byDocumentDelta: Vec2(0, 3))
+        #expect(moved.letterAdjustments?.first?.offset.isApproximatelyEqual(to: Vec2(1.5, 0), tolerance: 1e-9) == true)
+        let after = try TextKerning.letters(for: moved)[1].bounds
+        #expect(after.min.isApproximatelyEqual(to: before.min + Vec2(0, 3), tolerance: 1e-6))
+    }
 }

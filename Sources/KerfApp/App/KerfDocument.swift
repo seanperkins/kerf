@@ -96,6 +96,10 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var hiddenToolpaths: Set<UUID> = []
     /// Profile operation whose tabs the canvas is editing (click to add, drag to move).
     @Published var tabEditingOperationID: UUID?
+    /// Envelope distortion with draggable corners in progress on the canvas.
+    @Published var envelopeEdit: EnvelopeEdit?
+    /// Live text whose letters are being dragged on the canvas (interactive kerning).
+    @Published var kerningShapeID: UUID?
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
     private var deferredAlert: AlertMessage?
@@ -356,8 +360,8 @@ final class KerfDocument: ReferenceFileDocument {
 
     func moveSelectedNodes(by d: Vec2) {
         guard !nodeSelection.isEmpty, d != .zero else { return }
-        let refs = nodeSelection
-        perform("Move Nodes") { $0.moveNodes(refs, by: d) }
+        let refs = nodeSelection, mirror = drawingOptions.nodeMirror
+        perform("Move Nodes") { $0.moveNodes(refs, by: d, mirror: mirror) }
     }
 
     func deleteSelectedNodes() {
