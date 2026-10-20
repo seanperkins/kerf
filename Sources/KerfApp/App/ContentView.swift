@@ -78,9 +78,10 @@ struct ContentView: View {
         case .preview3D:
             Preview3DHost(document: document)
         case .split:
+            // 200 pt each: at the minimum window width the sidebar and inspector leave about 430 pt.
             HSplitView {
-                designPane.frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
-                Preview3DHost(document: document).frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+                designPane.frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity)
+                Preview3DHost(document: document).frame(minWidth: 200, maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }

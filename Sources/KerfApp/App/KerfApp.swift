@@ -31,6 +31,8 @@ struct KerfApp: App {
                 .environmentObject(toolLibrary)
                 .frame(minWidth: 1000, minHeight: 640)
         }
+        // Open wider than the minimum so the 2D | 3D split has room beside the sidebar and inspector.
+        .defaultSize(width: 1280, height: 820)
         .commands {
             KerfCommands()
             VectorMenuCommands()

@@ -216,8 +216,10 @@ struct SimulationPreviewView: View {
         Binding(get: { model.tool == t }, set: { model.tool = $0 ? t : .none })
     }
 
+    /// Wraps onto further lines in a narrow pane (the sidebar and inspector leave about 430 pt at the
+    /// minimum window width) rather than forcing the whole window layout wider than the screen.
     private var controls: some View {
-        HStack(spacing: 10) {
+        WrappingHStack(spacing: 10, lineSpacing: 8) {
             if let scope {
                 Picker("Simulate", selection: scope) {
                     ForEach(PreviewScope.allCases) { Text($0.title).tag($0) }
@@ -231,8 +233,8 @@ struct SimulationPreviewView: View {
         }
     }
 
-    private var playbackControls: some View {
-        HStack(spacing: 10) {
+    @ViewBuilder private var playbackControls: some View {
+        Group {
             Button(action: model.rewind) { Image(systemName: "backward.end.fill") }
                 .help("Back to start")
             Button(action: model.togglePlay) {
@@ -251,6 +253,7 @@ struct SimulationPreviewView: View {
             Slider(value: Binding(get: { model.progress }, set: { model.pause(); model.progress = $0 }),
                    in: 0...1)
                 .frame(minWidth: 160)
+                .flexibleInWrappingStack()
             Text("\(MachiningTimeEstimator.format(model.time)) / \(MachiningTimeEstimator.format(model.totalTime))")
                 .font(.caption.monospacedDigit())
                 .frame(minWidth: 110, alignment: .trailing)
