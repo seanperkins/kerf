@@ -4,6 +4,11 @@ import Foundation
 // Parameters for the 2D toolpaths added in the VCarve-parity work (toolpaths-2d).
 // Lengths are in document units, depths down from the material top; defaults assume inches.
 
+/// Where a profile cuts open vectors, relative to the vector's drawn direction.
+public enum OpenVectorSide: String, Codable, CaseIterable, Sendable {
+    case on, left, right
+}
+
 /// Quick engrave: follow the vectors on their centreline at a fixed depth (no offset).
 public struct EngraveParameters: Codable, Hashable, Sendable {
     public var depth: DepthSettings

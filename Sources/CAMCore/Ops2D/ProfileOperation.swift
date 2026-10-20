@@ -31,7 +31,18 @@ public struct ProfileOperation: ToolpathOperation {
                                   tolerance: tol)
         }
         var chains = plan.chains
-        chains += open.map { Chain2D(points: $0, isClosed: false) }
+        var openOffsetFailures = 0
+        let openSide = params.openVectorSide ?? .on
+        for line in open {
+            if openSide == .on {
+                chains.append(Chain2D(points: line, isClosed: false))
+            } else if let shifted = OpenOffset.oneSided(line, distance: finalOffset, left: openSide == .left, tolerance: tol) {
+                chains.append(Chain2D(points: shifted, isClosed: false))
+            } else {
+                openOffsetFailures += 1
+                chains.append(Chain2D(points: line, isClosed: false))
+            }
+        }
         guard !chains.isEmpty || !(finishPlan?.chains.isEmpty ?? true) else {
             throw CAMError.invalidGeometry("The tool does not fit inside the selected vectors")
         }
@@ -52,7 +63,10 @@ public struct ProfileOperation: ToolpathOperation {
         var warnings: [String] = []
         let dropped = finishPlan?.droppedLoops ?? plan.droppedLoops
         if dropped > 0 { warnings.append("\(dropped) vector(s) too small for the tool") }
-        if params.side != .on && !open.isEmpty {
+        if openOffsetFailures > 0 {
+            warnings.append("\(openOffsetFailures) open vector(s) could not be offset to the \(openSide.rawValue) and were cut on the line")
+        }
+        if params.side != .on && !open.isEmpty && openSide == .on {
             warnings.append("\(open.count) open vector(s) cut on the line (close them to cut \(params.side == .outside ? "outside" : "inside"))")
         }
         if !warnings.isEmpty { meta["warning"] = warnings.joined(separator: "; ") }

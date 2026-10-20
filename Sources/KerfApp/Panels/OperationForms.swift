@@ -105,6 +105,13 @@ struct ProfileForm: View {
                 Text("On").tag(ProfileSide.on)
             }
             .pickerStyle(.segmented)
+            Picker("Open vectors", selection: Binding(get: { params.openVectorSide ?? .on },
+                                                      set: { params.openVectorSide = $0 == .on ? nil : $0 })) {
+                Text("On").tag(OpenVectorSide.on)
+                Text("Left").tag(OpenVectorSide.left)
+                Text("Right").tag(OpenVectorSide.right)
+            }
+            .help("Open vectors: cut on the line, or keep the tool to the left or right of the vector's direction")
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
