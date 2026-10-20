@@ -97,6 +97,36 @@ struct OpenOffsetSheet: View {
     }
 }
 
+struct StraightInlaySheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var diameter: Double
+    @State private var clearance: Double
+    @State private var mirrorPlug = true
+
+    init(document: KerfDocument) {
+        self.document = document
+        _diameter = State(initialValue: document.units == .inch ? 0.125 : 3)
+        _clearance = State(initialValue: document.units == .inch ? 0.005 : 0.1)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let closed = document.selectedShapes.contains(where: \.isClosed)
+        DrawingDialog(title: "Straight-Wall Inlay Offsets", action: "Create Pocket & Plug", disabled: !closed || diameter <= 0,
+                      note: "Rounds every corner of the design to the end mill radius (so pocket and plug can both be cut), then makes an \"Inlay pocket\" vector (cut as a Pocket) and an \"Inlay plug\" vector beside it (cut with an outside Profile). The clearance is split between them. For V-bit inlays use Toolpaths › Inlay.",
+                      perform: {
+                          let (d, c, m) = (diameter, clearance, mirrorPlug)
+                          var made: (UUID, UUID)?
+                          document.perform("Inlay Offsets") { made = VectorCommands.straightInlay(ids, toolDiameter: d, clearance: c, mirrorPlug: m, in: &$0) }
+                          if let (a, b) = made { document.setSelection([a, b]) }
+                      }) {
+            LengthField("End mill diameter", value: $diameter, units: document.units)
+            LengthField("Clearance (total)", value: $clearance, units: document.units, help: "Gap between plug and pocket walls, both sides together")
+            Toggle("Mirror the plug (glued face down)", isOn: $mirrorPlug)
+        }
+    }
+}
+
 struct MirrorSheet: View {
     @ObservedObject var document: KerfDocument
     @State private var horizontally = true

@@ -22,6 +22,7 @@ struct DrawingSheetHost: View {
         case .traceBitmap: TraceBitmapSheet(document: document)
         case .distort: DistortSheet(document: document)
         case .offsetOpen: OpenOffsetSheet(document: document)
+        case .inlayOffset: StraightInlaySheet(document: document)
         }
     }
 }

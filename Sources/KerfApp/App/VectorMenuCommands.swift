@@ -42,6 +42,7 @@ struct VectorMenuCommands: Commands {
             sheetButton("Offset Open Vectors…", .offsetOpen)
             sheetButton("Fillet / Chamfer Corners…", .filletChamfer)
             sheetButton("Dog-bone Fillets…", .dogbone)
+            sheetButton("Straight-Wall Inlay Offsets…", .inlayOffset)
             Divider()
             Toggle("Snap to Guides", isOn: Binding(get: { document?.snapToGuides ?? true }, set: { document?.snapToGuides = $0 }))
             Button("Clear Guides") { document?.perform("Clear Guides") { $0.document.guides = nil } }

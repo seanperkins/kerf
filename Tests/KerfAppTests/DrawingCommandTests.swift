@@ -156,6 +156,20 @@ import Testing
         #expect(e.start.isApproximatelyEqual(to: Vec2(3, 1.5), tolerance: 1e-9) && e.end.isApproximatelyEqual(to: Vec2(5, 1.5), tolerance: 1e-9))
     }
 
+    @Test func straightInlayPocketAndPlugMatch() throws {
+        var p = AppTestSupport.project()
+        let sq = p.document.shapes[0]  // 2 x 1
+        let (pocketID, plugID) = try #require(VectorCommands.straightInlay([sq.id], toolDiameter: 0.25, clearance: 0.01,
+                                                                          mirrorPlug: true, in: &p))
+        let pocket = p.document.shape(id: pocketID)!, plug = p.document.shape(id: plugID)!
+        let a = abs(pocket.paths.reduce(0) { $0 + $1.signedArea() }), b = abs(plug.paths.reduce(0) { $0 + $1.signedArea() })
+        // Rounded corners lose (4 - π) r² = 0.0134; the pocket is bigger than the plug by the clearance.
+        #expect(a > b && a - b < 0.07)
+        #expect(abs(pocket.bounds().width - 2.01) < 1e-3)
+        #expect(abs(plug.bounds().width - 1.99) < 1e-3)
+        #expect(plug.bounds().min.x > pocket.bounds().max.x)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]

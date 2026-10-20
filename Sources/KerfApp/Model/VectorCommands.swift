@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset
     var id: String { rawValue }
 }
 
@@ -315,6 +315,37 @@ enum VectorCommands {
             newIDs.append(n.id)
         }
         return newIDs
+    }
+
+    // MARK: Straight-wall inlay
+
+    /// Pocket and plug outlines for a straight-wall (end mill) inlay. Both start from the design
+    /// with every corner rounded to the cutter radius (what an end mill can actually cut on
+    /// both parts), then the pocket grows and the plug shrinks by half the clearance. The plug
+    /// is mirrored left↔right (it is glued face down) unless `mirrorPlug` is false, and placed
+    /// beside the design. Returns (pocket, plug) shape IDs.
+    static func straightInlay(_ ids: [UUID], toolDiameter: Double, clearance: Double, mirrorPlug: Bool,
+                              in project: inout KerfProject) -> (UUID, UUID)? {
+        let shapes = project.document.shapes(ids: ids).filter(\.isClosed)
+        guard !shapes.isEmpty, toolDiameter > 0 else { return nil }
+        let tol = tolerance(project.document.units)
+        let r = toolDiameter / 2
+        let design = PathOps.union(shapes: shapes.map(\.paths), tolerance: tol)
+        let opened = PathOps.offset(PathOps.offset(design, by: -r, tolerance: tol), by: r, tolerance: tol)
+        let rounded = PathOps.offset(PathOps.offset(opened, by: r, tolerance: tol), by: -r, tolerance: tol)
+        let pocket = PathOps.offset(rounded, by: max(clearance, 0) / 2, tolerance: tol)
+        var plug = clearance > 0 ? PathOps.offset(rounded, by: -clearance / 2, tolerance: tol) : rounded
+        guard !pocket.isEmpty, !plug.isEmpty else { return nil }
+        let b = Rect2(points: plug.flatMap { $0.flattened(tolerance: tol) })
+        var t = Transform2D.translation(Vec2(b.width + toolDiameter * 4, 0))
+        if mirrorPlug { t = Transform2D.mirror(horizontalAxis: false, about: b.center).concatenating(t) }
+        plug = plug.map { $0.transformed(t) }
+        let layer = shapes[0].layerID
+        let ps = Shape(name: "Inlay pocket", layerID: layer, paths: pocket, origin: .derived(operation: "inlay pocket"))
+        let pl = Shape(name: "Inlay plug", layerID: layer, paths: plug, origin: .derived(operation: "inlay plug"))
+        project.document.add(ps)
+        project.document.add(pl)
+        return (ps.id, pl.id)
     }
 
     // MARK: Extend
