@@ -109,6 +109,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var cursorPosition: Vec2?
 
     weak var undoManager: UndoManager?
+    /// Where the document is saved (from the window's document configuration), for the Finder icon.
+    var fileURL: URL?
     /// Bumped by every undoable change (including undo/redo).
     private var editSerial = 0
     /// The operation whose live edits are being merged into the current undo step.
@@ -137,6 +139,7 @@ final class KerfDocument: ReferenceFileDocument {
     func snapshot(contentType: UTType) throws -> KerfProject {
         // After a save, the next live toolpath edit opens a new undo step (re-dirtying the file).
         liveOperationEdit = nil
+        scheduleFileThumbnail()
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
         return p

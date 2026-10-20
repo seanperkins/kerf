@@ -10,6 +10,7 @@ struct ContentView: View {
     @ObservedObject private var catalog = PostProfileCatalog.shared
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.documentConfiguration) private var documentConfiguration
     @State private var showInspector = true
 
     var body: some View {
@@ -32,6 +33,11 @@ struct ContentView: View {
         .focusedSceneObject(document)
         .onAppear { document.undoManager = undoManager }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
+        .onAppear { document.fileURL = documentConfiguration?.fileURL }
+        .onChange(of: documentConfiguration?.fileURL) { _, url in
+            document.fileURL = url
+            document.scheduleFileThumbnail()
+        }
         .sheet(item: $document.sheet, onDismiss: { document.sheetDismissed() }) { sheet in
             switch sheet {
             case .jobSetup: JobSetupSheet(document: document)
