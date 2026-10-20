@@ -26,6 +26,7 @@ struct DrawingSheetHost: View {
         case .copyAlong: CopyAlongSheet(document: document)
         case .vectorTexture: VectorTextureSheet(document: document)
         case .boundary: BoundarySheet(document: document)
+        case .plaque: PlaqueSheet(document: document)
         }
     }
 }

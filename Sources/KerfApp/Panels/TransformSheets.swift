@@ -162,6 +162,50 @@ struct BoundarySheet: View {
     }
 }
 
+struct PlaqueSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var style = PlaqueMaker.Style.rounded
+    @State private var margin: Double
+    @State private var corner: Double
+    @State private var border = false
+    @State private var inset: Double
+
+    init(document: KerfDocument) {
+        self.document = document
+        let inch = document.units == .inch
+        _margin = State(initialValue: inch ? 1 : 25)
+        _corner = State(initialValue: inch ? 0.75 : 20)
+        _inset = State(initialValue: inch ? 0.375 : 10)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        DrawingDialog(title: "Plaque Border", action: "Create Plaque", disabled: ids.isEmpty,
+                      note: "Draws a sign outline around the selected text or artwork (one new shape; the optional inner border is a second vector in it — select it with Break Apart to give it its own toolpath).",
+                      perform: {
+                          let (s, m, c, i) = (style, margin, corner, border ? inset : 0)
+                          var id: UUID?
+                          document.perform("Plaque Border") { id = VectorCommands.plaque(ids, style: s, margin: m, corner: c, borderInset: i, in: &$0) }
+                          if let id { document.setSelection([id]) }
+                      }) {
+            Picker("Style", selection: $style) {
+                Text("Rectangle").tag(PlaqueMaker.Style.rectangle)
+                Text("Rounded corners").tag(PlaqueMaker.Style.rounded)
+                Text("Chamfered corners").tag(PlaqueMaker.Style.chamfered)
+                Text("Notched corners").tag(PlaqueMaker.Style.notched)
+                Text("Ogee corners").tag(PlaqueMaker.Style.ogee)
+                Text("Oval").tag(PlaqueMaker.Style.oval)
+            }
+            LengthField("Margin", value: $margin, units: document.units)
+            if style != .rectangle && style != .oval {
+                LengthField("Corner size", value: $corner, units: document.units)
+            }
+            Toggle("Inner border line", isOn: $border)
+            if border { LengthField("Border inset", value: $inset, units: document.units) }
+        }
+    }
+}
+
 struct MirrorSheet: View {
     @ObservedObject var document: KerfDocument
     @State private var horizontally = true

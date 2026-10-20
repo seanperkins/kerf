@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset, copyAlong, vectorTexture, boundary
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset, copyAlong, vectorTexture, boundary, plaque
     var id: String { rawValue }
 }
 
@@ -328,6 +328,23 @@ enum VectorCommands {
                                         tolerance: tolerance(project.document.units))
         guard !paths.isEmpty else { return nil }
         let s = Shape(name: "Boundary", layerID: first.layerID, paths: paths, origin: .derived(operation: "boundary"))
+        project.document.add(s)
+        return s.id
+    }
+
+    /// Adds a plaque outline around the selection's bounds grown by `margin`. Returns its ID.
+    static func plaque(_ ids: [UUID], style: PlaqueMaker.Style, margin: Double, corner: Double, borderInset: Double,
+                       in project: inout KerfProject) -> UUID? {
+        let all = project.document.expandToGroups(ids)
+        guard let first = project.document.shapes(ids: all).first else { return nil }
+        var box = project.bounds(of: Set(all)).insetBy(-max(margin, 0))
+        if style == .oval {
+            // An ellipse through the box corners' reach: grow so the content stays inside.
+            box = Rect2(min: box.center - box.size * (0.5 * 2.0.squareRoot()), max: box.center + box.size * (0.5 * 2.0.squareRoot()))
+        }
+        let paths = PlaqueMaker.make(style, box: box, corner: corner, borderInset: borderInset, tolerance: tolerance(project.document.units))
+        guard !paths.isEmpty else { return nil }
+        let s = Shape(name: "Plaque", layerID: first.layerID, paths: paths, origin: .derived(operation: "plaque"))
         project.document.add(s)
         return s.id
     }

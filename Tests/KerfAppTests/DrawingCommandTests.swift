@@ -204,6 +204,20 @@ import Testing
         #expect(p.document.shape(id: wrap)!.paths.count == 1)  // the 2-wide gap is bridged
     }
 
+    @Test func plaqueAroundSelection() {
+        var p = AppTestSupport.project()
+        let ids = p.document.shapes.map(\.id)  // bounds (1,1)-(7,2)
+        let id = VectorCommands.plaque(ids, style: .rounded, margin: 1, corner: 0.5, borderInset: 0.25, in: &p)!
+        let s = p.document.shape(id: id)!
+        #expect(s.paths.count == 2)
+        let b = s.bounds()
+        #expect(abs(b.min.x) < 1e-6 && abs(b.max.x - 8) < 1e-6 && abs(b.min.y) < 1e-6 && abs(b.max.y - 3) < 1e-6)
+        let oval = VectorCommands.plaque(ids, style: .oval, margin: 0, corner: 0, borderInset: 0, in: &p)!
+        // The ellipse contains the content's corners.
+        let poly = p.document.shape(id: oval)!.paths[0].flattened()
+        #expect(PathGeometry.contains(poly, Vec2(1.01, 1.01)) && PathGeometry.contains(poly, Vec2(6.99, 1.99)))
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]
