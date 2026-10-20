@@ -15,6 +15,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     case chamfer(ChamferOperation)
     case holeMill(HoleMillOperation)
     case prism(PrismOperation)
+    case merge(MergeOperation)
 
     public var operation: any ToolpathOperation {
         switch self {
@@ -30,6 +31,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .chamfer(let o): return o
         case .holeMill(let o): return o
         case .prism(let o): return o
+        case .merge(let o): return o
         }
     }
 

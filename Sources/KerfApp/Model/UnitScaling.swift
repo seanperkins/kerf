@@ -158,6 +158,7 @@ extension AnyOperation {
         case .chamfer(var o): o.params = o.params.scaled(by: f); return .chamfer(o)
         case .holeMill(var o): o.params = o.params.scaled(by: f); return .holeMill(o)
         case .prism(var o): o.params = o.params.scaled(by: f); return .prism(o)
+        case .merge(var o): o.params.children = o.params.children.map { $0.scaled(by: f) }; return .merge(o)
         }
     }
 }

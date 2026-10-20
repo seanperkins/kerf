@@ -1,0 +1,72 @@
+import CADCore
+import Foundation
+
+/// Several toolpaths cut as one: the children are generated in order and consecutive results
+/// that use the same tool are joined into a single toolpath (one tool load, no tool change).
+public struct MergeOperation: ToolpathOperation {
+    public static let kind = OperationKind.merge
+    public var setup: OperationSetup
+    public var params: MergeParameters
+
+    public init(setup: OperationSetup, params: MergeParameters = MergeParameters()) {
+        self.setup = setup
+        self.params = params
+    }
+
+    public func generate(in context: CAMContext) throws -> [Toolpath] {
+        guard !params.children.isEmpty else { throw CAMError.invalidParameter("Nothing to merge") }
+        var pieces: [Toolpath] = []
+        for child in params.children {
+            do {
+                pieces += try child.generate(in: context)
+            } catch let error as CAMError {
+                throw CAMError.invalidParameter("\(child.setup.name): \(Self.describe(error))")
+            }
+        }
+        var out: [Toolpath] = []
+        for tp in pieces {
+            if var last = out.last, last.tool.id == tp.tool.id, last.spindleRPM == tp.spindleRPM {
+                last.moves += tp.moves
+                // A profile inside the merge keeps the "cut last" ordering protection.
+                if tp.kind == .profile { last.kind = .profile }
+                for (k, v) in tp.metadata where k == "warning" {
+                    last.metadata[k] = last.metadata[k].map { "\($0); \(tp.name): \(v)" } ?? "\(tp.name): \(v)"
+                }
+                out[out.count - 1] = last
+            } else {
+                var t = tp
+                t.id = UUID()
+                t.name = setup.name
+                t.operationID = setup.id
+                t.metadata = tp.metadata["warning"].map { ["warning": "\(tp.name): \($0)"] } ?? [:]
+                if t.kind != .profile { t.kind = .merge }
+                out.append(t)
+            }
+        }
+        for i in out.indices { out[i].metadata["merged"] = params.children.map(\.setup.name).joined(separator: ", ") }
+        return out
+    }
+
+    static func describe(_ e: CAMError) -> String {
+        switch e {
+        case .notImplemented(let s), .invalidGeometry(let s), .invalidParameter(let s): return s
+        case .missingTool: return "missing tool"
+        case .missingModel: return "missing 3D model"
+        case .noGeometry: return "no vectors selected"
+        }
+    }
+
+    /// A merge of `ops` (merges among them are flattened), named `name`.
+    public static func merging(_ ops: [AnyOperation], name: String) -> MergeOperation? {
+        var children: [AnyOperation] = []
+        for op in ops {
+            if case .merge(let m) = op { children += m.params.children } else { children.append(op) }
+        }
+        guard let first = children.first else { return nil }
+        var shapeIDs: [UUID] = []
+        for c in children { for id in c.setup.shapeIDs where !shapeIDs.contains(id) { shapeIDs.append(id) } }
+        children = children.map { c in var s = c.setup; s.isEnabled = true; return c.with(setup: s) }
+        return MergeOperation(setup: OperationSetup(name: name, toolID: first.setup.toolID, shapeIDs: shapeIDs),
+                              params: MergeParameters(children: children))
+    }
+}

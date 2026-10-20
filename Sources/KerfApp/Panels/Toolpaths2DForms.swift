@@ -249,3 +249,20 @@ struct ArrayCopyForm: View {
         }
     }
 }
+
+/// A merged toolpath: its parts in cutting order and a Split button.
+struct MergeForm: View {
+    var operation: MergeOperation
+    var onSplit: () -> Void
+
+    var body: some View {
+        InspectorSection(title: "Merged Toolpaths") {
+            ForEach(Array(operation.params.children.enumerated()), id: \.offset) { i, c in
+                Text("\(i + 1). \(c.setup.name) (\(c.kind.displayName))")
+            }
+            Text("Cut one after the other with one tool load. Consecutive parts with the same tool become one toolpath.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Button("Split Into Separate Toolpaths", action: onSplit)
+        }
+    }
+}

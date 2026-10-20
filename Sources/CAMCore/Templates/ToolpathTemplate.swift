@@ -72,7 +72,12 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
         let lib = project.mergedTools(with: library)
         var entries: [Entry] = []
         var tools: [Tool] = []
-        for op in project.operations where operationIDs?.contains(op.id) ?? true {
+        // A merged toolpath is stored as its children (each needs its own vectors).
+        let ops = project.operations.filter { operationIDs?.contains($0.id) ?? true }.flatMap { op -> [AnyOperation] in
+            if case .merge(let m) = op { return m.params.children }
+            return [op]
+        }
+        for op in ops {
             let selector = VectorSelector.describing(doc.shapes(ids: op.setup.shapeIDs), in: doc)
             entries.append(Entry(operation: op.detachedFromDesign(), selector: selector))
             for id in op.toolIDs where !tools.contains(where: { $0.id == id }) {
@@ -136,6 +141,7 @@ extension AnyOperation {
         case .chamfer(var o): o.setup = setup; return .chamfer(o)
         case .holeMill(var o): o.setup = setup; return .holeMill(o)
         case .prism(var o): o.setup = setup; return .prism(o)
+        case .merge(var o): o.setup = setup; return .merge(o)
         }
     }
 
@@ -147,6 +153,8 @@ extension AnyOperation {
         case .vcarve(let o): if let c = o.params.flatClearanceToolID { ids.append(c) }
         case .inlay(let o): if let c = o.params.flatClearanceToolID { ids.append(c) }
         case .relief3D(let o): if let c = o.params.roughing.toolID { ids.append(c) }
+        case .merge(let o):
+            for c in o.params.children { ids += c.toolIDs.filter { !ids.contains($0) } }
         default: break
         }
         return ids

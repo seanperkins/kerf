@@ -27,12 +27,14 @@ struct OperationEditor: View {
         InspectorSection(title: draft.kind.displayName + " Toolpath") {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
-            ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID), library: library,
-                       preferred: OperationFactory.preferredToolKinds(for: draft.kind))
-            ToolOverrideSection(override: setupBinding(\.toolOverride),
-                                tool: library.tool(id: draft.setup.toolID)?.forMaterial(document.document.job.material)
-                                    .converted(to: units), units: units)
-            if draft.kind != .relief3D {
+            if draft.kind != .merge {
+                ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID),
+                           library: library, preferred: OperationFactory.preferredToolKinds(for: draft.kind))
+                ToolOverrideSection(override: setupBinding(\.toolOverride),
+                                    tool: library.tool(id: draft.setup.toolID)?.forMaterial(document.document.job.material)
+                                        .converted(to: units), units: units)
+            }
+            if draft.kind != .relief3D && draft.kind != .merge {
                 vectorsRow
             }
         }
@@ -110,6 +112,8 @@ struct OperationEditor: View {
         case .prism(let o):
             PrismForm(params: paramsBinding(o.params) { .prism(PrismOperation(setup: draft.setup, params: $0)) },
                       units: units)
+        case .merge(let o):
+            MergeForm(operation: o, onSplit: { document.splitMergedOperation(o.setup.id) })
         case .relief3D(let o):
             Relief3DForm(params: paramsBinding(o.params) { .relief3D(Relief3DOperation(setup: draft.setup, params: $0)) },
                          units: units, library: library, models: document.document.models,

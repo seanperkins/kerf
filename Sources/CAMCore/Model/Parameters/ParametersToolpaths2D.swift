@@ -165,3 +165,10 @@ public struct ArrayCopySettings: Codable, Hashable, Sendable {
         return out
     }
 }
+
+/// The toolpaths a merged toolpath cuts, in order (toolpaths-2d addition).
+public struct MergeParameters: Codable, Hashable, Sendable {
+    public var children: [AnyOperation]
+
+    public init(children: [AnyOperation] = []) { self.children = children }
+}

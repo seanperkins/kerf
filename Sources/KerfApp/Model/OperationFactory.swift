@@ -20,6 +20,7 @@ extension AnyOperation {
             case .chamfer(var o): o.setup = newValue; self = .chamfer(o)
             case .holeMill(var o): o.setup = newValue; self = .holeMill(o)
             case .prism(var o): o.setup = newValue; self = .prism(o)
+            case .merge(var o): o.setup = newValue; self = .merge(o)
             }
         }
     }
@@ -32,6 +33,7 @@ extension AnyOperation {
         case .vcarve(let o): if let c = o.params.flatClearanceToolID { ids.append(c) }
         case .inlay(let o): if let c = o.params.flatClearanceToolID { ids.append(c) }
         case .relief3D(let o): if let c = o.params.roughing.toolID { ids.append(c) }
+        case .merge: return toolIDs
         default: break
         }
         return ids
@@ -63,7 +65,7 @@ enum OperationFactory {
     /// Preferred tool kinds for an operation (first match in the library wins).
     static func preferredToolKinds(for kind: OperationKind) -> [ToolKind] {
         switch kind {
-        case .profile, .pocket, .holeMill: return [.endMill, .ballNose]
+        case .profile, .pocket, .holeMill, .merge: return [.endMill, .ballNose]
         case .drill: return [.drill, .endMill]
         case .vcarve, .inlay, .chamfer, .prism: return [.vBit, .engraving]
         case .engrave: return [.engraving, .vBit, .ballNose, .endMill]
@@ -122,6 +124,8 @@ enum OperationFactory {
             return .engrave(EngraveOperation(setup: setup, params: EngraveParameters().scaled(by: f)))
         case .chamfer:
             return .chamfer(ChamferOperation(setup: setup, params: ChamferParameters().scaled(by: f)))
+        case .merge:
+            return nil
         case .prism:
             return .prism(PrismOperation(setup: setup, params: PrismParameters().scaled(by: f)))
         case .holeMill:
