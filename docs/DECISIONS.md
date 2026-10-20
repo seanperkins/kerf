@@ -159,3 +159,29 @@
   minimum bottom gap (S + glueGap ≤ P, else invalidParameter). Gaps are reported in toolpath
   metadata (`bottomGap`, `boardGap`). The male is generated in place (mirrored about its own
   bounds centre) — cut it on a separate board; `part: .both` emits female then male toolpaths.
+- **cam-3d** — STL files have no units; `STLImporter` assumes millimetres (`sourceUnits`, default
+  `.millimeter`) and converts to the document units. Vertices are merged on a 1e-7 grid and
+  degenerate triangles dropped. A file whose size matches the binary layout is binary even if
+  its header starts with "solid".
+- **cam-3d** — `PlacedModel` mapping: material XY = mesh XY × `scale` + `offset`; mesh Z is
+  stretched so its top sits `zTop` and its bottom `depth` below the material top. Outside the
+  model's triangles the relief surface is that bottom plane. `ModelPlacement.place` fits/centres
+  a mesh on the job.
+- **cam-3d** — The relief heightmap is *conservative*: each cell stores the shallowest mesh point
+  anywhere in its square (triangle clipped to the cell), and the drop-cutter honours each cell
+  at its point nearest the tool axis. Finishing therefore never gouges the mesh at any
+  resolution; the cost is up to ~slope × cell size of extra stock, so finer resolution = closer
+  finish. Grids are capped (30M cells) and auto-coarsened with a toolpath `warning`.
+- **cam-3d** — Roughing = z-levels (`passDepth` ?? tool stepdown, evenly spaced) raster-cleared
+  where a flat cutter of radius R+allowance, raised by allowance, clears the model (allowance
+  left both sideways and vertically). Levels are nested, so rapid descents stop 0.04 in / 1 mm
+  above the previous level. `PocketStrategy.offset` is cut as raster (angle 0) for now and
+  `profilePass` is ignored; noted in toolpath metadata. Roughing requires an end mill.
+- **cam-3d** — Relief tool centre stays inside the boundary vectors (or the model footprint);
+  output order is roughing then finishing, one toolpath each.
+- **cam-3d** — Fluting/Texture generators live in `Ops3D/FluteToolpathGenerator.swift` and
+  `Ops3D/TextureToolpathGenerator.swift` (public) because `Ops2D/` is owned by cam-2d. If cam-2d
+  has not implemented `FlutingOperation`/`TextureOperation`, the integrator can forward their
+  `generate` to these. Flute passes alternate direction (no retract between passes); texture
+  strokes are half-sine scoops from a SplitMix64 PRNG seeded by `seed`, linked by feeding
+  0.04 in / 1 mm above the top when close, region = selected closed vectors or the material.
