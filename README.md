@@ -5,9 +5,10 @@ It generates G-code for the Avid CNC PRO6096 (Mach4) and replaces VCarve Pro for
 machine.
 
 - **Design:** import SVG (incl. text and embedded images), DXF, EPS, AI and PDF vectors, tracing
-  images (JPG/PNG/BMP/TIF/GIF/WebP) and STL/OBJ/COLLADA models; export SVG, DXF, PDF, EPS and AI.
+  images (JPG/PNG/BMP/TIF/GIF/WebP) and STL/OBJ/COLLADA models (or their parts as flat outlines);
+  browse your own clipart folders; export SVG, DXF, PDF, EPS and AI. Job notes are saved with the file.
   Jobs can be two-sided or span several material sheets, start from saved templates, and numeric
-  fields accept expressions and document variables (`=thickness/2`, `1/4in`). Drawing tools include shapes,
+  fields accept expressions and linked document variables (`=thickness/2`, `1/4in`). Drawing tools include shapes,
   polylines, Bézier pen, text in any installed font, node editing, transforms, align/distribute,
   booleans, offset, layers, snapping and undo/redo.
 - **Toolpaths:** Profile (tabs, ramps, leads), Pocket (offset/raster, clearance tool), Drilling (peck),
