@@ -229,6 +229,20 @@ struct VCarveForm: View {
             OptionalLengthField(label: "Max pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.1 : 2.5)
         }
+        Divider()
+        InspectorSection(title: "Open Vectors") {
+            OptionalLengthField(label: "Engrave at depth", value: $params.openVectorDepth, units: units,
+                                defaultValue: units == .inch ? 0.05 : 1.25)
+            if params.openVectorDepth != nil {
+                NumberField("Taper ends", value: Binding(get: { params.openVectorTaper * 100 },
+                                                         set: { params.openVectorTaper = min(max($0 / 100, 0), 0.5) }),
+                            unit: "%", help: "Share of each line's length over which its ends rise to the surface (0 = constant depth, max 50%)")
+                Text("Open vectors are engraved along the line with the V-bit; tapered ends give sketch-style strokes.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Open vectors in the selection are ignored.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

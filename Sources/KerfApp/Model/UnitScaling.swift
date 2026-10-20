@@ -69,6 +69,7 @@ extension VCarveParameters {
     func scaled(by f: Double) -> VCarveParameters {
         var p = self
         p.startDepth *= f; p.flatDepth = flatDepth.map { $0 * f }; p.passDepth = passDepth.map { $0 * f }
+        p.openVectorDepth = openVectorDepth.map { $0 * f }
         return p
     }
 }

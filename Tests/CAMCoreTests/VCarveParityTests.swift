@@ -154,6 +154,56 @@ private func plug(_ params: InlayParameters, _ paths: [Path] = [F.rect(4, 4, 1, 
     #expect(p.plugBoundary == .boundaryOffset && p.surfaceClearance == nil && p.extraClearanceTools.isEmpty)
 }
 
+// MARK: vc-vbit-engrave
+
+private let openLine = Path(points: [Vec2(1, 1), Vec2(3, 1), Vec2(3, 2)], closed: false)
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func vcarveEngravesOpenVectorAtConstantDepth(zZero: ZZeroMode) throws {
+    let (ctx, setup) = F.context([openLine], zZero: zZero)
+    let tps = try VCarveOperation(setup: setup, params: VCarveParameters(startDepth: 0.02, openVectorDepth: 0.05))
+        .generate(in: ctx)
+    #expect(tps.count == 1)
+    let tp = try #require(tps.first)
+    let pts = F.cutPoints(tp, coords: ctx.coords)
+    // Feed moves at depth follow the line (plunge included), all at start + depth.
+    let atDepth = pts.filter { abs($0.depth - 0.07) < 1e-6 }
+    #expect(atDepth.count > 100)
+    for p in atDepth {
+        let onLine = (abs(p.xy.y - 1) < 1e-6 && p.xy.x >= 1 - 1e-6 && p.xy.x <= 3 + 1e-6)
+            || (abs(p.xy.x - 3) < 1e-6 && p.xy.y >= 1 - 1e-6 && p.xy.y <= 2 + 1e-6)
+        #expect(onLine)
+    }
+    #expect(pts.allSatisfy { $0.depth <= 0.07 + 1e-6 })
+    #expect(tp.metadata["warning"] == nil)
+    F.expectSafeMotion(tp, coords: ctx.coords)
+}
+
+@Test func vcarveEngravesOpenVectorWithTaperedEnds() throws {
+    let (ctx, setup) = F.context([openLine])
+    let params = VCarveParameters(openVectorDepth: 0.1, openVectorTaper: 0.25)
+    let tp = try #require(try VCarveOperation(setup: setup, params: params).generate(in: ctx).first)
+    let pts = F.cutPoints(tp, coords: ctx.coords).filter { $0.depth > 1e-9 }
+    func depth(near q: Vec2) -> Double { pts.filter { $0.xy.distance(to: q) < 0.02 }.map(\.depth).max() ?? -1 }
+    // Length 3: the first and last 0.75 ease in; the middle is at full depth.
+    #expect(depth(near: Vec2(1.02, 1)) < 0.01)
+    #expect(abs(depth(near: Vec2(1.375, 1)) - 0.05) < 0.01)
+    #expect(abs(depth(near: Vec2(2.5, 1)) - 0.1) < 1e-3)
+    #expect(depth(near: Vec2(3, 1.98)) < 0.01)
+}
+
+@Test func vcarveMixesClosedCarvingAndOpenEngraving() throws {
+    let (ctx, setup) = F.context([F.rect(5, 5, 0.4, 0.3), openLine])
+    let ignored = try #require(try VCarveOperation(setup: setup).generate(in: ctx).first)
+    #expect(ignored.metadata["warning"]?.contains("1 open vector(s) ignored") == true)
+    let tp = try #require(try VCarveOperation(setup: setup, params: VCarveParameters(openVectorDepth: 0.05))
+        .generate(in: ctx).first)
+    #expect(tp.metadata["warning"] == nil)
+    let pts = F.cutPoints(tp, coords: ctx.coords)
+    #expect(pts.contains { $0.xy.distance(to: Vec2(2, 1)) < 0.01 && abs($0.depth - 0.05) < 1e-6 })
+    #expect(pts.contains { $0.xy.x > 5 && abs($0.depth - 0.15 / F.tan30) < 1e-3 })
+}
+
 @Test func vcarveClearanceToolDecodesWithoutCornerSharpen() throws {
     let json = #"{"toolID":"00000000-0000-4000-8000-000000000002"}"#
     let t = try JSONDecoder().decode(VCarveClearanceTool.self, from: Data(json.utf8))

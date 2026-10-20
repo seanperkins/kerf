@@ -22,6 +22,8 @@ struct VCarveEngine {
     var cornerSharpen: [Bool] = []
     var clearanceStrategy: PocketStrategy = .offset
     var passDepth: Double?
+    /// Engraving strokes along open vectors, cut by the V-bit with the carve (already at depth).
+    var engraveStrokes: [VCarveStroke] = []
     var tolerance: Double
     var sampleStep: Double
 
@@ -78,7 +80,13 @@ struct VCarveEngine {
             }
         }
 
-        let levels = VCarveStrokes.passLevels(total: bottom, passDepth: passDepth)
+        let engraveBottom = engraveStrokes.map(\.maxDepth).max() ?? 0
+        if engraveBottom > startDepth + toolLimit + 1e-9 {
+            warnings.append(String(format: "Engraving is deeper than the V-bit can cut (%.4f)", startDepth + toolLimit))
+        }
+        vStrokes += engraveStrokes
+        let deepest = max(bottom, engraveBottom)
+        let levels = VCarveStrokes.passLevels(total: deepest, passDepth: passDepth)
         let vPasses = VCarveStrokes.multiPass(vStrokes, levels: levels).map { pass in
             VCarveStrokes.ordered(pass.map {
                 VCarveStroke(points: VCarveStrokes.simplified($0.points, tolerance: tolerance), isClosed: $0.isClosed)
@@ -86,7 +94,7 @@ struct VCarveEngine {
         }
         return Result(vbitPasses: vPasses,
                       clearance: clearance.map { ($0.tool, $0.passes.map { VCarveStrokes.ordered($0) }) },
-                      maxDepth: bottom, warnings: warnings)
+                      maxDepth: deepest, warnings: warnings)
     }
 
     /// Clears the flat area with the clearance tools in order (rest machining after the first).
@@ -231,10 +239,15 @@ extension VCarveEngine {
 
     /// Closed paths of the selected shapes; throws when nothing usable is selected.
     static func closedPaths(_ shapes: [Shape]) throws -> (paths: [Path], skippedOpen: Int) {
+        let split = try splitPaths(shapes)
+        guard !split.closed.isEmpty else { throw CAMError.invalidGeometry("V-carving needs closed vectors") }
+        return (split.closed, split.open.count)
+    }
+
+    /// Closed and open paths of the selected shapes; throws when nothing is selected.
+    static func splitPaths(_ shapes: [Shape]) throws -> (closed: [Path], open: [Path]) {
         guard !shapes.isEmpty else { throw CAMError.noGeometry }
         let all = shapes.flatMap(\.paths)
-        let closed = all.filter(\.isClosed)
-        guard !closed.isEmpty else { throw CAMError.invalidGeometry("V-carving needs closed vectors") }
-        return (closed, all.count - closed.count)
+        return (all.filter(\.isClosed), all.filter { !$0.isClosed })
     }
 }

@@ -13,13 +13,21 @@ public struct VCarveParameters: Codable, Hashable, Sendable {
     /// Further flat-area clearance tools, run in list order after `flatClearanceToolID`; each one
     /// only machines what the tools before it could not reach.
     public var extraClearanceTools: [VCarveClearanceTool]
+    /// Engrave selected open vectors with the V-bit this deep below `startDepth`
+    /// (nil = open vectors are ignored with a warning).
+    public var openVectorDepth: Double?
+    /// Fraction of each open vector's length (0…0.5) over which its ends rise smoothly to the
+    /// surface, for tapered sketch-style strokes (0 = constant depth).
+    public var openVectorTaper: Double
 
     public init(startDepth: Double = 0, flatDepth: Double? = nil, flatClearanceToolID: UUID? = nil,
                 flatClearanceStrategy: PocketStrategy = .offset, passDepth: Double? = nil,
-                extraClearanceTools: [VCarveClearanceTool] = []) {
+                extraClearanceTools: [VCarveClearanceTool] = [], openVectorDepth: Double? = nil,
+                openVectorTaper: Double = 0) {
         self.startDepth = startDepth; self.flatDepth = flatDepth; self.flatClearanceToolID = flatClearanceToolID
         self.flatClearanceStrategy = flatClearanceStrategy; self.passDepth = passDepth
         self.extraClearanceTools = extraClearanceTools
+        self.openVectorDepth = openVectorDepth; self.openVectorTaper = openVectorTaper
     }
 
     /// Every flat-area clearance tool in cutting order (empty without a flat depth tool).
@@ -33,6 +41,7 @@ extension VCarveParameters {
     // Decoder written out so fields added after format 1 default when missing.
     private enum CodingKeys: String, CodingKey {
         case startDepth, flatDepth, flatClearanceToolID, flatClearanceStrategy, passDepth, extraClearanceTools
+        case openVectorDepth, openVectorTaper
     }
 
     public init(from decoder: Decoder) throws {
@@ -42,7 +51,9 @@ extension VCarveParameters {
                   flatClearanceToolID: try c.decodeIfPresent(UUID.self, forKey: .flatClearanceToolID),
                   flatClearanceStrategy: try c.decode(PocketStrategy.self, forKey: .flatClearanceStrategy),
                   passDepth: try c.decodeIfPresent(Double.self, forKey: .passDepth),
-                  extraClearanceTools: try c.decodeIfPresent([VCarveClearanceTool].self, forKey: .extraClearanceTools) ?? [])
+                  extraClearanceTools: try c.decodeIfPresent([VCarveClearanceTool].self, forKey: .extraClearanceTools) ?? [],
+                  openVectorDepth: try c.decodeIfPresent(Double.self, forKey: .openVectorDepth),
+                  openVectorTaper: try c.decodeIfPresent(Double.self, forKey: .openVectorTaper) ?? 0)
     }
 }
 

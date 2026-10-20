@@ -323,3 +323,10 @@
   start depth, i.e. how far the plug board's cleared floor sits above the pocket board when
   seated; it is reported as `boardGap`, must be > 0 and, when set, less than the material
   thickness. The bottom (glue) gap stays P − S.
+- **vcarve-parity** — V-bit engraving of open vectors lives in the V-Carve toolpath:
+  `VCarveParameters.openVectorDepth` (nil = ignore open vectors with a warning, as before) engraves
+  each selected open vector along the line at start depth + depth; `openVectorTaper` (0…0.5) eases
+  each end from the surface over that share of the length with a cosine profile (sketch-style
+  strokes that start and end as points). The strokes join the V-bit's carve strokes, so pass
+  depth, ordering and the move writer apply. A selection of only open vectors is valid when
+  engraving is on. Closed vectors are still V-carved, never engraved along their outline.

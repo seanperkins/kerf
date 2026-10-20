@@ -13,11 +13,27 @@ public struct VCarveOperation: ToolpathOperation {
     }
 
     public func generate(in context: CAMContext) throws -> [Toolpath] {
-        let (paths, skipped) = try VCarveEngine.closedPaths(context.shapes(for: setup))
+        let (paths, open) = try VCarveEngine.splitPaths(context.shapes(for: setup))
+        let engraveDepth = params.openVectorDepth
+        if let d = engraveDepth, d <= 0 { throw CAMError.invalidParameter("open vector engraving depth must be positive") }
+        let engraving = engraveDepth == nil ? [] : open
+        guard !paths.isEmpty || !engraving.isEmpty else {
+            throw CAMError.invalidGeometry(open.isEmpty ? "V-carving needs closed vectors"
+                                           : "V-carving needs closed vectors (or turn on open vector engraving)")
+        }
+        let skipped = open.count - engraving.count
         let vbit = try context.tool(setup.toolID)
         var engine = VCarveEngine(region: VCarveRegion(paths: paths, tolerance: context.tolerance, units: context.units),
                                   vbit: vbit, context: context)
-        guard !engine.region.isEmpty else { throw CAMError.invalidGeometry("selected vectors enclose no area") }
+        guard !engine.region.isEmpty || !engraving.isEmpty else {
+            throw CAMError.invalidGeometry("selected vectors enclose no area")
+        }
+        if let d = engraveDepth {
+            engine.engraveStrokes = engraving.compactMap {
+                VCarveEngraving.stroke($0, startDepth: params.startDepth, depth: d, taper: params.openVectorTaper,
+                                       tolerance: context.tolerance, step: engine.sampleStep)
+            }
+        }
         engine.startDepth = params.startDepth
         engine.flatDepth = params.flatDepth
         engine.clearanceTools = params.flatDepth == nil
