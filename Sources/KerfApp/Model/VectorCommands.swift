@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular
     var id: String { rawValue }
 }
 
@@ -241,6 +241,15 @@ enum VectorCommands {
             }
         }
         return newIDs
+    }
+
+    /// Circular array: `count` items in total (original included) around `center`.
+    static func circularArray(_ ids: [UUID], count: Int, center: Vec2, stepDegrees: Double, rotateCopies: Bool,
+                              in project: inout KerfProject) -> [UUID] {
+        let selCenter = project.bounds(of: Set(project.document.expandToGroups(ids))).center
+        let ts = ArrayLayout.circular(count: count, center: center, stepDegrees: stepDegrees, rotateCopies: rotateCopies,
+                                      selectionCenter: selCenter)
+        return arrayCopies(ids, transforms: ts, in: &project)
     }
 
     /// Rectangular array: rows × columns including the original.

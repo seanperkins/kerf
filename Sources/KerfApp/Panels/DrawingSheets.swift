@@ -15,6 +15,7 @@ struct DrawingSheetHost: View {
         case .mirror: MirrorSheet(document: document)
         case .trimBoundary: TrimBoundarySheet(document: document)
         case .filletChamfer: FilletChamferSheet(document: document)
+        case .arrayCircular: CircularArraySheet(document: document)
         }
     }
 }

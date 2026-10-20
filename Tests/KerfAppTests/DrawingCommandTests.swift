@@ -96,6 +96,15 @@ import Testing
         #expect(b.min == Vec2(1, 1) && b.max == Vec2(5.5, 4))
     }
 
+    @Test func circularArrayAroundPoint() {
+        var p = AppTestSupport.project()
+        let first = p.document.shapes[0]  // centre (2, 1.5)
+        let ids = VectorCommands.circularArray([first.id], count: 4, center: Vec2(0, 1.5), stepDegrees: 90, rotateCopies: true, in: &p)
+        #expect(ids.count == 3)
+        let c = p.document.shape(id: ids[1])!.bounds().center
+        #expect(c.isApproximatelyEqual(to: Vec2(-2, 1.5), tolerance: 1e-9))
+    }
+
     @Test func arrayCopiesKeepGroupsSeparate() {
         var p = AppTestSupport.project()
         let ids = p.document.shapes.map(\.id)

@@ -2,6 +2,61 @@ import CADCore
 import CAMCore
 import SwiftUI
 
+struct CircularArraySheet: View {
+    enum CenterChoice: String, CaseIterable, Identifiable {
+        case material, custom
+        var id: String { rawValue }
+    }
+
+    @ObservedObject var document: KerfDocument
+    @State private var count = 6
+    @State private var evenly = true
+    @State private var sweep = 360.0
+    @State private var step = 30.0
+    @State private var rotate = true
+    @State private var centerChoice = CenterChoice.material
+    @State private var center: Vec2
+
+    init(document: KerfDocument) {
+        self.document = document
+        _center = State(initialValue: document.document.job.materialBounds.center)
+    }
+
+    private var stepValue: Double { evenly ? ArrayLayout.evenStep(count: count, sweepDegrees: sweep) : step }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        DrawingDialog(title: "Circular Array", action: "Create Copies", disabled: count < 2 || ids.isEmpty || stepValue == 0,
+                      note: "\(count - 1) copies, \(RulerTicks.label((stepValue * 1000).rounded() / 1000))° apart (positive = counter-clockwise).",
+                      perform: {
+                          let c = centerChoice == .material ? document.document.job.materialBounds.center : center
+                          let (n, s, r) = (count, stepValue, rotate)
+                          var newIDs: [UUID] = []
+                          document.perform("Circular Array") {
+                              newIDs = VectorCommands.circularArray(ids, count: n, center: c, stepDegrees: s, rotateCopies: r, in: &$0)
+                          }
+                          if !newIDs.isEmpty { document.setSelection(ids + newIDs) }
+                      }) {
+            IntField("Items (total)", value: $count, range: 2...360)
+            Toggle("Spread evenly", isOn: $evenly)
+            if evenly {
+                NumberField("Over angle", value: $sweep, unit: "°", help: "360° = full circle")
+            } else {
+                NumberField("Step angle", value: $step, unit: "°")
+            }
+            Toggle("Rotate copies", isOn: $rotate)
+            Picker("Centre", selection: $centerChoice) {
+                Text("Material centre").tag(CenterChoice.material)
+                Text("Custom point").tag(CenterChoice.custom)
+            }
+            if centerChoice == .custom {
+                LengthField("Centre X", value: $center.x, units: document.units)
+                LengthField("Centre Y", value: $center.y, units: document.units)
+            }
+        }
+    }
+}
+
 struct RectangularArraySheet: View {
     @ObservedObject var document: KerfDocument
     @State private var rows = 2

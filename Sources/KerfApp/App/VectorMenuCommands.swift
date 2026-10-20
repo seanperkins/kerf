@@ -12,6 +12,7 @@ struct VectorMenuCommands: Commands {
             sheetButton("Mirror…", .mirror)
             Divider()
             sheetButton("Rectangular Array…", .arrayLinear)
+            sheetButton("Circular Array…", .arrayCircular)
             Divider()
             Button("Trim Tool") { document?.activeTool = .trim }.disabled(document == nil)
             sheetButton("Trim to Boundary…", .trimBoundary)
