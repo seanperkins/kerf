@@ -21,28 +21,37 @@ public struct Heightfield: Hashable, Sendable {
         get { depths[j * columns + i] }
         set { depths[j * columns + i] = newValue }
     }
-}
 
-/// Simulates material removal of toolpaths into a `Heightfield`. Owned by the preview workstream.
-public struct MaterialSimulator: Sendable {
-    public var heightfield: Heightfield
-    public var coords: MachineCoordinates
-
-    public init(job: JobSetup, cellSize: Double) {
-        coords = MachineCoordinates(job: job)
-        heightfield = Heightfield(width: job.width, height: job.height, cellSize: cellSize)
+    /// Material-frame centre of cell (i, j).
+    public func cellCenter(_ i: Int, _ j: Int) -> Vec2 {
+        Vec2((Double(i) + 0.5) * cellSize, (Double(j) + 0.5) * cellSize)
     }
 
-    public mutating func apply(_ toolpath: Toolpath) {
-        // TODO(preview): sweep tool profile (flat/ball/V) along each move.
+    /// Cell containing material-frame point `p`, or nil when outside the stock.
+    public func cell(containing p: Vec2) -> (i: Int, j: Int)? {
+        let i = Int(floor(p.x / cellSize)), j = Int(floor(p.y / cellSize))
+        guard i >= 0, j >= 0, i < columns, j < rows else { return nil }
+        return (i, j)
     }
-}
 
-/// Machining-time estimate (feeds + rapids, no acceleration model). Owned by preview.
-public enum MachiningTimeEstimator {
-    /// - Parameter rapidRate: machine rapid speed in document units per minute.
-    public static func estimate(_ toolpaths: [Toolpath], rapidRate: Double) -> TimeInterval {
-        // TODO(preview): sum move lengths / feed (arcs by arc length), add tool-change allowance.
-        0
+    /// Depth at material-frame point `p` (0 outside the stock).
+    public func depth(at p: Vec2) -> Float {
+        guard let c = cell(containing: p) else { return 0 }
+        return self[c.i, c.j]
+    }
+
+    /// Deepest cell value.
+    public var maxDepth: Float { depths.max() ?? 0 }
+
+    /// Resets every cell to the untouched top.
+    public mutating func reset() {
+        for k in depths.indices { depths[k] = 0 }
+    }
+
+    /// Cell size giving roughly `targetCells` cells over the material (never below `minimum`).
+    public static func automaticCellSize(width: Double, height: Double, targetCells: Double = 1_000_000,
+                                         minimum: Double = 0) -> Double {
+        let area = max(width * height, 1e-12)
+        return max(minimum, (area / targetCells).squareRoot())
     }
 }
