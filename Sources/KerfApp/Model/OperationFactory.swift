@@ -16,6 +16,8 @@ extension AnyOperation {
             case .fluting(var o): o.setup = newValue; self = .fluting(o)
             case .texture(var o): o.setup = newValue; self = .texture(o)
             case .relief3D(var o): o.setup = newValue; self = .relief3D(o)
+            case .engrave(var o): o.setup = newValue; self = .engrave(o)
+            case .chamfer(var o): o.setup = newValue; self = .chamfer(o)
             }
         }
     }
@@ -38,7 +40,7 @@ extension AnyOperation {
 /// in inches; millimetre documents get them scaled by 25.4).
 enum OperationFactory {
     /// Kinds offered in the "New toolpath" menu, in VCarve-like order.
-    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .vcarve, .inlay, .fluting, .texture, .relief3D]
+    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .engrave, .chamfer, .vcarve, .inlay, .fluting, .texture, .relief3D]
 
     /// Title in the "New toolpath" menus (Inlay opens the pocket + plug wizard).
     static func menuTitle(_ kind: OperationKind) -> String {
@@ -49,7 +51,7 @@ enum OperationFactory {
     static func primaryToolTitle(_ kind: OperationKind) -> String {
         switch kind {
         case .pocket: return "Finish tool"
-        case .vcarve, .inlay: return "V-bit"
+        case .vcarve, .inlay, .chamfer: return "V-bit"
         case .drill: return "Drill"
         case .relief3D: return "Finishing tool"
         default: return "Tool"
@@ -61,7 +63,8 @@ enum OperationFactory {
         switch kind {
         case .profile, .pocket: return [.endMill, .ballNose]
         case .drill: return [.drill, .endMill]
-        case .vcarve, .inlay: return [.vBit, .engraving]
+        case .vcarve, .inlay, .chamfer: return [.vBit, .engraving]
+        case .engrave: return [.engraving, .vBit, .ballNose, .endMill]
         case .fluting: return [.ballNose, .vBit, .endMill]
         case .texture: return [.ballNose, .vBit]
         case .relief3D: return [.ballNose, .endMill]
@@ -113,6 +116,10 @@ enum OperationFactory {
             return .fluting(FlutingOperation(setup: setup, params: FlutingParameters().scaled(by: f)))
         case .texture:
             return .texture(TextureOperation(setup: setup, params: TextureParameters().scaled(by: f)))
+        case .engrave:
+            return .engrave(EngraveOperation(setup: setup, params: EngraveParameters().scaled(by: f)))
+        case .chamfer:
+            return .chamfer(ChamferOperation(setup: setup, params: ChamferParameters().scaled(by: f)))
         case .relief3D:
             guard let model = doc.models.first else { return nil }
             var s = setup

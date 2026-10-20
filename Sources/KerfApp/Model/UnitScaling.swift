@@ -93,6 +93,19 @@ extension Relief3DParameters {
     }
 }
 
+extension EngraveParameters {
+    func scaled(by f: Double) -> EngraveParameters { var p = self; p.depth = depth.scaled(by: f); return p }
+}
+
+extension ChamferParameters {
+    func scaled(by f: Double) -> ChamferParameters {
+        var p = self
+        p.width *= f; p.depth = depth.map { $0 * f }; p.tipClearance *= f; p.startDepth *= f
+        p.passDepth = passDepth.map { $0 * f }
+        return p
+    }
+}
+
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
         switch self {
@@ -104,6 +117,8 @@ extension AnyOperation {
         case .fluting(var o): o.params = o.params.scaled(by: f); return .fluting(o)
         case .texture(var o): o.params = o.params.scaled(by: f); return .texture(o)
         case .relief3D(var o): o.params = o.params.scaled(by: f); return .relief3D(o)
+        case .engrave(var o): o.params = o.params.scaled(by: f); return .engrave(o)
+        case .chamfer(var o): o.params = o.params.scaled(by: f); return .chamfer(o)
         }
     }
 }

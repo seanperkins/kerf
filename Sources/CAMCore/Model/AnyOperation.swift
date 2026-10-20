@@ -11,6 +11,8 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     case fluting(FlutingOperation)
     case texture(TextureOperation)
     case relief3D(Relief3DOperation)
+    case engrave(EngraveOperation)
+    case chamfer(ChamferOperation)
 
     public var operation: any ToolpathOperation {
         switch self {
@@ -22,6 +24,8 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .fluting(let o): return o
         case .texture(let o): return o
         case .relief3D(let o): return o
+        case .engrave(let o): return o
+        case .chamfer(let o): return o
         }
     }
 

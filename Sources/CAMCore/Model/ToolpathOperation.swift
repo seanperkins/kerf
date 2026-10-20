@@ -3,6 +3,8 @@ import Foundation
 
 public enum OperationKind: String, Codable, CaseIterable, Sendable {
     case profile, pocket, drill, vcarve, inlay, fluting, texture, relief3D
+    // toolpaths-2d additions
+    case engrave, chamfer
 
     public var displayName: String {
         switch self {
@@ -14,6 +16,8 @@ public enum OperationKind: String, Codable, CaseIterable, Sendable {
         case .fluting: return "Fluting"
         case .texture: return "Texture"
         case .relief3D: return "3D Relief"
+        case .engrave: return "Quick Engrave"
+        case .chamfer: return "Chamfer"
         }
     }
 }

@@ -90,6 +90,12 @@ struct OperationEditor: View {
             FlutingForm(params: paramsBinding(o.params) { .fluting(FlutingOperation(setup: draft.setup, params: $0)) }, units: units)
         case .texture(let o):
             TextureForm(params: paramsBinding(o.params) { .texture(TextureOperation(setup: draft.setup, params: $0)) }, units: units)
+        case .engrave(let o):
+            EngraveForm(params: paramsBinding(o.params) { .engrave(EngraveOperation(setup: draft.setup, params: $0)) },
+                        units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+        case .chamfer(let o):
+            ChamferForm(params: paramsBinding(o.params) { .chamfer(ChamferOperation(setup: draft.setup, params: $0)) },
+                        units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
         case .relief3D(let o):
             Relief3DForm(params: paramsBinding(o.params) { .relief3D(Relief3DOperation(setup: draft.setup, params: $0)) },
                          units: units, library: library, models: document.document.models,
