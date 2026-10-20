@@ -225,3 +225,27 @@ struct PrismForm: View {
         }
     }
 }
+
+/// Repeat the toolpath on a grid (OperationSetup.arrayCopy).
+struct ArrayCopyForm: View {
+    @Binding var array: ArrayCopySettings?
+    var units: LengthUnit
+
+    private func field<T>(_ kp: WritableKeyPath<ArrayCopySettings, T>, _ fallback: T) -> Binding<T> {
+        Binding(get: { array?[keyPath: kp] ?? fallback }, set: { v in array?[keyPath: kp] = v })
+    }
+
+    var body: some View {
+        Toggle("Repeat on a grid", isOn: Binding(get: { array != nil }, set: { on in
+            array = on ? ArrayCopySettings(spacingX: units == .inch ? 6 : 150, spacingY: units == .inch ? 6 : 150) : nil
+        }))
+        if let a = array {
+            IntField("Columns", value: field(\.columns, 1), range: 1...100)
+            IntField("Rows", value: field(\.rows, 1), range: 1...100)
+            LengthField("X spacing", value: field(\.spacingX, 0), units: units, help: "Distance between columns")
+            LengthField("Y spacing", value: field(\.spacingY, 0), units: units, help: "Distance between rows")
+            Text("\(a.count) cop\(a.count == 1 ? "y" : "ies") of this toolpath, cut row by row. The vectors are not copied; the toolpath shows a warning when copies run off the material.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}

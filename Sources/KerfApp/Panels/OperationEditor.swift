@@ -39,6 +39,10 @@ struct OperationEditor: View {
         Divider()
         parameterForm
         Divider()
+        InspectorSection(title: "Array Copies") {
+            ArrayCopyForm(array: setupBinding(\.arrayCopy), units: units)
+        }
+        Divider()
         resultView
         HStack {
             Button("Calculate") { save(); document.calculate([draft.id]) }

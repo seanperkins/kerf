@@ -136,9 +136,11 @@ extension ToolOverride {
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
         let op = scaledParameters(by: f)
-        guard let o = setup.toolOverride else { return op }
+        guard setup.toolOverride != nil || setup.arrayCopy != nil else { return op }
         var s = op.setup
-        s.toolOverride = o.scaled(by: f)
+        s.toolOverride = setup.toolOverride?.scaled(by: f)
+        s.arrayCopy?.spacingX *= f
+        s.arrayCopy?.spacingY *= f
         return op.with(setup: s)
     }
 

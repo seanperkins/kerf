@@ -138,3 +138,30 @@ public struct ToolOverride: Codable, Hashable, Sendable {
         return t
     }
 }
+
+/// Repeats a toolpath on a grid without copying its vectors (toolpaths-2d addition).
+public struct ArrayCopySettings: Codable, Hashable, Sendable {
+    public var columns: Int
+    public var rows: Int
+    /// Distance between copies along X / Y (document units; negative = left / down).
+    public var spacingX: Double
+    public var spacingY: Double
+
+    public init(columns: Int = 2, rows: Int = 1, spacingX: Double = 6, spacingY: Double = 6) {
+        self.columns = columns; self.rows = rows; self.spacingX = spacingX; self.spacingY = spacingY
+    }
+
+    public var count: Int { max(columns, 1) * max(rows, 1) }
+
+    /// Copy offsets in cutting order: rows from the first, alternating direction (serpentine).
+    public var offsets: [Vec2] {
+        var out: [Vec2] = []
+        for j in 0..<max(rows, 1) {
+            let cols = Array(0..<max(columns, 1))
+            for i in j % 2 == 0 ? cols : cols.reversed() {
+                out.append(Vec2(Double(i) * spacingX, Double(j) * spacingY))
+            }
+        }
+        return out
+    }
+}

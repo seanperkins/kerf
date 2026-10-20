@@ -45,6 +45,8 @@ public struct OperationSetup: Codable, Hashable, Identifiable, Sendable {
     public var shapeIDs: [UUID]
     /// This toolpath's changes to the primary tool's cutting data (toolpaths-2d addition).
     public var toolOverride: ToolOverride?
+    /// Repeat the generated toolpath on a grid (toolpaths-2d addition; nil = once).
+    public var arrayCopy: ArrayCopySettings?
 
     public init(id: UUID = UUID(), name: String, isEnabled: Bool = true, toolID: UUID, shapeIDs: [UUID] = []) {
         self.id = id; self.name = name; self.isEnabled = isEnabled; self.toolID = toolID; self.shapeIDs = shapeIDs
