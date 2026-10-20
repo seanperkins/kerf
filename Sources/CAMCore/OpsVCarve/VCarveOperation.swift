@@ -13,7 +13,34 @@ public struct VCarveOperation: ToolpathOperation {
     }
 
     public func generate(in context: CAMContext) throws -> [Toolpath] {
-        // TODO(cam-vcarve): implement.
-        throw CAMError.notImplemented("VCarveOperation")
+        let (paths, skipped) = try VCarveEngine.closedPaths(context.shapes(for: setup))
+        let vbit = try context.tool(setup.toolID)
+        var engine = VCarveEngine(region: VCarveRegion(paths: paths, tolerance: context.tolerance, units: context.units),
+                                  vbit: vbit, context: context)
+        guard !engine.region.isEmpty else { throw CAMError.invalidGeometry("selected vectors enclose no area") }
+        engine.startDepth = params.startDepth
+        engine.flatDepth = params.flatDepth
+        engine.clearanceTool = try params.flatDepth == nil ? nil : params.flatClearanceToolID.map { try context.tool($0) }
+        engine.clearanceStrategy = params.flatClearanceStrategy
+        engine.passDepth = params.passDepth
+        let result = try engine.run()
+
+        var metadata = ["maxDepth": String(format: "%.4f", result.maxDepth)]
+        var warnings = result.warnings
+        if skipped > 0 { warnings.append("\(skipped) open vector(s) ignored") }
+        if !warnings.isEmpty { metadata["warning"] = warnings.joined(separator: "; ") }
+
+        var out: [Toolpath] = []
+        if let clr = engine.clearanceTool,
+           let tp = VCarveEngine.toolpath(name: "\(setup.name) (flat clearance)", operationID: setup.id, kind: Self.kind,
+                                          tool: clr, passes: result.clearancePasses, context: context, metadata: metadata) {
+            out.append(tp)
+        }
+        if let tp = VCarveEngine.toolpath(name: setup.name, operationID: setup.id, kind: Self.kind, tool: vbit,
+                                          passes: result.vbitPasses, context: context, metadata: metadata) {
+            out.append(tp)
+        }
+        guard !out.isEmpty else { throw CAMError.invalidGeometry("nothing to carve") }
+        return out
     }
 }
