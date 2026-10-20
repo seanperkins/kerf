@@ -53,7 +53,39 @@ struct KerfCommands: Commands {
                 Divider()
                 Button("Distribute Horizontally") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: true, in: &p) } }
                 Button("Distribute Vertically") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: false, in: &p) } }
+                Button("Equal Spacing Horizontally") { withSelection("Distribute") { ids, p in DesignCommands.distributeSpacing(ids, horizontally: true, in: &p) } }
+                Button("Equal Spacing Vertically") { withSelection("Distribute") { ids, p in DesignCommands.distributeSpacing(ids, horizontally: false, in: &p) } }
             }
+            Button("Group") { document?.groupSelection() }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled((document?.selection.count ?? 0) < 2)
+            Button("Ungroup") { document?.ungroupSelection() }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(!(document?.selectedShapes.contains { $0.groupID != nil } ?? false))
+            Button("Combine Vectors") {
+                guard let doc = document else { return }
+                let order = doc.selectedShapes.map(\.id)
+                var newID: UUID?
+                doc.perform("Combine") { newID = DesignCommands.combine(order, in: &$0) }
+                if let id = newID { doc.setSelection([id]) }
+            }
+            Button("Break Apart") {
+                guard let doc = document else { return }
+                let ids = doc.selection
+                var newIDs: [UUID] = []
+                doc.perform("Break Apart") { newIDs = DesignCommands.explode(ids, in: &$0) }
+                if !newIDs.isEmpty { doc.setSelection(newIDs) }
+            }
+            Button("Join Open Vectors") {
+                guard let doc = document else { return }
+                let order = doc.selectedShapes.map(\.id)
+                let tol = doc.units == .inch ? 0.001 : 0.025
+                var newID: UUID?
+                doc.perform("Join") { newID = DesignCommands.join(order, tolerance: tol, in: &$0) }
+                if let id = newID { doc.setSelection([id]) }
+            }
+            Button("Edit Nodes") { document?.activeTool = .nodeEdit }
+            Divider()
             Menu("Boolean") {
                 ForEach(BooleanMode.allCases) { mode in
                     Button(mode.title) {
@@ -75,7 +107,9 @@ struct KerfCommands: Commands {
             Button("Close Open Vectors") { withSelection("Close Vectors") { ids, p in DesignCommands.close(ids, in: &p) } }
             Divider()
             Toggle("Snap to Grid", isOn: Binding(get: { document?.snapToGrid ?? true }, set: { document?.snapToGrid = $0 }))
-                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .keyboardShortcut("'", modifiers: .command)
+            Toggle("Snap to Objects", isOn: Binding(get: { document?.snapToObjects ?? true }, set: { document?.snapToObjects = $0 }))
+                .keyboardShortcut("'", modifiers: [.command, .shift])
         }
         CommandMenu("Toolpaths") {
             Menu("New Toolpath") {

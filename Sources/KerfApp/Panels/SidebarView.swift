@@ -177,6 +177,11 @@ struct LayerRow: View {
             }
             .disabled(document.selection.isEmpty)
             Divider()
+            Button("Move Layer Up") { document.perform("Reorder Layers") { $0.moveLayer(layer.id, by: -1) } }
+                .disabled(document.document.layers.first?.id == layer.id)
+            Button("Move Layer Down") { document.perform("Reorder Layers") { $0.moveLayer(layer.id, by: 1) } }
+                .disabled(document.document.layers.last?.id == layer.id)
+            Divider()
             Button("Delete Layer") { document.perform("Delete Layer") { $0.deleteLayer(layer.id) } }
                 .disabled(document.document.layers.count <= 1)
         }

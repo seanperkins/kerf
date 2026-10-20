@@ -3,21 +3,23 @@ import Foundation
 
 /// Canvas interaction modes.
 enum CanvasTool: String, CaseIterable, Identifiable {
-    case select, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, curve, text
+    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, text
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .select: return "Select"
+        case .nodeEdit: return "Node Edit"
         case .rectangle: return "Rectangle"
         case .roundedRectangle: return "Rounded Rectangle"
         case .circle: return "Circle"
         case .ellipse: return "Ellipse"
         case .polygon: return "Polygon"
         case .star: return "Star"
-        case .polyline: return "Polyline"
-        case .curve: return "Bézier Curve"
+        case .polyline: return "Line / Polyline"
+        case .pen: return "Bézier Pen"
+        case .curve: return "Smooth Curve"
         case .text: return "Text"
         }
     }
@@ -25,6 +27,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .select: return "cursorarrow"
+        case .nodeEdit: return "point.topleft.down.to.point.bottomright.filled.curvepath"
         case .rectangle: return "rectangle"
         case .roundedRectangle: return "app"
         case .circle: return "circle"
@@ -32,10 +35,31 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .polygon: return "hexagon"
         case .star: return "star"
         case .polyline: return "point.topleft.down.to.point.bottomright.curvepath"
+        case .pen: return "pencil.tip"
         case .curve: return "scribble"
         case .text: return "textformat"
         }
     }
+
+    /// Single-key shortcut on the canvas (VCarve/Illustrator-like).
+    var shortcut: Character? {
+        switch self {
+        case .select: return "v"
+        case .nodeEdit: return "n"
+        case .rectangle: return "r"
+        case .circle: return "c"
+        case .ellipse: return "e"
+        case .polyline: return "l"
+        case .pen: return "p"
+        case .text: return "t"
+        default: return nil
+        }
+    }
+
+    static func forShortcut(_ c: Character) -> CanvasTool? { allCases.first { $0.shortcut == c } }
+
+    /// Tools whose shapes are built from successive clicks.
+    var isClickBuilt: Bool { self == .polyline || self == .curve || self == .pen }
 
     /// Tools created by click-dragging a box/radius.
     var isDragShape: Bool {
@@ -57,6 +81,11 @@ struct DrawingOptions: Equatable {
     var fontSize = 1.0
     /// Shift-drag style constraint (square/circle) applied by the canvas.
     var constrain = false
+    /// Numeric creation (inspector): centre and size in document units. Circles, polygons and
+    /// stars use `exactWidth` as the diameter.
+    var exactCenter = Vec2(6, 6)
+    var exactWidth = 4.0
+    var exactHeight = 2.0
 }
 
 /// Builds shapes from canvas gestures (document coordinates). Pure, unit-agnostic.
@@ -105,6 +134,24 @@ enum DrawingTools {
                          paths: [ShapeFactory.star(center: a, points: options.starPoints, outerRadius: radius,
                                                    innerRadius: inner, rotation: (b - a).angle)],
                          origin: .star(points: max(2, options.starPoints), outerRadius: radius, innerRadius: inner))
+        default:
+            return nil
+        }
+    }
+
+    /// Shape of an exact size centred on `center` (numeric entry). Box tools use width × height;
+    /// radial tools use `width` as the diameter (outer diameter for stars).
+    static func exactShape(for tool: CanvasTool, center c: Vec2, width w: Double, height h: Double,
+                           options: DrawingOptions, layerID: UUID) -> Shape? {
+        guard w > 0 else { return nil }
+        var o = options
+        o.constrain = false
+        switch tool {
+        case .rectangle, .roundedRectangle, .ellipse:
+            guard h > 0 else { return nil }
+            return shape(for: tool, from: c - Vec2(w / 2, h / 2), to: c + Vec2(w / 2, h / 2), options: o, layerID: layerID)
+        case .circle, .polygon, .star:
+            return shape(for: tool, from: c, to: c + Vec2(0, w / 2), options: o, layerID: layerID)
         default:
             return nil
         }

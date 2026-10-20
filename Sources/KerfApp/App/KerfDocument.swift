@@ -69,7 +69,13 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var showToolpaths = true
     @Published var results: [UUID: ToolpathResult] = [:]
     @Published var calculating: Set<UUID> = []
-    @Published var activeTool: CanvasTool = .select
+    @Published var activeTool: CanvasTool = .select {
+        didSet { if activeTool != .nodeEdit { nodeSelection = [] } }
+    }
+    /// Selected anchors while the node-edit tool is active.
+    @Published var nodeSelection: Set<NodeRef> = []
+    /// Snap to nodes, midpoints and centres of other shapes (before falling back to the grid).
+    @Published var snapToObjects = true
     @Published var drawingOptions = DrawingOptions()
     @Published var snapToGrid = true
     @Published var sidebarTab: SidebarTab = .design
@@ -134,6 +140,8 @@ final class KerfDocument: ReferenceFileDocument {
     private func pruneState() {
         let ids = Set(project.document.shapes.map(\.id))
         if !selection.isSubset(of: ids) { setSelection(selectionOrder.filter(ids.contains)) }
+        let nodes = project.validNodes(nodeSelection)
+        if nodes != nodeSelection { nodeSelection = nodes }
         let opIDs = Set(project.operations.map(\.id))
         if let sel = selectedOperationID, !opIDs.contains(sel) { selectedOperationID = nil }
         results = results.filter { opIDs.contains($0.key) }
@@ -169,15 +177,22 @@ final class KerfDocument: ReferenceFileDocument {
         selection = Set(selectionOrder)
     }
 
+    /// Selects a shape (and its group mates). Extending toggles the whole group.
     func select(_ id: UUID, extending: Bool) {
+        let members = project.document.expandToGroups([id])
         if extending {
-            if selection.contains(id) { setSelection(selectionOrder.filter { $0 != id }) } else { setSelection(selectionOrder + [id]) }
+            if selection.contains(id) {
+                let drop = Set(members)
+                setSelection(selectionOrder.filter { !drop.contains($0) })
+            } else {
+                setSelection(selectionOrder + members)
+            }
         } else {
-            setSelection([id])
+            setSelection(members)
         }
     }
 
-    func addToSelection(_ ids: [UUID]) { setSelection(selectionOrder + ids) }
+    func addToSelection(_ ids: [UUID]) { setSelection(selectionOrder + project.document.expandToGroups(ids)) }
 
     func selectAll() {
         setSelection(project.document.shapes.filter { project.isEditable($0) }.map(\.id))
@@ -214,11 +229,86 @@ final class KerfDocument: ReferenceFileDocument {
 
     func duplicateSelection() {
         guard !selection.isEmpty else { return }
-        let ids = selection
+        let shapes = selectedShapes
         var newIDs: [UUID] = []
-        let g = project.document.gridSpacing
-        perform("Duplicate") { newIDs = $0.duplicateShapes(ids, offset: Vec2(g, -g)) }
+        let g = project.document.gridSpacing, layer = currentLayerID
+        perform("Duplicate") { newIDs = $0.paste(shapes, offset: Vec2(g, -g), fallbackLayer: layer) }
         setSelection(newIDs)
+    }
+
+    /// Pastes clipboard shapes (offset when the originals are still in the document).
+    func pasteShapes(_ shapes: [Shape]) {
+        guard !shapes.isEmpty else { return }
+        let offset = ShapeClipboard.pasteOffset(for: shapes, existing: Set(project.document.shapes.map(\.id)),
+                                                grid: project.document.gridSpacing)
+        var newIDs: [UUID] = []
+        let layer = currentLayerID
+        perform("Paste") { newIDs = $0.paste(shapes, offset: offset, fallbackLayer: layer) }
+        setSelection(newIDs)
+    }
+
+    func groupSelection() {
+        let order = selectionOrder
+        perform("Group") { _ = DesignCommands.group(order, in: &$0) }
+    }
+
+    func ungroupSelection() {
+        let order = selectionOrder
+        perform("Ungroup") { DesignCommands.ungroup(order, in: &$0) }
+    }
+
+    /// Applies `change` to the whole selection as one undoable step.
+    func editSelection(_ actionName: String, _ change: @escaping (Set<UUID>, inout KerfProject) -> Void) {
+        guard !selection.isEmpty else { return }
+        let ids = selection
+        perform(actionName) { change(ids, &$0) }
+    }
+
+    func transformSelection(by t: Transform2D, actionName: String) {
+        editSelection(actionName) { ids, p in p.transformShapes(ids, by: t) }
+    }
+
+    // MARK: Node edits
+
+    func moveSelectedNodes(by d: Vec2) {
+        guard !nodeSelection.isEmpty, d != .zero else { return }
+        let refs = nodeSelection
+        perform("Move Nodes") { $0.moveNodes(refs, by: d) }
+    }
+
+    func deleteSelectedNodes() {
+        guard !nodeSelection.isEmpty else { return }
+        let refs = nodeSelection
+        perform("Delete Nodes") { $0.deleteNodes(refs) }
+        nodeSelection = []
+    }
+
+    func setSelectedNodes(smooth: Bool) {
+        let refs = nodeSelection
+        perform(smooth ? "Smooth Nodes" : "Corner Nodes") { $0.setNodes(refs, smooth: smooth) }
+    }
+
+    func convertSegmentsAfterSelectedNodes(toCurve: Bool) {
+        let refs = nodeSelection
+        perform(toCurve ? "Convert to Curve" : "Convert to Line") { $0.convertSegments(after: refs, toCurve: toCurve) }
+    }
+
+    func insertNodesAfterSelection() {
+        let refs = nodeSelection
+        var new: Set<NodeRef> = []
+        perform("Insert Nodes") { new = $0.insertNodesAfter(refs) }
+        nodeSelection = new
+    }
+
+    func breakAtSelectedNode() {
+        guard nodeSelection.count == 1, let r = nodeSelection.first else { return }
+        perform("Break Path") { _ = $0.editNodes(of: r.shapeID) { ShapeNodes.breakAt($0, r) } }
+        nodeSelection = []
+    }
+
+    /// Replaces one shape (node drags, handle drags, inserts on the canvas).
+    func replaceShape(_ shape: Shape, actionName: String) {
+        perform(actionName) { p in p.editNodes(of: shape.id) { _ in shape } }
     }
 
     // MARK: Operations

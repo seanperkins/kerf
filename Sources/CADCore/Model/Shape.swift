@@ -22,11 +22,14 @@ public struct Shape: Codable, Hashable, Identifiable, Sendable {
     public var paths: [Path]
     public var origin: ShapeOrigin
     public var isLocked: Bool
+    /// Shapes sharing a group ID are selected and transformed together (nil = ungrouped).
+    /// Optional so files written before grouping existed still decode.
+    public var groupID: UUID?
 
     public init(id: UUID = UUID(), name: String = "", layerID: UUID, paths: [Path],
-                origin: ShapeOrigin = .drawn, isLocked: Bool = false) {
+                origin: ShapeOrigin = .drawn, isLocked: Bool = false, groupID: UUID? = nil) {
         self.id = id; self.name = name; self.layerID = layerID; self.paths = paths
-        self.origin = origin; self.isLocked = isLocked
+        self.origin = origin; self.isLocked = isLocked; self.groupID = groupID
     }
 
     public var isClosed: Bool { !paths.isEmpty && paths.allSatisfy(\.isClosed) }

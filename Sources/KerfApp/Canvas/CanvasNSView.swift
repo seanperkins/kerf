@@ -30,10 +30,26 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
         case move(startDoc: Vec2, currentDoc: Vec2)
         case pan(lastView: Vec2)
         case draw(startDoc: Vec2, currentDoc: Vec2)
+        /// Dragging a scale/rotate handle of the selection box.
+        case handle(TransformHandle, box: Rect2, startDoc: Vec2, currentDoc: Vec2)
+        /// Node tool: moving the selected nodes (`anchor` is the grabbed node's position).
+        case nodes(anchor: Vec2, startDoc: Vec2, currentDoc: Vec2)
+        /// Node tool: dragging one Bézier handle.
+        case bezierHandle(NodeRef, PathNodes.Handle, currentDoc: Vec2)
+        /// Node tool: rubber-band node selection.
+        case nodeMarquee(startView: Vec2, currentView: Vec2, extend: Bool)
+        /// Pen tool: dragging out the handle of the node just placed.
+        case penDrag
     }
     var drag: DragState = .none
     /// Points clicked so far for polyline/curve tools.
     var clickPoints: [Vec2] = []
+    /// Nodes placed so far with the Bézier pen.
+    var pen = PenPath()
+    /// Last object/grid snap (drawn as a marker).
+    var lastSnap: SnapEngine.Result?
+    /// Snap targets, rebuilt when the design or the excluded shapes change.
+    var snapCache: (revision: Int, excluded: Set<UUID>, engine: SnapEngine)?
     var hoverDoc: Vec2?
     var spaceHeld = false
     private var didInitialFit = false
@@ -167,15 +183,48 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
 
     func viewPoint(_ event: NSEvent) -> Vec2 { Vec2(convert(event.locationInWindow, from: nil)) }
 
-    func docPoint(_ event: NSEvent, snapped: Bool = true) -> Vec2 {
+    func docPoint(_ event: NSEvent, snapped: Bool = true, excluding: Set<UUID> = []) -> Vec2 {
         let p = viewport.toDocument(viewPoint(event))
-        guard snapped, let doc = document, doc.snapToGrid, !event.modifierFlags.contains(.command) else { return p }
-        return Snapping.snap(p, grid: doc.document.gridSpacing)
+        guard snapped, !event.modifierFlags.contains(.command) else { lastSnap = nil; return p }
+        return snap(p, excluding: excluding)
     }
 
-    /// Snaps a translation so grid-aligned geometry stays on the grid.
+    /// Snaps a document point to object points and/or the grid per the document's settings.
+    func snap(_ p: Vec2, excluding: Set<UUID> = []) -> Vec2 {
+        guard let doc = document else { return p }
+        let grid = doc.snapToGrid ? doc.document.gridSpacing : 0
+        guard doc.snapToObjects else {
+            lastSnap = grid > 0 ? .init(point: Snapping.snap(p, grid: grid), kind: .grid) : nil
+            return lastSnap?.point ?? p
+        }
+        let r = snapEngine(excluding: excluding).snap(p, tolerance: snapTolerance, grid: grid)
+        lastSnap = r
+        return r.point
+    }
+
+    var snapTolerance: Double { viewport.documentLength(8) }
+
+    func snapEngine(excluding: Set<UUID>) -> SnapEngine {
+        guard let doc = document else { return SnapEngine(targets: []) }
+        if let c = snapCache, c.revision == doc.designRevision, c.excluded == excluding { return c.engine }
+        let shapes = doc.project.document.shapes.filter { doc.project.isVisible($0) && !excluding.contains($0.id) }
+        let e = SnapEngine(shapes: shapes)
+        snapCache = (doc.designRevision, excluding, e)
+        return e
+    }
+
+    /// Snaps a selection translation: a corner/centre of the selection box (or a node of a small
+    /// selection) lands on an object point, otherwise the delta snaps to the grid.
     func snappedDelta(_ d: Vec2) -> Vec2 {
-        guard let doc = document, doc.snapToGrid else { return d }
-        return Snapping.snap(d, grid: doc.document.gridSpacing)
+        guard let doc = document, !NSEvent.modifierFlags.contains(.command) else { return d }
+        let grid = doc.snapToGrid ? doc.document.gridSpacing : 0
+        guard doc.snapToObjects else { return grid > 0 ? Snapping.snap(d, grid: grid) : d }
+        let b = doc.project.bounds(of: doc.selection)
+        var anchors = b.isEmpty ? [] : [b.min, b.max, Vec2(b.min.x, b.max.y), Vec2(b.max.x, b.min.y), b.center]
+        let shapes = doc.selectedShapes
+        if shapes.reduce(0, { $0 + $1.paths.reduce(0) { $0 + $1.segments.count } }) < 400 {
+            anchors += shapes.flatMap { s in s.paths.flatMap { [$0.start] + $0.segments.map(\.end) } }
+        }
+        return snapEngine(excluding: doc.selection).snapDelta(d, anchors: anchors, tolerance: snapTolerance, grid: grid)
     }
 }

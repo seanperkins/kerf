@@ -11,7 +11,9 @@ struct InspectorView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                if document.activeTool != .select {
+                if document.activeTool == .nodeEdit {
+                    NodeInspector(document: document)
+                } else if document.activeTool != .select {
                     DrawingOptionsView(document: document)
                 } else if document.sidebarTab == .toolpaths, let op = document.operation(document.selectedOperationID) {
                     OperationEditor(document: document, original: op).id(op.id)
@@ -57,6 +59,9 @@ struct DrawingOptionsView: View {
             case .curve:
                 Text("Click points for a smooth Bézier curve. Click the first point to close; double-click or Return to finish.")
                     .font(.callout).foregroundStyle(.secondary)
+            case .pen:
+                Text("Click for a corner node, click-drag for a smooth node. Click the first node to close; double-click or Return to finish; Delete removes the last node.")
+                    .font(.callout).foregroundStyle(.secondary)
             case .text:
                 TextField("Text", text: $document.drawingOptions.text)
                 Picker("Font", selection: $document.drawingOptions.fontName) {
@@ -64,16 +69,21 @@ struct DrawingOptionsView: View {
                 }
                 LengthField("Height", value: $document.drawingOptions.fontSize, units: units)
                 Text("Click on the canvas to place the text baseline.").font(.callout).foregroundStyle(.secondary)
-            case .select:
+            case .select, .nodeEdit:
                 EmptyView()
             }
             Toggle("Snap to grid", isOn: $document.snapToGrid)
+            Toggle("Snap to objects", isOn: $document.snapToObjects)
             Button("Done") { document.activeTool = .select }
         }
         .onAppear {
             let fromCore = TextOutliner.availableFontNames()
             fonts = fromCore.isEmpty ? NSFontManager.shared.availableFontFamilies : fromCore
             if !fonts.contains(document.drawingOptions.fontName), let f = fonts.first { document.drawingOptions.fontName = f }
+        }
+        if document.activeTool.isDragShape {
+            Divider()
+            ExactShapeSection(document: document)
         }
     }
 }
@@ -134,6 +144,7 @@ struct ShapeInspector: View {
                 NumberField("Rotate", value: $rotation, unit: "°")
                 Button("Apply") { let r = rotation; document.perform("Rotate") { TransformCommands.rotate(ids, degrees: r, in: &$0) } }
             }
+            MoveScaleFields(document: document)
             HStack {
                 Button("Mirror ↔") { document.perform("Mirror") { TransformCommands.mirror(ids, horizontally: true, in: &$0) } }
                 Button("Mirror ↕") { document.perform("Mirror") { TransformCommands.mirror(ids, horizontally: false, in: &$0) } }
@@ -203,6 +214,12 @@ struct AlignButtons: View {
             Button("Distribute ↕") { document.perform("Distribute") { DesignCommands.distribute(ids, horizontally: false, in: &$0) } }
                 .disabled(ids.count < 3)
         }
+        HStack {
+            Button("Space ↔") { document.perform("Distribute") { DesignCommands.distributeSpacing(ids, horizontally: true, in: &$0) } }
+                .disabled(ids.count < 3).help("Equal gaps between shapes, horizontally")
+            Button("Space ↕") { document.perform("Distribute") { DesignCommands.distributeSpacing(ids, horizontally: false, in: &$0) } }
+                .disabled(ids.count < 3).help("Equal gaps between shapes, vertically")
+        }
     }
 
     private func btn(_ icon: String, _ mode: AlignMode) -> some View {
@@ -242,18 +259,26 @@ struct EditVectorButtons: View {
                 Button("Close") { let ids = Set(order); document.perform("Close Vectors") { DesignCommands.close(ids, in: &$0) } }
             }
             HStack {
-                Button("Group") {
+                Button("Group") { document.groupSelection() }
+                    .disabled(order.count < 2)
+                Button("Ungroup") { document.ungroupSelection() }
+                    .disabled(!document.selectedShapes.contains { $0.groupID != nil })
+                Button("Edit Nodes") { document.activeTool = .nodeEdit }
+            }
+            HStack {
+                Button("Combine") {
                     var newID: UUID?
-                    document.perform("Group") { newID = DesignCommands.combine(order, in: &$0) }
+                    document.perform("Combine") { newID = DesignCommands.combine(order, in: &$0) }
                     if let id = newID { document.setSelection([id]) }
                 }
-                .disabled(order.count < 2)
-                Button("Ungroup") {
+                .disabled(order.count < 2).help("Merge the selected vectors into one multi-path shape")
+                Button("Break Apart") {
                     var ids: [UUID] = []
                     let sel = Set(order)
-                    document.perform("Ungroup") { ids = DesignCommands.explode(sel, in: &$0) }
+                    document.perform("Break Apart") { ids = DesignCommands.explode(sel, in: &$0) }
                     if !ids.isEmpty { document.setSelection(ids) }
                 }
+                .help("Split multi-path shapes into one shape per path")
                 Button("Delete", role: .destructive) { document.deleteSelection() }
             }
         }
