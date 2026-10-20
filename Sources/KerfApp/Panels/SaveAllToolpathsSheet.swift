@@ -86,6 +86,9 @@ struct SaveAllToolpathsSheet: View {
             }
             Text(loads.map { "T\($0.number) \($0.name)" }.joined(separator: " → "))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            if let cut = r.deepestCut {
+                Text("Deepest cut " + cut.text(units: document.units)).font(.caption).foregroundStyle(.secondary)
+            }
             if let e = r.errorMessage {
                 Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(Color.errorText)
             } else if errors + warnings > 0 {
