@@ -1,0 +1,324 @@
+import CADCore
+import CAMCore
+import Foundation
+import PostCore
+import Testing
+@testable import KerfApp
+
+/// Shared setup: Profile (T1) on shape 0, V-Carve (T6) and Pocket (T1) on shape 1, all calculated.
+private enum Job {
+    static let post = BuiltInPosts.avidMach4Inch
+
+    static func project() -> KerfProject {
+        var p = AppTestSupport.project()
+        let a = p.document.shapes[0].id, b = p.document.shapes[1].id
+        for (kind, ids) in [(OperationKind.profile, [a]), (.vcarve, [b]), (.pocket, [b])] {
+            p.operations.append(OperationFactory.make(kind: kind, project: p, library: .seeded, shapeIDs: ids)!)
+        }
+        return p
+    }
+
+    static func results(_ p: KerfProject) -> [UUID: ToolpathResult] {
+        Dictionary(uniqueKeysWithValues: p.operations.map {
+            ($0.id, ToolpathCalculator.calculate($0, project: p, library: .seeded, designRevision: 0, rapidRate: 200))
+        })
+    }
+}
+
+@Suite struct JobSummaryTests {
+    @Test func groupedByToolLoadsEachToolOnce() {
+        let p = Job.project()
+        let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true)
+        #expect(s.sequence.map(\.number) == [1, 6])
+        #expect(s.toolChanges == 1)
+        #expect(s.sequence[0].toolpathNames.count == 2)
+    }
+
+    @Test func listOrderChangesToolWheneverItDiffers() {
+        let p = Job.project()
+        let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: false)
+        #expect(s.sequence.map(\.number) == [1, 6, 1])
+        #expect(s.toolChanges == 2)
+    }
+
+    @Test func rowsCarryTimesAndToolsAndTotalSkipsDisabled() {
+        var p = Job.project()
+        let results = Job.results(p)
+        var s = JobSummary.make(operations: p.operations, results: results, groupByTool: true)
+        #expect(s.rows.count == 3)
+        #expect(s.rows.allSatisfy { ($0.estimatedSeconds ?? 0) > 0 })
+        #expect(s.rows[1].tools.first?.hasPrefix("T6") == true)
+        let all = s.totalSeconds
+        p.operations[1].editableSetup.isEnabled = false
+        s = JobSummary.make(operations: p.operations, results: results, groupByTool: true)
+        #expect(abs(s.totalSeconds - (all - (s.rows[1].estimatedSeconds ?? 0))) < 1e-6)
+        #expect(s.sequence.map(\.number) == [1])
+    }
+
+    @Test func uncalculatedRowsHaveNoTime() {
+        let p = Job.project()
+        let s = JobSummary.make(operations: p.operations, results: [:], groupByTool: true)
+        #expect(s.rows.allSatisfy { $0.estimatedSeconds == nil })
+        #expect(s.sequence.isEmpty)
+        #expect(s.toolChanges == 0)
+    }
+}
+
+@Suite struct SaveAllToolpathsTests {
+    @Test func singleFileModesProduceOneProgram() {
+        let p = Job.project()
+        let r = Job.results(p)
+        for mode in [SaveAllMode.oneFileGroupedByTool, .oneFileInOrder] {
+            let files = GCodeBatchExport.plan(mode: mode, operations: p.operations, results: r, jobName: "Sign",
+                                              profile: Job.post)
+            #expect(files.count == 1)
+            #expect(files[0].fileName == "Sign.tap")
+        }
+    }
+
+    @Test func filePerToolpathNamesEachAfterItsToolpath() {
+        let p = Job.project()
+        let files = GCodeBatchExport.plan(mode: .filePerToolpath, operations: p.operations, results: Job.results(p),
+                                          jobName: "Sign", profile: Job.post)
+        #expect(files.map(\.fileName) == ["Sign_Profile_1.tap", "Sign_V-Carve_1.tap", "Sign_Pocket_1.tap"])
+    }
+
+    @Test func filePerToolHasNoToolChangesInside() throws {
+        let p = Job.project()
+        let files = GCodeBatchExport.plan(mode: .filePerTool, operations: p.operations, results: Job.results(p),
+                                          jobName: "Sign", profile: Job.post)
+        #expect(files.count == 2)
+        #expect(files[0].fileName.hasPrefix("Sign_T1_"))
+        for f in files { #expect(Set(f.toolpaths.map(\.tool.id)).count == 1) }
+        let posted = GCodeBatchExport.post(files, project: p, profile: Job.post, jobName: "Sign")
+        let dir = AppTestSupport.tempDir()
+        let urls = try GCodeBatchExport.write(posted, to: dir)
+        #expect(urls.count == 2)
+        let text = try String(contentsOf: urls[1], encoding: .utf8)
+        #expect(text.contains("M30"))
+    }
+
+    @Test func disabledAndUncalculatedToolpathsAreSkipped() {
+        var p = Job.project()
+        var r = Job.results(p)
+        p.operations[0].editableSetup.isEnabled = false
+        r[p.operations[2].id] = nil
+        let files = GCodeBatchExport.plan(mode: .filePerToolpath, operations: p.operations, results: r,
+                                          jobName: "Sign", profile: Job.post)
+        #expect(files.map(\.title) == ["V-Carve 1"])
+    }
+
+    @Test func duplicateFileNamesGetSuffixes() {
+        let f = PlannedGCodeFile(fileName: "a.tap", title: "a", toolpaths: [])
+        #expect(GCodeBatchExport.uniquified([f, f, f]).map(\.fileName) == ["a.tap", "a_2.tap", "a_3.tap"])
+    }
+}
+
+@Suite struct ValidationReportTests {
+    @Test func hasOneSectionPerEnabledToolpathPlusCombined() {
+        let p = Job.project()
+        let report = ValidationReport.make(project: p, results: Job.results(p), profile: Job.post, groupByTool: true)
+        #expect(report.sections.map(\.title) == ["Profile 1", "V-Carve 1", "Pocket 1", "Combined program"])
+        #expect(report.errorCount == 0)
+    }
+
+    @Test func uncalculatedAndFailedToolpathsAreReported() {
+        var p = Job.project()
+        p.operations[0].editableSetup.shapeIDs = []
+        let r = Job.results(p).filter { $0.key != p.operations[2].id }
+        let report = ValidationReport.make(project: p, results: r, profile: Job.post, groupByTool: true)
+        #expect(report.sections[0].issues.first?.message.hasPrefix("Not exported") == true)
+        #expect(report.sections[2].issues.first?.message == "Not calculated yet")
+        #expect(report.warningCount >= 2)
+    }
+
+    @Test func cutsBelowTheSpoilboardAreErrors() {
+        var p = Job.project()
+        guard case .pocket(var o) = p.operations[2] else { Issue.record("expected pocket"); return }
+        o.params.depth.cutDepth = p.document.job.thickness + 0.5
+        p.operations[2] = .pocket(o)
+        let report = ValidationReport.make(project: p, results: Job.results(p), profile: Job.post, groupByTool: true)
+        #expect(report.errorCount > 0)
+        #expect(report.sections[2].issues.contains { $0.severity == .error })
+    }
+}
+
+@Suite struct InlayWizardTests {
+    @Test func createsFemalePocketAndMalePlug() {
+        let p = AppTestSupport.project()
+        var w = InlayWizardModel(project: p, library: .seeded, shapeIDs: [p.document.shapes[0].id])
+        #expect(w.problems(library: .seeded).isEmpty)
+        w.pocketDepth = 0.25; w.plugStartDepth = 0.15; w.glueGap = 0.03
+        let ops = w.makeOperations()
+        #expect(ops.count == 2)
+        guard case .inlay(let f) = ops[0], case .inlay(let m) = ops[1] else { Issue.record("expected inlays"); return }
+        #expect(f.params.part == .female && m.params.part == .male)
+        #expect(f.setup.name == "Inlay 1 Pocket" && m.setup.name == "Inlay 1 Plug")
+        #expect(m.params.maleStartDepth == 0.15 && f.params.pocketDepth == 0.25)
+        #expect(f.setup.toolID == ToolLibrary.seeded.tools[5].id)
+        #expect(abs(w.bottomGap - 0.1) < 1e-12)
+    }
+
+    @Test func rejectsImpossibleDepthsAndMissingVectors() {
+        let p = AppTestSupport.project()
+        var w = InlayWizardModel(project: p, library: .seeded, shapeIDs: [])
+        w.plugStartDepth = 0.2; w.glueGap = 0.05; w.pocketDepth = 0.2
+        let problems = w.problems(library: .seeded)
+        #expect(problems.count == 2)
+        w.vbitID = ToolLibrary.seeded.tools[0].id
+        #expect(w.problems(library: .seeded).contains("Inlays need a V-bit."))
+    }
+
+    @Test func millimetreDocumentsGetScaledDefaults() {
+        let p = AppTestSupport.project().converted(to: .millimeter)
+        let w = InlayWizardModel(project: p, library: .seeded, shapeIDs: [])
+        #expect(abs(w.pocketDepth - 0.2 * 25.4) < 1e-9)
+    }
+}
+
+@Suite struct ModelPlacementFormTests {
+    /// 4 x 2 base, 1 high pyramid.
+    static let mesh = Mesh3D(vertices: [Vec3(0, 0, 0), Vec3(4, 0, 0), Vec3(4, 2, 0), Vec3(0, 2, 0), Vec3(2, 1, 1)],
+                             indices: [0, 1, 4, 1, 2, 4, 2, 3, 4, 3, 0, 4, 0, 2, 1, 0, 3, 2])
+
+    static func job() -> JobSetup { Document().job }
+
+    @Test func defaultsCentreTheModelAtNativeSize() {
+        let job = Self.job()
+        let f = ModelPlacementForm(mesh: Self.mesh, name: "Pyr", job: job, library: .seeded)
+        let m = f.placedModel
+        #expect(abs(m.scale - 1) < 1e-12)
+        #expect(m.footprint.center.distance(to: job.materialBounds.center) < 1e-9)
+        #expect(abs(m.depth - min(1, job.thickness)) < 1e-12)
+        #expect(m.zTop == 0)
+    }
+
+    @Test func sizeKeepsAspectAndPositionAndZAreApplied() {
+        var f = ModelPlacementForm(mesh: Self.mesh, name: "Pyr", job: Self.job(), library: .seeded)
+        f.setWidth(8)
+        #expect(f.height == 4)
+        f.setHeight(1)
+        #expect(f.width == 2)
+        f.position = .custom
+        f.x = 3; f.y = 5
+        f.zHeight = 0.4; f.zOffset = 0.1
+        let m = f.placedModel
+        #expect(m.footprint.min.distance(to: Vec2(3, 5)) < 1e-9)
+        #expect(abs(m.footprint.width - 2) < 1e-9)
+        #expect(abs(m.zTop - 0.1) < 1e-12 && abs(m.depth - 0.5) < 1e-12)
+        #expect(f.warnings.isEmpty)
+    }
+
+    @Test func oversizedModelsShrinkToFitAndWarnWhenTooDeep() {
+        var job = Self.job()
+        job.width = 2; job.height = 2
+        var f = ModelPlacementForm(mesh: Self.mesh, name: "Pyr", job: job, library: .seeded)
+        #expect(abs(f.width - 2) < 1e-9 && abs(f.height - 1) < 1e-9)
+        f.zHeight = job.thickness
+        f.zOffset = 0.1
+        #expect(f.warnings.contains("The model goes deeper than the material thickness."))
+    }
+
+    @Test func createsRoughingAndFinishingToolpaths() throws {
+        var p = AppTestSupport.project()
+        let f = ModelPlacementForm(mesh: Self.mesh, name: "Pyr", job: p.document.job, library: .seeded)
+        p.document.models.append(f.placedModel)
+        let ops = f.makeOperations(existing: p.operations, units: p.document.units)
+        #expect(ops.map(\.setup.name) == ["Pyr Roughing", "Pyr Finishing"])
+        guard case .relief3D(let r) = ops[0], case .relief3D(let fin) = ops[1] else { Issue.record("expected 3D"); return }
+        #expect(r.params.roughing.isEnabled && !r.params.finishing.isEnabled)
+        #expect(!fin.params.roughing.isEnabled && fin.params.finishing.isEnabled)
+        #expect(ToolLibrary.seeded.tool(id: r.setup.toolID)?.kind == .endMill)
+        #expect(ToolLibrary.seeded.tool(id: fin.setup.toolID)?.kind == .ballNose)
+        p.operations = ops
+        for op in ops {
+            let res = ToolpathCalculator.calculate(op, project: p, library: .seeded, designRevision: 0, rapidRate: 200)
+            #expect(res.error == nil)
+            #expect(res.toolpaths.count == 1)
+        }
+    }
+
+    @Test func editingRoundTripsAnExistingModel() {
+        var f = ModelPlacementForm(mesh: Self.mesh, name: "Pyr", job: Self.job(), library: .seeded)
+        f.setWidth(6); f.zOffset = 0.05; f.zHeight = 0.3
+        let m = f.placedModel
+        let e = ModelPlacementForm(editing: m, job: Self.job(), library: .seeded)
+        #expect(e.modelID == m.id)
+        #expect(!e.createToolpaths)
+        #expect(e.placedModel == m || e.placedModel.footprint.min.distance(to: m.footprint.min) < 1e-9)
+        #expect(abs(e.width - 6) < 1e-9 && abs(e.zHeight - 0.3) < 1e-12)
+    }
+}
+
+@Suite struct TabEditorTests {
+    static func setup() -> (KerfProject, Shape) {
+        let p = AppTestSupport.project()
+        return (p, p.document.shapes[0]) // 2x1 rectangle at (1,1)
+    }
+
+    @Test func clickingNearAVectorAddsATabThere() throws {
+        let (p, s) = Self.setup()
+        let t = try #require(TabEditor.adding(at: Vec2(2, 0.98), to: TabSettings(), shapes: [s], maxDistance: 0.1,
+                                              tolerance: 0.001))
+        #expect(t.isEnabled && t.isManual && t.manualTabs?.count == 1)
+        let pos = TabEditor.positions(t, document: p.document, tolerance: 0.001)
+        #expect(pos[0]!.distance(to: Vec2(2, 1)) < 1e-6)
+        #expect(TabEditor.adding(at: Vec2(2, 0.5), to: t, shapes: [s], maxDistance: 0.1, tolerance: 0.001) == nil)
+    }
+
+    @Test func tabsCanBeHitMovedAndRemoved() throws {
+        let (p, s) = Self.setup()
+        var t = try #require(TabEditor.adding(at: Vec2(2, 1), to: TabSettings(), shapes: [s], maxDistance: 0.1,
+                                              tolerance: 0.001))
+        #expect(TabEditor.hit(at: Vec2(2.03, 1.02), tabs: t, document: p.document, radius: 0.05, tolerance: 0.001) == 0)
+        #expect(TabEditor.hit(at: Vec2(2.5, 1), tabs: t, document: p.document, radius: 0.05, tolerance: 0.001) == nil)
+        t = try #require(TabEditor.moving(0, to: Vec2(3.4, 1.5), in: t, shapes: [s], tolerance: 0.001))
+        let q = TabEditor.positions(t, document: p.document, tolerance: 0.001)[0]!
+        #expect(q.distance(to: Vec2(3, 1.5)) < 1e-6) // snapped onto the right edge
+        t = TabEditor.removing(0, from: t)
+        #expect(t.manualTabs == [])
+        #expect(t.isManual)
+    }
+
+    @Test func switchingToManualSeedsTheAutomaticCount() {
+        let (p, _) = Self.setup()
+        var tabs = TabSettings(isEnabled: true, countPerPath: 3)
+        tabs = TabEditor.makeManual(tabs, shapes: p.document.shapes)
+        #expect(tabs.manualTabs?.count == 6)
+        #expect(TabEditor.makeAutomatic(tabs).manualTabs == nil)
+    }
+
+    @Test func manualTabsReachTheGeneratedToolpath() throws {
+        var p = AppTestSupport.project()
+        let s = p.document.shapes[0]
+        var op = OperationFactory.make(kind: .profile, project: p, library: .seeded, shapeIDs: [s.id])!
+        let tabs = try #require(TabEditor.adding(at: Vec2(2, 1), to: op.profileTabs!, shapes: [s], maxDistance: 0.1,
+                                                 tolerance: 0.001))
+        op = op.withProfileTabs(tabs)
+        p.operations = [op]
+        let r = ToolpathCalculator.calculate(op, project: p, library: .seeded, designRevision: 0, rapidRate: 200)
+        #expect(r.error == nil)
+        // With tabs the deepest cut is still the full depth, but some final-pass moves are raised.
+        let coords = MachineCoordinates(job: p.document.job)
+        let tabTop = coords.z(depth: p.document.job.thickness - tabs.thickness)
+        #expect(r.toolpaths[0].moves.contains { abs(($0.target?.z ?? 99) - tabTop) < 1e-9 })
+    }
+}
+
+@Suite struct OperationHintsTests {
+    @Test func peckSummaryListsEachPeck() {
+        let s = OperationHints.peckSummary(DrillParameters(cutDepth: 0.5, peckDepth: 0.2), units: .inch)
+        #expect(s == "3 pecks per hole: 0.2, 0.4, 0.5 in.")
+        #expect(OperationHints.peckSummary(DrillParameters(cutDepth: 0.5, peckDepth: 0), units: .inch)
+                    .hasPrefix("Single plunge"))
+    }
+
+    @Test func clearanceToolMustBeLargerThanFinishTool() {
+        let lib = ToolLibrary.seeded
+        let quarter = lib.tools[0], eighth = lib.tools[1], half = lib.tools[2]
+        #expect(OperationHints.pocketClearanceProblem(finish: quarter, clearance: half) == nil)
+        #expect(OperationHints.pocketClearanceProblem(finish: quarter, clearance: eighth) != nil)
+        #expect(OperationHints.pocketClearanceProblem(finish: quarter, clearance: quarter) != nil)
+        #expect(OperationHints.pocketClearanceProblem(finish: quarter, clearance: nil) == nil)
+    }
+}

@@ -55,7 +55,7 @@ public struct DrillOperation: ToolpathOperation {
     }
 
     /// Depths of successive pecks (the last is the cut depth).
-    static func peckDepths(start: Double, end: Double, peck: Double) -> [Double] {
+    public static func peckDepths(start: Double, end: Double, peck: Double) -> [Double] {
         guard peck > 1e-9 else { return [end] }
         var out: [Double] = []
         var d = start
