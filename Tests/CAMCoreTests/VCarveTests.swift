@@ -153,3 +153,24 @@ func vcarveFlatAreaUsesClearanceTool(strategy: PocketStrategy) throws {
     #expect(abs(ctx.coords.depth(ofMachineZ: tp.minZ!) - 4 / F.tan30) < 0.02)
     #expect(tp.tool.units == .millimeter)
 }
+
+@Test func vcarveDenseOutlineStaysFastAndInside() throws {
+    // 600-vertex wavy ring (text-like density) with a wavy hole.
+    func wavy(_ r: Double, _ amp: Double, _ n: Int) -> Path {
+        Path(points: (0..<n).map { i in
+            let a = Double(i) / Double(n) * 2 * .pi
+            let rr = r + amp * sin(a * 24)
+            return Vec2(3 + rr * cos(a), 3 + rr * sin(a))
+        }, closed: true)
+    }
+    let (ctx, setup) = F.context([wavy(1.0, 0.05, 600), wavy(0.6, 0.04, 400)])
+    let start = Date()
+    let tp = try #require(try VCarveOperation(setup: setup, params: VCarveParameters(flatDepth: 0.2)).generate(in: ctx).first)
+    #expect(Date().timeIntervalSince(start) < 10)
+    for p in F.cutPoints(tp, coords: ctx.coords, step: 0.05) {
+        let d = p.xy.distance(to: Vec2(3, 3))
+        #expect(d > 0.55 && d < 1.06)
+        #expect(p.depth <= 0.2 + 1e-6)
+    }
+    F.expectSafeMotion(tp, coords: ctx.coords)
+}
