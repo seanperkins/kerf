@@ -37,7 +37,7 @@ public protocol MeshImporter: Sendable {
 
 /// Registry used by the app to pick an importer by file extension.
 public enum FileFormats {
-    public static let vectorImporters: [any VectorImporter.Type] = [SVGImporter.self, DXFImporter.self, EPSImporter.self]
+    public static let vectorImporters: [any VectorImporter.Type] = [SVGImporter.self, DXFImporter.self, EPSImporter.self, PDFImporter.self]
     public static let vectorExporters: [any VectorExporter.Type] = [SVGExporter.self, DXFExporter.self]
 
     public static func importer(forExtension ext: String) -> (any VectorImporter)? {
@@ -45,6 +45,7 @@ public enum FileFormats {
         if SVGImporter.fileExtensions.contains(e) { return SVGImporter() }
         if DXFImporter.fileExtensions.contains(e) { return DXFImporter() }
         if EPSImporter.fileExtensions.contains(e) { return EPSImporter() }
+        if PDFImporter.fileExtensions.contains(e) { return PDFImporter() }
         return nil
     }
 }

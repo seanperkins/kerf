@@ -12,7 +12,7 @@ struct ImportOutcome: Equatable {
 /// File > Import: vectors (SVG/DXF/EPS) become shapes on their own layers; STL becomes a
 /// placed 3D model centred on the material.
 enum ImportService {
-    static let vectorExtensions = ["svg", "dxf", "eps"]
+    static let vectorExtensions = ["svg", "dxf", "eps", "ai", "pdf"]
     static let meshExtensions = ["stl"]
     static var allExtensions: [String] { vectorExtensions + meshExtensions }
 
