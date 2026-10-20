@@ -1,0 +1,227 @@
+import Foundation
+
+/// COLLADA (.dae) mesh import — the open format SketchUp (and most modellers) export.
+/// Reads `<triangles>`, `<polylist>` and `<polygons>` (fan-triangulated) of every geometry
+/// instanced from the visual scene, applying node `<matrix>`/translate/rotate/scale transforms,
+/// `<instance_node>` (SketchUp components) and the `<unit meter>` / `<up_axis>` of the asset.
+public struct DAEImporter: MeshImporter {
+    public static let fileExtensions = ["dae"]
+    public init() {}
+
+    public func importMesh(from data: Data, targetUnits: LengthUnit) throws -> Mesh3D {
+        let root = try XMLTree.parse(data)
+        guard root.name == "COLLADA" else { throw KerfIOError.malformed("not a COLLADA document") }
+        var ids: [String: XMLTree] = [:]
+        root.forEach { if let id = $0.attributes["id"] { ids[id] = $0 } }
+
+        let asset = root.child("asset")
+        let meter = asset?.child("unit")?.attributes["meter"].flatMap(Double.init) ?? 1
+        let up = asset?.child("up_axis")?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Y_UP"
+        // Metres → target units, and the up axis → +Z.
+        let scale = meter * LengthUnit.millimeter.convert(1000, to: targetUnits)
+        var base = Matrix4.scale(scale)
+        if up == "Y_UP" { base = Matrix4.yUpToZUp.multiplied(by: base) }
+        if up == "X_UP" { base = Matrix4.xUpToZUp.multiplied(by: base) }
+
+        var tris: [(Vec3, Vec3, Vec3)] = []
+        var depth = 0
+        func visit(_ node: XMLTree, _ parent: Matrix4) {
+            guard depth < 32 else { return }
+            depth += 1
+            defer { depth -= 1 }
+            var m = parent
+            for c in node.children {
+                switch c.name {
+                case "matrix":
+                    let v = c.numbers
+                    if v.count == 16 { m = m.multiplied(by: Matrix4(rowMajor: v)) }
+                case "translate":
+                    let v = c.numbers
+                    if v.count == 3 { m = m.multiplied(by: .translation(v[0], v[1], v[2])) }
+                case "scale":
+                    let v = c.numbers
+                    if v.count == 3 { m = m.multiplied(by: .scale(v[0], v[1], v[2])) }
+                case "rotate":
+                    let v = c.numbers
+                    if v.count == 4 { m = m.multiplied(by: .rotation(axis: Vec3(v[0], v[1], v[2]), degrees: v[3])) }
+                default: break
+                }
+            }
+            for c in node.children {
+                switch c.name {
+                case "instance_geometry":
+                    if let g = c.attributes["url"].flatMap({ ids[String($0.dropFirst())] }) {
+                        tris += Self.triangles(of: g, ids: ids).map { (m.apply($0.0), m.apply($0.1), m.apply($0.2)) }
+                    }
+                case "instance_node":
+                    if let n = c.attributes["url"].flatMap({ ids[String($0.dropFirst())] }) { visit(n, m) }
+                case "node":
+                    visit(c, m)
+                default: break
+                }
+            }
+        }
+
+        let sceneURL = root.child("scene")?.child("instance_visual_scene")?.attributes["url"]
+        let scene = sceneURL.flatMap { ids[String($0.dropFirst())] }
+            ?? root.child("library_visual_scenes")?.child("visual_scene")
+        if let scene {
+            for n in scene.children where n.name == "node" { visit(n, base) }
+        } else {
+            // No scene: take every geometry untransformed.
+            for g in root.child("library_geometries")?.children ?? [] where g.name == "geometry" {
+                tris += Self.triangles(of: g, ids: ids).map { (base.apply($0.0), base.apply($0.1), base.apply($0.2)) }
+            }
+        }
+        guard !tris.isEmpty else { throw KerfIOError.malformed("the COLLADA file contains no triangles") }
+        return STLImporter.indexed(tris, scale: 1)
+    }
+
+    /// Triangles of one `<geometry>` in its own coordinates.
+    static func triangles(of geometry: XMLTree, ids: [String: XMLTree]) -> [(Vec3, Vec3, Vec3)] {
+        guard let mesh = geometry.child("mesh") else { return [] }
+        func positions(_ url: String?) -> [Vec3] {
+            guard var src = url.flatMap({ ids[String($0.dropFirst())] }) else { return [] }
+            if src.name == "vertices",
+               let s = src.children.first(where: { $0.name == "input" && $0.attributes["semantic"] == "POSITION" })?
+                .attributes["source"].flatMap({ ids[String($0.dropFirst())] }) {
+                src = s
+            }
+            guard let arr = src.child("float_array") else { return [] }
+            let v = arr.numbers
+            let stride = src.child("technique_common")?.child("accessor")?.attributes["stride"].flatMap(Int.init) ?? 3
+            guard stride >= 3 else { return [] }
+            return Swift.stride(from: 0, to: v.count - 2, by: stride).map { Vec3(v[$0], v[$0 + 1], v[$0 + 2]) }
+        }
+        var out: [(Vec3, Vec3, Vec3)] = []
+        for prim in mesh.children where ["triangles", "polylist", "polygons"].contains(prim.name) {
+            let inputs = prim.children.filter { $0.name == "input" }
+            guard let vin = inputs.first(where: { $0.attributes["semantic"] == "VERTEX" }) else { continue }
+            let pts = positions(vin.attributes["source"])
+            let vOffset = vin.attributes["offset"].flatMap(Int.init) ?? 0
+            let width = (inputs.compactMap { $0.attributes["offset"].flatMap(Int.init) }.max() ?? 0) + 1
+            func polygon(_ idx: ArraySlice<Int>) {
+                let verts = idx.compactMap { $0 >= 0 && $0 < pts.count ? pts[$0] : nil }
+                guard verts.count >= 3 else { return }
+                for k in 1..<(verts.count - 1) { out.append((verts[0], verts[k], verts[k + 1])) }
+            }
+            let ps = prim.children.filter { $0.name == "p" }
+            switch prim.name {
+            case "triangles":
+                guard let p = ps.first else { continue }
+                let all = p.integers
+                let vIdx = Swift.stride(from: vOffset, to: all.count, by: width).map { all[$0] }
+                for t in Swift.stride(from: 0, to: vIdx.count - 2, by: 3) { polygon(vIdx[t..<(t + 3)]) }
+            case "polylist":
+                guard let p = ps.first else { continue }
+                let all = p.integers
+                let vIdx = Swift.stride(from: vOffset, to: all.count, by: width).map { all[$0] }
+                var at = 0
+                for n in prim.child("vcount")?.integers ?? [] {
+                    guard n > 0, at + n <= vIdx.count else { break }
+                    polygon(vIdx[at..<(at + n)])
+                    at += n
+                }
+            default:  // polygons: one <p> per polygon
+                for p in ps {
+                    let all = p.integers
+                    polygon(ArraySlice(Swift.stride(from: vOffset, to: all.count, by: width).map { all[$0] }))
+                }
+            }
+        }
+        return out
+    }
+}
+
+/// Column-vector 4×4 affine matrix (row-major storage) for COLLADA node transforms.
+struct Matrix4 {
+    var m: [Double]  // 16, row-major
+
+    init(rowMajor: [Double]) { m = rowMajor }
+
+    static let identity = Matrix4(rowMajor: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
+    static func translation(_ x: Double, _ y: Double, _ z: Double) -> Matrix4 {
+        Matrix4(rowMajor: [1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1])
+    }
+    static func scale(_ s: Double) -> Matrix4 { scale(s, s, s) }
+    static func scale(_ x: Double, _ y: Double, _ z: Double) -> Matrix4 {
+        Matrix4(rowMajor: [x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1])
+    }
+    /// (x, y, z) → (x, −z, y): Y-up models stand on Kerf's XY plane with +Y becoming +Z.
+    static let yUpToZUp = Matrix4(rowMajor: [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1])
+    /// COLLADA X_UP (right = −Y, up = +X) → Z-up: (x, y, z) → (−y, −z, x).
+    static let xUpToZUp = Matrix4(rowMajor: [0, -1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0, 0, 0, 1])
+
+    static func rotation(axis a: Vec3, degrees: Double) -> Matrix4 {
+        let len = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()
+        guard len > 1e-12 else { return .identity }
+        let x = a.x / len, y = a.y / len, z = a.z / len
+        let r = degrees * .pi / 180, c = cos(r), s = sin(r), t = 1 - c
+        return Matrix4(rowMajor: [t * x * x + c, t * x * y - s * z, t * x * z + s * y, 0,
+                                  t * x * y + s * z, t * y * y + c, t * y * z - s * x, 0,
+                                  t * x * z - s * y, t * y * z + s * x, t * z * z + c, 0,
+                                  0, 0, 0, 1])
+    }
+
+    /// self × o (apply `o` first).
+    func multiplied(by o: Matrix4) -> Matrix4 {
+        var r = [Double](repeating: 0, count: 16)
+        for i in 0..<4 { for j in 0..<4 { for k in 0..<4 { r[i * 4 + j] += m[i * 4 + k] * o.m[k * 4 + j] } } }
+        return Matrix4(rowMajor: r)
+    }
+
+    func apply(_ p: Vec3) -> Vec3 {
+        Vec3(m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3],
+             m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7],
+             m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11])
+    }
+}
+
+/// Small generic XML element tree (element text kept) for COLLADA.
+final class XMLTree {
+    let name: String
+    let attributes: [String: String]
+    var children: [XMLTree] = []
+    var text = ""
+
+    init(name: String, attributes: [String: String]) { self.name = name; self.attributes = attributes }
+
+    func child(_ name: String) -> XMLTree? { children.first { $0.name == name } }
+
+    func forEach(_ body: (XMLTree) -> Void) {
+        body(self)
+        for c in children { c.forEach(body) }
+    }
+
+    var numbers: [Double] { text.split(whereSeparator: { $0 == " " || $0.isNewline || $0 == "\t" }).compactMap { Double($0) } }
+    var integers: [Int] { text.split(whereSeparator: { $0 == " " || $0.isNewline || $0 == "\t" }).compactMap { Int($0) } }
+
+    static func parse(_ data: Data) throws -> XMLTree {
+        let b = Builder()
+        let parser = XMLParser(data: data)
+        parser.delegate = b
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse(), let root = b.root else {
+            throw KerfIOError.malformed(parser.parserError?.localizedDescription ?? "unreadable XML")
+        }
+        return root
+    }
+
+    private final class Builder: NSObject, XMLParserDelegate {
+        var root: XMLTree?
+        var stack: [XMLTree] = []
+
+        func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
+                    qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+            let node = XMLTree(name: elementName.split(separator: ":").last.map(String.init) ?? elementName,
+                               attributes: attributeDict)
+            if let top = stack.last { top.children.append(node) } else { root = node }
+            stack.append(node)
+        }
+
+        func parser(_ parser: XMLParser, foundCharacters string: String) { stack.last?.text += string }
+
+        func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,
+                    qualifiedName qName: String?) { _ = stack.popLast() }
+    }
+}

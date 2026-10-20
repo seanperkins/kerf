@@ -14,9 +14,11 @@ struct ImportOutcome: Equatable {
 /// placed 3D model centred on the material.
 enum ImportService {
     static let vectorExtensions = ["svg", "dxf", "eps", "ai", "pdf"]
-    static let meshExtensions = ["stl", "obj"]
+    static let meshExtensions = ["stl", "obj", "dae"]
     static var imageExtensions: [String] { RasterCodec.fileExtensions }
-    static var allExtensions: [String] { vectorExtensions + meshExtensions + imageExtensions }
+    /// Accepted by the open panel only so a clear "export as DAE/STL" message can be shown.
+    static let explainedExtensions = ["skp"]
+    static var allExtensions: [String] { vectorExtensions + meshExtensions + imageExtensions + explainedExtensions }
 
     static var allowedContentTypes: [UTType] {
         allExtensions.compactMap { UTType(filenameExtension: $0) }
@@ -24,7 +26,11 @@ enum ImportService {
 
     /// STL or OBJ reader by file extension (both assume millimetres).
     static func meshImporter(for fileName: String) -> any MeshImporter {
-        (fileName as NSString).pathExtension.lowercased() == "obj" ? OBJImporter() : STLImporter()
+        switch (fileName as NSString).pathExtension.lowercased() {
+        case "obj": return OBJImporter()
+        case "dae": return DAEImporter()
+        default: return STLImporter()
+        }
     }
 
     static func isMesh(_ fileName: String) -> Bool {
@@ -129,6 +135,8 @@ enum ImportService {
     static func describe(_ error: Error) -> String {
         switch error {
         case KerfIOError.notImplemented(let what): return "\(what) is not available in this build yet."
+        case KerfIOError.unsupportedFormat("skp"):
+            return "SketchUp files cannot be read directly. In SketchUp use File > Export > 3D Model and choose COLLADA (.dae) or STL, then import that file."
         case KerfIOError.unsupportedFormat(let ext): return "Kerf cannot import .\(ext) files."
         case KerfIOError.malformed(let msg): return "The file could not be read: \(msg)"
         default: return error.localizedDescription

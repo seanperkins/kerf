@@ -18,4 +18,15 @@ import Testing
         #expect(out.modelIDs.count == 1)
         #expect(q.document.models[0].name == "part")
     }
+
+    @Test func sketchUpFilesExplainTheExportRoute() {
+        var p = KerfProject()
+        #expect(ImportService.allExtensions.contains("skp") && ImportService.isMesh("model.dae"))
+        do {
+            _ = try ImportService.importFile(data: Data([0xFF, 0xFE]), fileName: "house.skp", into: &p)
+            Issue.record("expected an error")
+        } catch {
+            #expect(ImportService.describe(error).contains("COLLADA"))
+        }
+    }
 }
