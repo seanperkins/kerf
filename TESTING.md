@@ -58,6 +58,19 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    `~/Library/Application Support/Kerf/`.
 10. **Round trip.** Save the document as a `.kerf` file, close it and open it again.
 
+### More file and job features
+
+- **Job sheet:** File → Job Sheet… saves an HTML page (material, origin, tools, toolpaths, times,
+  picture) and opens it in the browser for printing. File → Print… / Print at Actual Size… print
+  the 2D design.
+- **More imports:** File → Import… also takes PDF/AI vectors, JPG/PNG/… tracing images (edit them in
+  the Design sidebar's Images section: fade, crop, size), OBJ and COLLADA (.dae, e.g. exported from
+  SketchUp) models. Export Vectors… writes PDF, EPS or AI by file extension.
+- **Templates:** File → Save as Template…, then File → New from Template.
+- **Job Setup:** Plunge Z, datum offset, and a two-sided job (Design → Show Bottom Side, ⌥⌘F).
+  Design → Sheets adds more material sheets; each sheet exports its own G-code.
+- **Variables:** Design → Document Variables…; type `=thickness - 0.05` or `1/4in` in any number field.
+
 ## 3. On the machine (Avid PRO6096, Mach4)
 
 **Dry run in Mach4 (no cutting):**

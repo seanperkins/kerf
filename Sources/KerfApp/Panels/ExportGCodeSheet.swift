@@ -27,7 +27,7 @@ struct ExportGCodeSheet: View {
             Form {
                 Picker("Toolpaths", selection: $scope) {
                     Text("All enabled toolpaths").tag(GCodeExportScope.all)
-                    ForEach(document.project.operations) { op in
+                    ForEach(document.outputProject.operations) { op in
                         Text(op.setup.name).tag(GCodeExportScope.operation(op.id))
                     }
                 }
@@ -36,7 +36,10 @@ struct ExportGCodeSheet: View {
                 }
                 LabeledContent("Machine", value: document.machine?.name ?? "Custom (post limits)")
                 PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine)
-                LabeledContent("Z zero", value: document.document.job.zZero.displayName)
+                if document.isTwoSided {
+                    LabeledContent("Side", value: document.activeSide.displayName + " (switch in the Design menu)")
+                }
+                LabeledContent("Z zero", value: document.outputProject.document.job.zZero.displayName)
                 LabeledContent("XY origin", value: document.document.job.xyOrigin.displayName)
             }
             .formStyle(.grouped)
@@ -107,7 +110,7 @@ struct ExportGCodeSheet: View {
 
     private func targetOperations() -> [UUID] {
         switch scope {
-        case .all: return document.project.operations.filter(\.setup.isEnabled).map(\.id)
+        case .all: return document.outputProject.operations.filter(\.setup.isEnabled).map(\.id)
         case .operation(let id): return [id]
         }
     }
@@ -135,13 +138,13 @@ struct ExportGCodeSheet: View {
     }
 
     private func post() {
-        let tps = GCodeExporter.toolpaths(scope: scope, operations: document.project.operations,
+        let tps = GCodeExporter.toolpaths(scope: scope, operations: document.outputProject.operations,
                                           results: document.results, groupByTool: groupByTool)
         let failed = targetOperations().compactMap { id -> String? in
             guard let r = document.results[id], let e = r.error else { return nil }
             return "\(r.operation.setup.name): \(e)"
         }
-        var r = GCodeExporter.export(project: document.project, toolpaths: tps, profile: profile,
+        var r = GCodeExporter.export(project: document.outputProject(for: scope), toolpaths: tps, profile: profile,
                                      jobName: document.document.name)
         if !failed.isEmpty {
             r.issues.insert(contentsOf: failed.map { GCodeIssue(severity: .warning, message: "Skipped — \($0)") }, at: 0)

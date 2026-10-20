@@ -44,6 +44,28 @@ public struct TextOutliner: Sendable {
         return out
     }
 
+    /// Outlines for one line of text set at a font POINT size (em size, e.g. SVG `font-size`),
+    /// with the baseline's anchor at `origin`. Throws `fontNotFound` for unknown fonts.
+    public func outlines(for text: String, fontName: String, pointSize: Double, origin: Vec2,
+                         alignment: TextAlignment) throws -> [Path] {
+        guard pointSize > 0, !text.isEmpty else { return [] }
+        let probe = try Self.font(named: fontName, capHeight: 70)
+        let font = CTFontCreateCopyWithAttributes(probe, pointSize, nil, nil)
+        let attr = NSAttributedString(string: text, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+        let ctLine = CTLineCreateWithAttributedString(attr)
+        let width = CTLineGetTypographicBounds(ctLine, nil, nil, nil)
+        let factor: Double = alignment == .left ? 0 : alignment == .center ? 0.5 : 1
+        return glyphOutlines(ctLine, at: Vec2(origin.x - width * factor, origin.y), fallback: font)
+    }
+
+    /// Advance width of one line at a font point size.
+    public func advance(of text: String, fontName: String, pointSize: Double) throws -> Double {
+        guard pointSize > 0, !text.isEmpty else { return 0 }
+        let font = CTFontCreateCopyWithAttributes(try Self.font(named: fontName, capHeight: 70), pointSize, nil, nil)
+        let attr = NSAttributedString(string: text, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+        return CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attr), nil, nil, nil)
+    }
+
     /// A text `Shape` (provenance recorded for re-editing).
     public func shape(for text: String, fontName: String, size: Double, origin: Vec2,
                       alignment: TextAlignment = .left, layerID: UUID) throws -> Shape {

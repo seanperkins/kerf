@@ -10,6 +10,7 @@ struct ContentView: View {
     @ObservedObject private var catalog = PostProfileCatalog.shared
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.documentConfiguration) private var documentConfiguration
     @State private var showInspector = true
 
     var body: some View {
@@ -36,6 +37,11 @@ struct ContentView: View {
         }
         .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
+        .onAppear { document.fileURL = documentConfiguration?.fileURL }
+        .onChange(of: documentConfiguration?.fileURL) { _, url in
+            document.fileURL = url
+            document.scheduleFileThumbnail()
+        }
         .sheet(item: $document.sheet, onDismiss: { document.sheetDismissed() }) { sheet in
             switch sheet {
             case .jobSetup: JobSetupSheet(document: document)
@@ -50,11 +56,14 @@ struct ContentView: View {
             case .fixtures: FixturesSheet(document: document)
             case .tiling: TilingSheet(document: document)
             case .partLabels: PartLabelsSheet(document: document)
+            case .variables: DocumentVariablesSheet(document: document)
             }
         }
         .alert(item: $document.alert) { a in
             Alert(title: Text(a.title), message: Text(a.message))
         }
+        .environment(\.documentVariables, document.document.variableTable)
+        .environment(\.expressionUnits, document.units)
     }
 
     @ViewBuilder private var center: some View {
@@ -125,8 +134,10 @@ struct StatusBar: View {
     var body: some View {
         HStack(spacing: 14) {
             Text(GCodeExporter.materialDescription(document.document))
-            Text("Z0: " + document.document.job.zZero.displayName)
+            Text("Z0: " + document.outputProject.document.job.zZero.displayName)
             Text("Origin: " + document.document.job.xyOrigin.displayName)
+            if document.document.isMultiSheet { Text("Sheet: " + document.document.currentSheetName).bold() }
+            if document.isTwoSided { Text("Side: " + document.activeSide.displayName).bold() }
             Text([document.machine?.name, document.postProfile.name].compactMap { $0 }.joined(separator: " · "))
             Spacer()
             if !document.selection.isEmpty { Text("\(document.selection.count) selected") }

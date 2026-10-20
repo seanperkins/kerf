@@ -39,6 +39,7 @@ enum DocumentSheet: Identifiable, Equatable {
     case fixtures
     case tiling
     case partLabels
+    case variables
 
     var id: String {
         switch self {
@@ -54,6 +55,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .fixtures: return "fixtures"
         case .tiling: return "tiling"
         case .partLabels: return "partLabels"
+        case .variables: return "variables"
         }
     }
 }
@@ -113,6 +115,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var snapToGrid = true
     @Published var sidebarTab: SidebarTab = .design
     @Published var centerMode: CenterMode = .design2D
+    /// Side shown and edited in a two-sided job.
+    @Published var activeSide: JobSide = .top
     @Published var sheet: DocumentSheet?
     @Published var alert: AlertMessage?
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
@@ -120,6 +124,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var cursorPosition: Vec2?
 
     weak var undoManager: UndoManager?
+    /// Where the document is saved (from the window's document configuration), for the Finder icon.
+    var fileURL: URL?
     /// Bumped by every undoable change (including undo/redo).
     private var editSerial = 0
     /// The operation whose live edits are being merged into the current undo step.
@@ -165,6 +171,7 @@ final class KerfDocument: ReferenceFileDocument {
         // After a save, the next live toolpath edit opens a new undo step (re-dirtying the file).
         liveOperationEdit = nil
         lastSavedProject = project
+        scheduleFileThumbnail()
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
         return p
@@ -262,7 +269,7 @@ final class KerfDocument: ReferenceFileDocument {
     func addToSelection(_ ids: [UUID]) { setSelection(selectionOrder + project.document.expandToGroups(ids)) }
 
     func selectAll() {
-        setSelection(project.document.shapes.filter { project.isEditable($0) }.map(\.id))
+        setSelection(project.document.shapes.filter { project.isEditable($0) && isOnActiveSide($0) }.map(\.id))
     }
 
     func clearSelection() { setSelection([]) }
@@ -279,7 +286,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// Layer new shapes go to: the layer of the primary selection, else the first unlocked visible one.
     var currentLayerID: UUID {
         if let first = selectedShapes.first { return first.layerID }
-        return project.document.layers.first { $0.isVisible && !$0.isLocked }?.id ?? project.document.defaultLayerID
+        let onSide = currentSheetLayers.filter { !isTwoSided || ($0.side ?? .top) == activeSide }
+        return onSide.first { $0.isVisible && !$0.isLocked }?.id ?? onSide.first?.id ?? project.document.defaultLayerID
     }
 
     func deleteSelection() {
@@ -594,6 +602,7 @@ final class KerfDocument: ReferenceFileDocument {
 
     func applyJobSetup(_ form: JobSetupForm) {
         perform("Job Setup") { $0 = form.apply(to: $0) }
+        if !isTwoSided { activeSide = .top }
         requestCanvas(.fit)
     }
 
@@ -625,6 +634,7 @@ final class KerfDocument: ReferenceFileDocument {
                 let imported = p
                 perform("Import \(url.lastPathComponent)") { $0 = imported }
                 newShapes += outcome.shapeIDs
+                if !outcome.imageIDs.isEmpty && outcome.shapeIDs.isEmpty { requestCanvas(.fit) }
                 messages += outcome.warnings.map { "\(url.lastPathComponent): \($0)" }
             } catch {
                 messages.append("\(url.lastPathComponent): \(ImportService.describe(error))")
@@ -656,14 +666,8 @@ final class KerfDocument: ReferenceFileDocument {
         let ext = url.pathExtension.lowercased()
         let shapes = selectionOnly && !selection.isEmpty ? selectedShapes : project.document.shapes
         do {
-            let data: Data
-            switch ext {
-            case SVGExporter.fileExtension:
-                data = try SVGExporter().export(shapes: shapes, layers: project.document.layers, units: units)
-            case DXFExporter.fileExtension:
-                data = try DXFExporter().export(shapes: shapes, layers: project.document.layers, units: units)
-            default: throw KerfIOError.unsupportedFormat(ext)
-            }
+            guard let exporter = FileFormats.exporter(forExtension: ext) else { throw KerfIOError.unsupportedFormat(ext) }
+            let data = try exporter.export(shapes: shapes, layers: project.document.layers, units: units)
             try data.write(to: url, options: .atomic)
         } catch {
             alert = AlertMessage(title: "Export failed", message: ImportService.describe(error))

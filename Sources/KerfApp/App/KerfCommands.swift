@@ -9,8 +9,19 @@ import UniformTypeIdentifiers
 struct KerfCommands: Commands {
     @FocusedObject private var document: KerfDocument?
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.newDocument) private var newDocument
 
     var body: some Commands {
+        CommandGroup(replacing: .printItem) {
+            Button("Print…") { document?.printDesign(actualSize: false) }
+                .keyboardShortcut("p", modifiers: .command)
+                .disabled(document == nil)
+            Button("Print at Actual Size…") { document?.printDesign(actualSize: true) }
+                .disabled(document == nil)
+        }
+        CommandGroup(after: .newItem) {
+            TemplateMenu(document: document) { project in newDocument { KerfDocument(project: project) } }
+        }
         CommandGroup(after: .importExport) {
             Button("Recover Unsaved Work…") { RecoveryPrompt.offer(interactive: true) }
             Divider()
@@ -44,6 +55,14 @@ struct KerfCommands: Commands {
         CommandMenu("Design") {
             Button("Job Setup…") { document?.sheet = .jobSetup }
                 .keyboardShortcut("j", modifiers: [.command, .shift])
+            Button(document?.activeSide == .bottom ? "Show Top Side" : "Show Bottom Side") {
+                if let d = document { d.showSide(d.activeSide.other) }
+            }
+            .keyboardShortcut("f", modifiers: [.command, .option])
+            .disabled(!(document?.isTwoSided ?? false))
+            SheetsMenu(document: document)
+            Button("Document Variables…") { document?.sheet = .variables }
+                .disabled(document == nil)
             Divider()
             Menu("Draw") {
                 ForEach(CanvasTool.allCases) { tool in
@@ -199,7 +218,7 @@ struct KerfCommands: Commands {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = ImportService.allowedContentTypes
-        panel.message = "Import SVG, DXF, EPS vectors or an STL model"
+        panel.message = "Import vectors (SVG, DXF, EPS, AI, PDF), a tracing image or a 3D model"
         guard panel.runModal() == .OK else { return }
         doc.importFiles(panel.urls)
     }
@@ -207,9 +226,10 @@ struct KerfCommands: Commands {
     private func runExportVectorsPanel() {
         guard let doc = document else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = ["svg", "dxf"].compactMap { UTType(filenameExtension: $0) }
+        panel.allowedContentTypes = ["svg", "dxf", "pdf", "eps", "ai"].compactMap { UTType(filenameExtension: $0) }
         panel.nameFieldStringValue = doc.document.name + ".svg"
-        panel.message = doc.selection.isEmpty ? "Export all vectors (SVG or DXF)" : "Export the selected vectors (SVG or DXF)"
+        panel.message = (doc.selection.isEmpty ? "Export all vectors" : "Export the selected vectors")
+            + " (SVG, DXF, PDF, EPS or AI — choose by file extension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         doc.exportVectors(to: url, selectionOnly: !doc.selection.isEmpty)
     }

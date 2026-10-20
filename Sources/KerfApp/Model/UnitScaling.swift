@@ -232,6 +232,8 @@ extension Document {
             if let s = d.layers[i].sheet { d.layers[i].sheet = SheetSlot(number: s.number, offset: s.offset * f) }
             if let k = d.layers[i].keepOut { d.layers[i].keepOut = LayerKeepOut(height: k.height * f) }
         }
+        d.otherSheets = otherSheets?.map { var s = $0; s.job = $0.job.scaled(by: f); return s }
+        d.images = images?.map { var i = $0; i.rect = Rect2(min: $0.rect.min * f, max: $0.rect.max * f); return i }
         return d
     }
 }

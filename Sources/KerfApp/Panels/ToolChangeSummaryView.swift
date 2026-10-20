@@ -10,7 +10,7 @@ struct ToolChangeSummaryView: View {
     @State private var expanded = false
 
     var body: some View {
-        let s = JobSummary.make(operations: document.project.operations, results: document.results,
+        let s = JobSummary.make(operations: document.outputProject.operations, results: document.results,
                                 groupByTool: groupByTool)
         VStack(alignment: .leading, spacing: 4) {
             HStack {

@@ -134,6 +134,14 @@ struct VCarveMoveWriter {
             retract()
             if position?.xy != first.xy { moves.append(.rapid(to: coords.machineAtSafeZ(first.xy))) }
             position = Vec3(first.xy, z: safeDepth)
+            // Job plunge gap: rapid down to it before feeding (default: plunge from safe Z).
+            if let g = coords.job.plungeGap {
+                let gap = coords.job.effectivePlungeGap(default: g)
+                if gap < coords.job.safeZ - 1e-9, first.z > -gap + 1e-9 {
+                    moves.append(.rapid(to: coords.machine(first.xy, depth: -gap)))
+                    position = Vec3(first.xy, z: -gap)
+                }
+            }
             linear(first, plunging: true)
         }
         for p in stroke.points.dropFirst() { linear(p, plunging: false) }

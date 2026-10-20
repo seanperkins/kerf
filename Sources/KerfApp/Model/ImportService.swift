@@ -6,18 +6,31 @@ import UniformTypeIdentifiers
 struct ImportOutcome: Equatable {
     var shapeIDs: [UUID] = []
     var modelIDs: [UUID] = []
+    var imageIDs: [UUID] = []
     var warnings: [String] = []
 }
 
 /// File > Import: vectors (SVG/DXF/EPS) become shapes on their own layers; STL becomes a
 /// placed 3D model centred on the material.
 enum ImportService {
-    static let vectorExtensions = ["svg", "dxf", "eps"]
-    static let meshExtensions = ["stl"]
-    static var allExtensions: [String] { vectorExtensions + meshExtensions }
+    static let vectorExtensions = ["svg", "dxf", "eps", "ai", "pdf"]
+    static let meshExtensions = ["stl", "obj", "dae"]
+    static var imageExtensions: [String] { RasterCodec.fileExtensions }
+    /// Accepted by the open panel only so a clear "export as DAE/STL" message can be shown.
+    static let explainedExtensions = ["skp"]
+    static var allExtensions: [String] { vectorExtensions + meshExtensions + imageExtensions + explainedExtensions }
 
     static var allowedContentTypes: [UTType] {
         allExtensions.compactMap { UTType(filenameExtension: $0) }
+    }
+
+    /// STL or OBJ reader by file extension (both assume millimetres).
+    static func meshImporter(for fileName: String) -> any MeshImporter {
+        switch (fileName as NSString).pathExtension.lowercased() {
+        case "obj": return OBJImporter()
+        case "dae": return DAEImporter()
+        default: return STLImporter()
+        }
     }
 
     static func isMesh(_ fileName: String) -> Bool {
@@ -27,8 +40,8 @@ enum ImportService {
     /// Reads an STL into a placement form (the app shows it as the "Place 3D Model" dialog).
     static func placementForm(data: Data, fileName: String, project: KerfProject,
                               library: ToolLibrary) throws -> ModelPlacementForm {
-        let mesh = try STLImporter().importMesh(from: data, targetUnits: project.document.units)
-        guard mesh.triangleCount > 0 else { throw KerfIOError.malformed("the STL contains no triangles") }
+        let mesh = try meshImporter(for: fileName).importMesh(from: data, targetUnits: project.document.units)
+        guard mesh.triangleCount > 0 else { throw KerfIOError.malformed("the model contains no triangles") }
         return ModelPlacementForm(mesh: mesh, name: (fileName as NSString).deletingPathExtension,
                                   job: project.document.job, library: library)
     }
@@ -38,16 +51,26 @@ enum ImportService {
         let base = (fileName as NSString).deletingPathExtension
         let units = project.document.units
         if meshExtensions.contains(ext) {
-            let mesh = try STLImporter().importMesh(from: data, targetUnits: units)
+            let mesh = try meshImporter(for: fileName).importMesh(from: data, targetUnits: units)
             let model = place(mesh: mesh, name: base, job: project.document.job)
             project.document.models.append(model)
             return ImportOutcome(modelIDs: [model.id])
+        }
+        if imageExtensions.contains(ext) {
+            return try importBitmap(data: data, name: base, into: &project)
         }
         guard let importer = FileFormats.importer(forExtension: ext) else {
             throw KerfIOError.unsupportedFormat(ext)
         }
         let result = try importer.importVectors(from: data, targetUnits: units)
         var outcome = ImportOutcome(warnings: result.warnings)
+        for (i, e) in result.images.enumerated() {
+            guard let info = RasterCodec.info(of: e.png) else { continue }
+            let img = PlacedImage(name: "\(base) image \(i + 1)", layerID: bitmapLayer(in: &project), png: e.png,
+                                  pixelWidth: info.pixels.width, pixelHeight: info.pixels.height, rect: e.rect)
+            project.document.placedImages.append(img)
+            outcome.imageIDs.append(img.id)
+        }
         // Keep importer layers; fall back to a layer named after the file.
         var layerMap: [UUID: UUID] = [:]
         for l in result.layers {
@@ -70,8 +93,31 @@ enum ImportService {
             project.document.add(s)
             outcome.shapeIDs.append(s.id)
         }
-        if outcome.shapeIDs.isEmpty { outcome.warnings.append("The file contained no supported vectors.") }
+        if outcome.shapeIDs.isEmpty && outcome.imageIDs.isEmpty {
+            outcome.warnings.append("The file contained no supported vectors.")
+        }
         return outcome
+    }
+
+    static let bitmapLayerName = "Bitmaps"
+
+    /// The layer tracing images go on (created on first use).
+    static func bitmapLayer(in project: inout KerfProject) -> UUID {
+        if let l = project.document.layers.first(where: { $0.name == bitmapLayerName }) { return l.id }
+        return project.addLayer(named: bitmapLayerName)
+    }
+
+    /// JPG/PNG/BMP/TIF/GIF/WebP → a faded tracing image centred on the material.
+    static func importBitmap(data: Data, name: String, into project: inout KerfProject) throws -> ImportOutcome {
+        guard let info = RasterCodec.info(of: data), let png = RasterCodec.png(fromEncoded: data) else {
+            throw KerfIOError.malformed("the image could not be decoded")
+        }
+        let rect = PlacedImage.defaultRect(pixels: info.pixels, physicalInches: info.inches, job: project.document.job,
+                                           units: project.document.units)
+        let img = PlacedImage(name: name.isEmpty ? "Image" : name, layerID: bitmapLayer(in: &project), png: png,
+                              pixelWidth: info.pixels.width, pixelHeight: info.pixels.height, rect: rect)
+        project.document.placedImages.append(img)
+        return ImportOutcome(imageIDs: [img.id])
     }
 
     /// Centres the mesh on the material, model top flush with the material top, and depth equal
@@ -89,6 +135,8 @@ enum ImportService {
     static func describe(_ error: Error) -> String {
         switch error {
         case KerfIOError.notImplemented(let what): return "\(what) is not available in this build yet."
+        case KerfIOError.unsupportedFormat("skp"):
+            return "SketchUp files cannot be read directly. In SketchUp use File > Export > 3D Model and choose COLLADA (.dae) or STL, then import that file."
         case KerfIOError.unsupportedFormat(let ext): return "Kerf cannot import .\(ext) files."
         case KerfIOError.malformed(let msg): return "The file could not be read: \(msg)"
         default: return error.localizedDescription

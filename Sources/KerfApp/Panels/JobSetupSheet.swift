@@ -19,6 +19,7 @@ struct JobSetupSheet: View {
             Form {
                 Section("Job") {
                     TextField("Job name", text: $form.name)
+                    if form.isMultiSheet { TextField("Sheet name", text: $form.sheetName) }
                     Picker("Units", selection: Binding(get: { form.units }, set: { form.setUnits($0) })) {
                         ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
@@ -47,9 +48,22 @@ struct JobSetupSheet: View {
                         Text("Machine X0 Y0 is at the \(form.job.xyOrigin.displayName.lowercased()) of the material.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    Toggle("Offset the datum", isOn: Binding(get: { form.job.datumOffset != nil },
+                                                             set: { form.job.datumOffset = $0 ? (form.job.datumOffset ?? .zero) : nil }))
+                    if form.job.datumOffset != nil {
+                        LengthField("Offset X", value: Binding(get: { form.job.datumOffset?.x ?? 0 },
+                                                               set: { form.job.datumOffset?.x = $0 }), units: u,
+                                    help: "Distance from the chosen corner/centre to machine X0 (right is positive)")
+                        LengthField("Offset Y", value: Binding(get: { form.job.datumOffset?.y ?? 0 },
+                                                               set: { form.job.datumOffset?.y = $0 }), units: u,
+                                    help: "Distance from the chosen corner/centre to machine Y0 (up is positive)")
+                    }
                 }
+                TwoSidedSection(job: $form.job)
                 Section("Rapid heights (above material top)") {
                     LengthField("Safe Z", value: $form.job.safeZ, units: u)
+                    OptionalLengthField(label: "Plunge Z (rapid down to)", value: $form.job.plungeGap, units: u,
+                                        defaultValue: u == .inch ? 0.1 : 2.5)
                     LengthField("Home Z", value: $form.job.homeZ, units: u)
                     LengthField("Home X", value: $form.job.home.x, units: u, help: "Machine coordinates")
                     LengthField("Home Y", value: $form.job.home.y, units: u, help: "Machine coordinates")
@@ -114,5 +128,28 @@ struct OriginPicker: View {
         }
         .buttonStyle(.plain)
         .help(o.displayName)
+    }
+}
+
+/// Job Setup: double-sided machining (flip axis and the bottom side's Z zero).
+struct TwoSidedSection: View {
+    @Binding var job: JobSetup
+
+    var body: some View {
+        Section("Sides") {
+            Toggle("Two-sided job", isOn: Binding(get: { job.twoSided != nil },
+                                                  set: { job.twoSided = $0 ? (job.twoSided ?? TwoSidedSetup()) : nil }))
+            if let t = job.twoSided {
+                Picker("Flip the material", selection: Binding(get: { t.flip }, set: { job.twoSided?.flip = $0 })) {
+                    ForEach(FlipAxis.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                Picker("Bottom side Z zero", selection: Binding(get: { t.bottomZZero }, set: { job.twoSided?.bottomZZero = $0 })) {
+                    Text("Same as top side").tag(ZZeroMode?.none)
+                    ForEach(ZZeroMode.allCases, id: \.self) { Text($0.displayName).tag(ZZeroMode?.some($0)) }
+                }
+                Text("Each side is drawn as seen from above while it faces up; the other side shows mirrored and dashed. Use the centre origin, or stock cut exactly to size, so the second side registers to the first.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
     }
 }

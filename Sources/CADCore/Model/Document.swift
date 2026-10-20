@@ -13,6 +13,16 @@ public struct Document: Codable, Hashable, Sendable {
     public var gridSpacing: Double
     /// Areas toolpaths must avoid (clamps); nil = none (toolpaths-2d addition).
     public var keepOutZones: [KeepOutZone]?
+    /// Raster tracing images; nil when there are none (see `placedImages`).
+    public var images: [PlacedImage]?
+    /// Multi-sheet jobs (see `MaterialSheet.swift`): id/name of the sheet whose setup is in
+    /// `job` (nil = the primary sheet), the parked sheets, and their creation order.
+    public var activeSheetID: UUID?
+    public var activeSheetName: String?
+    public var otherSheets: [MaterialSheet]?
+    public var sheetOrder: [UUID]?
+    /// Named numbers for numeric fields (see `ExpressionEvaluator`); nil when none.
+    public var variables: [DocumentVariable]?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

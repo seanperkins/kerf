@@ -17,10 +17,10 @@ import Testing
 
     @Test func groupsBecomeLayersAndHiddenContentIsSkipped() throws {
         #expect(mm.layers.map(\.name) == ["SVG Import", "Outline", "Holes"])
-        #expect(mm.shapes.count == 5) // border, hole1, <use> dot, oval, loose line
+        #expect(mm.shapes.count == 6) // border, hole1, <use> dot, oval, loose line, text outlines
         let holes = mm.layers[2].id
         #expect(mm.shapes.filter { $0.layerID == holes }.count == 3)
-        #expect(mm.warnings.contains { $0.contains("text") })
+        #expect(mm.shapes.contains { $0.name == "ignored" && $0.paths.count > 3 })
         #expect(mm.shapes.allSatisfy { $0.origin == .imported(format: "svg") })
     }
 

@@ -101,7 +101,7 @@ struct SaveAllToolpathsSheet: View {
     private func run() {
         calcTask?.cancel()
         calcTask = nil
-        let stale = document.project.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
+        let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
         guard !stale.isEmpty else { post(); return }
         posted = []
         calculatingCount = stale.count
@@ -114,9 +114,9 @@ struct SaveAllToolpathsSheet: View {
     }
 
     private func post() {
-        let files = GCodeBatchExport.plan(mode: mode, operations: document.project.operations,
+        let files = GCodeBatchExport.plan(mode: mode, operations: document.outputProject.operations,
                                           results: document.results, jobName: document.document.name, profile: profile)
-        posted = GCodeBatchExport.post(files, project: document.project, profile: profile, jobName: document.document.name)
+        posted = GCodeBatchExport.post(files, project: document.outputProject, profile: profile, jobName: document.document.name)
     }
 
     private func save() {

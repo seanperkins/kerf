@@ -13,14 +13,14 @@ struct Preview3DHost: View {
 
     /// Calculated toolpaths of the chosen scope, in machining order.
     var toolpaths: [Toolpath] {
-        scope.toolpaths(operations: document.project.operations, results: document.results,
+        scope.toolpaths(operations: document.outputProject.operations, results: document.results,
                         hidden: document.hiddenToolpaths, selected: document.selectedOperationID,
                         groupByTool: groupByTool)
     }
 
     var body: some View {
         SimulationPreviewView(
-            job: document.document.job, units: document.document.units, toolpaths: toolpaths,
+            job: document.outputProject.document.job, units: document.document.units, toolpaths: toolpaths,
             rapidRate: SimulationPreviewView.rapidRate(for: document.postProfile, units: document.document.units),
             scope: $scope, emptyMessage: scope.emptyMessage, documentName: document.document.name)
         .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }

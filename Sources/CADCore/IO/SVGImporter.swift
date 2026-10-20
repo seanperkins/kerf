@@ -30,7 +30,7 @@ public struct SVGImporter: VectorImporter {
             }
         }
         if ctx.shapes.contains(where: { $0.layerID == defaultLayer.id }) { ctx.layers.insert(defaultLayer, at: 0) }
-        return ImportResult(layers: ctx.layers, shapes: ctx.shapes, warnings: ctx.warnings)
+        return ImportResult(layers: ctx.layers, shapes: ctx.shapes, warnings: ctx.warnings, images: ctx.images)
     }
 
     /// Maps root user space → document units with Y flipped (page bottom at y = 0).
@@ -79,6 +79,7 @@ public struct SVGImporter: VectorImporter {
         var layers: [Layer] = []
         var shapes: [Shape] = []
         var warnings: [String] = []
+        var images: [ImportedImage] = []
         var ids: [String: SVGNode] = [:]
         private var warned: Set<String> = []
         private var useDepth = 0
@@ -120,9 +121,9 @@ public struct SVGImporter: VectorImporter {
                 }
                 useDepth -= 1
             case "text":
-                warnOnce("SVG text was skipped; convert text to paths before exporting.")
+                addText(n, ctm: ctm, layerID: layerID)
             case "image":
-                warnOnce("Embedded images were skipped.")
+                addImage(n, ctm: ctm)
             default:
                 if let paths = SVGImporter.geometry(of: n), !paths.isEmpty {
                     // A subpath that returns to its start without "Z" is still a closed vector.
@@ -136,6 +137,23 @@ public struct SVGImporter: VectorImporter {
     }
 
     // MARK: - Element geometry (raw user space)
+
+    /// Installed font for a CSS `font-family` list (generic families map to macOS fonts);
+    /// bold weights prefer the family's "Bold" face. nil when none of them is installed.
+    static func resolveFont(family: String?, weight: String?) -> String? {
+        let generic = ["sans-serif": "Helvetica", "serif": "Times New Roman", "monospace": "Menlo",
+                       "cursive": "Apple Chancery", "fantasy": "Papyrus", "system-ui": "Helvetica"]
+        let names = (family ?? "sans-serif").split(separator: ",").map {
+            $0.trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
+        }.filter { !$0.isEmpty }
+        let bold = weight.map { $0 == "bold" || $0 == "bolder" || (Int($0) ?? 400) >= 600 } ?? false
+        for raw in names {
+            let name = generic[raw.lowercased()] ?? raw
+            let tries = bold ? ["\(name) Bold", "\(name)-Bold", name] : [name]
+            for t in tries where (try? TextOutliner().advance(of: "H", fontName: t, pointSize: 10)) != nil { return t }
+        }
+        return nil
+    }
 
     static func geometry(of n: SVGNode) -> [Path]? {
         func num(_ k: String, _ ref: Double = 0) -> Double { SVGAttributes.pixels(n[k], percentOf: ref) ?? 0 }
@@ -191,5 +209,85 @@ public struct SVGImporter: VectorImporter {
             .line(to: Vec2(x0, y0 + ry)),
             corner(Vec2(x0, y0 + ry), Vec2(x0 + rx, y0), Vec2(x0, y0)),
         ], isClosed: true)
+    }
+}
+
+// MARK: - Text and images
+
+extension SVGImporter.Context {
+    /// `<text>` (with `<tspan>` runs) → outline shape. Fonts come from the installed system fonts.
+    mutating func addText(_ n: SVGNode, ctm: Transform2D, layerID: UUID) {
+        var paths: [Path] = []
+        var label = ""
+        var cursor = Vec2(SVGAttributes.pixels(n["x"]) ?? 0, SVGAttributes.pixels(n["y"]) ?? 0)
+        var atStart = true
+
+        func run(_ node: SVGNode) {
+            for c in node.children {
+                if c.name == "#text" {
+                    var s = c.data.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\t", with: " ")
+                    while s.contains("  ") { s = s.replacingOccurrences(of: "  ", with: " ") }
+                    if atStart { s = String(s.drop { $0 == " " }) }
+                    guard !s.isEmpty else { continue }
+                    atStart = false
+                    emit(s, style: node)
+                } else if c.name == "tspan" || c.name == "textPath" {
+                    if c.property("display") == "none" { continue }
+                    if let x = SVGAttributes.pixels(c["x"]) { cursor.x = x }
+                    if let y = SVGAttributes.pixels(c["y"]) { cursor.y = y }
+                    cursor.x += SVGAttributes.pixels(c["dx"]) ?? 0
+                    cursor.y += SVGAttributes.pixels(c["dy"]) ?? 0
+                    run(c)
+                }
+            }
+        }
+
+        func emit(_ s: String, style: SVGNode) {
+            let size = SVGAttributes.pixels(style.inherited("font-size"), percentOf: 16) ?? 16
+            let family = style.inherited("font-family")
+            guard let font = SVGImporter.resolveFont(family: family, weight: style.inherited("font-weight")) ?? {
+                warnOnce("Font \(family ?? "?") is not installed; Helvetica was used.")
+                return "Helvetica"
+            }() else { return }
+            let anchor = style.inherited("text-anchor")
+            let align: TextAlignment = anchor == "middle" ? .center : anchor == "end" ? .right : .left
+            let outliner = TextOutliner()
+            guard let outline = try? outliner.outlines(for: s, fontName: font, pointSize: size, origin: .zero,
+                                                       alignment: align) else { return }
+            // Glyphs are Y-up; SVG user space is Y-down with the baseline at the cursor.
+            let place = Transform2D(a: 1, b: 0, c: 0, d: -1, tx: cursor.x, ty: cursor.y).concatenating(ctm)
+            paths += outline.map { $0.transformed(place) }
+            label += s
+            if align == .left { cursor.x += (try? outliner.advance(of: s, fontName: font, pointSize: size)) ?? 0 }
+        }
+
+        run(n)
+        guard !paths.isEmpty else { return }
+        let name = label.trimmingCharacters(in: .whitespaces)
+        shapes.append(Shape(name: name.isEmpty ? "Text" : String(name.prefix(40)), layerID: layerID, paths: paths,
+                            origin: .imported(format: "svg")))
+    }
+
+    /// `<image>` with an embedded (data: URI) picture → tracing image; linked files are skipped.
+    mutating func addImage(_ n: SVGNode, ctm: Transform2D) {
+        let x = SVGAttributes.pixels(n["x"]) ?? 0, y = SVGAttributes.pixels(n["y"]) ?? 0
+        guard let w = SVGAttributes.pixels(n["width"]), let h = SVGAttributes.pixels(n["height"]), w > 0, h > 0 else {
+            warnOnce("An <image> without a width and height was skipped.")
+            return
+        }
+        guard let href = n["xlink:href"] ?? n["href"], href.hasPrefix("data:"), let comma = href.firstIndex(of: ",") else {
+            warnOnce("Linked (not embedded) images were skipped; import the picture file itself.")
+            return
+        }
+        let header = href[..<comma], payload = String(href[href.index(after: comma)...])
+        let raw: Data? = header.contains(";base64")
+            ? Data(base64Encoded: payload.filter { !$0.isWhitespace })
+            : payload.removingPercentEncoding.map { Data($0.utf8) }
+        guard let raw, let png = RasterCodec.png(fromEncoded: raw) else {
+            warnOnce("An embedded image could not be decoded.")
+            return
+        }
+        let corners = [Vec2(x, y), Vec2(x + w, y), Vec2(x, y + h), Vec2(x + w, y + h)].map { ctm.apply($0) }
+        images.append(ImportedImage(rect: Rect2(points: corners), png: png))
     }
 }

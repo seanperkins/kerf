@@ -39,7 +39,7 @@ public enum TextureToolpathGenerator {
         }
         let pattern = RasterPattern(region: region, angleDegrees: params.angle, offsets: offsets)
 
-        let clearance = context.units == .inch ? 0.04 : 1.0
+        let clearance = context.coords.job.effectivePlungeGap(default: context.units == .inch ? 0.04 : 1.0)
         var writer = PathWriter3D(coords: context.coords, feedRate: tool.feedRate, plungeRate: tool.plungeRate,
                                   clearance: clearance)
         let hop = 2 * maxLen

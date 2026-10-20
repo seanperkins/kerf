@@ -4,7 +4,10 @@ Kerf is a native macOS (Apple Silicon, macOS 14+) CAD/CAM app for 2D, 2.5D and b
 It generates G-code for the Avid CNC PRO6096 (Mach4) and replaces VCarve Pro for that
 machine.
 
-- **Design:** import SVG, DXF, EPS and STL, and export SVG and DXF. Drawing tools include shapes,
+- **Design:** import SVG (incl. text and embedded images), DXF, EPS, AI and PDF vectors, tracing
+  images (JPG/PNG/BMP/TIF/GIF/WebP) and STL/OBJ/COLLADA models; export SVG, DXF, PDF, EPS and AI.
+  Jobs can be two-sided or span several material sheets, start from saved templates, and numeric
+  fields accept expressions and document variables (`=thickness/2`, `1/4in`). Drawing tools include shapes,
   polylines, Bézier pen, text in any installed font, node editing, transforms, align/distribute,
   booleans, offset, layers, snapping and undo/redo.
 - **Toolpaths:** Profile (tabs, ramps, leads), Pocket (offset/raster, clearance tool), Drilling (peck),
@@ -12,7 +15,8 @@ machine.
 - **Layout:** true-shape nesting with overflow onto extra sheets, clamp and fixture keep-out
   zones, part labels, a printable job sheet, material and bed checks, and tiled G-code for jobs
   larger than the bed (Design > Layout, File > Export Job Sheet…, Toolpaths > Save Tiled G-code…).
-- **Preview and output:** 2D overlay, 3D material-removal simulation and time estimates. A
+- **Preview and output:** 2D overlay, 3D material-removal simulation and time estimates, and
+  printing of the 2D design. A
   data-driven post (JSON profiles) ships with Avid Mach4 inch/mm and Generic GRBL (mm), and output
   goes through a built-in G-code validator.
 

@@ -58,6 +58,10 @@ public struct Layer: Codable, Hashable, Identifiable, Sendable {
     /// Set when the layer's closed vectors are clamp / fixture zones the tool must stay out
     /// of (layout). They are never machined. Optional so older files decode.
     public var keepOut: LayerKeepOut?
+    /// Side of a two-sided job the layer belongs to (nil = top / single-sided).
+    public var side: JobSide?
+    /// Sheet of a multi-sheet job the layer belongs to (nil = the primary sheet).
+    public var sheetID: UUID?
 
     public init(id: UUID = UUID(), name: String, isVisible: Bool = true, isLocked: Bool = false,
                 colorHex: String = "#000000", sheet: SheetSlot? = nil, keepOut: LayerKeepOut? = nil) {

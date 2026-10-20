@@ -19,8 +19,15 @@ enum ToolpathCalculator {
     /// Runs the operation's generator. Never throws: failures become `error` text.
     static func calculate(_ op: AnyOperation, project: KerfProject, library: ToolLibrary,
                           designRevision: Int, rapidRate: Double) -> ToolpathResult {
+        var document = project.document
+        switch project.machiningJob(for: op) {
+        case .success(let job): document.job = job
+        case .failure(let e):
+            return ToolpathResult(toolpaths: [], error: e.message, operation: op, designRevision: designRevision,
+                                  estimatedSeconds: 0)
+        }
         // Extra nesting sheets parked beside the material are not machined.
-        let onMaterial = NestSheets.activeDocument(project.document)
+        let onMaterial = NestSheets.activeDocument(document)
         let context = CAMContext(document: onMaterial, tools: project.mergedTools(with: library))
         if onMaterial.shapes.count != project.document.shapes.count, !op.setup.shapeIDs.isEmpty,
            op.setup.shapeIDs.allSatisfy({ onMaterial.shape(id: $0) == nil && project.document.shape(id: $0) != nil }) {

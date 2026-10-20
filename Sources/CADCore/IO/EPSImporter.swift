@@ -14,7 +14,8 @@ public struct EPSImporter: VectorImporter {
             throw KerfIOError.malformed("EPS: unreadable text")
         }
         if text.hasPrefix("%PDF") {
-            throw KerfIOError.unsupportedFormat("PDF-based Illustrator file; save it as SVG or legacy EPS")
+            // Illustrator 9+ .ai files are PDF documents.
+            return try PDFImporter().importVectors(from: data, targetUnits: targetUnits)
         }
         guard text.hasPrefix("%!") || text.contains("%!PS") else { throw KerfIOError.malformed("EPS: missing %!PS header") }
 
