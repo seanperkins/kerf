@@ -136,7 +136,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `3d-boundary` | cam-3d | Limit 3D machining to boundary vectors | done | P2 | Relief3DParameters.boundaryShapeIDs, OperationForms "Use Selection as Boundary" |
 | `3d-rest-machining` | cam-3d | 3D rest machining | done | P3 | FinishingSettings.restToolID, Ops3D/ReliefRest.swift, inspector "Rest after"; ReliefRestTests |
 | `3d-project-2d` | cam-3d | Project 2D toolpaths onto 3D surface | done | P3 | OperationSetup.projectOntoModelID, Ops3D/ReliefProjection.swift, inspector "Project onto 3D"; ReliefProjectionTests |
-| `3d-two-sided` | cam-3d | Two-sided 3D machining | missing | P3 | Single-sided only |
+| `3d-two-sided` | cam-3d | Two-sided 3D machining | done | P3 | Relief3DParameters.twoSided (side, flip, split, web), Ops3D/ReliefTwoSided.swift, inspector "Two-Sided"; ReliefTwoSidedTests. No registration-pin toolpaths |
 | `3d-rotary` | cam-3d | Rotary / wrapped toolpaths | missing | P3 | Out of scope: Avid has no rotary axis |
 | `lay-nesting` | layout | True-shape nesting on sheets | missing | P1 | Not implemented |
 | `lay-multi-sheet-nest` | layout | Nesting over multiple sheets with overflow | missing | P2 | Not implemented |

@@ -342,3 +342,17 @@
   so a pass never rapids into material that was cleared somewhere else before projection. Outside
   the model's triangles the surface is its bottom plane (same as 3D Relief). Inspector:
   "Project onto 3D" picker under the vectors row, shown when the document has models.
+- **cam-3d** — **Two-sided 3D machining (3d-two-sided).** `Relief3DParameters.twoSided` (optional): side
+  (top/bottom), flip (left-right = turned over about the vertical centre line, X mirrored;
+  top-bottom = Y mirrored), split depth (nil = halfway between the model's top and bottom) and
+  web. It is per toolpath: make one Relief3D toolpath per side. The bottom side is computed in the
+  flipped board's frame: models are mirrored in XY and Z with depths measured from the old bottom
+  face, boundary vectors are mirrored, and the result is ordinary top-down G-code for the flipped
+  board (same XY origin and Z-zero rules). The top side's surface is clamped at the split depth;
+  the bottom side stops `web` short of it (default 0.04 in / 1 mm), so the part stays attached by a
+  thin web instead of being released. Registration relies on stock cut exactly to the job size and
+  pushed against the same corner; there are no registration-pin toolpaths yet. This is independent
+  of a job-level two-sided setup (`io-two-sided-setup`), which is owned by another area.
+- **cam-3d** — **Rotary / wrapped toolpaths (3d-rotary): not implemented, by decision.** The Avid
+  PRO6096 has no rotary axis, the Mach4 post has no A-axis output and nothing could be tested on the
+  machine, so emitting wrapped A-axis G-code would be untestable and unsafe. Left as missing (P3).

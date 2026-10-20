@@ -88,6 +88,8 @@ extension Relief3DParameters {
         p.roughing.allowance *= f
         p.roughing.passDepth = roughing.passDepth.map { $0 * f }
         p.finishing.stepover = finishing.stepover.map { $0 * f }
+        p.twoSided?.splitDepth = twoSided?.splitDepth.map { $0 * f }
+        p.twoSided?.web = (twoSided?.web ?? 0) * f
         return p
     }
 }

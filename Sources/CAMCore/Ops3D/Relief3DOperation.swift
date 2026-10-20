@@ -23,8 +23,21 @@ public struct Relief3DOperation: ToolpathOperation {
         guard let model = context.document.model(id: params.modelID) else { throw CAMError.missingModel(params.modelID) }
         let extraIDs = params.allModelIDs.dropFirst()
         let extras = extraIDs.compactMap { context.document.model(id: $0) }
-        let models = ([model] + extras).filter { $0.mesh.triangleCount > 0 }
+        var models = ([model] + extras).filter { $0.mesh.triangleCount > 0 }
         guard !models.isEmpty else { throw CAMError.noGeometry }
+        let job = context.document.job
+        // Two-sided: the depth this side's surface is clamped at (this side's frame).
+        var sideLimit: Double?
+        if let two = params.twoSided {
+            let split = ReliefTwoSided.splitDepth(two, model: model)
+            guard split > model.zTop + 1e-9, split < model.depth - 1e-9 else {
+                throw CAMError.invalidParameter("The two-sided split depth must lie between the model's top and bottom")
+            }
+            let limit = ReliefTwoSided.clampDepth(two, split: split, thickness: job.thickness)
+            guard limit > 1e-9 else { throw CAMError.invalidParameter("The two-sided web leaves nothing to cut") }
+            sideLimit = limit
+            if two.side == .bottom { models = models.map { ReliefTwoSided.flipped($0, flip: two.flip, job: job) } }
+        }
         guard params.roughing.isEnabled || params.finishing.isEnabled else {
             throw CAMError.invalidParameter("Enable roughing and/or finishing")
         }
@@ -36,6 +49,9 @@ public struct Relief3DOperation: ToolpathOperation {
 
         let boundaryShapes = context.document.shapes(ids: params.boundaryShapeIDs)
         var region = ReliefRegion.polygons(of: boundaryShapes, tolerance: context.tolerance)
+        if let two = params.twoSided, two.side == .bottom {
+            region = region.map { $0.map { ReliefTwoSided.mirror($0, flip: two.flip, job: job) } }
+        }
         if region.isEmpty {
             region = GeomKernel.boolean(.union, subject: models.map { ReliefRegion.rectangle($0.footprint) }, clip: [],
                                         fillRule: .nonZero)
@@ -54,8 +70,12 @@ public struct Relief3DOperation: ToolpathOperation {
         if cellSize > params.resolution * 1.0001 {
             metadata["warning"] = String(format: "Heightmap resolution coarsened to %.4g", cellSize)
         }
-        let map = try ReliefHeightmap.rasterize(models, over: area, cellSize: cellSize)
-        if map.maxDepth > context.document.job.thickness + 1e-9 {
+        var map = try ReliefHeightmap.rasterize(models, over: area, cellSize: cellSize)
+        if let limit = sideLimit {
+            ReliefTwoSided.clamp(&map, at: limit)
+            metadata["side"] = params.twoSided?.side.rawValue
+        }
+        if map.maxDepth > job.thickness + 1e-9 {
             metadata["warning"] = "Model is deeper than the material thickness"
         }
         let clearance = context.units == .inch ? 0.04 : 1.0
