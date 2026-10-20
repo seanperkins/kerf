@@ -24,7 +24,7 @@ struct EngraveForm: View {
                 Text("Groove width at \(fmt(params.depth.cutDepth)) \(units.abbreviation) deep: \(fmt(w)) \(units.abbreviation)")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Text("Cuts along each selected vector on its centreline (no offset). Open and closed vectors both work.")
+            Text("Cuts along each selected vector on its centerline (no offset). Open and closed vectors both work.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -205,7 +205,7 @@ struct HoleMillForm: View {
             DirectionPicker(direction: $params.direction)
             Text(params.mode == .helical
                  ? "Spirals down at each selected circle's size (or the diameter above), then cleans the bottom with a flat lap. Holes smaller than the tool are skipped."
-                 : "Plunges at the centre of each circle (drill a pilot hole first), moves out and cuts one turn per pitch. Use a thread mill; its diameter is the tool diameter.")
+                 : "Plunges at the center of each circle (drill a pilot hole first), moves out and cuts one turn per pitch. Use a thread mill; its diameter is the tool diameter.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -222,7 +222,7 @@ struct PrismForm: View {
             OptionalLengthField(label: "Pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.1 : 2.5)
             DirectionPicker(direction: $params.direction)
-            Text("The V-bit runs round each closed shape at the depth where its flanks meet along the shape's centreline, so the shape is left as a bevelled prism with a sharp ridge. Each shape gets its own depth; with a max depth, wider parts keep a flat top.")
+            Text("The V-bit runs round each closed shape at the depth where its flanks meet along the shape's centerline, so the shape is left as a beveled prism with a sharp ridge. Each shape gets its own depth; with a max depth, wider parts keep a flat top.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

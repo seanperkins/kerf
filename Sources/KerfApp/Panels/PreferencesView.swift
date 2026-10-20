@@ -14,7 +14,7 @@ struct PreferencesView: View {
             MachinePreferences(model: model)
                 .tabItem { Label("Machines", systemImage: "cube") }
             ColorPreferences(model: model)
-                .tabItem { Label("Colours", systemImage: "paintpalette") }
+                .tabItem { Label("Colors", systemImage: "paintpalette") }
         }
         .frame(width: 640, height: 480)
     }
@@ -37,7 +37,7 @@ struct GeneralPreferences: View {
             Section("Snapping (each new window)") {
                 Toggle("Snap to grid", isOn: $model.prefs.snapToGrid)
                 Toggle("Snap to objects", isOn: $model.prefs.snapToObjects)
-                    .help("Snap to nodes, midpoints and centres of other shapes")
+                    .help("Snap to nodes, midpoints and centers of other shapes")
             }
             Section("Safety net") {
                 Picker("Save recovery copies", selection: $model.prefs.recoveryIntervalSeconds) {
@@ -70,7 +70,7 @@ struct ColorPreferences: View {
                 colorRow("Selection", \.selectionColorHex, AppPreferences.defaultSelectionColor)
                 colorRow("Rapid moves", \.rapidColorHex, AppPreferences.defaultRapidColor)
             }
-            Text("Layer colours are set per layer in the Design sidebar. Toolpath colours cycle per toolpath.")
+            Text("Layer colors are set per layer in the Design sidebar. Toolpath colors cycle per toolpath.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
@@ -222,7 +222,7 @@ struct MachineEditor: View {
                         .keyboardShortcut(.defaultAction)
                         .disabled(!isValid)
                 } else {
-                    Text("Built-in machines are read-only. Duplicate one to customise it.")
+                    Text("Built-in machines are read-only. Duplicate one to customize it.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

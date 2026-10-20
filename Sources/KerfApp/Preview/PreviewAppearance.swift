@@ -98,17 +98,17 @@ struct PreviewAppearancePopover: View {
             HStack {
                 Toggle("Painted top", isOn: $store.settings.paintTop)
                 Spacer()
-                ColorPicker("Paint colour", selection: color(\.paintColor), supportsOpacity: false)
+                ColorPicker("Paint color", selection: color(\.paintColor), supportsOpacity: false)
                     .labelsHidden().disabled(!store.settings.paintTop)
             }
-            .help("Colour the uncut surface; carved areas show bare material")
+            .help("Color the uncut surface; carved areas show bare material")
             HStack {
-                Toggle("Colour machined areas", isOn: $store.settings.colorMachined)
+                Toggle("Color machined areas", isOn: $store.settings.colorMachined)
                 Spacer()
-                ColorPicker("Machined colour", selection: color(\.machinedColor), supportsOpacity: false)
+                ColorPicker("Machined color", selection: color(\.machinedColor), supportsOpacity: false)
                     .labelsHidden().disabled(!store.settings.colorMachined)
             }
-            .help("Show every cut in one flat colour")
+            .help("Show every cut in one flat color")
             Button("Restore Defaults") { store.settings = PreviewAppearanceSettings() }
         }
         .padding(14)

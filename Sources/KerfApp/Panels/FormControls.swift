@@ -107,7 +107,7 @@ struct IntField: View {
 }
 
 extension LengthUnit {
-    var displayName: String { self == .inch ? "Inches" : "Millimetres" }
+    var displayName: String { self == .inch ? "Inches" : "Millimeters" }
     var feedUnit: String { self == .inch ? "in/min" : "mm/min" }
 }
 
@@ -118,7 +118,7 @@ extension XYOrigin {
         case .lowerRight: return "Lower right"
         case .upperLeft: return "Upper left"
         case .upperRight: return "Upper right"
-        case .center: return "Centre"
+        case .center: return "Center"
         }
     }
 }

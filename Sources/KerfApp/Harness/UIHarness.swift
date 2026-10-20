@@ -6,7 +6,10 @@ import SwiftUI
 
 /// A scripted, headless-friendly UI driver for debug builds.
 ///
-///     Kerf --ui-scenario harness/scenarios/profile.json --ui-out .tmp/ui/run [--ui-active]
+///     Kerf --ui-scenario harness/scenarios/profile.json --ui-out .tmp/ui/run [--ui-active 1]
+///
+/// Every flag takes a value: AppKit reads `-key value` pairs from the arguments, and a bare flag shifts the
+/// pairing so the next value ("YES") is taken for a file to open.
 ///
 /// It opens an untitled document, runs the scenario's steps against the live app, writes PNGs and text
 /// dumps (accessibility tree, menus) taken from inside the process, then exits. Nothing needs Screen
@@ -37,7 +40,7 @@ final class UIHarness {
         let out = value(after: "--ui-out") ?? ".tmp/ui/run"
         let size = value(after: "--ui-size").map { $0.split(separator: "x").compactMap { Double($0) } }
         return Request(scenario: URL(fileURLWithPath: scenario), out: URL(fileURLWithPath: out, isDirectory: true),
-                       active: args.contains("--ui-active"), appearance: value(after: "--ui-appearance"),
+                       active: value(after: "--ui-active") == "1", appearance: value(after: "--ui-appearance"),
                        size: size?.count == 2 ? size : nil)
     }
 

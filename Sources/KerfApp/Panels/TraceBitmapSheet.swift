@@ -52,7 +52,7 @@ struct TraceBitmapSheet: View {
                 }
                 HStack(spacing: 6) {
                     if busy { ProgressView().controlSize(.small) }
-                    Text("\(traced.count) outline\(traced.count == 1 ? "" : "s"), \(img.width)×\(img.height) px. Placed on the centre of the material.")
+                    Text("\(traced.count) outline\(traced.count == 1 ? "" : "s"), \(img.width)×\(img.height) px. Placed on the center of the material.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             } else {

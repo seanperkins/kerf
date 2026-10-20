@@ -80,7 +80,7 @@ struct TextOnCurveSheet: View {
             if onCurve {
                 Picker("Position", selection: $placement) {
                     Text("From start").tag(TextOnPath.Placement.start)
-                    Text("Centred").tag(TextOnPath.Placement.center)
+                    Text("Centered").tag(TextOnPath.Placement.center)
                     Text("To end").tag(TextOnPath.Placement.end)
                 }
                 LengthField("Offset from curve", value: $offset, units: document.units)
@@ -108,7 +108,7 @@ struct TextLayoutFields: View {
     var body: some View {
         Picker("Justify", selection: $alignment) {
             Image(systemName: "text.alignleft").tag(CADCore.TextAlignment.left).help("Left")
-            Image(systemName: "text.aligncenter").tag(CADCore.TextAlignment.center).help("Centre")
+            Image(systemName: "text.aligncenter").tag(CADCore.TextAlignment.center).help("Center")
             Image(systemName: "text.alignright").tag(CADCore.TextAlignment.right).help("Right")
         }
         .pickerStyle(.segmented)

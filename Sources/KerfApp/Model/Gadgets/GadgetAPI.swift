@@ -159,7 +159,7 @@ enum GadgetAPI {
 
     READ
       kerf.units                "inch" or "mm"
-      kerf.inch, kerf.mm        one inch / one millimetre in document units
+      kerf.inch, kerf.mm        one inch / one millimeter in document units
       kerf.material             { width, height, thickness, zZero: "top"|"spoilboard", safeZ }
       kerf.variables            document variables { name: value }
       kerf.selection()          selected shapes; kerf.shapes() every shape. Each is

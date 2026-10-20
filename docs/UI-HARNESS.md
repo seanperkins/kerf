@@ -84,7 +84,11 @@ there parses).
 ## Limits
 
 - The window is drawn inactive unless you pass `--active` (grey traffic lights, grey selection). `--active`
-  brings Kerf to the front for the run.
+  asks to bring Kerf to the front for the run; macOS may not grant it.
+- `menus` lists the menu bar's structure, titles and key equivalents. Items that depend on the focused document
+  (Group, Mirror, Align…) show as disabled, because SwiftUI's menu focus does not reach the document in this
+  setup, so check enablement in the running app. Every harness flag takes a value (`--ui-active 1`): a bare
+  flag shifts AppKit's `-key value` argument pairing, and the next value is taken for a file to open.
 - Popovers, pop-up menu contents and file panels are not captured. `menus` dumps the menu bar's structure.
 - SceneKit (the 3D preview) is composited from its own snapshot; give it a `wait` before a capture, or the
   simulated stock is not built yet.

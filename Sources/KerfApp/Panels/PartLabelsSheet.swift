@@ -33,7 +33,7 @@ struct PartLabelsSheet: View {
                 }
                 LengthField("Largest text height", value: $options.maxHeight, units: document.units)
                 LengthField("Smallest text height", value: $options.minHeight, units: document.units,
-                            help: "Parts too small for this size are not labelled")
+                            help: "Parts too small for this size are not labeled")
                 Picker("Font", selection: $options.fontName) {
                     ForEach(fonts, id: \.self) { Text($0).tag($0) }
                 }
@@ -76,7 +76,7 @@ struct PartLabelsSheet: View {
                 document.selectedOperationID = id
             }
             if r.skipped > 0 {
-                document.alert = AlertMessage(title: "Some parts were not labelled",
+                document.alert = AlertMessage(title: "Some parts were not labeled",
                                               message: "\(r.skipped) part(s) had no room for a label of the smallest text height.")
             }
         }

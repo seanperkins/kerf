@@ -17,7 +17,7 @@ enum SampleProjects {
     static let all: [Sample] = [
         sign,
         Sample(fileName: "bracket-plate.dxf", title: "Bracket plate (DXF)",
-               detail: "8 x 5 in plate with bolt holes, a slot and a bore, to practise profiles and drilling"),
+               detail: "8 x 5 in plate with bolt holes, a slot and a bore, to practice profiles and drilling"),
         Sample(fileName: "relief.stl", title: "Relief model (STL)",
                detail: "75 mm square relief for the 3D roughing and finishing toolpaths"),
     ]

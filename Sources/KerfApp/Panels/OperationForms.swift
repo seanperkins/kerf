@@ -135,7 +135,7 @@ struct ProfileForm: View {
             .help("Open vectors: cut on the line, or keep the tool to the left or right of the vector's direction")
             Picker("Start point", selection: Binding(get: { params.startPoint ?? .nearest },
                                                      set: { params.startPoint = $0 == .nearest ? nil : $0 })) {
-                Text("Nearest (optimised)").tag(ProfileStartPoint.nearest)
+                Text("Nearest (optimized)").tag(ProfileStartPoint.nearest)
                 Text("Vector start node").tag(ProfileStartPoint.vectorStart)
                 Text("Left side").tag(ProfileStartPoint.left)
                 Text("Right side").tag(ProfileStartPoint.right)
@@ -244,7 +244,7 @@ struct DrillForm: View {
             }
             NumberField("Dwell at bottom", value: $params.dwellSeconds, unit: "s")
             Text(OperationHints.peckSummary(params, units: units)).font(.caption).foregroundStyle(.secondary)
-            Text("Drills at the centre of each selected vector.").font(.caption).foregroundStyle(.secondary)
+            Text("Drills at the center of each selected vector.").font(.caption).foregroundStyle(.secondary)
         }
     }
 }

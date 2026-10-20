@@ -147,7 +147,7 @@ struct JobSheet: Equatable {
         case .lowerRight: origin = "the lower-right corner"
         case .upperLeft: origin = "the upper-left corner"
         case .upperRight: origin = "the upper-right corner"
-        case .center: origin = "the centre"
+        case .center: origin = "the center"
         }
         let zText = job.zZero == .materialTop
             ? "Touch off Z0 on the TOP of the material (\(fmt(job.thickness, u)) thick)."

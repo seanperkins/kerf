@@ -38,7 +38,7 @@ struct DistortSheet: View {
         let units = document.units
         DrawingDialog(title: "Shear / Distort", action: envelope ? "Distort" : "Shear", disabled: ids.isEmpty,
                       note: envelope ? "Moves the corners of the selection's bounding box and bends the vectors to follow (curves are refitted as lines and arcs; live text becomes curves)."
-                          : "Slants the selection about its centre. Positive X slants the top to the right; positive Y raises the right side.",
+                          : "Slants the selection about its center. Positive X slants the top to the right; positive Y raises the right side.",
                       perform: {
                           if envelope {
                               let o = offsets
@@ -222,7 +222,7 @@ struct MirrorSheet: View {
     var body: some View {
         let ids = document.selectedShapes.map(\.id)
         DrawingDialog(title: "Mirror", action: keepOriginal ? "Mirror Copy" : "Mirror", disabled: ids.isEmpty,
-                      note: "Mirroring about the material centre flips a design for cutting from the back of the board.",
+                      note: "Mirroring about the material center flips a design for cutting from the back of the board.",
                       perform: {
                           let (h, p, k) = (horizontally, pivot, keepOriginal)
                           var copies: [UUID]?

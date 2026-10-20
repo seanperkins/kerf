@@ -82,10 +82,10 @@ struct JobSetupSheet: View {
                         if form.job.datumOffset != nil {
                             LengthField("Offset X", value: Binding(get: { form.job.datumOffset?.x ?? 0 },
                                                                    set: { form.job.datumOffset?.x = $0 }), units: u,
-                                        help: "Distance from the chosen corner/centre to machine X0 (right is positive)")
+                                        help: "Distance from the chosen corner/center to machine X0 (right is positive)")
                             LengthField("Offset Y", value: Binding(get: { form.job.datumOffset?.y ?? 0 },
                                                                    set: { form.job.datumOffset?.y = $0 }), units: u,
-                                        help: "Distance from the chosen corner/centre to machine Y0 (up is positive)")
+                                        help: "Distance from the chosen corner/center to machine Y0 (up is positive)")
                         }
                     }
                     TwoSidedSection(job: $form.job)
@@ -173,7 +173,7 @@ struct TwoSidedSection: View {
                     Text("Same as top side").tag(ZZeroMode?.none)
                     ForEach(ZZeroMode.allCases, id: \.self) { Text($0.displayName).tag(ZZeroMode?.some($0)) }
                 }
-                Text("Each side is drawn as seen from above while it faces up; the other side shows mirrored and dashed. Use the centre origin, or stock cut exactly to size, so the second side registers to the first.")
+                Text("Each side is drawn as seen from above while it faces up; the other side shows mirrored and dashed. Use the center origin, or stock cut exactly to size, so the second side registers to the first.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

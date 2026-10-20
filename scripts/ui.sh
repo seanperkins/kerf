@@ -24,7 +24,7 @@ while (( $# )); do
     --light) extra+=(--ui-appearance light); shift ;;
     --dark) extra+=(--ui-appearance dark); shift ;;
     --size) extra+=(--ui-size "$2"); shift 2 ;;
-    --active) extra+=(--ui-active); shift ;;
+    --active) extra+=(--ui-active 1); shift ;;
     --no-build) build=0; shift ;;
     -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) scenario="$1"; shift ;;

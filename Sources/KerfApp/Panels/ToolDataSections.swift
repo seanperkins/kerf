@@ -41,7 +41,7 @@ struct ToolGroupSection: View {
     var existingGroups: [String]
 
     var body: some View {
-        Section("Organisation") {
+        Section("Organization") {
             HStack {
                 TextField("Group", text: Binding(get: { tool.group ?? "" }, set: { tool.group = $0.isEmpty ? nil : $0 }),
                           prompt: Text(tool.kind.displayName))

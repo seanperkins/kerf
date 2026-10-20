@@ -45,14 +45,14 @@ struct DrawingOptionsView: View {
                 LengthField("Corner radius", value: $document.drawingOptions.cornerRadius, units: units)
                 Text("Drag a box. Hold Shift for a square.").font(.callout).foregroundStyle(.secondary)
             case .circle:
-                Text("Drag from the centre outwards.").font(.callout).foregroundStyle(.secondary)
+                Text("Drag from the center outwards.").font(.callout).foregroundStyle(.secondary)
             case .polygon:
                 IntField("Sides", value: $document.drawingOptions.polygonSides, range: 3...64)
-                Text("Drag from the centre to a corner.").font(.callout).foregroundStyle(.secondary)
+                Text("Drag from the center to a corner.").font(.callout).foregroundStyle(.secondary)
             case .star:
                 IntField("Points", value: $document.drawingOptions.starPoints, range: 2...64)
                 NumberField("Inner ratio", value: $document.drawingOptions.starInnerRatio)
-                Text("Drag from the centre to a point.").font(.callout).foregroundStyle(.secondary)
+                Text("Drag from the center to a point.").font(.callout).foregroundStyle(.secondary)
             case .polyline:
                 Text("Click to add points. Click the first point to close, double-click or Return to finish, Esc to cancel.")
                     .font(.callout).foregroundStyle(.secondary)
@@ -82,7 +82,7 @@ struct DrawingOptionsView: View {
                 TextLayoutFields(alignment: $document.drawingOptions.textAlignment,
                                  lineSpacing: $document.drawingOptions.lineSpacing,
                                  letterSpacing: $document.drawingOptions.letterSpacing, units: units)
-                Text("Click on the canvas to place the text. The click is the start, centre or end of the first baseline, following the justification. Text stays editable until converted to curves.")
+                Text("Click on the canvas to place the text. The click is the start, center or end of the first baseline, following the justification. Text stays editable until converted to curves.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .select, .nodeEdit:
                 EmptyView()
@@ -221,7 +221,7 @@ struct AlignButtons: View {
             }
         }
         HStack {
-            Button("Centre on Material") { document.perform("Align") { DesignCommands.align(ids, mode: .materialCenter, in: &$0) } }
+            Button("Center on Material") { document.perform("Align") { DesignCommands.align(ids, mode: .materialCenter, in: &$0) } }
         }
         HStack {
             Button("Distribute ↔") { document.perform("Distribute") { DesignCommands.distribute(ids, horizontally: true, in: &$0) } }

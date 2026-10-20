@@ -68,7 +68,7 @@ struct NodeInspector: View {
             Picker("Mirror", selection: $document.drawingOptions.nodeMirror) {
                 ForEach(NodeMirrorMode.allCases, id: \.self) { Text($0.title).tag($0) }
             }
-            .help("Symmetric editing: moving a node or handle also moves its mirror partner across the vector's centre line(s)")
+            .help("Symmetric editing: moving a node or handle also moves its mirror partner across the vector's center line(s)")
             Toggle("Snap to grid", isOn: $document.snapToGrid)
             Toggle("Snap to objects", isOn: $document.snapToObjects)
             Button("Done") { document.activeTool = .select }
@@ -92,8 +92,8 @@ struct ExactShapeSection: View {
         let tool = document.activeTool
         let radial = [.circle, .polygon, .star].contains(tool)
         InspectorSection(title: "Exact Size") {
-            LengthField("Centre X", value: $document.drawingOptions.exactCenter.x, units: units)
-            LengthField("Centre Y", value: $document.drawingOptions.exactCenter.y, units: units)
+            LengthField("Center X", value: $document.drawingOptions.exactCenter.x, units: units)
+            LengthField("Center Y", value: $document.drawingOptions.exactCenter.y, units: units)
             LengthField(radial ? "Diameter" : "Width", value: $document.drawingOptions.exactWidth, units: units)
             if !radial {
                 LengthField("Height", value: $document.drawingOptions.exactHeight, units: units)
@@ -106,7 +106,7 @@ struct ExactShapeSection: View {
                         document.addShape(s, actionName: "Draw \(tool.title)")
                     }
                 }
-                Button("Centre on Material") {
+                Button("Center on Material") {
                     document.drawingOptions.exactCenter = document.document.job.materialBounds.center
                 }
             }

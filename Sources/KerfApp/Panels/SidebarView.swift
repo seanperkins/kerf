@@ -173,7 +173,7 @@ struct LayerRow: View {
                 get: { Color(nsColor: NSColor(hex: layer.colorHex) ?? .black) },
                 set: { c in update { $0.colorHex = NSColor(c).hexString } }), supportsOpacity: false)
                 .labelsHidden().frame(width: 44)
-                .accessibilityLabel("Colour of layer \(layer.name)")
+                .accessibilityLabel("Color of layer \(layer.name)")
             TextField("Layer", text: $name, onCommit: { update { $0.name = name.isEmpty ? layer.name : name } })
                 .textFieldStyle(.plain)
             Spacer()

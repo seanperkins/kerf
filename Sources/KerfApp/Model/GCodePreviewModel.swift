@@ -47,7 +47,7 @@ struct GCodePreviewModel {
     }
 
     var summary: String {
-        let u = reader.programUnits.map { $0 == .inch ? "inches (G20)" : "millimetres (G21)" } ?? "units not stated"
+        let u = reader.programUnits.map { $0 == .inch ? "inches (G20)" : "millimeters (G21)" } ?? "units not stated"
         return "\(reader.moveCount) moves, \(tools.count) tool\(tools.count == 1 ? "" : "s"), \(u)"
     }
 }
