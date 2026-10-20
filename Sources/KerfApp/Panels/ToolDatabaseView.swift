@@ -37,6 +37,10 @@ struct ToolDatabaseView: View {
                         ForEach(ToolKind.allCases, id: \.self) { kind in
                             Button(kind.displayName) { selectedID = library.add(kind: kind).id }
                         }
+                        Divider()
+                        Button("Bull Nose End Mill") { selectedID = library.add(kind: .endMill, shape: .bullNose).id }
+                        Button("Tapered Ball Nose") { selectedID = library.add(kind: .ballNose, shape: .tapered).id }
+                        Button("Form Tool") { selectedID = library.add(kind: .endMill, shape: .form).id }
                     } label: { Label("Add Tool", systemImage: "plus") }
                 }
             }
@@ -192,6 +196,7 @@ struct ToolEditor: View {
                     Text("The Avid 2.2 kW spindle runs 6000–24000 RPM.").font(.caption).foregroundStyle(.orange)
                 }
             }
+            ToolShapeSection(tool: $tool)
             FeedsCalculatorSection(tool: $tool)
             MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools))
             ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted())

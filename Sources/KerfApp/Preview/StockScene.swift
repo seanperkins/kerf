@@ -165,6 +165,24 @@ final class StockScene {
             n.position = SCNVector3(0, h / 2, 0)
             root.addChildNode(n)
             shankBase = h
+        case .shaped:
+            // Stack of frustums following the outline (lowest height at each radius).
+            let n = 24
+            var prev: (r: Double, h: Double) = (0, shape.heightAboveTip(atRadius: 0) ?? 0)
+            for k in 1...n {
+                let rk = shape.radius * Double(k) / Double(n)
+                let hk = shape.heightAboveTip(atRadius: rk) ?? prev.h
+                let dh = hk - prev.h
+                if dh > 1e-6 {
+                    let f = SCNCone(topRadius: CGFloat(rk), bottomRadius: CGFloat(prev.r), height: CGFloat(dh))
+                    f.materials = [steel]
+                    let node = SCNNode(geometry: f)
+                    node.position = SCNVector3(0, CGFloat(prev.h + dh / 2), 0)
+                    root.addChildNode(node)
+                }
+                prev = (rk, hk)
+            }
+            shankBase = CGFloat(prev.h)
         }
         let shank = SCNCylinder(radius: r, height: shankLength)
         shank.materials = [steel]

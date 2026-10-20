@@ -330,6 +330,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             return """
             Toolpaths ▸ Tool Database (⇧⌘T) lists your cutters. Each tool has a type, diameter, angle (V-bits), stepdown, stepover, spindle speed, feed and plunge rates. Tools are shared by all jobs and saved in Application Support/Kerf/tools.json; jobs also keep a copy of the tools they use.
 
+            End mills and ball noses have a **Shape**: Bull Nose (an end mill with a corner radius), Tapered (a ball tip of the given radius on a cone that widens at the taper angle per side, up to the diameter) or Form (any turned outline such as a roundover, entered as radius at each height above the tip). The 3D preview, 3D finishing, Moulding and Quick Engrave widths use the real outline; 2D Profile and Pocket offsets still use the diameter. Undercuts on a form tool are treated as seen from below.
+
             To move tools to another Mac, use **Share ▸ Export All Tools…** (or Export Selected Tool…) and save a `.kerftools` file, then **Share ▸ Import Tools…** on the other machine. Import also reads another Mac's `tools.json` and CSV files (columns name, type, diameter, plus optional units, number, flutes, angle, stepdown, stepover, rpm, feed, plunge, group, notes). If an imported tool already exists with different settings, choose Replace Existing, Keep Both or Keep Existing. Clashing tool numbers are changed to a free number.
             """
         case .preview:

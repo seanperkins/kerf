@@ -5,8 +5,8 @@ import Foundation
 /// Two formats:
 /// * `.kerftools` — pretty JSON `{ "formatVersion": 1, "tools": [...] }`. Lossless (groups,
 ///   per-material data, ids). A plain `tools.json` copied from another Mac is also accepted.
-/// * `.csv` — one tool per row with a header, for spreadsheets. Per-material data is not
-///   included; a missing `id` column gives the tools new ids.
+/// * `.csv` — one tool per row with a header, for spreadsheets. Per-material data and form-tool
+///   outlines are not included; a missing `id` column gives the tools new ids.
 public enum ToolLibraryExchange {
     public static let fileExtension = "kerftools"
     public static let formatVersion = 1
@@ -62,7 +62,7 @@ public enum ToolLibraryExchange {
     // MARK: CSV
 
     static let csvColumns = ["id", "number", "name", "type", "units", "diameter", "flutes", "angle",
-                             "tip_diameter", "flute_length", "stepdown",
+                             "tip_diameter", "flute_length", "corner_radius", "ball_tip_radius", "taper_half_angle", "stepdown",
                              "stepover", "rpm", "feed", "plunge", "group", "notes"]
 
     public static func encodeCSV(_ tools: [Tool]) -> String {
@@ -71,7 +71,7 @@ public enum ToolLibraryExchange {
             let fields: [String] = [
                 t.id.uuidString, String(t.number), t.name, t.kind.rawValue, t.units.rawValue,
                 num(t.diameter), String(t.flutes), t.angle.map(num) ?? "", num(t.tipDiameter),
-                t.fluteLength.map(num) ?? "",
+                t.fluteLength.map(num) ?? "", shapeField(t, 0), shapeField(t, 1), shapeField(t, 2),
                 num(t.stepdown), num(t.stepover),
                 num(t.spindleRPM), num(t.feedRate), num(t.plungeRate), t.group ?? "", t.notes,
             ]
@@ -119,6 +119,11 @@ public enum ToolLibraryExchange {
                          stepdown: try d("stepdown") ?? dia / 2, stepover: try d("stepover") ?? dia * 0.4,
                          spindleRPM: try d("rpm") ?? 18000, feedRate: try d("feed") ?? 60,
                          plungeRate: try d("plunge") ?? 20, notes: s("notes") ?? "", group: s("group"))
+            if let c = try d("corner_radius"), c > 0 {
+                t.shape = .bullNose(cornerRadius: c)
+            } else if let tip = try d("ball_tip_radius"), let half = try d("taper_half_angle") {
+                t.shape = .taperedBallNose(tipRadius: tip, halfAngle: half)
+            }
             if let idText = s("id"), let id = UUID(uuidString: idText) { t.id = id }
             tools.append(t)
         }
@@ -141,6 +146,16 @@ public enum ToolLibraryExchange {
     public static func write(_ tools: [Tool], to url: URL) throws {
         let data = url.pathExtension.lowercased() == "csv" ? Data(encodeCSV(tools).utf8) : try encodeJSON(tools)
         try data.write(to: url, options: .atomic)
+    }
+
+    /// Bull-nose / tapered-ball columns (form tool outlines are only kept in .kerftools).
+    private static func shapeField(_ t: Tool, _ column: Int) -> String {
+        switch (t.shape, column) {
+        case (.bullNose(let c)?, 0): return num(c)
+        case (.taperedBallNose(let tip, _)?, 1): return num(tip)
+        case (.taperedBallNose(_, let a)?, 2): return num(a)
+        default: return ""
+        }
     }
 
     private static func num(_ x: Double) -> String {

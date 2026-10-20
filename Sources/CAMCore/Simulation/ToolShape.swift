@@ -9,9 +9,12 @@ public enum ToolShape: Hashable, Sendable {
     /// V / engraving cutter: flat tip of `tipRadius`, flanks rising at `halfAngle` (radians,
     /// measured from the axis) out to `radius`.
     case vee(radius: Double, tipRadius: Double, halfAngle: Double)
+    /// Bull nose, tapered ball nose or form tool (toolpaths-2d addition).
+    case shaped(radius: Double, shape: CutterShape)
 
     public init(tool: Tool) {
         let r = max(tool.radius, 1e-9)
+        if let s = tool.effectiveShape { self = .shaped(radius: r, shape: s); return }
         switch tool.kind {
         case .endMill:
             self = .flat(radius: r)
@@ -28,7 +31,7 @@ public enum ToolShape: Hashable, Sendable {
 
     public var radius: Double {
         switch self {
-        case .flat(let r), .ball(let r), .vee(let r, _, _): return r
+        case .flat(let r), .ball(let r), .vee(let r, _, _), .shaped(let r, _): return r
         }
     }
 
@@ -44,6 +47,8 @@ public enum ToolShape: Hashable, Sendable {
         case .vee(let radius, let tip, let half):
             guard r <= radius else { return nil }
             return r <= tip ? 0 : (r - tip) / tan(half)
+        case .shaped(let radius, let shape):
+            return shape.heightAboveTip(atRadius: r, toolRadius: radius)
         }
     }
 }

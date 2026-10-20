@@ -64,6 +64,22 @@ final class ToolLibraryModel: ObservableObject {
         return t
     }
 
+    /// Adds a tool of `kind` with a special outline (bull nose, tapered ball nose, form).
+    @discardableResult
+    func add(kind: ToolKind, shape: ToolShapeChoice, units: LengthUnit = .inch) -> Tool {
+        var t = Self.template(kind: kind, units: units, number: nextToolNumber)
+        t.shape = shape.defaultShape(for: t)
+        switch shape {
+        case .bullNose: t.name = "New Bull Nose"
+        case .tapered: t.name = "New Tapered Ball Nose"; t.diameter *= 0.5
+                       t.shape = shape.defaultShape(for: t); t.stepover = t.diameter * 0.1
+        case .form: t.name = "New Form Tool"; t.diameter *= 2; t.shape = shape.defaultShape(for: t)
+        case .standard: break
+        }
+        mutate { $0.upsert(t) }
+        return t
+    }
+
     func update(_ tool: Tool) { mutate { $0.upsert(tool) } }
 
     @discardableResult

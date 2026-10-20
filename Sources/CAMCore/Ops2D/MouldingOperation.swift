@@ -130,22 +130,18 @@ public struct MouldingOperation: ToolpathOperation {
         let r = tool.radius
         let n = max(1, Int((profile.width / step).rounded(.up)))
         let offsets = (0...n).map { min(profile.width, Double($0) * profile.width / Double(n)) }
-        let m = 24
+        let m = 48
+        // Also test where the section has a corner (a step's top edge is where the tool sits).
+        let corners = profile.samples.map(\.t)
         return offsets.map { t in
             var best = Double.infinity
-            for k in -m...m {
-                let u = r * Double(k) / Double(m)
+            func test(_ u: Double) {
                 // Height of the tool's cutting surface above its tip at lateral distance u.
-                let h: Double
-                switch tool.kind {
-                case .ballNose: h = r - (max(r * r - u * u, 0)).squareRoot()
-                case .vBit, .engraving:
-                    let half = (tool.angle ?? 90) / 2 * .pi / 180
-                    h = max(abs(u) - tool.tipDiameter / 2, 0) / tan(half)
-                default: h = 0
-                }
+                let h = tool.heightAboveTip(atRadius: min(abs(u), r)) ?? 0
                 best = min(best, profile.depth(at: t + u) + h)
             }
+            for k in -m...m { test(r * Double(k) / Double(m)) }
+            for c in corners where abs(c - t) <= r { test(c - t) }
             return (t, max(0, best) + max(extra, 0))
         }
     }

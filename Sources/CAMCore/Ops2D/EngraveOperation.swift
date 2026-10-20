@@ -30,6 +30,7 @@ public struct EngraveOperation: ToolpathOperation {
     /// Width of the groove a tool cuts at `depth` (V-bit cone, ball radius or full diameter).
     public static func cutWidth(tool: Tool, depth: Double) -> Double {
         let d = max(depth, 0)
+        if tool.effectiveShape != nil { return tool.cutWidth(atDepth: d) }
         switch tool.kind {
         case .vBit, .engraving:
             return tool.angle == nil ? tool.diameter : tool.vWidth(atDepth: d)
