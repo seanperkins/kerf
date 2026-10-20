@@ -2,13 +2,15 @@
 
 Kerf against the public VCarve Pro 12.5 feature set, built from Vectric's public product page and online help only (see Sources). Status is judged from Kerf's code and tests: **done** = works end to end including the UI; **partial** = engine or UI only, or a subset of the options; **missing** = not implemented. Priority: **P1** = matters for typical Avid sign, part, inlay or 3D jobs; P2 = useful; P3 = niche or out of scope (for example rotary).
 
-Totals: 196 features. 171 done, 8 partial, 17 missing. P1: 64 done, 0 partial, 0 missing.
+Totals: 196 features. 172 done, 7 partial, 17 missing. P1: 64 done, 0 partial, 0 missing.
 
 Round 2 (2026-10-20): every partial and missing item was re-checked against the code and is unchanged; the full suite passed (774 tests). Fourteen items were added from the public feature list (marked *r2* in notes).
 
 Round 2 merge (2026-10-20): the drawing, io, toolpaths-2d, cam-3d, layout, preview and app-ux round-2 branches were merged into main; the full suite passed (888 tests in 135 suites), scripts/bundle.sh built dist/Kerf.app with the Quick Look extension, and the app launched and quit cleanly with no crash reports. Remaining partials: io-skp-import, io-clipart-library, pv-3d-toolpath-vectors. Remaining missing items are won't-do for this machine: tp-drill-bank, tp-laser, 3d-rotary.
 
 Round 3 (2026-10-20): the six partial or missing items were re-checked against main and are unchanged (no .skp reader, no bundled or online clipart, no drawing in the 3D view, no drill bank, laser or rotary). A completeness pass over Vectric's public product page, help index and V12.5 What's New added nineteen items (marked *r3*): picture adjustments, join modes, associative dimensions, smart part selection, spell check, layer extras, sheet duplication and toolpath transfer, external threads, more inlay types, tool search and naming, rounding, keyhole and drag-knife toolpaths, per-sheet plates, two-sided nesting, a job-sheet editor, volume display and a machine setup wizard. All are P3; no P1 gap was found. The full suite passed (892 tests in 135 suites).
+
+Round 3 merge (2026-10-20): parity/preview-r3 was merged into main, so pv-3d-toolpath-vectors is now done (Select and Draw tools in the 3D view). swift build passed, the full suite passed (899 tests in 136 suites), scripts/bundle.sh built dist/Kerf.app, and the app launched and quit cleanly with no new crash reports. Still partial: io-skp-import, io-clipart-library and five *r3* items; the missing items are unchanged.
 
 | id | area | feature | status | priority | notes |
 |---|---|---|---|---|---|
