@@ -20,6 +20,19 @@ enum ImportService {
         allExtensions.compactMap { UTType(filenameExtension: $0) }
     }
 
+    static func isMesh(_ fileName: String) -> Bool {
+        meshExtensions.contains((fileName as NSString).pathExtension.lowercased())
+    }
+
+    /// Reads an STL into a placement form (the app shows it as the "Place 3D Model" dialog).
+    static func placementForm(data: Data, fileName: String, project: KerfProject,
+                              library: ToolLibrary) throws -> ModelPlacementForm {
+        let mesh = try STLImporter().importMesh(from: data, targetUnits: project.document.units)
+        guard mesh.triangleCount > 0 else { throw KerfIOError.malformed("the STL contains no triangles") }
+        return ModelPlacementForm(mesh: mesh, name: (fileName as NSString).deletingPathExtension,
+                                  job: project.document.job, library: library)
+    }
+
     static func importFile(data: Data, fileName: String, into project: inout KerfProject) throws -> ImportOutcome {
         let ext = (fileName as NSString).pathExtension.lowercased()
         let base = (fileName as NSString).deletingPathExtension

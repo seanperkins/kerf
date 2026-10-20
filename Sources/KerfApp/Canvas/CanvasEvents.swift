@@ -13,8 +13,14 @@ extension CanvasNSView {
         window?.makeFirstResponder(self)
         guard let doc = document else { return }
         let v = viewPoint(event)
-        if spaceHeld || event.modifierFlags.contains(.option) && doc.activeTool == .select {
+        let tabEditing = doc.tabEditingOperationID != nil
+        if spaceHeld || event.modifierFlags.contains(.option) && doc.activeTool == .select && !tabEditing {
             drag = .pan(lastView: v); NSCursor.closedHand.set(); return
+        }
+        if tabEditing {
+            tabMouseDown(event, doc)
+            needsDisplay = true
+            return
         }
         switch doc.activeTool {
         case .select:
@@ -61,10 +67,47 @@ extension CanvasNSView {
             drag = .marquee(startView: s, currentView: v, extend: extend)
         case .draw(let s, _):
             drag = .draw(startDoc: s, currentDoc: docPoint(event))
+        case .tab(let i, _):
+            if let (op, tabs) = editedProfileTabs(doc) {
+                let moved = TabEditor.moving(i, to: docPoint(event, snapped: false), in: tabs,
+                                             shapes: doc.document.shapes(ids: op.setup.shapeIDs), tolerance: tolerance)
+                drag = .tab(index: i, preview: moved)
+            }
         case .none:
             break
         }
         needsDisplay = true
+    }
+
+    // MARK: Tab editor
+
+    /// The Profile operation under tab editing and its tab settings.
+    private func editedProfileTabs(_ doc: KerfDocument) -> (AnyOperation, TabSettings)? {
+        guard let id = doc.tabEditingOperationID, let op = doc.operation(id), let tabs = op.profileTabs else { return nil }
+        return (op, tabs)
+    }
+
+    /// Click on a tab: start dragging it (option-click deletes it). Click on one of the
+    /// toolpath's vectors: add a tab there.
+    private func tabMouseDown(_ event: NSEvent, _ doc: KerfDocument) {
+        guard let (op, tabs) = editedProfileTabs(doc) else { doc.tabEditingOperationID = nil; return }
+        let p = docPoint(event, snapped: false)
+        if let i = TabEditor.hit(at: p, tabs: tabs, document: doc.document, radius: viewport.documentLength(7),
+                                 tolerance: tolerance) {
+            if event.modifierFlags.contains(.option) {
+                doc.setProfileTabs(TabEditor.removing(i, from: tabs), for: op.id, actionName: "Delete Tab")
+            } else {
+                drag = .tab(index: i, preview: nil)
+            }
+            return
+        }
+        let base = tabs.isManual ? tabs : TabEditor.makeManual(tabs, shapes: [])
+        if let t = TabEditor.adding(at: p, to: base, shapes: doc.document.shapes(ids: op.setup.shapeIDs),
+                                    maxDistance: viewport.documentLength(8), tolerance: tolerance) {
+            doc.setProfileTabs(t, for: op.id, actionName: "Add Tab")
+        } else {
+            NSSound.beep()
+        }
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -86,6 +129,8 @@ extension CanvasNSView {
             }
         case .pan:
             NSCursor.arrow.set()
+        case .tab(_, let preview):
+            if let t = preview, let id = doc.tabEditingOperationID { doc.setProfileTabs(t, for: id, actionName: "Move Tab") }
         case .none:
             break
         }
@@ -149,7 +194,7 @@ extension CanvasNSView {
         case 51, 117: // delete, forward delete
             doc.deleteSelection()
         case 53: // escape
-            if !clickPoints.isEmpty { clickPoints = [] } else if doc.activeTool != .select { doc.activeTool = .select } else { doc.clearSelection() }
+            if doc.tabEditingOperationID != nil { doc.tabEditingOperationID = nil } else if !clickPoints.isEmpty { clickPoints = [] } else if doc.activeTool != .select { doc.activeTool = .select } else { doc.clearSelection() }
         case 36, 76: // return, enter
             finishClickShape()
         case 123: doc.translateSelection(by: Vec2(-step, 0), actionName: "Nudge")

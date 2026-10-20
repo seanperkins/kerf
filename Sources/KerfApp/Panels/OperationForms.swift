@@ -84,6 +84,16 @@ struct PocketStrategyForm: View {
 struct ProfileForm: View {
     @Binding var params: ProfileParameters
     var units: LengthUnit
+    /// The operation's vectors (to seed manual tabs).
+    var shapes: [Shape] = []
+    var isEditingTabs: Binding<Bool> = .constant(false)
+
+    private var manualBinding: Binding<Bool> {
+        Binding(get: { params.tabs.isManual }, set: { manual in
+            params.tabs = manual ? TabEditor.makeManual(params.tabs, shapes: shapes) : TabEditor.makeAutomatic(params.tabs)
+            if !manual { isEditingTabs.wrappedValue = false }
+        })
+    }
 
     var body: some View {
         InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units) }
@@ -105,8 +115,25 @@ struct ProfileForm: View {
             if params.tabs.isEnabled {
                 LengthField("Length", value: $params.tabs.length, units: units)
                 LengthField("Thickness", value: $params.tabs.thickness, units: units)
-                IntField("Tabs per vector", value: $params.tabs.countPerPath, range: 1...64)
                 Toggle("Triangular (3D) tabs", isOn: $params.tabs.isTriangular)
+                Picker("Placement", selection: manualBinding) {
+                    Text("Automatic").tag(false)
+                    Text("Manual").tag(true)
+                }
+                .pickerStyle(.segmented)
+                if let manual = params.tabs.manualTabs {
+                    let n = manual.count
+                    Text("\(n) tab\(n == 1 ? "" : "s") placed by hand").font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Toggle(isOn: isEditingTabs) { Label("Edit on Canvas", systemImage: "pin") }
+                            .toggleStyle(.button)
+                        Button("Clear") { params.tabs.manualTabs = [] }.disabled(n == 0)
+                    }
+                } else {
+                    IntField("Tabs per vector", value: $params.tabs.countPerPath, range: 1...64)
+                    OptionalLengthField(label: "Spacing", value: $params.tabs.spacing, units: units,
+                                        defaultValue: units == .inch ? 6 : 150)
+                }
             }
         }
         Divider()
@@ -129,6 +156,7 @@ struct PocketForm: View {
     @Binding var params: PocketParameters
     var units: LengthUnit
     var library: ToolLibrary
+    var finishToolID: UUID?
 
     var body: some View {
         InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units) }
@@ -137,10 +165,23 @@ struct PocketForm: View {
             PocketStrategyForm(strategy: $params.strategy)
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units)
+        }
+        Divider()
+        InspectorSection(title: "Tools") {
             OptionalToolPicker(title: "Clearance tool", toolID: $params.clearanceToolID, library: library,
                                kinds: [.endMill, .ballNose])
-            RampForm(ramp: $params.ramp, units: units)
+            if let problem = OperationHints.pocketClearanceProblem(finish: finishToolID.flatMap { library.tool(id: $0) },
+                                                                   clearance: params.clearanceToolID.flatMap { library.tool(id: $0) }) {
+                Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(params.clearanceToolID == nil
+                     ? "The finish tool clears the whole pocket."
+                     : "The larger clearance tool removes the bulk first; the finish tool then cleans up the walls and corners it could not reach.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
+        Divider()
+        InspectorSection(title: "Ramps") { RampForm(ramp: $params.ramp, units: units) }
     }
 }
 
@@ -152,9 +193,16 @@ struct DrillForm: View {
         InspectorSection(title: "Drilling") {
             LengthField("Start depth", value: $params.startDepth, units: units)
             LengthField("Cut depth", value: $params.cutDepth, units: units)
-            LengthField("Peck depth", value: $params.peckDepth, units: units, help: "0 = single plunge")
-            LengthField("Retract height", value: $params.retractHeight, units: units, help: "Above the material top between pecks")
-            NumberField("Dwell", value: $params.dwellSeconds, unit: "s")
+            Toggle("Peck drilling", isOn: Binding(get: { params.peckDepth > 0 }, set: { on in
+                params.peckDepth = on ? (units == .inch ? 0.125 : 3) : 0
+            }))
+            if params.peckDepth > 0 {
+                LengthField("Peck depth", value: $params.peckDepth, units: units, help: "Depth added by each peck")
+                LengthField("Retract height", value: $params.retractHeight, units: units,
+                            help: "Above the material top between pecks (clears chips)")
+            }
+            NumberField("Dwell at bottom", value: $params.dwellSeconds, unit: "s")
+            Text(OperationHints.peckSummary(params, units: units)).font(.caption).foregroundStyle(.secondary)
             Text("Drills at the centre of each selected vector.").font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -202,6 +250,13 @@ struct InlayForm: View {
             LengthField("Plug boundary margin", value: $params.maleBoundaryMargin, units: units)
             OptionalToolPicker(title: "Flat area tool", toolID: $params.flatClearanceToolID, library: library,
                                kinds: [.endMill, .ballNose])
+            let gap = params.pocketDepth - params.maleStartDepth
+            if params.maleStartDepth + params.glueGap > params.pocketDepth + 1e-9 {
+                Text("Plug start depth + glue gap must not exceed the pocket depth.").font(.caption).foregroundStyle(.orange)
+            } else {
+                Text("Gap under the plug: \(RulerTicks.label((gap * 1000).rounded() / 1000)) \(units.abbreviation)")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }
@@ -223,6 +278,8 @@ struct FlutingForm: View {
             NumberField("Ramp length", value: Binding(get: { params.rampFraction * 100 },
                                                       set: { params.rampFraction = min(max($0 / 100, 0), 0.5) }), unit: "%")
             Toggle("Smooth ramp", isOn: $params.smoothRamp)
+            Text("Each selected vector is cut once, plunging gradually over the ramp length to full depth. Use a ball nose or V-bit for tapered flutes.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -246,6 +303,8 @@ struct TextureForm: View {
                     Button("Shuffle") { params.seed = UInt64.random(in: 1...999_999) }
                 }
             }
+            Text("Fills the selected closed vectors with short random strokes at the given spacing and angle.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

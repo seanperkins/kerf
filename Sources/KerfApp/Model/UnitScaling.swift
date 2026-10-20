@@ -19,7 +19,9 @@ extension RampSettings {
 }
 
 extension TabSettings {
-    func scaled(by f: Double) -> TabSettings { var t = self; t.length *= f; t.thickness *= f; return t }
+    func scaled(by f: Double) -> TabSettings {
+        var t = self; t.length *= f; t.thickness *= f; t.spacing = t.spacing.map { $0 * f }; return t
+    }
 }
 
 extension LeadSettings {

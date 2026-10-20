@@ -80,13 +80,20 @@ struct KerfCommands: Commands {
         CommandMenu("Toolpaths") {
             Menu("New Toolpath") {
                 ForEach(OperationFactory.menuKinds, id: \.self) { kind in
-                    Button(kind.displayName) { document?.addOperation(kind) }
+                    Button(OperationFactory.menuTitle(kind)) { document?.addOperation(kind) }
                 }
             }
             .disabled(document == nil)
             Button("Calculate All") { document?.calculateAll() }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Check Toolpaths…") { document?.sheet = .validation }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Save All Toolpaths…") { document?.sheet = .saveAllToolpaths }
+                .keyboardShortcut("s", modifiers: [.command, .option])
+                .disabled(document?.project.operations.isEmpty ?? true)
+            Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("t", modifiers: [.command, .option])
             Divider()
