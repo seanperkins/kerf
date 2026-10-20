@@ -1,12 +1,107 @@
 import Foundation
 
-/// DXF (ASCII) import: LINE, ARC, CIRCLE, LWPOLYLINE (bulges), POLYLINE, SPLINE (approximated), $INSUNITS.
+/// DXF (ASCII) import: LINE, ARC, CIRCLE, ELLIPSE, LWPOLYLINE (bulges), POLYLINE, SPLINE
+/// (sampled), INSERT (block references); `$INSUNITS` → document units. DXF layers become
+/// layers. Loose open entities on the same layer whose ends touch are joined into vectors.
 public struct DXFImporter: VectorImporter {
     public static let fileExtensions = ["dxf"]
-    public init() {}
+
+    /// Endpoint tolerance (in target units) for joining open entities; nil disables joining.
+    public var joinTolerance: Double?
+    /// Chordal tolerance (in DXF units) used to sample splines.
+    public var splineTolerance: Double
+
+    public init(joinTolerance: Double? = nil, splineTolerance: Double = 0.001) {
+        self.joinTolerance = joinTolerance; self.splineTolerance = splineTolerance
+    }
 
     public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
-        // TODO(cad-io): implement.
-        throw KerfIOError.notImplemented("DXFImporter")
+        let file = try DXFFile(data: data)
+        var warnings: [String] = []
+        let scale = unitScale(file, to: targetUnits, warnings: &warnings)
+        let toDoc = Transform2D.scale(scale, scale)
+        let joinTol = joinTolerance ?? (targetUnits == .inch ? 0.0005 : 0.01)
+
+        var layerOrder: [String] = []
+        var pathsByLayer: [String: [Path]] = [:]
+        var skipped: [String: Int] = [:]
+
+        func collect(_ entities: [DXFEntity], _ t: Transform2D, inheritedLayer: String?, depth: Int) {
+            for e in entities {
+                let layer = (e.layer == "0" ? inheritedLayer : nil) ?? e.layer
+                if e.type == "INSERT" {
+                    guard depth < 16, let name = e.string(2), let block = file.blocks[name] else {
+                        skipped["INSERT", default: 0] += 1; continue
+                    }
+                    let sx = e.double(41) ?? 1, sy = e.double(42) ?? 1
+                    let rot = (e.double(50) ?? 0) * .pi / 180
+                    let at = Vec2(e.double(10) ?? 0, e.double(20) ?? 0)
+                    var m = Transform2D.translation(-block.base).concatenating(.scale(sx, sy))
+                        .concatenating(.rotation(rot)).concatenating(.translation(at))
+                    if e.isMirroredOCS { m = m.concatenating(.scale(-1, 1)) }
+                    collect(block.entities, m.concatenating(t), inheritedLayer: layer, depth: depth + 1)
+                    continue
+                }
+                guard let paths = DXFGeometry.paths(for: e, splineTolerance: splineTolerance) else {
+                    skipped[e.type, default: 0] += 1; continue
+                }
+                guard !paths.isEmpty else { continue }
+                if pathsByLayer[layer] == nil { layerOrder.append(layer) }
+                pathsByLayer[layer, default: []] += paths.map { $0.transformed(t) }
+            }
+        }
+        collect(file.entities, toDoc, inheritedLayer: nil, depth: 0)
+
+        for (type, n) in skipped.sorted(by: { $0.key < $1.key }) {
+            warnings.append("Skipped \(n) unsupported \(type) entit\(n == 1 ? "y" : "ies").")
+        }
+
+        var layers: [Layer] = []
+        var shapes: [Shape] = []
+        for name in layerOrder {
+            let layer = Layer(name: name, colorHex: color(file.layerColors[name], index: layers.count))
+            layers.append(layer)
+            var paths = pathsByLayer[name] ?? []
+            if joinTol > 0 { paths = PathOps.joinOpenPaths(paths, tolerance: joinTol) }
+            for p in paths {
+                shapes.append(Shape(name: p.isClosed ? "Closed vector" : "Open vector", layerID: layer.id,
+                                    paths: [p], origin: .imported(format: "dxf")))
+            }
+        }
+        return ImportResult(layers: layers, shapes: shapes, warnings: warnings)
+    }
+
+    /// Scale factor from DXF drawing units to `target`.
+    func unitScale(_ file: DXFFile, to target: LengthUnit, warnings: inout [String]) -> Double {
+        let mm: Double?
+        switch file.headerInt("$INSUNITS") {
+        case 1: mm = 25.4
+        case 2: mm = 304.8
+        case 4: mm = 1
+        case 5: mm = 10
+        case 6: mm = 1000
+        case 8: mm = 25.4e-6
+        case 9: mm = 25.4e-3
+        case 13: mm = 1e-3
+        case 14: mm = 100
+        default:
+            switch file.headerInt("$MEASUREMENT") {
+            case 0: mm = 25.4
+            case 1: mm = 1
+            default: mm = nil
+            }
+        }
+        guard let mm else {
+            warnings.append("DXF has no units; values were read as \(target == .inch ? "inches" : "millimetres").")
+            return 1
+        }
+        return mm / target.millimeters
+    }
+
+    /// AutoCAD Color Index 1–7 → hex; other indices fall back to a palette.
+    func color(_ aci: Int?, index: Int) -> String {
+        let basic = [1: "#FF0000", 2: "#FFFF00", 3: "#00FF00", 4: "#00FFFF", 5: "#0000FF", 6: "#FF00FF", 7: "#000000"]
+        if let aci, let hex = basic[aci] { return hex }
+        return SVGImporter.palette[index % SVGImporter.palette.count]
     }
 }
