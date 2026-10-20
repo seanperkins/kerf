@@ -11,15 +11,14 @@ public struct PDFImporter: VectorImporter {
     public init() {}
 
     /// A raster image drawn on the page (`Do` of an Image XObject), in target units.
-    public struct EmbeddedImage: Sendable {
-        /// Lower-left corner and size in document units (axis-aligned bounds of the drawn image).
-        public var rect: Rect2
-        /// PNG-encoded pixels.
-        public var png: Data
-    }
+    public typealias EmbeddedImage = ImportedImage
 
+    /// Vectors of page 1 plus its embedded images (in `ImportResult.images`).
     public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
-        try importPage(from: data, targetUnits: targetUnits, includeImages: false).result
+        let (r, images) = try importPage(from: data, targetUnits: targetUnits, includeImages: true)
+        var result = r
+        result.images = images
+        return result
     }
 
     /// Vectors plus (optionally) embedded images of the first page.

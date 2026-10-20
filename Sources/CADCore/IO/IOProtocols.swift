@@ -6,14 +6,26 @@ public enum KerfIOError: Error, Equatable, Sendable {
     case malformed(String)
 }
 
+/// A raster image found in a vector file (PDF image XObject, SVG `<image>`).
+public struct ImportedImage: Sendable {
+    /// Axis-aligned placement in document units (material frame).
+    public var rect: Rect2
+    /// PNG-encoded pixels.
+    public var png: Data
+
+    public init(rect: Rect2, png: Data) { self.rect = rect; self.png = png }
+}
+
 /// Result of importing a vector file: new layers and the shapes assigned to them.
 public struct ImportResult: Sendable {
     public var layers: [Layer]
     public var shapes: [Shape]
     public var warnings: [String]
+    /// Embedded raster images (the app places them as tracing images).
+    public var images: [ImportedImage]
 
-    public init(layers: [Layer] = [], shapes: [Shape] = [], warnings: [String] = []) {
-        self.layers = layers; self.shapes = shapes; self.warnings = warnings
+    public init(layers: [Layer] = [], shapes: [Shape] = [], warnings: [String] = [], images: [ImportedImage] = []) {
+        self.layers = layers; self.shapes = shapes; self.warnings = warnings; self.images = images
     }
 }
 

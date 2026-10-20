@@ -20,6 +20,19 @@ final class SVGNode {
 
     var id: String? { attributes["id"] }
 
+    /// Character data of a "#text" child (text content is kept in document order).
+    var data: String { attributes["data"] ?? "" }
+
+    /// Property set on this element or inherited from an ancestor (font-family, font-size…).
+    func inherited(_ key: String) -> String? {
+        var n: SVGNode? = self
+        while let cur = n {
+            if let v = cur.property(key), v != "inherit" { return v }
+            n = cur.parent
+        }
+        return nil
+    }
+
     func forEach(_ body: (SVGNode) -> Void) {
         body(self)
         for c in children { c.forEach(body) }
@@ -49,6 +62,19 @@ final class SVGNode {
             let node = SVGNode(name: local, attributes: attributeDict)
             if let top = stack.last { node.parent = top; top.children.append(node) } else { root = node }
             stack.append(node)
+        }
+
+        func parser(_ parser: XMLParser, foundCharacters string: String) {
+            guard let top = stack.last, top.name == "text" || top.name == "tspan" || top.name == "textPath" else { return }
+            if let last = top.children.last, last.name == "#text" {
+                let merged = SVGNode(name: "#text", attributes: ["data": last.data + string])
+                merged.parent = top
+                top.children[top.children.count - 1] = merged
+            } else {
+                let node = SVGNode(name: "#text", attributes: ["data": string])
+                node.parent = top
+                top.children.append(node)
+            }
         }
 
         func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?,

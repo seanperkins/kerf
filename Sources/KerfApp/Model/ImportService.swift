@@ -56,15 +56,9 @@ enum ImportService {
         guard let importer = FileFormats.importer(forExtension: ext) else {
             throw KerfIOError.unsupportedFormat(ext)
         }
-        let result: ImportResult
-        var embedded: [PDFImporter.EmbeddedImage] = []
-        if ext == "pdf" || (ext == "ai" && data.starts(with: Data("%PDF".utf8))) {
-            (result, embedded) = try PDFImporter().importPage(from: data, targetUnits: units, includeImages: true)
-        } else {
-            result = try importer.importVectors(from: data, targetUnits: units)
-        }
+        let result = try importer.importVectors(from: data, targetUnits: units)
         var outcome = ImportOutcome(warnings: result.warnings)
-        for (i, e) in embedded.enumerated() {
+        for (i, e) in result.images.enumerated() {
             guard let info = RasterCodec.info(of: e.png) else { continue }
             let img = PlacedImage(name: "\(base) image \(i + 1)", layerID: bitmapLayer(in: &project), png: e.png,
                                   pixelWidth: info.pixels.width, pixelHeight: info.pixels.height, rect: e.rect)
