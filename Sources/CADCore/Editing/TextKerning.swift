@@ -18,9 +18,29 @@ public enum TextKerning {
     }
 
     static func outlines(for spec: TextSpec, adjustments: [TextSpec.LetterAdjustment], outliner: TextOutliner) throws -> [Path] {
+        try letters(for: spec, adjustments: adjustments, outliner: outliner).flatMap(\.paths)
+    }
+
+    /// One laid-out letter of live text (document coordinates, adjustments applied).
+    public struct Letter: Sendable {
+        /// Letter number used by `TextSpec.LetterAdjustment.index`.
+        public var index: Int
+        /// Line the letter is on (0 = first).
+        public var line: Int
+        public var paths: [Path]
+        public var bounds: Rect2
+    }
+
+    /// The letters of `spec` with its current adjustments, in order. Blank glyphs (spaces) are
+    /// included with empty paths so indices stay aligned.
+    public static func letters(for spec: TextSpec) throws -> [Letter] {
+        try letters(for: spec, adjustments: spec.letterAdjustments ?? [], outliner: TextOutliner())
+    }
+
+    static func letters(for spec: TextSpec, adjustments: [TextSpec.LetterAdjustment], outliner: TextOutliner) throws -> [Letter] {
         let byIndex = Dictionary(adjustments.map { ($0.index, $0) }, uniquingKeysWith: { _, b in b })
         let pitch = try lineHeight(fontName: spec.fontName, size: spec.size, lineSpacing: spec.lineSpacing)
-        var out: [Path] = []
+        var out: [Letter] = []
         var index = 0
         for (i, line) in spec.string.components(separatedBy: "\n").enumerated() {
             let glyphs = try outliner.glyphs(for: line, fontName: spec.fontName, size: spec.size, letterSpacing: spec.letterSpacing)
@@ -36,10 +56,37 @@ public enum TextKerning {
                     t = Transform2D.rotation(a.rotation * .pi / 180, about: c).concatenating(.translation(a.offset))
                 }
                 t = t.concatenating(.translation(lineShift)).concatenating(spec.transform)
-                out += g.paths.map { $0.transformed(t) }
+                let paths = g.paths.map { $0.transformed(t) }
+                out.append(Letter(index: index, line: i, paths: paths,
+                                  bounds: paths.reduce(Rect2.empty) { $0.union($1.bounds()) }))
                 index += 1
             }
         }
+        return out
+    }
+
+    /// The letter under `point` (inside its bounding box grown by `tolerance`; the smallest box
+    /// wins where boxes overlap). Blank letters are never hit.
+    public static func letter(at point: Vec2, in letters: [Letter], tolerance: Double) -> Letter? {
+        letters.filter { !$0.paths.isEmpty && $0.bounds.insetBy(-tolerance).contains(point) }
+            .min { $0.bounds.width * $0.bounds.height < $1.bounds.width * $1.bounds.height }
+    }
+
+    /// `spec` with `indices` moved by a document-space `delta` (converted into layout units, so
+    /// scaled, rotated or mirrored text moves with the pointer). Adjustments that end up empty are
+    /// dropped; nil when none remain.
+    public static func moving(_ spec: TextSpec, letters indices: Set<Int>, byDocumentDelta delta: Vec2) -> TextSpec {
+        guard !indices.isEmpty, let inv = spec.transform.inverted else { return spec }
+        let d = inv.applyToVector(delta)
+        var byIndex = Dictionary((spec.letterAdjustments ?? []).map { ($0.index, $0) }, uniquingKeysWith: { _, b in b })
+        for i in indices {
+            var a = byIndex[i] ?? TextSpec.LetterAdjustment(index: i)
+            a.offset = a.offset + d
+            byIndex[i] = a
+        }
+        var out = spec
+        let kept = byIndex.values.filter { $0.offset.length > 1e-12 || $0.rotation != 0 }.sorted { $0.index < $1.index }
+        out.letterAdjustments = kept.isEmpty ? nil : kept
         return out
     }
 }

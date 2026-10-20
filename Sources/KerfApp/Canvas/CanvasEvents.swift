@@ -28,7 +28,7 @@ extension CanvasNSView {
         if spaceHeld || event.modifierFlags.contains(.option) && doc.activeTool == .select && !tabEditing {
             drag = .pan(lastView: v); NSCursor.closedHand.set(); return
         }
-        if envelopeMouseDown(event, doc) { needsDisplay = true; return }
+        if envelopeMouseDown(event, doc) || kerningMouseDown(event, doc) { needsDisplay = true; return }
         if !tabEditing, guideMouseDown(event, doc) { needsDisplay = true; return }
         if tabEditing {
             tabMouseDown(event, doc)
@@ -248,7 +248,7 @@ extension CanvasNSView {
 
     override func keyDown(with event: NSEvent) {
         guard let doc = document else { return super.keyDown(with: event) }
-        if handleDrawingToolKey(event, doc) { needsDisplay = true; return }
+        if kerningKeyDown(event, doc) || handleDrawingToolKey(event, doc) { needsDisplay = true; return }
         let step = doc.document.gridSpacing * (event.modifierFlags.contains(.shift) ? 10 : 1)
         let nodeMode = doc.activeTool == .nodeEdit && !doc.nodeSelection.isEmpty
         func nudge(_ d: Vec2) {

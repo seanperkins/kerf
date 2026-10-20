@@ -155,6 +155,10 @@ struct TextEditSection: View {
             }
             Divider()
             Text("Letter spacing by hand").font(.subheadline.bold())
+            Button(document.kerningShapeID == shape.id ? "Stop Kerning" : "Kern on Canvas") {
+                document.kerningShapeID == shape.id ? document.endKerning() : document.beginKerning(shape.id)
+            }
+            .help("Drag letters on the design; Shift-drag moves the rest of the line")
             IntField("Letter number", value: $letter, range: 1...max(1, letterCount))
             LengthField("Move X", value: $letterOffset.x, units: document.units)
             LengthField("Move Y", value: $letterOffset.y, units: document.units)

@@ -98,6 +98,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var tabEditingOperationID: UUID?
     /// Envelope distortion with draggable corners in progress on the canvas.
     @Published var envelopeEdit: EnvelopeEdit?
+    /// Live text whose letters are being dragged on the canvas (interactive kerning).
+    @Published var kerningShapeID: UUID?
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
     private var deferredAlert: AlertMessage?

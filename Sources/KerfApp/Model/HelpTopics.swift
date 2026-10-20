@@ -188,6 +188,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             - Drag to draw shapes; type exact sizes in the inspector afterwards.
             - Polylines and curves: click points, double-click or press Return to finish, Esc to cancel.
             - Text uses any installed font; the size is the height of capital letters.
+            - To kern, select one text object and choose **Kern on Canvas** in the inspector (or Vectors ▸ Kern Text on Canvas): drag letters, Shift-drag to move a letter and the rest of its line, arrows nudge the clicked letter. The text stays editable.
             - Snapping to the grid (⌘') and to object points (⇧⌘') can be paused by holding ⌘ while dragging.
             - Drag a box left→right to select shapes fully inside it, right→left to select anything it touches.
             """

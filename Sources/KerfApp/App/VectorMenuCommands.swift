@@ -25,6 +25,8 @@ struct VectorMenuCommands: Commands {
             Divider()
             sheetButton("Fit Text to Box…", .textFit)
             sheetButton("Text on Curve / Arc…", .textOnCurve)
+            Button("Kern Text on Canvas") { document?.beginKerning() }
+                .disabled(!(document.map { $0.selectedShapes.count == 1 && $0.selectedShapes[0].text != nil } ?? false))
             Button("Convert Text to Curves") {
                 guard let doc = document else { return }
                 let ids = doc.selection

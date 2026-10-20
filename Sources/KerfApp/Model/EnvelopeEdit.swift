@@ -50,6 +50,7 @@ extension KerfDocument {
             return
         }
         activeTool = .select
+        kerningShapeID = nil
         envelopeEdit = e
     }
 
