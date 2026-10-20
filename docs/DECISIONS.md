@@ -258,3 +258,15 @@
   snaps to 15°). Mirroring stays on menu/inspector buttons.
 - **drawing** — Bézier pen is a separate tool (P); the old click-through smooth curve remains as
   "Smooth Curve". Canvas single-key tool shortcuts: V N R C E L P T.
+
+## advanced-ui
+
+- **advanced-ui** — Manual profile tabs are `TabSettings.manualTabs: [TabAnchor]?` (optional, so older .kerf files decode unchanged). An anchor is (shape id, path index, fraction of the flattened path length), so tabs follow the vector when it moves, scales or rotates. When manual, each anchor goes to the toolpath loop nearest its position; loops with no anchor get no tabs; overlapping tabs on a loop are merged (first one kept). nil = the existing automatic layout.
+- **advanced-ui** — Tab editor: "Edit on Canvas" in the Profile inspector (Tabs → Placement: Manual). Click one of the toolpath's vectors to add a tab, drag a tab to slide it along the vectors, option-click to delete, Esc/Done to finish. Each edit is one undo step. Switching to Manual seeds evenly spaced anchors (tabs-per-vector on each closed path).
+- **advanced-ui** — New Toolpath → Inlay opens a wizard that creates TWO InlayOperations (part = female "Pocket", part = male "Plug") sharing one set of settings, so each board's program can be saved separately. The single-operation `.both` part is still supported in the inspector.
+- **advanced-ui** — Importing an STL no longer places the model silently: it opens "Place 3D Model" (size with locked aspect, centre/lower-left/custom position, model Z height, Z offset below the top) and by default creates two Relief3D toolpaths: "<name> Roughing" (end mill, finishing off) and "<name> Finishing" (ball nose, roughing off). Models can be re-placed later from the model's context menu. Multiple STLs queue their dialogs; import warnings are shown after the last one. `ImportService.importFile` still places STLs directly for headless use.
+- **advanced-ui** — "Save All Toolpaths" offers: one file grouped by tool (default), one file in list order, one file per toolpath, one file per tool. Multi-file modes ask for a folder; clashing names get `_2`, `_3` suffixes. Every file is validated; saving with errors asks for confirmation.
+- **advanced-ui** — "Check Toolpaths…" (⇧⌘K) validates each enabled toolpath on its own plus the combined program, showing only combined-program issues not already listed per toolpath. Uncalculated and failed toolpaths are listed as warnings.
+- **advanced-ui** — The Toolpaths sidebar shows each toolpath's tools and estimated time, plus a footer with total time and the tool load/change sequence (grouped by tool or list order). The total sums per-toolpath estimates (no tool-change allowance).
+- **advanced-ui** — Pocket's primary tool is labelled "Finish tool"; the clearance tool is only used when it is larger than the finish tool, and the form says so. Drill has a "Peck drilling" toggle (off = peck depth 0, single plunge) and a per-hole peck summary. `DrillOperation.peckDepths` is now public for that summary.
+- **advanced-ui** — Tab spacing is now scaled with the other tab lengths when converting a document between inch and mm.

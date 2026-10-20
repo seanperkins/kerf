@@ -40,6 +40,8 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
         case nodeMarquee(startView: Vec2, currentView: Vec2, extend: Bool)
         /// Pen tool: dragging out the handle of the node just placed.
         case penDrag
+        /// Dragging manual tab `index`; `preview` holds the moved tabs until mouse-up.
+        case tab(index: Int, preview: TabSettings?)
     }
     var drag: DragState = .none
     /// Points clicked so far for polyline/curve tools.

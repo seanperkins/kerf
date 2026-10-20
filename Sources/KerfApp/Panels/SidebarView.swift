@@ -66,6 +66,16 @@ struct DesignSidebar: View {
                                 Text("\(m.mesh.triangleCount) tris").font(.caption).foregroundStyle(.secondary)
                             }
                             .contextMenu {
+                                Button("Size and Position…") { document.editPlacement(of: m.id) }
+                                Button("Create 3D Toolpaths…") {
+                                    if var f = document.document.model(id: m.id).map({
+                                        ModelPlacementForm(editing: $0, job: document.document.job, library: document.mergedLibrary)
+                                    }) {
+                                        f.createToolpaths = true
+                                        document.sheet = .placeModel(f)
+                                    }
+                                }
+                                Divider()
                                 Button("Delete Model") {
                                     document.perform("Delete Model") { $0.document.models.removeAll { $0.id == m.id } }
                                 }
@@ -209,7 +219,7 @@ struct ToolpathsSidebar: View {
             HStack {
                 Menu {
                     ForEach(OperationFactory.menuKinds, id: \.self) { kind in
-                        Button(kind.displayName) { document.addOperation(kind) }
+                        Button(OperationFactory.menuTitle(kind)) { document.addOperation(kind) }
                     }
                 } label: {
                     Label("New Toolpath", systemImage: "plus")
@@ -243,13 +253,14 @@ struct ToolpathsSidebar: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Button("Calculate All") { document.calculateAll() }
-                        .disabled(document.project.operations.isEmpty)
                     Spacer()
-                    Button("Export G-code…") { document.sheet = .exportGCode(.all) }
-                        .disabled(document.project.operations.isEmpty)
+                    Button { document.sheet = .validation } label: { Image(systemName: "checkmark.shield") }
+                        .help("Check toolpaths with the validator")
+                    Button("Save All…") { document.sheet = .saveAllToolpaths }
+                        .help("Save all toolpaths: one combined file or one file per toolpath/tool")
                 }
-                Text("Estimated time: " + ToolpathCalculator.formatDuration(document.totalEstimatedSeconds))
-                    .font(.caption).foregroundStyle(.secondary)
+                .disabled(document.project.operations.isEmpty)
+                ToolChangeSummaryView(document: document)
             }
             .padding(8)
         }
@@ -294,8 +305,17 @@ struct ToolpathRow: View {
     }
 
     private var subtitle: String {
-        let tool = document.mergedLibrary.tool(id: operation.setup.toolID)?.name ?? "Missing tool"
-        return "\(operation.kind.displayName) · \(tool)"
+        let lib = document.mergedLibrary
+        var tools: [String] = []
+        for id in operation.referencedToolIDs {
+            let t = lib.tool(id: id).map { "T\($0.number)" } ?? "missing tool"
+            if !tools.contains(t) { tools.append(t) }
+        }
+        var s = "\(operation.kind.displayName) · \(tools.joined(separator: "+"))"
+        if let r = document.results[operation.id], r.error == nil, !document.isStale(operation.id) {
+            s += " · " + ToolpathCalculator.formatDuration(r.estimatedSeconds)
+        }
+        return s
     }
 
     @ViewBuilder private var status: some View {

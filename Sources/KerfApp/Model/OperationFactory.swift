@@ -40,6 +40,22 @@ enum OperationFactory {
     /// Kinds offered in the "New toolpath" menu, in VCarve-like order.
     static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .vcarve, .inlay, .fluting, .texture, .relief3D]
 
+    /// Title in the "New toolpath" menus (Inlay opens the pocket + plug wizard).
+    static func menuTitle(_ kind: OperationKind) -> String {
+        kind == .inlay ? "Inlay (Pocket + Plug)…" : kind.displayName
+    }
+
+    /// Label of the primary tool picker for an operation kind.
+    static func primaryToolTitle(_ kind: OperationKind) -> String {
+        switch kind {
+        case .pocket: return "Finish tool"
+        case .vcarve, .inlay: return "V-bit"
+        case .drill: return "Drill"
+        case .relief3D: return "Finishing tool"
+        default: return "Tool"
+        }
+    }
+
     /// Preferred tool kinds for an operation (first match in the library wins).
     static func preferredToolKinds(for kind: OperationKind) -> [ToolKind] {
         switch kind {

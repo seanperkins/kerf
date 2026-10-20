@@ -16,11 +16,32 @@ public struct TabSettings: Codable, Hashable, Sendable {
     public var isTriangular: Bool
     /// Optional distance between tabs; when set it overrides `countPerPath` (cam-2d addition).
     public var spacing: Double?
+    /// User-placed tabs (the tab editor). When non-nil the automatic layout is skipped and each
+    /// anchor puts one tab on the toolpath loop nearest to it; loops with no anchor get none.
+    public var manualTabs: [TabAnchor]?
 
     public init(isEnabled: Bool = false, length: Double = 0.25, thickness: Double = 0.125,
-                countPerPath: Int = 4, isTriangular: Bool = false, spacing: Double? = nil) {
+                countPerPath: Int = 4, isTriangular: Bool = false, spacing: Double? = nil,
+                manualTabs: [TabAnchor]? = nil) {
         self.isEnabled = isEnabled; self.length = length; self.thickness = thickness
         self.countPerPath = countPerPath; self.isTriangular = isTriangular; self.spacing = spacing
+        self.manualTabs = manualTabs
+    }
+
+    /// True when tabs come from user-placed anchors instead of the automatic layout.
+    public var isManual: Bool { manualTabs != nil }
+}
+
+/// A user-placed tab: a position along one path of a vector, as a fraction of that path's
+/// flattened length (so the tab follows the vector when it is moved, scaled or rotated).
+public struct TabAnchor: Codable, Hashable, Sendable {
+    public var shapeID: UUID
+    public var pathIndex: Int
+    /// 0 ..< 1 along the path, measured from its start point.
+    public var fraction: Double
+
+    public init(shapeID: UUID, pathIndex: Int = 0, fraction: Double) {
+        self.shapeID = shapeID; self.pathIndex = pathIndex; self.fraction = fraction
     }
 }
 

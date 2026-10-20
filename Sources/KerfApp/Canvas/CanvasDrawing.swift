@@ -23,6 +23,7 @@ extension CanvasNSView {
         drawModels(ctx, doc, vt)
         drawShapes(ctx, doc, vt)
         if doc.showToolpaths { drawToolpaths(ctx, doc, vt) }
+        drawTabs(ctx, doc, vt)
         drawOrigin(ctx, doc)
         drawInteraction(ctx, doc, vt)
         drawEditingOverlay(ctx, doc, vt)
@@ -155,6 +156,32 @@ extension CanvasNSView {
             stroke(ctx, g.rapids, vt, color: NSColor.systemRed.withAlphaComponent(selected ? 0.8 : 0.45), width: 1,
                    dash: [4, 4])
         }
+    }
+
+    /// Manual tab markers of the profile being edited (or the selected one); while editing, its
+    /// vectors are highlighted.
+    private func drawTabs(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform) {
+        let editing = doc.tabEditingOperationID
+        guard let id = editing ?? doc.selectedOperationID, let op = doc.operation(id), var tabs = op.profileTabs,
+              tabs.isEnabled, tabs.isManual else { return }
+        if editing != nil {
+            for s in doc.document.shapes(ids: op.setup.shapeIDs) {
+                stroke(ctx, cgPath(s), vt, color: NSColor.systemOrange.withAlphaComponent(0.8), width: 2.5)
+            }
+        }
+        if case .tab(_, let preview?) = drag { tabs = preview }
+        let r: CGFloat = editing != nil ? 6 : 4
+        ctx.saveGState()
+        ctx.setLineWidth(1.5)
+        for p in TabEditor.positions(tabs, document: doc.document, tolerance: tolerance).compactMap({ $0 }) {
+            let v = viewport.toView(p)
+            let rect = CGRect(x: v.x - r, y: v.y - r, width: 2 * r, height: 2 * r)
+            ctx.setFillColor(NSColor.systemOrange.cgColor)
+            ctx.fillEllipse(in: rect)
+            ctx.setStrokeColor(NSColor.white.cgColor)
+            ctx.strokeEllipse(in: rect)
+        }
+        ctx.restoreGState()
     }
 
     private func drawOrigin(_ ctx: CGContext, _ doc: KerfDocument) {

@@ -32,11 +32,15 @@ struct ContentView: View {
         .focusedSceneObject(document)
         .onAppear { document.undoManager = undoManager }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
-        .sheet(item: $document.sheet) { sheet in
+        .sheet(item: $document.sheet, onDismiss: { document.sheetDismissed() }) { sheet in
             switch sheet {
             case .jobSetup: JobSetupSheet(document: document)
             case .exportGCode(let scope): ExportGCodeSheet(document: document, scope: scope)
             case .offset: OffsetSheet(document: document)
+            case .inlayWizard: InlayWizardSheet(document: document)
+            case .placeModel(let form): ModelPlacementSheet(document: document, form: form)
+            case .saveAllToolpaths: SaveAllToolpathsSheet(document: document)
+            case .validation: ValidationSheet(document: document)
             }
         }
         .alert(item: $document.alert) { a in
@@ -50,6 +54,13 @@ struct ContentView: View {
             ZStack(alignment: .topLeading) {
                 DesignCanvas(document: document)
                 ToolPalette(document: document).padding(.leading, 28).padding(.top, 28)
+                if let id = document.tabEditingOperationID, let op = document.operation(id) {
+                    TabEditingBanner(name: op.setup.name, count: op.profileTabs?.manualTabs?.count ?? 0) {
+                        document.tabEditingOperationID = nil
+                    }
+                    .frame(maxWidth: .infinity, alignment: .top)
+                    .padding(.top, 28)
+                }
             }
         case .preview3D:
             Preview3DHost(document: document)

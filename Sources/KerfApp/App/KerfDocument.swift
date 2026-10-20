@@ -25,12 +25,20 @@ enum DocumentSheet: Identifiable, Equatable {
     case jobSetup
     case exportGCode(GCodeExportScope)
     case offset
+    case inlayWizard
+    case placeModel(ModelPlacementForm)
+    case saveAllToolpaths
+    case validation
 
     var id: String {
         switch self {
         case .jobSetup: return "job"
         case .exportGCode: return "export"
         case .offset: return "offset"
+        case .inlayWizard: return "inlay"
+        case .placeModel(let f): return "place-\(f.modelID)"
+        case .saveAllToolpaths: return "saveAll"
+        case .validation: return "validation"
         }
     }
 }
@@ -66,6 +74,11 @@ final class KerfDocument: ReferenceFileDocument {
     private(set) var selectionOrder: [UUID] = []
     @Published var selectedOperationID: UUID?
     @Published var hiddenToolpaths: Set<UUID> = []
+    /// Profile operation whose tabs the canvas is editing (click to add, drag to move).
+    @Published var tabEditingOperationID: UUID?
+    /// STL imports waiting for the placement dialog (shown one after another).
+    var pendingPlacements: [ModelPlacementForm] = []
+    private var deferredAlert: AlertMessage?
     @Published var showToolpaths = true
     @Published var results: [UUID: ToolpathResult] = [:]
     @Published var calculating: Set<UUID> = []
@@ -144,6 +157,7 @@ final class KerfDocument: ReferenceFileDocument {
         if nodes != nodeSelection { nodeSelection = nodes }
         let opIDs = Set(project.operations.map(\.id))
         if let sel = selectedOperationID, !opIDs.contains(sel) { selectedOperationID = nil }
+        if let t = tabEditingOperationID, operation(t)?.profileTabs == nil { tabEditingOperationID = nil }
         results = results.filter { opIDs.contains($0.key) }
     }
 
@@ -314,6 +328,7 @@ final class KerfDocument: ReferenceFileDocument {
     // MARK: Operations
 
     func addOperation(_ kind: OperationKind) {
+        if kind == .inlay { sheet = .inlayWizard; return }
         guard let op = OperationFactory.make(kind: kind, project: project, library: mergedLibrary,
                                              shapeIDs: selectionOrder) else {
             alert = AlertMessage(title: "No 3D model",
@@ -327,6 +342,58 @@ final class KerfDocument: ReferenceFileDocument {
 
     func updateOperation(_ op: AnyOperation) {
         perform("Edit Toolpath") { $0.upsertOperation(op) }
+    }
+
+    /// Adds several operations as one undo step and selects the first.
+    func addOperations(_ ops: [AnyOperation], actionName: String) {
+        guard let first = ops.first else { return }
+        perform(actionName) { p in ops.forEach { p.upsertOperation($0) } }
+        sidebarTab = .toolpaths
+        selectedOperationID = first.id
+    }
+
+    /// Inlay wizard: female pocket + male plug toolpaths.
+    func addInlay(_ wizard: InlayWizardModel) {
+        addOperations(wizard.makeOperations(), actionName: "New Inlay Toolpaths")
+    }
+
+    /// Replaces the tab settings of a Profile operation (one undo step).
+    func setProfileTabs(_ tabs: TabSettings, for id: UUID, actionName: String = "Edit Tabs") {
+        guard let op = operation(id), op.profileTabs != nil else { return }
+        let new = op.withProfileTabs(tabs)
+        perform(actionName) { $0.upsertOperation(new) }
+    }
+
+    // MARK: 3D models
+
+    /// Adds (or updates) a placed model and creates the form's Roughing/Finishing toolpaths.
+    func applyPlacement(_ form: ModelPlacementForm) {
+        let model = form.placedModel
+        let ops = form.makeOperations(existing: project.operations, units: units)
+        let isNew = project.document.model(id: model.id) == nil
+        perform(isNew ? "Place 3D Model" : "Edit 3D Model") { p in
+            if let i = p.document.models.firstIndex(where: { $0.id == model.id }) {
+                p.document.models[i] = model
+            } else {
+                p.document.models.append(model)
+            }
+            ops.forEach { p.upsertOperation($0) }
+        }
+        if let first = ops.first {
+            sidebarTab = .toolpaths
+            selectedOperationID = first.id
+        }
+    }
+
+    /// Shows the next queued placement dialog (after an STL import).
+    func showNextPlacement() {
+        guard sheet == nil, !pendingPlacements.isEmpty else { return }
+        sheet = .placeModel(pendingPlacements.removeFirst())
+    }
+
+    func editPlacement(of modelID: UUID) {
+        guard let m = project.document.model(id: modelID) else { return }
+        sheet = .placeModel(ModelPlacementForm(editing: m, job: project.document.job, library: mergedLibrary))
     }
 
     func deleteOperation(_ id: UUID) {
@@ -421,6 +488,11 @@ final class KerfDocument: ReferenceFileDocument {
         for url in urls {
             do {
                 let data = try Data(contentsOf: url)
+                if ImportService.isMesh(url.lastPathComponent) {
+                    pendingPlacements.append(try ImportService.placementForm(
+                        data: data, fileName: url.lastPathComponent, project: project, library: mergedLibrary))
+                    continue
+                }
                 var outcome = ImportOutcome()
                 var p = project
                 outcome = try ImportService.importFile(data: data, fileName: url.lastPathComponent, into: &p)
@@ -428,15 +500,30 @@ final class KerfDocument: ReferenceFileDocument {
                 perform("Import \(url.lastPathComponent)") { $0 = imported }
                 newShapes += outcome.shapeIDs
                 messages += outcome.warnings.map { "\(url.lastPathComponent): \($0)" }
-                if !outcome.modelIDs.isEmpty {
-                    messages.append("\(url.lastPathComponent): 3D model placed on the material. Add a 3D toolpath to machine it.")
-                }
             } catch {
                 messages.append("\(url.lastPathComponent): \(ImportService.describe(error))")
             }
         }
         if !newShapes.isEmpty { setSelection(newShapes); sidebarTab = .design; requestCanvas(.fit) }
-        if !messages.isEmpty { alert = AlertMessage(title: "Import", message: messages.joined(separator: "\n")) }
+        let message = messages.isEmpty ? nil : AlertMessage(title: "Import", message: messages.joined(separator: "\n"))
+        if pendingPlacements.isEmpty {
+            alert = message
+        } else {
+            // A sheet and an alert cannot show together: report after the placement dialogs.
+            deferredAlert = message
+            centerMode = .design2D
+            showNextPlacement()
+        }
+    }
+
+    /// Called when any sheet closes: next queued placement, then any deferred import report.
+    func sheetDismissed() {
+        if !pendingPlacements.isEmpty {
+            showNextPlacement()
+        } else if let a = deferredAlert {
+            deferredAlert = nil
+            alert = a
+        }
     }
 
     func exportVectors(to url: URL, selectionOnly: Bool) {

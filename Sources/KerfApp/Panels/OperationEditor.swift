@@ -22,7 +22,8 @@ struct OperationEditor: View {
         InspectorSection(title: draft.kind.displayName + " Toolpath") {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
-            ToolPicker(title: "Tool", toolID: setupBinding(\.toolID), library: library, preferred: OperationFactory.preferredToolKinds(for: draft.kind))
+            ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID), library: library,
+                       preferred: OperationFactory.preferredToolKinds(for: draft.kind))
             if draft.kind != .relief3D {
                 vectorsRow
             }
@@ -65,10 +66,11 @@ struct OperationEditor: View {
     @ViewBuilder private var parameterForm: some View {
         switch draft {
         case .profile(let o):
-            ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units)
+            ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units,
+                        shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding)
         case .pocket(let o):
             PocketForm(params: paramsBinding(o.params) { .pocket(PocketOperation(setup: draft.setup, params: $0)) },
-                       units: units, library: library)
+                       units: units, library: library, finishToolID: draft.setup.toolID)
         case .drill(let o):
             DrillForm(params: paramsBinding(o.params) { .drill(DrillOperation(setup: draft.setup, params: $0)) }, units: units)
         case .vcarve(let o):
@@ -102,6 +104,18 @@ struct OperationEditor: View {
                           systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Text("Estimated time: " + ToolpathCalculator.formatDuration(r.estimatedSeconds))
                         .font(.caption).foregroundStyle(.secondary)
+                    if r.toolpaths.count > 1 {
+                        ForEach(r.toolpaths) { tp in
+                            let secs = MachiningTimeEstimator.estimate([tp], rapidRate: document.rapidRateInDocumentUnits)
+                            Text("• \(tp.name): T\(tp.tool.number), \(ToolpathCalculator.formatDuration(secs))")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        let changes = max(0, JobSummary.sequence(of: r.toolpaths).count - 1)
+                        if changes > 0 {
+                            Text("\(changes) tool change\(changes == 1 ? "" : "s") within this toolpath")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     ForEach(r.toolpaths.flatMap { $0.metadata.sorted { $0.key < $1.key } }, id: \.key) { kv in
                         Text("\(kv.key): \(kv.value)").font(.caption).foregroundStyle(.secondary)
                     }
@@ -114,6 +128,20 @@ struct OperationEditor: View {
     }
 
     // MARK: Bindings
+
+    /// On-canvas tab editing for this (Profile) operation. Turning it on saves the draft first so
+    /// canvas edits start from what the form shows.
+    private var editingTabsBinding: Binding<Bool> {
+        Binding(get: { document.tabEditingOperationID == draft.id }, set: { on in
+            if on {
+                save()
+                document.centerMode = .design2D
+                document.tabEditingOperationID = draft.id
+            } else if document.tabEditingOperationID == draft.id {
+                document.tabEditingOperationID = nil
+            }
+        })
+    }
 
     private func setupBinding<T>(_ kp: WritableKeyPath<OperationSetup, T>) -> Binding<T> {
         Binding(get: { draft.setup[keyPath: kp] }, set: { v in

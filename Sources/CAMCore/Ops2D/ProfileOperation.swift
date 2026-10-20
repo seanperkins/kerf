@@ -36,8 +36,14 @@ public struct ProfileOperation: ToolpathOperation {
                                                      tolerance: tol)
         var builder = ToolpathBuilder(coords: coords, tool: tool, units: context.units, tolerance: tol,
                                       fitArcs: params.preferArcs)
-        for chain in ordered {
-            cut(chain, passes: passes, tool: tool, wasteRegion: plan.wasteRegion, builder: &builder, tolerance: tol)
+        var manualCenters: [[Double]]?
+        if params.tabs.isEnabled, let anchors = params.tabs.manualTabs {
+            manualCenters = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) },
+                                               document: context.document, tolerance: tol)
+        }
+        for (i, chain) in ordered.enumerated() {
+            cut(chain, passes: passes, tool: tool, wasteRegion: plan.wasteRegion, manualTabs: manualCenters?[i],
+                builder: &builder, tolerance: tol)
         }
         var meta: [String: String] = [:]
         if plan.droppedLoops > 0 { meta["warning"] = "\(plan.droppedLoops) vector(s) too small for the tool" }
@@ -45,7 +51,8 @@ public struct ProfileOperation: ToolpathOperation {
                          moves: builder.finish(), metadata: meta)]
     }
 
-    private func cut(_ chain: Chain2D, passes: [Double], tool: Tool, wasteRegion: WasteSide,
+    /// `manualTabs`: user-placed tab centres for this loop (nil = automatic layout).
+    private func cut(_ chain: Chain2D, passes: [Double], tool: Tool, wasteRegion: WasteSide, manualTabs: [Double]?,
                      builder: inout ToolpathBuilder, tolerance tol: Double) {
         let alc = ArcLengthChain(chain)
         guard alc.length > tol else { return }
@@ -65,10 +72,16 @@ public struct ProfileOperation: ToolpathOperation {
             return
         }
 
-        let tabs: TabLayout? = params.tabs.isEnabled
-            ? TabLayout(loopLength: alc.length, settings: params.tabs, toolDiameter: tool.diameter,
-                        cutDepth: params.depth.cutDepth)
-            : nil
+        var tabs: TabLayout?
+        if params.tabs.isEnabled {
+            if let manual = manualTabs {
+                tabs = TabLayout(loopLength: alc.length, centers: manual, settings: params.tabs,
+                                 toolDiameter: tool.diameter, cutDepth: params.depth.cutDepth)
+            } else {
+                tabs = TabLayout(loopLength: alc.length, settings: params.tabs, toolDiameter: tool.diameter,
+                                 cutDepth: params.depth.cutDepth)
+            }
+        }
         let useLeads = params.lead.type != .none && params.lead.distance > 0
         var ramp = params.ramp
         if useLeads { ramp.isEnabled = false }
