@@ -111,6 +111,16 @@ struct ProfileForm: View {
                 Text("Right").tag(OpenVectorSide.right)
             }
             .help("Open vectors: cut on the line, or keep the tool to the left or right of the vector's direction")
+            Picker("Start point", selection: Binding(get: { params.startPoint ?? .nearest },
+                                                     set: { params.startPoint = $0 == .nearest ? nil : $0 })) {
+                Text("Nearest (optimised)").tag(ProfileStartPoint.nearest)
+                Text("Vector start node").tag(ProfileStartPoint.vectorStart)
+                Text("Left side").tag(ProfileStartPoint.left)
+                Text("Right side").tag(ProfileStartPoint.right)
+                Text("Bottom side").tag(ProfileStartPoint.bottom)
+                Text("Top side").tag(ProfileStartPoint.top)
+            }
+            .help("Where each closed loop starts cutting")
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)

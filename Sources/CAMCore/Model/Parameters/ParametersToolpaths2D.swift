@@ -9,6 +9,16 @@ public enum OpenVectorSide: String, Codable, CaseIterable, Sendable {
     case on, left, right
 }
 
+/// Where each closed profile loop starts cutting.
+public enum ProfileStartPoint: String, Codable, CaseIterable, Sendable {
+    /// The point nearest the previous position (shortest rapids; the default).
+    case nearest
+    /// The start node of the vector (open vectors are not reversed).
+    case vectorStart
+    /// The middle of a side of the loop's bounding box.
+    case left, right, bottom, top
+}
+
 /// Quick engrave: follow the vectors on their centreline at a fixed depth (no offset).
 public struct EngraveParameters: Codable, Hashable, Sendable {
     public var depth: DepthSettings
