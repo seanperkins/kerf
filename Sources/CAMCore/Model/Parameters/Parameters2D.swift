@@ -14,11 +14,13 @@ public struct TabSettings: Codable, Hashable, Sendable {
     public var countPerPath: Int
     /// Triangular (ramped) tabs instead of rectangular.
     public var isTriangular: Bool
+    /// Optional distance between tabs; when set it overrides `countPerPath` (cam-2d addition).
+    public var spacing: Double?
 
     public init(isEnabled: Bool = false, length: Double = 0.25, thickness: Double = 0.125,
-                countPerPath: Int = 4, isTriangular: Bool = false) {
+                countPerPath: Int = 4, isTriangular: Bool = false, spacing: Double? = nil) {
         self.isEnabled = isEnabled; self.length = length; self.thickness = thickness
-        self.countPerPath = countPerPath; self.isTriangular = isTriangular
+        self.countPerPath = countPerPath; self.isTriangular = isTriangular; self.spacing = spacing
     }
 }
 
