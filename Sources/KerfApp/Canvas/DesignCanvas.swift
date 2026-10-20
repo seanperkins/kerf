@@ -5,6 +5,8 @@ import SwiftUI
 /// SwiftUI wrapper for the AppKit canvas.
 struct DesignCanvas: NSViewRepresentable {
     @ObservedObject var document: KerfDocument
+    /// Redraws when canvas colours change in Preferences.
+    @ObservedObject private var preferences = PreferencesModel.shared
 
     func makeNSView(context: Context) -> CanvasNSView {
         let v = CanvasNSView()
@@ -38,6 +40,8 @@ struct ToolPalette: View {
                 }
                 .buttonStyle(.plain)
                 .help(tool.shortcut.map { "\(tool.title) (\(String($0).uppercased()))" } ?? tool.title)
+                .accessibilityLabel(tool.title)
+                .accessibilityAddTraits(document.activeTool == tool ? .isSelected : [])
                 if tool == .nodeEdit { Divider().frame(width: 24) }
             }
         }

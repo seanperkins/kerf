@@ -18,11 +18,12 @@ struct ExportGCodeSheet: View {
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
 
-    private var profile: PostProfile { catalog.profile(id: profileID) }
+    /// The chosen post with the job's machine limits applied.
+    private var profile: PostProfile { document.effectiveProfile(id: profileID) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Export G-code").font(.title2.bold())
+            HStack { Text("Export G-code").font(.title2.bold()); Spacer(); HelpButton(topic: .exportGCode) }
             Form {
                 Picker("Toolpaths", selection: $scope) {
                     Text("All enabled toolpaths").tag(GCodeExportScope.all)
@@ -33,9 +34,8 @@ struct ExportGCodeSheet: View {
                 if scope == .all {
                     Toggle("Group by tool (fewest tool changes)", isOn: $groupByTool)
                 }
-                Picker("Machine / post", selection: $profileID) {
-                    ForEach(catalog.profiles) { Text($0.name).tag($0.id) }
-                }
+                LabeledContent("Machine", value: document.machine?.name ?? "Custom (post limits)")
+                PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine)
                 LabeledContent("Z zero", value: document.document.job.zZero.displayName)
                 LabeledContent("XY origin", value: document.document.job.xyOrigin.displayName)
             }
@@ -185,7 +185,7 @@ struct OffsetSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Offset Vectors").font(.title3.bold())
+            HStack { Text("Offset Vectors").font(.title3.bold()); Spacer(); HelpButton(topic: .transforms) }
             Form {
                 LengthField("Distance", value: $distance, units: document.units)
                 Picker("Direction", selection: $outward) {

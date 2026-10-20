@@ -27,7 +27,8 @@ struct NumberField: View {
                 }
             }
         }
-        .help(help ?? label)
+        .help(help ?? FieldHelp.text(for: label) ?? label)
+        .accessibilityHint(unit)
     }
 }
 
@@ -64,6 +65,7 @@ struct OptionalLengthField: View {
                 Text(units.abbreviation).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
             }
         }
+        .help(FieldHelp.text(for: label) ?? label)
     }
 }
 
@@ -113,11 +115,19 @@ extension ZZeroMode {
 /// Section header used in inspectors.
 struct InspectorSection<Content: View>: View {
     var title: String
+    /// Shows a "?" button that opens this help topic.
+    var helpTopic: HelpTopic? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
+            HStack {
+                Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+                if let helpTopic {
+                    Spacer()
+                    HelpButton(topic: helpTopic).controlSize(.small)
+                }
+            }
             content
         }
         .padding(.vertical, 4)

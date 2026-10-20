@@ -22,7 +22,8 @@ struct ModelPlacementSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(isNew ? "Place 3D Model" : "Edit 3D Model").font(.title2.bold()).padding([.horizontal, .top], 20)
+            HStack { Text(isNew ? "Place 3D Model" : "Edit 3D Model").font(.title2.bold()); Spacer(); HelpButton(topic: .relief3D) }
+                .padding([.horizontal, .top], 20)
             Text("\(form.name) · \(form.mesh.triangleCount) triangles · original size \(label(form.meshSize.x)) x \(label(form.meshSize.y)) x \(label(form.meshSize.z)) \(units.abbreviation)")
                 .font(.callout).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.top, 4)
             Form {

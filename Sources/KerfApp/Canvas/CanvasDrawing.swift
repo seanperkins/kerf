@@ -2,6 +2,14 @@ import AppKit
 import CADCore
 import CAMCore
 
+/// Canvas colours chosen in Preferences (with built-in fallbacks).
+enum CanvasColors {
+    static var prefs: AppPreferences { PreferencesModel.shared.prefs }
+    static var material: NSColor { NSColor(hex: prefs.materialColorHex) ?? NSColor(hex: AppPreferences.defaultMaterialColor)! }
+    static var selection: NSColor { NSColor(hex: prefs.selectionColorHex) ?? .systemBlue }
+    static var rapid: NSColor { NSColor(hex: prefs.rapidColorHex) ?? .systemRed }
+}
+
 /// Palette for toolpath overlays (one colour per operation, cycling).
 enum ToolpathColors {
     static let palette: [NSColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemTeal,
@@ -63,7 +71,7 @@ extension CanvasNSView {
         let r = viewRect(doc.document.job.materialBounds)
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: 0, height: -2), blur: 6, color: NSColor.black.withAlphaComponent(0.25).cgColor)
-        NSColor(srgbRed: 0.99, green: 0.97, blue: 0.93, alpha: 1).setFill()
+        CanvasColors.material.setFill()
         ctx.fill(r)
         ctx.restoreGState()
         ctx.setStrokeColor(NSColor(srgbRed: 0.55, green: 0.45, blue: 0.33, alpha: 1).cgColor)
@@ -134,9 +142,9 @@ extension CanvasNSView {
             let locked = !project.isEditable(s)
             stroke(ctx, path, vt, color: locked ? base.withAlphaComponent(0.45) : base, width: isSel ? 1 : 1.25)
             if isSel {
-                stroke(ctx, path, vt, color: .systemBlue, width: 2, dash: doc.activeTool == .nodeEdit ? [] : [6, 4])
+                stroke(ctx, path, vt, color: CanvasColors.selection, width: 2, dash: doc.activeTool == .nodeEdit ? [] : [6, 4])
                 if let t = preview, project.isEditable(s) {
-                    stroke(ctx, path, t.cg.concatenating(vt), color: .systemBlue.withAlphaComponent(0.6), width: 1.5)
+                    stroke(ctx, path, t.cg.concatenating(vt), color: CanvasColors.selection.withAlphaComponent(0.6), width: 1.5)
                 }
             }
             if let ps = nodePreview[s.id] {
@@ -154,7 +162,7 @@ extension CanvasNSView {
             let color = ToolpathColors.color(forIndex: i)
             let stale = doc.isStale(op.id)
             stroke(ctx, g.cuts, vt, color: color.withAlphaComponent(stale ? 0.35 : 0.9), width: selected ? 2.5 : 1.5)
-            stroke(ctx, g.rapids, vt, color: NSColor.systemRed.withAlphaComponent(selected ? 0.8 : 0.45), width: 1,
+            stroke(ctx, g.rapids, vt, color: CanvasColors.rapid.withAlphaComponent(selected ? 0.8 : 0.45), width: 1,
                    dash: [4, 4])
         }
     }

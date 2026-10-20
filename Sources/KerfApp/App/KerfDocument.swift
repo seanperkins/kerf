@@ -18,7 +18,12 @@ enum SidebarTab: String, CaseIterable, Identifiable {
 
 enum CenterMode: String, CaseIterable, Identifiable {
     case design2D = "2D", preview3D = "3D"
+    /// 2D design and 3D preview side by side.
+    case split = "2D | 3D"
     var id: String { rawValue }
+
+    var showsDesign: Bool { self != .preview3D }
+    var showsPreview: Bool { self != .design2D }
 }
 
 enum DocumentSheet: Identifiable, Equatable {
@@ -114,15 +119,24 @@ final class KerfDocument: ReferenceFileDocument {
     let toolLibrary: ToolLibraryModel
     private var cancellables: Set<AnyCancellable> = []
 
+    /// Identifies this window's crash-recovery copy.
+    let recoveryID = UUID()
+    /// The project as last opened or saved; unsaved changes = `project` differs from it.
+    private(set) var lastSavedProject: KerfProject
+    var needsRecovery: Bool { project != lastSavedProject }
+
     init(project: KerfProject, toolLibrary: ToolLibraryModel = .shared) {
         self.project = project
+        self.lastSavedProject = project
         self.toolLibrary = toolLibrary
         toolLibrary.$revision.dropFirst().sink { [weak self] _ in self?.designRevision += 1 }.store(in: &cancellables)
     }
 
     convenience init() {
-        let doc = Document()
-        self.init(project: KerfProject(document: doc, postProfileID: PostProfileStore.defaultID(for: doc.units)))
+        let prefs = PreferencesModel.shared.prefs
+        self.init(project: prefs.newProject(machines: MachineCatalog.shared.machines,
+                                            profiles: PostProfileCatalog.shared.profiles))
+        applyWindowPreferences(prefs)
     }
 
     required convenience init(configuration: ReadConfiguration) throws {
@@ -130,11 +144,19 @@ final class KerfDocument: ReferenceFileDocument {
             throw CocoaError(.fileReadCorruptFile)
         }
         self.init(project: try KerfProject.decode(from: data))
+        applyWindowPreferences(PreferencesModel.shared.prefs)
+    }
+
+    /// Per-window editing defaults from Preferences (snapping).
+    func applyWindowPreferences(_ prefs: AppPreferences) {
+        snapToGrid = prefs.snapToGrid
+        snapToObjects = prefs.snapToObjects
     }
 
     func snapshot(contentType: UTType) throws -> KerfProject {
         // After a save, the next live toolpath edit opens a new undo step (re-dirtying the file).
         liveOperationEdit = nil
+        lastSavedProject = project
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
         return p
@@ -181,8 +203,17 @@ final class KerfDocument: ReferenceFileDocument {
     var units: LengthUnit { project.document.units }
     var mergedLibrary: ToolLibrary { project.mergedTools(with: toolLibrary.library) }
 
+    /// The post profile with the job's machine limits applied (what validation and export use).
     var postProfile: PostProfile {
-        PostProfileCatalog.shared.profile(id: project.postProfileID ?? PostProfileStore.defaultID(for: units))
+        effectiveProfile(id: project.postProfileID ?? PostProfileStore.defaultID(for: units))
+    }
+
+    /// The machine this job is set up for (nil = a custom post with its own limits).
+    var machine: MachineDefinition? { MachineCatalog.shared.machine(for: project) }
+
+    /// Post `id` with this job's machine limits applied.
+    func effectiveProfile(id: String?) -> PostProfile {
+        MachineResolver.effectiveProfile(PostProfileCatalog.shared.profile(id: id), machine: machine)
     }
 
     /// Profile rapid rate converted to document units per minute.
@@ -541,7 +572,14 @@ final class KerfDocument: ReferenceFileDocument {
     }
 
     func setPostProfile(_ id: String) {
-        perform("Change Machine") { $0.postProfileID = id }
+        perform("Change Post Processor") { $0.postProfileID = id }
+    }
+
+    /// Picks the machine (and its default post if the current post does not drive it).
+    func setMachine(_ id: String) {
+        guard let m = MachineCatalog.shared.machine(id: id) else { return }
+        let profiles = PostProfileCatalog.shared.profiles
+        perform("Change Machine") { MachineResolver.select(machine: m, in: &$0, profiles: profiles) }
     }
 
     // MARK: Job setup
@@ -549,6 +587,11 @@ final class KerfDocument: ReferenceFileDocument {
     func applyJobSetup(_ form: JobSetupForm) {
         perform("Job Setup") { $0 = form.apply(to: $0) }
         requestCanvas(.fit)
+    }
+
+    /// Makes sure the 2D canvas is on screen (keeps the side-by-side view if it is showing).
+    func showDesignCanvas() {
+        if !centerMode.showsDesign { centerMode = .design2D }
     }
 
     func requestCanvas(_ kind: CanvasRequest.Kind) {
@@ -586,7 +629,7 @@ final class KerfDocument: ReferenceFileDocument {
         } else {
             // A sheet and an alert cannot show together: report after the placement dialogs.
             deferredAlert = message
-            centerMode = .design2D
+            showDesignCanvas()
             showNextPlacement()
         }
     }

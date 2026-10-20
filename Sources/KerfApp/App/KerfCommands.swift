@@ -12,6 +12,8 @@ struct KerfCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .importExport) {
+            Button("Recover Unsaved Work…") { RecoveryPrompt.offer(interactive: true) }
+            Divider()
             Button("Import…") { runImportPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(document == nil)
@@ -33,6 +35,7 @@ struct KerfCommands: Commands {
             Button("Zoom Out") { document?.requestCanvas(.zoomOut) }.keyboardShortcut("-", modifiers: .command)
             Divider()
             Button("Show 2D Design") { document?.centerMode = .design2D }.keyboardShortcut("1", modifiers: [.command, .option])
+            Button("Show 2D and 3D Side by Side") { document?.centerMode = .split }.keyboardShortcut("2", modifiers: [.command, .option])
             Button("Show 3D Preview") { document?.centerMode = .preview3D }.keyboardShortcut("3", modifiers: [.command, .option])
             Divider()
         }
@@ -111,6 +114,14 @@ struct KerfCommands: Commands {
             Toggle("Snap to Objects", isOn: Binding(get: { document?.snapToObjects ?? true }, set: { document?.snapToObjects = $0 }))
                 .keyboardShortcut("'", modifiers: [.command, .shift])
         }
+        CommandGroup(replacing: .help) {
+            Button("Kerf Help") { showHelp(.gettingStarted) }
+                .keyboardShortcut("?", modifiers: .command)
+            Button("Keyboard Shortcuts") { showHelp(.shortcuts) }
+            Button("Running a Safe Air Cut") { showHelp(.airCut) }
+            Divider()
+            Button("Welcome to Kerf") { WelcomeView.show() }
+        }
         CommandMenu("Toolpaths") {
             Menu("New Toolpath") {
                 ForEach(OperationFactory.menuKinds, id: \.self) { kind in
@@ -151,6 +162,8 @@ struct KerfCommands: Commands {
             Button("Open Post Profiles Folder") { openPostFolder() }
         }
     }
+
+    private func showHelp(_ topic: HelpTopic) { HelpNavigator.show(topic) }
 
     private func withSelection(_ name: String, _ change: @escaping (Set<UUID>, inout KerfProject) -> Void) {
         guard let doc = document, !doc.selection.isEmpty else { return }

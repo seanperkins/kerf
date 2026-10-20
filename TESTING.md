@@ -5,6 +5,8 @@
 - The app is at `dist/Kerf.app`. To rebuild it, run `scripts/bundle.sh` (release build, ad-hoc signed).
 - **First launch:** the app is ad-hoc signed, not notarised. Right-click `Kerf.app` → **Open** → **Open**.
   If macOS still blocks it, go to System Settings → Privacy & Security → "Open Anyway".
+- The **Welcome** window opens at launch (Help ▸ Welcome to Kerf reopens it). "Open the Sample Sign" opens an
+  untitled copy of `sign.kerf`; Help ▸ Kerf Help (⌘?) has a topic for every form.
 - Sample files are in `samples/`:
 
 | File | What it is |

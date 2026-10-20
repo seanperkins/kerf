@@ -24,7 +24,7 @@ struct OperationEditor: View {
     private var library: ToolLibrary { document.mergedLibrary }
 
     var body: some View {
-        InspectorSection(title: draft.kind.displayName + " Toolpath") {
+        InspectorSection(title: draft.kind.displayName + " Toolpath", helpTopic: HelpTopic.forOperation(draft.kind)) {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
             if draft.kind != .merge {
@@ -62,6 +62,7 @@ struct OperationEditor: View {
             Spacer()
             Button(role: .destructive) { document.deleteOperation(draft.id) } label: { Image(systemName: "trash") }
                 .help("Delete toolpath")
+                .accessibilityLabel("Delete toolpath")
         }
         .onChange(of: draft) { _, _ in save() }
         .onChange(of: original) { _, new in if new != draft { draft = new } }
@@ -185,7 +186,7 @@ struct OperationEditor: View {
         Binding(get: { document.tabEditingOperationID == draft.id }, set: { on in
             if on {
                 save()
-                document.centerMode = .design2D
+                document.showDesignCanvas()
                 document.tabEditingOperationID = draft.id
             } else if document.tabEditingOperationID == draft.id {
                 document.tabEditingOperationID = nil
@@ -229,7 +230,7 @@ struct ToolPicker: View {
                 ForEach(sorted) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
             Button { openWindow(id: ToolDatabaseView.windowID) } label: { Image(systemName: "wrench.and.screwdriver") }
-                .buttonStyle(.borderless).help("Tool Database")
+                .buttonStyle(.borderless).help("Tool Database").accessibilityLabel("Open Tool Database")
         }
         if let t = library.tool(id: toolID) {
             Text(toolSummary(t)).font(.caption).foregroundStyle(.secondary)

@@ -12,7 +12,7 @@ struct NodeInspector: View {
     var body: some View {
         let units = document.units
         let nodes = document.nodeSelection
-        InspectorSection(title: "Node Edit") {
+        InspectorSection(title: "Node Edit", helpTopic: .nodeEditing) {
             if document.selection.isEmpty {
                 Text("Click a vector to show its nodes.").font(.callout).foregroundStyle(.secondary)
             } else {

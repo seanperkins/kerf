@@ -30,7 +30,11 @@ struct ContentView: View {
         .toolbar { toolbarContent }
         .navigationTitle(document.document.name)
         .focusedSceneObject(document)
-        .onAppear { document.undoManager = undoManager }
+        .onAppear {
+            document.undoManager = undoManager
+            RecoveryCoordinator.shared.register(document)
+        }
+        .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
         .sheet(item: $document.sheet, onDismiss: { document.sheetDismissed() }) { sheet in
             switch sheet {
@@ -52,19 +56,28 @@ struct ContentView: View {
     @ViewBuilder private var center: some View {
         switch document.centerMode {
         case .design2D:
-            ZStack(alignment: .topLeading) {
-                DesignCanvas(document: document)
-                ToolPalette(document: document).padding(.leading, 28).padding(.top, 28)
-                if let id = document.tabEditingOperationID, let op = document.operation(id) {
-                    TabEditingBanner(name: op.setup.name, count: op.profileTabs?.manualTabs?.count ?? 0) {
-                        document.tabEditingOperationID = nil
-                    }
-                    .frame(maxWidth: .infinity, alignment: .top)
-                    .padding(.top, 28)
-                }
-            }
+            designPane
         case .preview3D:
             Preview3DHost(document: document)
+        case .split:
+            HSplitView {
+                designPane.frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+                Preview3DHost(document: document).frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private var designPane: some View {
+        ZStack(alignment: .topLeading) {
+            DesignCanvas(document: document)
+            ToolPalette(document: document).padding(.leading, 28).padding(.top, 28)
+            if let id = document.tabEditingOperationID, let op = document.operation(id) {
+                TabEditingBanner(name: op.setup.name, count: op.profileTabs?.manualTabs?.count ?? 0) {
+                    document.tabEditingOperationID = nil
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(.top, 28)
+            }
         }
     }
 
@@ -76,21 +89,18 @@ struct ContentView: View {
         ToolbarItemGroup(placement: .principal) {
             Picker("View", selection: $document.centerMode) {
                 Text("2D").tag(CenterMode.design2D)
+                Text("2D | 3D").tag(CenterMode.split)
                 Text("3D").tag(CenterMode.preview3D)
             }
             .pickerStyle(.segmented)
-            .help("Design canvas or 3D preview")
+            .help("Design canvas, both side by side, or 3D preview")
         }
         ToolbarItemGroup {
             Button { document.requestCanvas(.fit) } label: { Label("Zoom to Fit", systemImage: "arrow.up.left.and.arrow.down.right") }
                 .help("Zoom to material (F)")
             Toggle(isOn: $document.snapToGrid) { Label("Snap", systemImage: "grid") }
                 .help("Snap to grid")
-            Picker("Machine", selection: Binding(get: { document.postProfile.id }, set: { document.setPostProfile($0) })) {
-                ForEach(catalog.profiles) { Text($0.name).tag($0.id) }
-            }
-            .frame(width: 210)
-            .help("Machine / post processor")
+            MachinePostPickers(document: document)
             Button { openWindow(id: ToolDatabaseView.windowID) } label: { Label("Tools", systemImage: "wrench.and.screwdriver") }
                 .help("Tool Database")
             Button { document.calculateAll() } label: { Label("Calculate", systemImage: "play.fill") }
@@ -100,6 +110,7 @@ struct ContentView: View {
                 .help("Export G-code")
                 .disabled(document.project.operations.isEmpty)
             Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.right") }
+                .help("Show or hide the inspector")
         }
     }
 }
@@ -112,7 +123,7 @@ struct StatusBar: View {
             Text(GCodeExporter.materialDescription(document.document))
             Text("Z0: " + document.document.job.zZero.displayName)
             Text("Origin: " + document.document.job.xyOrigin.displayName)
-            Text(document.postProfile.name)
+            Text([document.machine?.name, document.postProfile.name].compactMap { $0 }.joined(separator: " · "))
             Spacer()
             if !document.selection.isEmpty { Text("\(document.selection.count) selected") }
             if let p = document.cursorPosition {

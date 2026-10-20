@@ -15,7 +15,7 @@ struct JobSetupSheet: View {
     var body: some View {
         let u = form.units
         VStack(alignment: .leading, spacing: 0) {
-            Text("Job Setup").font(.title2.bold()).padding([.horizontal, .top], 20)
+            HStack { Text("Job Setup").font(.title2.bold()); Spacer(); HelpButton(topic: .jobSetup) }.padding([.horizontal, .top], 20)
             Form {
                 Section("Job") {
                     TextField("Job name", text: $form.name)
@@ -56,6 +56,12 @@ struct JobSetupSheet: View {
                 }
                 Section("Drawing") {
                     LengthField("Grid spacing", value: $form.gridSpacing, units: u)
+                }
+                let fit = MachineResolver.fitProblems(job: form.job, units: form.units, machine: document.machine)
+                if !fit.isEmpty {
+                    Section("Machine") {
+                        ForEach(fit, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                    }
                 }
                 if !form.problems.isEmpty {
                     Section {

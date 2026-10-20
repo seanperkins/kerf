@@ -6,6 +6,17 @@ final class KerfAppDelegate: NSObject, NSApplicationDelegate {
         // Needed when launched as a bare SwiftPM executable (no bundle).
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        RecoveryCoordinator.shared.start()
+        // Let the first windows open before showing the Welcome window and asking about work
+        // left by a crash.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            if PreferencesModel.shared.prefs.showWelcomeAtLaunch { WelcomeView.show() }
+            RecoveryPrompt.offer(interactive: false)
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        RecoveryCoordinator.shared.cleanUpOnQuit()
     }
 }
 
@@ -27,5 +38,9 @@ struct KerfApp: App {
                 .environmentObject(toolLibrary)
         }
         .defaultSize(width: 820, height: 600)
+
+        Settings {
+            PreferencesView()
+        }
     }
 }

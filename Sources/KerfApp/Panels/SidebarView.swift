@@ -138,7 +138,7 @@ struct LayersList: View {
                 Text("Layers").font(.headline)
                 Spacer()
                 Button { document.perform("Add Layer") { $0.addLayer() } } label: { Image(systemName: "plus") }
-                    .buttonStyle(.borderless).help("Add layer")
+                    .buttonStyle(.borderless).help("Add layer").accessibilityLabel("Add layer")
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             List {
@@ -162,14 +162,17 @@ struct LayerRow: View {
                 Image(systemName: layer.isVisible ? "eye" : "eye.slash")
             }
             .buttonStyle(.borderless).help(layer.isVisible ? "Hide layer" : "Show layer")
+            .accessibilityLabel(layer.isVisible ? "Hide layer \(layer.name)" : "Show layer \(layer.name)")
             Button { update { $0.isLocked.toggle() } } label: {
                 Image(systemName: layer.isLocked ? "lock.fill" : "lock.open")
             }
             .buttonStyle(.borderless).help(layer.isLocked ? "Unlock layer" : "Lock layer")
+            .accessibilityLabel(layer.isLocked ? "Unlock layer \(layer.name)" : "Lock layer \(layer.name)")
             ColorPicker("", selection: Binding(
                 get: { Color(nsColor: NSColor(hex: layer.colorHex) ?? .black) },
                 set: { c in update { $0.colorHex = NSColor(c).hexString } }), supportsOpacity: false)
                 .labelsHidden().frame(width: 28)
+                .accessibilityLabel("Colour of layer \(layer.name)")
             TextField("Layer", text: $name, onCommit: { update { $0.name = name.isEmpty ? layer.name : name } })
                 .textFieldStyle(.plain)
             Spacer()
@@ -229,6 +232,7 @@ struct ToolpathsSidebar: View {
                 Spacer()
                 Toggle(isOn: $document.showToolpaths) { Image(systemName: "eye") }
                     .toggleStyle(.button).help("Show toolpaths on the canvas")
+                    .accessibilityLabel("Show toolpaths on the canvas")
             }
             .padding(8)
             if document.project.operations.isEmpty {
@@ -256,6 +260,7 @@ struct ToolpathsSidebar: View {
                     Spacer()
                     Button { document.sheet = .validation } label: { Image(systemName: "checkmark.shield") }
                         .help("Check toolpaths with the validator")
+                        .accessibilityLabel("Check toolpaths")
                     Button("Save All…") { document.sheet = .saveAllToolpaths }
                         .help("Save all toolpaths: one combined file or one file per toolpath/tool")
                 }
@@ -289,10 +294,12 @@ struct ToolpathRow: View {
             Toggle("", isOn: Binding(get: { operation.setup.isEnabled },
                                      set: { document.setOperationEnabled(operation.id, $0) }))
                 .labelsHidden().toggleStyle(.checkbox).help("Include in export")
+                .accessibilityLabel("Include \(operation.setup.name) in export")
             Button { document.toggleToolpathVisibility(operation.id) } label: {
                 Image(systemName: document.hiddenToolpaths.contains(operation.id) ? "eye.slash" : "eye")
             }
             .buttonStyle(.borderless).help("Show/hide on canvas")
+            .accessibilityLabel(document.hiddenToolpaths.contains(operation.id) ? "Show \(operation.setup.name) on canvas" : "Hide \(operation.setup.name) on canvas")
             Circle().fill(Color(nsColor: ToolpathColors.color(forIndex: colorIndex))).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 1) {
                 Text(operation.setup.name).lineLimit(1)
@@ -324,15 +331,18 @@ struct ToolpathRow: View {
         } else if let r = document.results[operation.id] {
             if let err = r.error {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).help(err)
+                    .accessibilityLabel("Failed: \(err)")
             } else if document.isStale(operation.id) {
                 Image(systemName: "arrow.clockwise.circle").foregroundStyle(.secondary).help("Needs recalculating")
+                    .accessibilityLabel("Needs recalculating")
             } else {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                     .help("Calculated · " + ToolpathCalculator.formatDuration(r.estimatedSeconds))
+                    .accessibilityLabel("Calculated, " + ToolpathCalculator.formatDuration(r.estimatedSeconds))
             }
         } else {
             Button { document.calculate([operation.id]) } label: { Image(systemName: "play.circle") }
-                .buttonStyle(.borderless).help("Calculate")
+                .buttonStyle(.borderless).help("Calculate").accessibilityLabel("Calculate \(operation.setup.name)")
         }
     }
 }
