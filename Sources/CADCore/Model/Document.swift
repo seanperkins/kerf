@@ -11,6 +11,8 @@ public struct Document: Codable, Hashable, Sendable {
     public var models: [PlacedModel]
     /// Grid spacing for snapping, in document units.
     public var gridSpacing: Double
+    /// Areas toolpaths must avoid (clamps); nil = none (toolpaths-2d addition).
+    public var keepOutZones: [KeepOutZone]?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

@@ -21,6 +21,7 @@ extension CanvasNSView {
         drawMaterial(ctx, doc, vt)
         drawGrid(ctx, doc)
         drawModels(ctx, doc, vt)
+        drawKeepOutZones(ctx, doc, vt)
         drawShapes(ctx, doc, vt)
         if doc.showToolpaths { drawToolpaths(ctx, doc, vt) }
         drawTabs(ctx, doc, vt)

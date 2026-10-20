@@ -29,6 +29,7 @@ enum DocumentSheet: Identifiable, Equatable {
     case placeModel(ModelPlacementForm)
     case saveAllToolpaths
     case validation
+    case keepOutZones
 
     var id: String {
         switch self {
@@ -39,6 +40,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .placeModel(let f): return "place-\(f.modelID)"
         case .saveAllToolpaths: return "saveAll"
         case .validation: return "validation"
+        case .keepOutZones: return "keepOut"
         }
     }
 }

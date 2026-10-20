@@ -180,6 +180,11 @@ extension Document {
         d.gridSpacing = gridSpacing * f
         d.shapes = shapes.map { $0.transformed(.scale(f, f)) }
         d.models = models.map { $0.scaled(by: f) }
+        d.keepOutZones = keepOutZones?.map { z in
+            var s = z
+            s.outline = z.outline.map { $0 * f }; s.height *= f
+            return s
+        }
         return d
     }
 }

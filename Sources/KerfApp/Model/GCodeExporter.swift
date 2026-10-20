@@ -37,6 +37,18 @@ enum GCodeExporter {
         }
     }
 
+    /// Errors for toolpaths that come over a keep-out zone below its top (+ clearance margin).
+    static func keepOutIssues(_ toolpaths: [Toolpath], document doc: Document) -> [GCodeIssue] {
+        guard let zones = doc.keepOutZones, !zones.isEmpty else { return [] }
+        let margin = doc.units == .inch ? 0.05 : 1.0
+        let tol = doc.units == .inch ? 0.0005 : 0.01
+        return KeepOut.violations(toolpaths, zones: zones, coords: MachineCoordinates(job: doc.job), margin: margin,
+                                  tolerance: tol).map { v in
+            let what = v.isRapid ? "rapids over" : "cuts into"
+            return GCodeIssue(severity: .error, message: "\(v.toolpathName) \(what) keep-out zone \"\(v.zoneName)\" near X\(RulerTicks.label((v.at.x * 1000).rounded() / 1000)) Y\(RulerTicks.label((v.at.y * 1000).rounded() / 1000))")
+        }
+    }
+
     static func materialDescription(_ doc: Document) -> String {
         let j = doc.job
         func f(_ v: Double) -> String { RulerTicks.label(v) }
@@ -52,6 +64,7 @@ enum GCodeExporter {
         }
         let validator = GCodeValidator(profile: profile, job: doc.job, units: doc.units)
         var issues = validator.validate(toolpaths: toolpaths)
+        issues += keepOutIssues(toolpaths, document: doc)
         // The post header already prints W x H x T, so no extra material description.
         let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths)
         do {

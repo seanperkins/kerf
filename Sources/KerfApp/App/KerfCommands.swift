@@ -131,6 +131,8 @@ struct KerfCommands: Commands {
                 .disabled(document?.project.operations.isEmpty ?? true)
             Button("Apply Toolpath Template…") { document?.runApplyTemplatePanel() }
                 .disabled(document == nil)
+            Button("Keep-Out Zones…") { document?.sheet = .keepOutZones }
+                .disabled(document == nil)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("t", modifiers: [.command, .option])
