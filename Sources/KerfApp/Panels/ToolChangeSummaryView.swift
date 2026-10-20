@@ -13,11 +13,14 @@ struct ToolChangeSummaryView: View {
         let s = JobSummary.make(operations: document.outputProject.operations, results: document.results,
                                 groupByTool: groupByTool)
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Estimated time: " + ToolpathCalculator.formatDuration(s.totalSeconds)).font(.caption.bold())
-                Spacer()
-                Text(s.sequence.isEmpty ? "No tools" : "\(s.sequence.count) tool\(s.sequence.count == 1 ? "" : "s") · \(s.toolChanges) change\(s.toolChanges == 1 ? "" : "s")")
-                    .font(.caption).foregroundStyle(.secondary)
+            // Longest wording that fits the sidebar; "4 tools · 3 changes" shortens before the time does.
+            let time = "Estimated time: " + ToolpathCalculator.formatDuration(s.totalSeconds)
+            let tools = s.sequence.count
+            let toolsText = tools == 0 ? "No tools" : "\(tools) tool\(tools == 1 ? "" : "s")"
+            ViewThatFits(in: .horizontal) {
+                header(time, tools == 0 ? toolsText : "\(toolsText) · \(s.toolChanges) change\(s.toolChanges == 1 ? "" : "s")")
+                header(time, toolsText)
+                header(time, nil)
             }
             DisclosureGroup(isExpanded: $expanded) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -40,5 +43,14 @@ struct ToolChangeSummaryView: View {
                 Text("Tool changes").font(.caption)
             }
         }
+    }
+
+    private func header(_ time: String, _ detail: String?) -> some View {
+        HStack {
+            Text(time).font(.caption.bold())
+            Spacer(minLength: 8)
+            if let detail { Text(detail).font(.caption).foregroundStyle(.secondary) }
+        }
+        .lineLimit(1)
     }
 }

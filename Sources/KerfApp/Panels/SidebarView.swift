@@ -172,7 +172,7 @@ struct LayerRow: View {
             ColorPicker("", selection: Binding(
                 get: { Color(nsColor: NSColor(hex: layer.colorHex) ?? .black) },
                 set: { c in update { $0.colorHex = NSColor(c).hexString } }), supportsOpacity: false)
-                .labelsHidden().frame(width: 28)
+                .labelsHidden().frame(width: 44)
                 .accessibilityLabel("Colour of layer \(layer.name)")
             TextField("Layer", text: $name, onCommit: { update { $0.name = name.isEmpty ? layer.name : name } })
                 .textFieldStyle(.plain)
@@ -273,19 +273,28 @@ struct ToolpathsSidebar: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Button("Calculate All") { document.calculateAll() }
-                    Spacer()
-                    Button { document.sheet = .validation } label: { Image(systemName: "checkmark.shield") }
-                        .help("Check toolpaths with the validator")
-                        .accessibilityLabel("Check toolpaths")
-                    Button("Save All…") { document.sheet = .saveAllToolpaths }
-                        .help("Save all toolpaths: one combined file or one file per toolpath/tool")
+                ViewThatFits(in: .horizontal) {
+                    footerButtons(calculate: "Calculate All", save: "Save All…")
+                    footerButtons(calculate: "Calculate", save: "Save…")
                 }
                 .disabled(document.project.operations.isEmpty)
                 ToolChangeSummaryView(document: document)
             }
             .padding(8)
+        }
+    }
+
+    /// Short labels fit the sidebar's 220 pt minimum, where "Calculate All" was cut to "Calculate…".
+    private func footerButtons(calculate: String, save: String) -> some View {
+        HStack {
+            Button(calculate) { document.calculateAll() }
+                .help("Calculate all toolpaths")
+            Spacer()
+            Button { document.sheet = .validation } label: { Image(systemName: "checkmark.shield") }
+                .help("Check toolpaths with the validator")
+                .accessibilityLabel("Check toolpaths")
+            Button(save) { document.sheet = .saveAllToolpaths }
+                .help("Save all toolpaths: one combined file or one file per toolpath/tool")
         }
     }
 
@@ -321,7 +330,16 @@ struct ToolpathRow: View {
             Circle().fill(Color(nsColor: ToolpathColors.color(forIndex: colorIndex))).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 1) {
                 Text(operation.setup.name).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                // The time goes first when the sidebar is narrow: the tool number matters more.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) {
+                        Text(summary).lineLimit(1).fixedSize()
+                        Spacer(minLength: 4)
+                        if let duration { Text(duration).fixedSize() }
+                    }
+                    Text(summary).lineLimit(1)
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             status
@@ -329,18 +347,17 @@ struct ToolpathRow: View {
         .opacity(operation.setup.isEnabled ? 1 : 0.55)
     }
 
-    private var subtitle: String {
+    private var summary: String {
         let lib = document.mergedLibrary
-        var tools: [String] = []
-        for id in operation.referencedToolIDs {
-            let t = lib.tool(id: id).map { "T\($0.number)" } ?? "missing tool"
-            if !tools.contains(t) { tools.append(t) }
-        }
-        var s = "\(operation.kind.displayName) · \(tools.joined(separator: "+"))"
-        if let r = document.results[operation.id], r.error == nil, !document.isStale(operation.id) {
-            s += " · " + ToolpathCalculator.formatDuration(r.estimatedSeconds)
-        }
-        return s
+        let tools = operation.referencedToolIDs.map { id in lib.tool(id: id).map { "T\($0.number)" } ?? "missing tool" }
+        return ToolpathRowText.summary(kind: operation.kind.displayName, tools: tools)
+    }
+
+    /// The calculated time, once it is current; kept apart from the summary so a narrow sidebar
+    /// truncates the tools, not the time.
+    private var duration: String? {
+        guard let r = document.results[operation.id], r.error == nil, !document.isStale(operation.id) else { return nil }
+        return ToolpathCalculator.formatDuration(r.estimatedSeconds)
     }
 
     @ViewBuilder private var status: some View {
@@ -362,5 +379,16 @@ struct ToolpathRow: View {
             Button { document.calculate([operation.id]) } label: { Image(systemName: "play.circle") }
                 .buttonStyle(.icon).help("Calculate").accessibilityLabel("Calculate \(operation.setup.name)")
         }
+    }
+}
+
+/// Text for a toolpath row, kept apart from the view so it can be tested.
+enum ToolpathRowText {
+    /// "Pocket · T1+T6": the kind and the tools it uses, each once. A toolpath that uses none (a merged
+    /// one) is just its kind.
+    static func summary(kind: String, tools: [String]) -> String {
+        var unique: [String] = []
+        for t in tools where !unique.contains(t) { unique.append(t) }
+        return unique.isEmpty ? kind : "\(kind) · \(unique.joined(separator: "+"))"
     }
 }
