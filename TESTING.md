@@ -75,7 +75,50 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
   Design → Sheets adds more material sheets; each sheet exports its own G-code.
 - **Variables:** Design → Document Variables…; type `=thickness - 0.05` or `1/4in` in any number field.
 
-## 3. On the machine (Avid PRO6096, Mach4)
+## 3. New since first build
+
+The first test build was commit `2ea022c`. These steps cover what was added after it; each takes a
+minute or two. Use `samples/sign.kerf` (or a new document) unless a step says otherwise.
+
+1. **More toolpaths.** Toolpaths → New Toolpath now also has Quick Engrave, Chamfer, Hole Milling
+   (helical bore; turn on threads), Prism Carve, Photo V-Carve (needs a tracing image), Straight-Wall
+   Inlay (Pocket + Plug) and Moulding (pick a rail and a profile vector). Make one of each and press
+   Calculate All. On a Profile, try a separate last pass, start point, cut order, sharp corners and
+   open-vector left/right offset; on a Pocket or V-Carve, add a second clearance tool.
+2. **Merging and templates.** Select two toolpaths that use the same tool and choose Toolpaths → Merge
+   With Next Toolpath, then Split Merged Toolpath. Save Toolpath Template…, then Apply Toolpath
+   Template… in a new document with the same layer names.
+3. **Tools.** Tool Database… (⇧⌘T): tools sit in folders, have per-material feeds and a feeds
+   calculator. In a toolpath's inspector, edit the tool's feeds for that toolpath only.
+4. **Layout.** Design → Layout → Nest Parts… on the bracket plate copied several times (parts that do not
+   fit spill onto extra sheets). Then try Clamps and Fixture Holes…, Toolpaths → Keep-Out Zones… (export
+   refuses cuts in a zone), Label Parts…, and Production Plates… with a two-row CSV and `{Name}` in
+   a text object. Toolpaths → Save Tiled G-code… splits a job longer than 96 in into bed-sized tiles.
+5. **Drawing.** Vectors menu: Dog-bone Fillets…, Fillet / Chamfer Corners…, Rectangular and Circular
+   Array…, Copy Along Vector…, Trim Tool, Extend to Nearest Vector, Fit Curves to Vectors…, Text on
+   Curve / Arc…, Fit Text to Box…, Convert Text to Curves, Distort Envelope on Canvas and Validate
+   Vectors… (problem spots are marked on the canvas). Drag guides out of the rulers and snap to them;
+   use the measure tool; while drawing a rectangle, type `3,2` and Return.
+6. **Files.** File → Import… a PDF and a JPG (trace it with Vectors → Trace Bitmap…). Export Vectors…
+   as PDF/EPS/AI. Save as Template…, then New from Template. File → Clipart… browses a folder of your own
+   files. File → Import 3D Model as 2D Parts… flattens a COLLADA/OBJ model into outlines. Toolpaths →
+   Preview G-code File… draws a `.tap` from another job.
+7. **Job setup.** Job Setup… (⇧⌘J): Plunge Z, datum offset, two-sided job (Design → Show Bottom Side),
+   and Design → Sheets for a multi-sheet job. Design → Document Variables… and type `=thickness/2` in a
+   depth field.
+8. **3D.** With `relief.stl` placed: Offset roughing, Offset/Spiral finishing, Rest after a larger tool,
+   Combine with a second model, Two-Sided, and "Project onto 3D" on a Fluting toolpath.
+9. **Preview.** In the 3D preview (⌥⌘3): scope picker, material palette, ruler, PNG snapshot,
+   stopwatch calibration, camera presets, toolpath lines/rapids/vectors, and the pencil and arrow tools
+   for drawing and selecting vectors in 3D. View → Show 2D and 3D Side by Side.
+10. **Gadgets and help.** Gadgets menu: run a bundled gadget and open the Gadget API Reference. Help →
+    Kerf Help (⌘?), Keyboard Shortcuts, Welcome to Kerf. File → Recover Unsaved Work… after a force-quit.
+11. **Job sheet.** File → Export Job Sheet… and check the tools, times, part labels and picture.
+
+Every toolpath in steps 1–8 should calculate without an error, and Check Toolpaths… (⇧⌘K) should
+report no errors for the sample. The status of every VCarve Pro feature is in `docs/PARITY.md`.
+
+## 4. On the machine (Avid PRO6096, Mach4)
 
 **Dry run in Mach4 (no cutting):**
 1. Load the `.tap` file. Check the header comments for the job, the tools, the material size and
@@ -97,7 +140,7 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 5. If everything looks right, re-zero Z on the real surface (material top or spoilboard, matching
    Job Setup), turn the spindle on and cut. Run the first real cut at reduced feed override.
 
-## 4. Known limitations and stubs
+## 5. Known limitations and stubs
 
 - The app is ad-hoc signed and not notarised (Gatekeeper warns on first launch). It has no app icon.
 - Finder / Quick Look thumbnails of `.kerf` files come from the bundled extension

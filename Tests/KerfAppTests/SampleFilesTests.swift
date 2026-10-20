@@ -103,6 +103,50 @@ struct SampleFilesTests {
         try Self.write(Data(text.utf8), "sign.tap")
     }
 
+    // MARK: Checked-in files
+
+    /// The files in `samples/` as committed still open, and the sign's .kerf posts to exactly the
+    /// committed .tap with no validator errors (catches CAM or post drift that was not re-sampled).
+    @Test("Checked-in samples load and the sign .tap regenerates unchanged")
+    func checkedInSamples() throws {
+        func read(_ name: String) throws -> Data {
+            try Data(contentsOf: Self.samplesDir.appendingPathComponent(name))
+        }
+        let project = try KerfProject.decode(from: try read("sign.kerf"))
+        #expect(project.operations.count == 4)
+
+        var scratch = KerfProject(document: Document(), postProfileID: BuiltInPosts.avidMach4Inch.id)
+        let svg = try ImportService.importFile(data: try read("sign.svg"), fileName: "sign.svg",
+                                               into: &scratch)
+        #expect(!svg.shapeIDs.isEmpty)
+        let dxf = try ImportService.importFile(data: try read("bracket-plate.dxf"), fileName: "bracket-plate.dxf",
+                                               into: &scratch)
+        #expect(dxf.shapeIDs.count >= 7)
+        let mesh = try STLImporter(sourceUnits: .millimeter).importMesh(from: try read("relief.stl"),
+                                                                       targetUnits: .inch)
+        #expect(mesh.indices.count / 3 > 1000)
+
+        let profile = BuiltInPosts.avidMach4Inch
+        var results: [UUID: ToolpathResult] = [:]
+        for op in project.operations {
+            let r = ToolpathCalculator.calculate(op, project: project, library: ToolLibrary.seeded,
+                                                 designRevision: 0, rapidRate: profile.rapidRate)
+            #expect(r.error == nil, "\(op.setup.name): \(r.error ?? "")")
+            results[op.id] = r
+        }
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
+                                          groupByTool: false)
+        let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile,
+                                          jobName: "Sign")
+        let text = try #require(result.text)
+        #expect(result.issues.filter { $0.severity == .error }.isEmpty)
+        let committed = String(decoding: try read("sign.tap"), as: UTF8.self)
+        #expect(text == committed)
+        let validator = GCodeValidator(profile: profile, job: project.document.job, units: project.document.units)
+        let fileErrors = GCodeValidator.errors(in: validator.validate(gcode: committed))
+        #expect(fileErrors.isEmpty, "\(fileErrors)")
+    }
+
     // MARK: DXF part
 
     /// 8 x 5 in bracket plate: rounded outline, four 1/4" bolt holes and a 2 x 1 in slot.
