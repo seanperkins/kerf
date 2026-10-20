@@ -11,6 +11,7 @@ struct DrawingSheetHost: View {
         switch kind {
         case .dogbone: DogboneSheet(document: document)
         case .arrayLinear: RectangularArraySheet(document: document)
+        case .validator: VectorValidatorSheet(document: document)
         }
     }
 }

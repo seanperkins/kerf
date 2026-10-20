@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear
+    case dogbone, arrayLinear, validator
     var id: String { rawValue }
 }
 
@@ -46,6 +46,29 @@ enum VectorCommands {
             replacePaths(s.id, with: paths, operation: "dog-bone", in: &project)
         }
         return count
+    }
+
+    // MARK: Validator
+
+    /// Shapes the validator looks at: the selection, or every visible shape when nothing is selected.
+    static func validationScope(_ ids: [UUID], in project: KerfProject) -> [Shape] {
+        ids.isEmpty ? project.document.shapes.filter(project.isVisible) : project.document.shapes(ids: ids)
+    }
+
+    /// Applies the validator's automatic repairs. Returns the number of issues repaired.
+    @discardableResult
+    static func repair(_ issues: [VectorIssue], in project: inout KerfProject) -> Int {
+        let fixable = issues.filter(\.kind.isFixable)
+        let ids = Set(fixable.map(\.shapeID))
+        let shapes = project.document.shapes.filter { ids.contains($0.id) && project.isEditable($0) }
+        let editable = Set(shapes.map(\.id))
+        let used = fixable.filter { editable.contains($0.shapeID) }
+        let tol = tolerance(project.document.units)
+        let fixed = VectorValidator.fix(shapes, issues: used, tolerance: tol)
+        let kept = Set(fixed.map(\.id))
+        project.deleteShapes(editable.subtracting(kept))
+        for s in fixed { project.document.replace(s) }
+        return used.count
     }
 
     // MARK: Arrays

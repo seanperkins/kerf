@@ -18,6 +18,18 @@ import Testing
         #expect(VectorCommands.dogbone(ids, toolDiameter: 0.25, style: .dogbone, side: .part, maxAngle: 135, in: &q) == 0)
     }
 
+    @Test func repairDeletesDuplicatesAndPrunesOperations() {
+        var p = AppTestSupport.project()
+        let orig = p.document.shapes[0]
+        var dup = orig
+        dup.id = UUID()
+        p.document.add(dup)
+        let issues = VectorValidator.check(VectorCommands.validationScope([], in: p), tolerance: 0.0005)
+        #expect(issues.map(\.kind) == [.duplicate])
+        #expect(VectorCommands.repair(issues, in: &p) == 1)
+        #expect(p.document.shapes.count == 2)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]

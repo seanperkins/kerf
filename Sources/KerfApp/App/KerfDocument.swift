@@ -106,6 +106,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
     /// Cursor position in document units (for the status bar).
     @Published var cursorPosition: Vec2?
+    /// Problem locations circled on the canvas (vector validator); cleared by the user.
+    @Published var highlightMarkers: [Vec2] = []
 
     weak var undoManager: UndoManager?
     /// Bumped by every undoable change (including undo/redo).

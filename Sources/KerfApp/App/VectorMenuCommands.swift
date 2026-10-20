@@ -12,6 +12,10 @@ struct VectorMenuCommands: Commands {
             sheetButton("Rectangular Array…", .arrayLinear)
             Divider()
             sheetButton("Dog-bone Fillets…", .dogbone)
+            Divider()
+            sheetButton("Validate Vectors…", .validator, needsSelection: false)
+            Button("Clear Problem Markers") { document?.highlightMarkers = [] }
+                .disabled(document?.highlightMarkers.isEmpty ?? true)
         }
     }
 

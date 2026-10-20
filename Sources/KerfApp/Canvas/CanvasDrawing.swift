@@ -27,6 +27,7 @@ extension CanvasNSView {
         drawOrigin(ctx, doc)
         drawInteraction(ctx, doc, vt)
         drawEditingOverlay(ctx, doc, vt)
+        drawDrawingOverlays(ctx, doc)
         drawRulers(ctx, doc)
         drawCursorReadout(doc)
     }
