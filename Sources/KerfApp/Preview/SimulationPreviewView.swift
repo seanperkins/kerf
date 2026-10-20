@@ -66,6 +66,8 @@ struct SimulationPreviewView: View {
     var emptyMessage = "No toolpaths to simulate"
     /// Used for the default file name when saving an image.
     var documentName = "Untitled"
+    /// Design vectors (material-frame polylines) that "Show ▸ Vectors" draws on the stock top.
+    var vectors: [[Vec2]] = []
 
     @StateObject private var model = SimulationPreviewModel()
     @ObservedObject private var timeStore = TimeEstimateStore.shared
@@ -90,6 +92,7 @@ struct SimulationPreviewView: View {
         .onChange(of: toolpaths) { _, _ in configure() }
         .onChange(of: job) { _, _ in configure() }
         .onChange(of: rapidRate) { _, _ in configure() }
+        .onChange(of: vectors) { _, v in model.setVectors(v) }
         .onChange(of: timeStore.settings) { _, _ in configure() }
         .onChange(of: appearanceStore.settings) { _, s in model.setAppearance(s.appearance) }
     }
@@ -102,6 +105,7 @@ struct SimulationPreviewView: View {
 
     private func configure() {
         model.setAppearance(appearanceStore.settings.appearance)
+        model.setVectors(vectors)
         model.configure(job: job, toolpaths: toolpaths, rapidRate: rapidRate, units: units,
                         timeSettings: timeStore.settings)
     }
@@ -181,6 +185,7 @@ struct SimulationPreviewView: View {
             .labelsHidden()
             .frame(width: 100)
             Toggle("Tool", isOn: $model.showTool).toggleStyle(.checkbox)
+            showMenu
             Button { PreviewImageExport.runSavePanel(stockScene: model.stockScene, documentName: documentName) } label: {
                 Image(systemName: "camera")
             }
@@ -196,11 +201,42 @@ struct SimulationPreviewView: View {
                 .popover(isPresented: $showTimeSettings) {
                     TimeEstimatePopover(store: timeStore, toolpaths: toolpaths, rapidRate: rapidRate, units: units)
                 }
-            Button(action: model.resetCamera) { Image(systemName: "camera.metering.center.weighted") }
-                .help("Reset view")
+            viewMenu
             if model.isBusy { ProgressView().controlSize(.small) }
         }
         .disabled(toolpaths.isEmpty)
+    }
+
+    /// What is drawn over the simulated stock.
+    private var showMenu: some View {
+        Menu {
+            Toggle("Toolpath Lines", isOn: $model.showToolpathLines)
+            Toggle("Rapid Moves", isOn: $model.showRapidLines).disabled(!model.showToolpathLines)
+            Toggle("Vectors", isOn: $model.showVectors)
+        } label: {
+            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+        }
+        .menuIndicator(.visible)
+        .fixedSize()
+        .help("Show toolpath lines, rapids and design vectors in the 3D view")
+    }
+
+    /// Standard view directions and the orthographic switch.
+    private var viewMenu: some View {
+        Menu {
+            ForEach(PreviewViewDirection.allCases) { d in
+                Button { model.setView(d) } label: { Label(d.title, systemImage: d.systemImage) }
+            }
+            Divider()
+            Toggle("Orthographic", isOn: $model.isOrthographic)
+        } label: {
+            Image(systemName: "cube.transparent")
+        } primaryAction: {
+            model.resetCamera()
+        }
+        .menuIndicator(.visible)
+        .fixedSize()
+        .help("Reset the view (the arrow lists top, front, side and isometric views and orthographic mode)")
     }
 
     /// Profile rapid rate converted to `units` per minute.

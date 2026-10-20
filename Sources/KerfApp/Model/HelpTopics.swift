@@ -335,6 +335,10 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             The **2D** view draws calculated toolpaths over the design: solid lines are cuts, dashed red lines are rapid moves. Toolpaths ▸ Show Toolpaths (⌥⌘T) hides them.
 
             The **3D** view simulates cutting the material. Press Play, scrub the timeline or change the speed. **2D | 3D** shows both side by side.
+
+            The **view** button (cube) resets the camera; its arrow picks a standard view (top, front, back, left, right, bottom, isometric) and switches **Orthographic** projection on or off. Drag to orbit, scroll to zoom.
+
+            The **Show** menu next to the Tool checkbox draws **toolpath lines** (cuts coloured by depth, rapid moves in orange) and the design **vectors** in the 3D view, on top of the simulated stock.
             """
         case .checkToolpaths:
             return """

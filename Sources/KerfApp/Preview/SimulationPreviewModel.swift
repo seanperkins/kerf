@@ -105,6 +105,43 @@ final class SimulationPreviewModel: ObservableObject {
     @Published var isMeasuring = false { didSet { if !isMeasuring { clearMeasurement() } } }
     @Published private(set) var measurement = PreviewMeasurement()
 
+    // MARK: Toolpath and vector lines
+
+    static let showToolpathsKey = "preview3D.showToolpaths"
+    static let showRapidsKey = "preview3D.showRapids"
+    static let showVectorsKey = "preview3D.showVectors"
+
+    private static func storedFlag(_ key: String, default value: Bool) -> Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? value
+    }
+
+    /// Toolpath centre lines drawn in the 3D view.
+    @Published var showToolpathLines = storedFlag(showToolpathsKey, default: true) {
+        didSet { UserDefaults.standard.set(showToolpathLines, forKey: Self.showToolpathsKey); applyOverlay() }
+    }
+    /// Rapid moves drawn with the toolpath lines.
+    @Published var showRapidLines = storedFlag(showRapidsKey, default: true) {
+        didSet { UserDefaults.standard.set(showRapidLines, forKey: Self.showRapidsKey); applyOverlay() }
+    }
+    /// Design vectors drawn on the material top.
+    @Published var showVectors = storedFlag(showVectorsKey, default: false) {
+        didSet { UserDefaults.standard.set(showVectors, forKey: Self.showVectorsKey); applyOverlay() }
+    }
+    private var lines = ToolpathLines3D()
+    private var vectors: [[Vec2]] = []
+
+    /// Design vectors (material frame polylines; closed ones repeat their first point).
+    func setVectors(_ v: [[Vec2]]) {
+        guard v != vectors else { return }
+        vectors = v
+        applyOverlay()
+    }
+
+    private func applyOverlay() {
+        stockScene.showOverlay(toolpaths: showToolpathLines ? lines : nil, showRapids: showRapidLines,
+                               vectors: showVectors ? vectors : [])
+    }
+
     /// A click on the stock while measuring (material frame, z = -depth).
     func pick(_ p: Vec3) {
         guard isMeasuring, let engine else { return }
@@ -155,10 +192,12 @@ final class SimulationPreviewModel: ObservableObject {
                                       toolChangeSeconds: timeSettings.toolChangeSeconds, motion: motion)
         totalTime = player.timeline.totalTime
         moves = SimulationMoveIndex(timeline: player.timeline)
+        lines = ToolpathLines3D(toolpaths: toolpaths, coords: MachineCoordinates(job: job))
         updateMoveLabel()
         engine = SimulationEngine(player: player, job: job, maxVertices: 200_000, appearance: appearance,
                                   unitsPerInch: LengthUnit.inch.factor(to: units))
         stockScene.configure(job: job)
+        applyOverlay()
         // Show the finished result by default; scrub back to watch it being cut.
         if time == totalTime { requestFrame() } else { time = totalTime }
     }
@@ -244,6 +283,9 @@ final class SimulationPreviewModel: ObservableObject {
     func rewind() { pause(); time = 0 }
     func jumpToEnd() { pause(); time = totalTime }
     func resetCamera() { stockScene.resetCamera() }
+    func setView(_ direction: PreviewViewDirection) { stockScene.setView(direction) }
+    /// Parallel projection (no perspective), handy with the top / front / side views.
+    @Published var isOrthographic = false { didSet { stockScene.isOrthographic = isOrthographic } }
 
     private func requestFrame() {
         guard engine != nil else { return }

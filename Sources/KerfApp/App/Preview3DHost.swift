@@ -10,6 +10,19 @@ struct Preview3DHost: View {
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @AppStorage(PreviewScope.storageKey) private var scope = PreviewScope.all
     @ObservedObject private var timeStore = TimeEstimateStore.shared
+    @AppStorage(SimulationPreviewModel.showVectorsKey) private var showVectors = false
+
+    /// Visible design vectors on the shown side / sheet, flattened (only when drawn in 3D).
+    var vectors: [[Vec2]] {
+        guard showVectors else { return [] }
+        let project = document.outputProject
+        return project.document.shapes.filter { project.isVisible($0) && document.isOnActiveSide($0) }
+            .flatMap(\.paths).compactMap { path in
+                var pts = path.flattened(tolerance: 0.005)
+                if path.isClosed, let first = pts.first { pts.append(first) }
+                return pts.count >= 2 ? pts : nil
+            }
+    }
 
     /// Calculated toolpaths of the chosen scope, in machining order.
     var toolpaths: [Toolpath] {
@@ -22,7 +35,8 @@ struct Preview3DHost: View {
         SimulationPreviewView(
             job: document.outputProject.document.job, units: document.document.units, toolpaths: toolpaths,
             rapidRate: SimulationPreviewView.rapidRate(for: document.postProfile, units: document.document.units),
-            scope: $scope, emptyMessage: scope.emptyMessage, documentName: document.document.name)
+            scope: $scope, emptyMessage: scope.emptyMessage, documentName: document.document.name,
+            vectors: vectors)
         .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
     }
 }

@@ -15,6 +15,7 @@ final class StockScene {
     private let stockNode = SCNNode()
     private let toolNode = SCNNode()
     private let measureNode = SCNNode()
+    private let overlayNode = SCNNode()
     private(set) var job = JobSetup()
     /// Specular strength of the stock (0...1), from the material appearance.
     var shininess = 0.15
@@ -28,6 +29,7 @@ final class StockScene {
         content.addChildNode(stockNode)
         content.addChildNode(toolNode)
         content.addChildNode(measureNode)
+        content.addChildNode(overlayNode)
 
         let camera = SCNCamera()
         camera.zNear = 0.01
@@ -63,17 +65,61 @@ final class StockScene {
         SCNVector3(job.width / 2, -job.thickness / 2, -job.height / 2)
     }
 
-    /// Resets the camera to a three-quarter view of the whole stock.
+    /// Frames the new stock from the last chosen standard direction.
     func configure(job: JobSetup) {
         self.job = job
-        resetCamera()
+        setView(viewDirection)
     }
 
-    func resetCamera() {
-        let size = max(job.width, job.height, job.thickness * 4)
-        let c = center
-        cameraNode.position = SCNVector3(c.x, c.y + CGFloat(size) * 0.9, c.z + CGFloat(size) * 1.1)
-        cameraNode.look(at: c, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
+    func resetCamera() { setView(.threeQuarter) }
+
+    /// The standard direction last chosen (the camera may have been orbited since).
+    private(set) var viewDirection = PreviewViewDirection.threeQuarter
+
+    /// Scene-space point for a material-frame point (material Z becomes scene +Y).
+    static func scenePoint(_ p: Vec3) -> SCNVector3 { SCNVector3(p.x, p.z, -p.y) }
+
+    /// Width / height of the on-screen view (1.5 before it is laid out).
+    private var viewAspect: Double {
+        guard let v = attachedView, v.bounds.width > 1, v.bounds.height > 1 else { return 1.5 }
+        return Double(v.bounds.width / v.bounds.height)
+    }
+
+    /// Moves the camera to look at the whole stock from `direction`.
+    func setView(_ direction: PreviewViewDirection) {
+        viewDirection = direction
+        // The view may have swapped in its own free camera while orbiting; take ours back.
+        if let v = attachedView, v.pointOfView !== cameraNode {
+            cameraNode.camera?.usesOrthographicProjection = isOrthographic
+            v.pointOfView = cameraNode
+        }
+        guard let camera = cameraNode.camera else { return }
+        let pose = PreviewCameraPose(direction: direction, job: job, fieldOfView: Double(camera.fieldOfView),
+                                     aspect: viewAspect)
+        cameraNode.position = Self.scenePoint(pose.eye)
+        cameraNode.look(at: Self.scenePoint(pose.target), up: Self.scenePoint(pose.up),
+                        localFront: SCNVector3(0, 0, -1))
+        camera.orthographicScale = pose.orthographicScale
+    }
+
+    /// The camera the view is rendering from (ours unless the view swapped in its own).
+    private var activeCameraNode: SCNNode { attachedView?.pointOfView ?? cameraNode }
+
+    /// Orthographic (parallel) projection instead of perspective. Switching keeps the view
+    /// direction and roughly the same framing at the stock centre.
+    var isOrthographic: Bool {
+        get { activeCameraNode.camera?.usesOrthographicProjection ?? false }
+        set {
+            let node = activeCameraNode
+            guard let camera = node.camera, camera.usesOrthographicProjection != newValue else { return }
+            if newValue {
+                let p = node.worldPosition, c = center
+                let d = Double(SCNVector3Distance(p, c))
+                camera.orthographicScale = PreviewCameraPose.orthographicScale(distance: d,
+                                                                               fieldOfView: Double(camera.fieldOfView))
+            }
+            camera.usesOrthographicProjection = newValue
+        }
     }
 
     func updateStock(_ mesh: HeightfieldMesh) {
@@ -133,6 +179,79 @@ final class StockScene {
             n.renderingOrder = 10
             measureNode.addChildNode(n)
         }
+    }
+
+    // MARK: Toolpath and vector lines
+
+    /// Line colours of the 3D overlay.
+    enum OverlayColor {
+        static let rapid = CAMCore.RGBColor(1.0, 0.55, 0.05)
+        static let vector = CAMCore.RGBColor(0.08, 0.08, 0.1)
+    }
+
+    /// Draws toolpath centre lines (cuts coloured by depth, rapids red when `showRapids`) and
+    /// design vectors on the material top. Lines are drawn over the stock so cuts stay visible
+    /// inside the simulated grooves.
+    func showOverlay(toolpaths lines: ToolpathLines3D?, showRapids: Bool, vectors: [[Vec2]]) {
+        overlayNode.childNodes.forEach { $0.removeFromParentNode() }
+        if let g = Self.overlayGeometry(toolpaths: lines, showRapids: showRapids, vectors: vectors) {
+            let n = SCNNode(geometry: g)
+            n.renderingOrder = 5
+            overlayNode.addChildNode(n)
+        }
+    }
+
+    /// True when overlay lines are showing (for tests).
+    var overlayLineCount: Int {
+        overlayNode.childNodes.compactMap { $0.geometry?.elements.first?.primitiveCount }.reduce(0, +)
+    }
+
+    /// One line-list geometry with per-vertex colours, or nil when there is nothing to draw.
+    static func overlayGeometry(toolpaths lines: ToolpathLines3D?, showRapids: Bool,
+                                vectors: [[Vec2]]) -> SCNGeometry? {
+        var positions: [Float] = [], colors: [Float] = [], indices: [UInt32] = []
+        func add(_ pts: [Vec3], color: (Vec3) -> CAMCore.RGBColor) {
+            guard pts.count >= 2 else { return }
+            let base = UInt32(positions.count / 3)
+            for p in pts {
+                positions += [Float(p.x), Float(p.y), Float(p.z)]
+                let c = color(p)
+                colors += [c.r, c.g, c.b]
+            }
+            for k in 0..<UInt32(pts.count - 1) { indices += [base + k, base + k + 1] }
+        }
+        if let lines {
+            let maxDepth = max(lines.maxDepth, 1e-9)
+            for l in lines.polylines {
+                if l.isRapid {
+                    if showRapids { add(l.points) { _ in OverlayColor.rapid } }
+                } else {
+                    add(l.points) { DepthColorRamp.toolpath(normalizedDepth: max(0, -$0.z) / maxDepth) }
+                }
+            }
+        }
+        for v in vectors { add(v.map { Vec3($0, z: 0) }) { _ in OverlayColor.vector } }
+        guard !indices.isEmpty else { return nil }
+        let n = positions.count / 3
+        func source(_ values: [Float], _ semantic: SCNGeometrySource.Semantic) -> SCNGeometrySource {
+            let data = values.withUnsafeBufferPointer { Data(buffer: $0) }
+            return SCNGeometrySource(data: data, semantic: semantic, vectorCount: n,
+                                     usesFloatComponents: true, componentsPerVector: 3,
+                                     bytesPerComponent: MemoryLayout<Float>.size, dataOffset: 0,
+                                     dataStride: 3 * MemoryLayout<Float>.size)
+        }
+        let indexData = indices.withUnsafeBufferPointer { Data(buffer: $0) }
+        let element = SCNGeometryElement(data: indexData, primitiveType: .line,
+                                         primitiveCount: indices.count / 2,
+                                         bytesPerIndex: MemoryLayout<UInt32>.size)
+        let g = SCNGeometry(sources: [source(positions, .vertex), source(colors, .color)], elements: [element])
+        let m = SCNMaterial()
+        m.diffuse.contents = NSColor.white // multiplied by the vertex colours
+        m.lightingModel = .constant
+        m.readsFromDepthBuffer = false
+        m.writesToDepthBuffer = false
+        g.materials = [m]
+        return g
     }
 
     private static func cutterNode(_ shape: ToolShape, units job: JobSetup) -> SCNNode {
@@ -199,4 +318,9 @@ final class StockScene {
         geo.materials = [m]
         return geo
     }
+}
+
+private func SCNVector3Distance(_ a: SCNVector3, _ b: SCNVector3) -> CGFloat {
+    let dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z
+    return (dx * dx + dy * dy + dz * dz).squareRoot()
 }

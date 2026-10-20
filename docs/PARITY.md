@@ -169,8 +169,8 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `pv-2d-overlay` | preview | 2D toolpath overlay with rapids | done | P1 | Preview/ToolpathOverlayRenderer.swift, CanvasDrawing; RenderSmokeTests |
 | `pv-save-image` | preview | Save preview image | done | P3 | Offscreen PNG of the 3D view |
 | `pv-step-control` | preview | Single-step / run-to-retract simulation control | done | P3 | SimulationMoveIndex step back/forward, run to next retract |
-| `pv-3d-views` | preview | Standard 3D view directions (top/front/side/iso) and orthographic mode | missing | P2 | *r2* StockScene has one perspective orbit camera and a reset button only |
-| `pv-3d-toolpath-vectors` | preview | Toolpath lines and vectors shown in the 3D view (and drawing there) | missing | P2 | *r2* 3D view shows only the simulated stock, tool and measure markers; toolpath lines are on the 2D overlay |
+| `pv-3d-views` | preview | Standard 3D view directions (top/front/side/iso) and orthographic mode | done | P2 | Sources/KerfApp/Preview/PreviewCamera.swift (directions + framing), StockScene.setView / isOrthographic, cube menu in SimulationPreviewView; Tests/KerfAppTests/PreviewCameraTests.swift |
+| `pv-3d-toolpath-vectors` | preview | Toolpath lines and vectors shown in the 3D view (and drawing there) | partial | P2 | CAMCore/Simulation/ToolpathLines3D.swift, StockScene.showOverlay, Show menu (toolpath lines / rapids / vectors); Tests SimToolpathLines3DTests, PreviewOverlay3DTests. Drawing in the 3D view is not implemented (see DECISIONS preview-r2) |
 | `ux-menus-shortcuts` | app-ux | Menus and keyboard shortcuts | done | P1 | App/KerfCommands.swift, DrawingTools.shortcut |
 | `ux-preferences` | app-ux | Preferences window (default units, grid, post, snapping, colours) | done | P2 | Panels/PreferencesView.swift, Model/AppPreferences.swift; PreferencesTests |
 | `ux-undo` | app-ux | Undo/redo for every document edit | done | P1 | KerfDocument.perform snapshot undo; DocumentTests |
