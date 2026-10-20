@@ -142,6 +142,16 @@ final class UIHarness {
             doc.setSelection([])
             doc.requestCanvas(.fit)
             await settle()
+        case "project":
+            let path = step.name ?? ""
+            let url = path.hasPrefix("/") ? URL(fileURLWithPath: path)
+                : URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(path)
+            guard FileManager.default.fileExists(atPath: url.path) else { throw HarnessError(message: "project: no file at \(url.path)") }
+            let project = try KerfProject.decode(from: Data(contentsOf: url))
+            doc.perform("Load project") { $0 = project }
+            doc.setSelection([])
+            doc.requestCanvas(.fit)
+            await settle()
         case "appearance":
             apply(appearance: step.value ?? "system")
             await settle()

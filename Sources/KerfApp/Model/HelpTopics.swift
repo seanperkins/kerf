@@ -330,7 +330,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .tabs:
             return """
-            **Tabs** are small bridges left at the bottom of a through cut so the part does not move. Set their length and thickness; choose automatic spacing or Placement: Manual and **Edit on Canvas** to click where they go (drag to slide, Option-click to delete).
+            **Tabs** are small bridges left at the bottom of a through cut so the part does not move. Set their length and **tab height**, which is measured up from the bottom of the cut, not from the material bottom: if the cut goes a little below the material (to clear the spoilboard) the tab holds less, and the note under the field says how much. Choose automatic spacing or Placement: Manual and **Edit on Canvas** to click where they go (drag to slide, Option-click to delete).
 
             **Ramps** enter the material gradually (smooth, zigzag or spiral) instead of plunging. **Leads** start and finish the cut just outside the part to avoid marks; **Overcut** goes past the start point to clean the seam.
             """

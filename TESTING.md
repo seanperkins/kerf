@@ -49,7 +49,8 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    Type some text in a font you have installed.
 7. **Each toolpath type.** Select vectors, then choose Toolpaths → New Toolpath → …:
    - **Profile** on the plate outline: outside, tabs on, ramp on. Then edit tabs on the canvas
-     (Tabs → Placement: Manual → Edit on Canvas).
+     (Tabs → Placement: Manual → Edit on Canvas). The note under Tab height says what the tabs hold
+     (with a 0.77 in cut in 0.75 in material and 0.125 in tabs: 0.105 in).
    - **Pocket** on the slot, with offset and then raster clearing.
    - **Drilling** on the bolt holes, with peck drilling on.
    - **V-Carve** on some text, with and without a flat-bottom clearance tool.
