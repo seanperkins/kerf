@@ -26,7 +26,7 @@ public struct OBJImporter: MeshImporter {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("v ") || line.hasPrefix("v\t") {
                 let n = line.dropFirst(2).split(whereSeparator: { $0 == " " || $0 == "\t" }).prefix(3).compactMap { Double($0) }
-                guard n.count == 3 else { throw KerfIOError.malformed("OBJ: bad vertex '\(line)'") }
+                guard n.count == 3, n.allSatisfy(\.isFinite) else { throw KerfIOError.malformed("OBJ: bad vertex '\(line)'") }
                 verts.append(yUp ? Vec3(n[0], -n[2], n[1]) : Vec3(n[0], n[1], n[2]))
             } else if line.hasPrefix("f ") || line.hasPrefix("f\t") {
                 var idx: [Int] = []

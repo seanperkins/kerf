@@ -40,8 +40,16 @@ public struct SVGImporter: VectorImporter {
         let vb = root["viewBox"].map(SVGNumberScanner.numbers(in:)) ?? []
         let hasVB = vb.count == 4 && vb[2] > 0 && vb[3] > 0
         // Viewport size in px (width/height attributes; default to the viewBox size).
-        let wPx = SVGAttributes.pixels(root["width"], percentOf: hasVB ? vb[2] : 0) ?? (hasVB ? vb[2] : 0)
-        let hPx = SVGAttributes.pixels(root["height"], percentOf: hasVB ? vb[3] : 0) ?? (hasVB ? vb[3] : 0)
+        let wAttr = SVGAttributes.pixels(root["width"], percentOf: hasVB ? vb[2] : 0)
+        let hAttr = SVGAttributes.pixels(root["height"], percentOf: hasVB ? vb[3] : 0)
+        // With a viewBox, a missing (or "auto") dimension is the other one scaled by the viewBox
+        // aspect ratio (SVG 2 §8.3); defaulting it to the viewBox size would mis-scale the file.
+        var wPx = wAttr ?? (hasVB ? vb[2] : 0)
+        var hPx = hAttr ?? (hasVB ? vb[3] : 0)
+        if hasVB {
+            if let w = wAttr, hAttr == nil { hPx = w * vb[3] / vb[2] }
+            if let h = hAttr, wAttr == nil { wPx = h * vb[2] / vb[3] }
+        }
         var userToPx = Transform2D.identity
         if hasVB {
             var sx = wPx / vb[2], sy = hPx / vb[3]

@@ -61,6 +61,9 @@ public enum ExpressionEvaluator {
         let variables: [String: Double]
         let units: LengthUnit?
         var i = 0
+        /// Nesting of parentheses and unary signs; pasted junk must not overflow the stack.
+        var depth = 0
+        static let maxDepth = 64   // five frames per level; must fit a 512 KB secondary-thread stack
 
         init(chars: [Character], variables: [String: Double], units: LengthUnit?) {
             self.chars = chars; self.variables = variables; self.units = units
@@ -96,9 +99,20 @@ public enum ExpressionEvaluator {
         /// Unary minus binds looser than "^": -2^2 = -4.
         mutating func unary() throws -> Double {
             skipSpace()
-            if peek == "-" { i += 1; return -(try unary()) }
-            if peek == "+" { i += 1; return try unary() }
+            if peek == "-" || peek == "+" {
+                let negative = peek == "-"
+                i += 1
+                try descend()
+                defer { depth -= 1 }
+                let v = try unary()
+                return negative ? -v : v
+            }
             return try power()
+        }
+
+        mutating func descend() throws {
+            depth += 1
+            guard depth <= Self.maxDepth else { throw ExpressionError.syntax("expression nested too deeply") }
         }
 
         mutating func power() throws -> Double {
@@ -113,6 +127,8 @@ public enum ExpressionEvaluator {
             guard let c = peek else { throw ExpressionError.syntax("missing value") }
             if c == "(" {
                 i += 1
+                try descend()
+                defer { depth -= 1 }
                 let v = try expression()
                 skipSpace()
                 guard peek == ")" else { throw ExpressionError.syntax("missing ')'") }

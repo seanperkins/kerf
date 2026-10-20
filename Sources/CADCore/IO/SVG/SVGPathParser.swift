@@ -134,6 +134,7 @@ public enum SVGPathParser {
         var dtheta = v.angle - u.angle
         if sweep, dtheta < 0 { dtheta += 2 * .pi }
         if !sweep, dtheta > 0 { dtheta -= 2 * .pi }
+        guard dtheta.isFinite, center.x.isFinite, center.y.isFinite, rx.isFinite, ry.isFinite else { return [.line(to: p2)] }
 
         let n = max(1, Int(ceil(abs(dtheta) / (.pi / 2) - 1e-9)))
         let step = dtheta / Double(n)

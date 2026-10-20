@@ -53,7 +53,8 @@ public struct EPSImporter: VectorImporter {
         var unknown: Set<String> = []
 
         static let painters: Set<String> = ["fill", "eofill", "stroke", "f", "F", "s", "S", "b", "B", "B*", "b*", "f*", "F*"]
-        static let closingPainters: Set<String> = ["s", "b", "f", "b*", "f*"]
+        /// Every fill closes the current subpath; only `stroke`/`S` leave it open.
+        static let closingPainters: Set<String> = ["fill", "eofill", "s", "b", "B", "f", "F", "b*", "B*", "f*", "F*"]
         static let ignored: Set<String> = ["setlinewidth", "setgray", "setrgbcolor", "setcmykcolor", "setlinecap",
                                            "setlinejoin", "setmiterlimit", "setdash", "showpage", "bind", "def",
                                            "pop", "dup", "exch", "load", "begin", "end", "save", "restore",

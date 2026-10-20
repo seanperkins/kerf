@@ -46,7 +46,20 @@ public struct Document: Codable, Hashable, Sendable {
         self.gridSpacing = gridSpacing ?? (units == .inch ? 0.25 : 5)
     }
 
-    public var defaultLayerID: UUID { layers[0].id }
+    /// The first layer. Decoding repairs a layer-less file (see `repairingLayers`), so this is
+    /// never empty for a loaded document; an empty `layers` array is still handled.
+    public var defaultLayerID: UUID { layers.first?.id ?? repairingLayers().layers[0].id }
+
+    /// The document with at least one layer (a hand-edited or generated `.kerf` may have none).
+    /// Shapes whose layer is missing move to that layer so they stay visible and machinable.
+    public func repairingLayers() -> Document {
+        guard layers.isEmpty else { return self }
+        var d = self
+        let layer = Layer(name: "Layer 1")
+        d.layers = [layer]
+        for i in d.shapes.indices { d.shapes[i].layerID = layer.id }
+        return d
+    }
 
     public func shape(id: UUID) -> Shape? { shapes.first { $0.id == id } }
     public func shapes(ids: [UUID]) -> [Shape] { ids.compactMap { shape(id: $0) } }

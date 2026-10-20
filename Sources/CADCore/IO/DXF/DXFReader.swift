@@ -9,7 +9,7 @@ struct DXFEntity {
 
     func string(_ code: Int) -> String? { pairs.first { $0.code == code }?.value }
     func double(_ code: Int) -> Double? { string(code).flatMap { Double($0.trimmingCharacters(in: .whitespaces)) } }
-    func int(_ code: Int) -> Int? { double(code).map { Int($0) } }
+    func int(_ code: Int) -> Int? { double(code).flatMap { Int(exactly: $0.rounded()) } }
     func doubles(_ code: Int) -> [Double] {
         pairs.filter { $0.code == code }.compactMap { Double($0.value.trimmingCharacters(in: .whitespaces)) }
     }
@@ -36,17 +36,23 @@ struct DXFFile {
             throw KerfIOError.malformed("DXF: unreadable text encoding")
         }
         if text.hasPrefix("AutoCAD Binary DXF") { throw KerfIOError.unsupportedFormat("Binary DXF") }
-        let lines = text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" })
+        let lines = text.split(omittingEmptySubsequences: false,
+                               whereSeparator: { $0 == "\n" || $0 == "\r\n" || $0 == "\r" })
             .map { $0.hasSuffix("\r") ? $0.dropLast() : $0 }
         var pairs: [(Int, String)] = []
         pairs.reserveCapacity(lines.count / 2)
         var i = 0
         while i + 1 < lines.count {
-            guard let code = Int(lines[i].trimmingCharacters(in: .whitespaces)) else {
+            let codeText = lines[i].trimmingCharacters(in: .whitespaces)
+            // Blank lines after the last pair (editors and some exporters add them) are not a code.
+            if codeText.isEmpty, lines[i...].allSatisfy({ $0.allSatisfy(\.isWhitespace) }) { break }
+            guard let code = Int(codeText) else {
                 throw KerfIOError.malformed("DXF: bad group code at line \(i + 1)")
             }
-            pairs.append((code, String(lines[i + 1]).trimmingCharacters(in: .whitespaces)))
+            let value = String(lines[i + 1]).trimmingCharacters(in: .whitespaces)
+            pairs.append((code, value))
             i += 2
+            if code == 0, value == "EOF" { break }   // anything after EOF is not DXF
         }
         guard pairs.contains(where: { $0.0 == 0 && $0.1 == "SECTION" }) else {
             throw KerfIOError.malformed("DXF: no SECTION found")

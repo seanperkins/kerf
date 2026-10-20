@@ -252,7 +252,11 @@ final class XMLTree {
         for c in children { c.forEach(body) }
     }
 
-    var numbers: [Double] { text.split(whereSeparator: { $0 == " " || $0.isNewline || $0 == "\t" }).compactMap { Double($0) } }
+    /// Non-finite tokens ("nan", "inf", overflowing exponents) are dropped so no index or
+    /// integer conversion downstream can trap; a truncated array then fails the count checks.
+    var numbers: [Double] {
+        text.split(whereSeparator: { $0 == " " || $0.isNewline || $0 == "\t" }).compactMap { Double($0) }.filter(\.isFinite)
+    }
     var integers: [Int] { text.split(whereSeparator: { $0 == " " || $0.isNewline || $0 == "\t" }).compactMap { Int($0) } }
 
     static func parse(_ data: Data) throws -> XMLTree {

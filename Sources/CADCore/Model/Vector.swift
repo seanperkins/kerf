@@ -8,6 +8,9 @@ public struct Vec2: Codable, Hashable, Sendable, CustomStringConvertible {
     public init(_ x: Double, _ y: Double) { self.x = x; self.y = y }
     public init(x: Double, y: Double) { self.x = x; self.y = y }
 
+    /// False for NaN or infinite components.
+    public var isFinite: Bool { x.isFinite && y.isFinite }
+
     public static let zero = Vec2(0, 0)
 
     public var length: Double { (x * x + y * y).squareRoot() }
@@ -50,6 +53,9 @@ public struct Vec3: Codable, Hashable, Sendable, CustomStringConvertible {
     public init(_ x: Double, _ y: Double, _ z: Double) { self.x = x; self.y = y; self.z = z }
     public init(x: Double, y: Double, z: Double) { self.x = x; self.y = y; self.z = z }
     public init(_ xy: Vec2, z: Double) { self.x = xy.x; self.y = xy.y; self.z = z }
+
+    /// False for NaN or infinite components.
+    public var isFinite: Bool { x.isFinite && y.isFinite && z.isFinite }
 
     public static let zero = Vec3(0, 0, 0)
 

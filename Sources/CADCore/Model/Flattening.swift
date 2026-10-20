@@ -13,7 +13,9 @@ public enum Flattening {
             let sweep = arcSweep(from: start, to: to, center: center, clockwise: cw)
             // chord deviation r(1-cos(θ/2)) <= tol
             let maxStep = r > tol ? 2 * acos(max(-1, 1 - tol / r)) : Double.pi / 2
-            let n = max(1, Int(ceil(abs(sweep) / max(maxStep, 1e-6))))
+            let steps = ceil(abs(sweep) / max(maxStep, 1e-6))
+            guard steps.isFinite, r.isFinite else { pts.append(to); return }   // corrupt arc: a line
+            let n = max(1, Int(steps))
             let a0 = (start - center).angle
             for i in 1..<n {
                 let a = a0 + sweep * Double(i) / Double(n)
@@ -23,6 +25,7 @@ public enum Flattening {
         case .cubic(let to, let c1, let c2):
             // Uniform subdivision count from the control polygon's second differences.
             let d = max((start - c1 * 2 + c2).length, (c1 - c2 * 2 + to).length)
+            guard d.isFinite else { pts.append(to); return }   // corrupt control points: a line
             let n = max(1, min(1000, Int(ceil(sqrt(0.75 * d / tol)))))
             for i in 1..<n {
                 pts.append(cubicPoint(start, c1, c2, to, Double(i) / Double(n)))
@@ -56,6 +59,7 @@ public enum Flattening {
     public static func arcToCubics(from start: Vec2, to end: Vec2, center: Vec2, clockwise: Bool) -> [PathSegment] {
         let r = start.distance(to: center)
         let sweep = arcSweep(from: start, to: end, center: center, clockwise: clockwise)
+        guard sweep.isFinite, r.isFinite else { return [.line(to: end)] }
         let n = max(1, Int(ceil(abs(sweep) / (.pi / 2) - 1e-9)))
         let step = sweep / Double(n)
         let k = 4.0 / 3.0 * tan(step / 4)
