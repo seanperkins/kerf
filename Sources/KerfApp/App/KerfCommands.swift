@@ -118,6 +118,8 @@ struct KerfCommands: Commands {
                 .keyboardShortcut("?", modifiers: .command)
             Button("Keyboard Shortcuts") { showHelp(.shortcuts) }
             Button("Running a Safe Air Cut") { showHelp(.airCut) }
+            Divider()
+            Button("Welcome to Kerf") { WelcomeView.show() }
         }
         CommandMenu("Toolpaths") {
             Menu("New Toolpath") {
@@ -146,10 +148,7 @@ struct KerfCommands: Commands {
         }
     }
 
-    private func showHelp(_ topic: HelpTopic) {
-        HelpNavigator.shared.topic = topic
-        openWindow(id: HelpView.windowID)
-    }
+    private func showHelp(_ topic: HelpTopic) { HelpNavigator.show(topic) }
 
     private func withSelection(_ name: String, _ change: @escaping (Set<UUID>, inout KerfProject) -> Void) {
         guard let doc = document, !doc.selection.isEmpty else { return }

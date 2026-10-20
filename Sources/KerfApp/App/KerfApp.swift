@@ -7,8 +7,12 @@ final class KerfAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         RecoveryCoordinator.shared.start()
-        // Let the first windows open before asking about work left by a crash.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { RecoveryPrompt.offer(interactive: false) }
+        // Let the first windows open before showing the Welcome window and asking about work
+        // left by a crash.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            if PreferencesModel.shared.prefs.showWelcomeAtLaunch { WelcomeView.show() }
+            RecoveryPrompt.offer(interactive: false)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -38,10 +42,5 @@ struct KerfApp: App {
         Settings {
             PreferencesView()
         }
-
-        Window("Kerf Help", id: HelpView.windowID) {
-            HelpView()
-        }
-        .defaultSize(width: 860, height: 600)
     }
 }

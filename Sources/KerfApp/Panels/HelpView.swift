@@ -4,6 +4,12 @@ import SwiftUI
 final class HelpNavigator: ObservableObject {
     static let shared = HelpNavigator()
     @Published var topic: HelpTopic? = .gettingStarted
+
+    /// Opens (or brings forward) the Help window at `topic`.
+    static func show(_ topic: HelpTopic) {
+        shared.topic = topic
+        HostedWindows.show(id: HelpView.windowID, title: "Kerf Help", size: CGSize(width: 860, height: 600)) { HelpView() }
+    }
 }
 
 /// Help ▸ Kerf Help: searchable topic list and the selected topic.
@@ -14,10 +20,14 @@ struct HelpView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(HelpTopic.search(query), selection: $navigator.topic) { t in
-                Label(t.title, systemImage: t.systemImage).tag(t)
+            VStack(spacing: 0) {
+                TextField("Search help", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(8)
+                List(HelpTopic.search(query), selection: $navigator.topic) { t in
+                    Label(t.title, systemImage: t.systemImage).tag(t)
+                }
             }
-            .searchable(text: $query, placement: .sidebar, prompt: "Search help")
             .navigationSplitViewColumnWidth(min: 200, ideal: 230)
         } detail: {
             if let t = navigator.topic {
@@ -68,13 +78,9 @@ struct HelpTopicView: View {
 /// The round "?" button: opens the Help window at `topic`.
 struct HelpButton: View {
     let topic: HelpTopic
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        HelpLink {
-            HelpNavigator.shared.topic = topic
-            openWindow(id: HelpView.windowID)
-        }
+        HelpLink { HelpNavigator.show(topic) }
         .help("Help: \(topic.title)")
         .accessibilityLabel("Help for \(topic.title)")
     }
