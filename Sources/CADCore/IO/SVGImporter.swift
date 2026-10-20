@@ -129,7 +129,7 @@ public struct SVGImporter: VectorImporter {
                     // A subpath that returns to its start without "Z" is still a closed vector.
                     let doc = PathGeometry.closeNearlyClosed(paths.map { $0.transformed(ctm) },
                                                              tolerance: units == .inch ? 0.0005 : 0.01)
-                    shapes.append(Shape(name: n.id ?? n.name, layerID: layerID, paths: doc,
+                    shapes.append(Shape(name: n.id.map(SVGImporter.displayName(forID:)) ?? n.name, layerID: layerID, paths: doc,
                                         origin: .imported(format: "svg")))
                 }
             }
@@ -153,6 +153,17 @@ public struct SVGImporter: VectorImporter {
             for t in tries where (try? TextOutliner().advance(of: "H", fontName: t, pointSize: 10)) != nil { return t }
         }
         return nil
+    }
+
+    /// A shape name from an SVG element id. Kerf's own export writes ids as "Name-<8 hex digits>" to keep
+    /// them unique; the hash is dropped so a round trip (and the sample files) keep readable names.
+    /// Only a suffix with at least one letter a–f counts, so "Rev-20240101" keeps its date.
+    public static func displayName(forID id: String) -> String {
+        guard let dash = id.lastIndex(of: "-"), dash != id.startIndex else { return id }
+        let suffix = id[id.index(after: dash)...]
+        let isHash = suffix.count == 8 && suffix.allSatisfy { $0.isHexDigit && !$0.isUppercase }
+            && suffix.contains { "abcdef".contains($0) }
+        return isHash ? String(id[..<dash]) : id
     }
 
     static func geometry(of n: SVGNode) -> [Path]? {
