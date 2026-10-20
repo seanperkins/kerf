@@ -21,39 +21,68 @@ public struct ProfileOperation: ToolpathOperation {
         let tol = context.tolerance
 
         let (closed, open) = ShapeGeometry.loops(of: shapes, tolerance: tol)
-        let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: tool.radius + params.allowance,
+        let lastPass = effectiveLastPass(tolerance: tol)
+        let finalOffset = tool.radius + params.allowance
+        let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset + (lastPass?.allowance ?? 0),
                                          direction: params.direction, tolerance: tol)
+        let finishPlan = lastPass.map {
+            ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset,
+                                  direction: $0.reverseDirection ? params.direction.reversed : params.direction,
+                                  tolerance: tol)
+        }
         var chains = plan.chains
         chains += open.map { Chain2D(points: $0, isClosed: false) }
-        guard !chains.isEmpty else {
+        guard !chains.isEmpty || !(finishPlan?.chains.isEmpty ?? true) else {
             throw CAMError.invalidGeometry("The tool does not fit inside the selected vectors")
         }
 
         let coords = context.coords
         let home = coords.materialXY(fromMachine: context.document.job.home)
-        let ordered = ChainOrdering.nearestNeighbour(chains, from: home, allowReverse: true,
-                                                     predecessors: ChainOrdering.innerFirstPredecessors(chains),
-                                                     tolerance: tol)
         var builder = ToolpathBuilder(coords: coords, tool: tool, units: context.units, tolerance: tol,
                                       fitArcs: params.preferArcs)
-        var manualCenters: [[Double]]?
-        if params.tabs.isEnabled, let anchors = params.tabs.manualTabs {
-            manualCenters = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) },
-                                               document: context.document, tolerance: tol)
-        }
-        for (i, chain) in ordered.enumerated() {
-            cut(chain, passes: passes, tool: tool, wasteRegion: plan.wasteRegion, manualTabs: manualCenters?[i],
-                builder: &builder, tolerance: tol)
+        cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
+                 context: context, builder: &builder)
+        if let lastPass, let finishPlan {
+            // Last pass: removes the side allowance the roughing passes left on the wall.
+            let finishPasses = lastPass.fullDepth ? [params.depth.cutDepth] : passes
+            cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
+                     wasteRegion: finishPlan.wasteRegion, context: context, builder: &builder)
         }
         var meta: [String: String] = [:]
         var warnings: [String] = []
-        if plan.droppedLoops > 0 { warnings.append("\(plan.droppedLoops) vector(s) too small for the tool") }
+        let dropped = finishPlan?.droppedLoops ?? plan.droppedLoops
+        if dropped > 0 { warnings.append("\(dropped) vector(s) too small for the tool") }
         if params.side != .on && !open.isEmpty {
             warnings.append("\(open.count) open vector(s) cut on the line (close them to cut \(params.side == .outside ? "outside" : "inside"))")
         }
         if !warnings.isEmpty { meta["warning"] = warnings.joined(separator: "; ") }
         return [Toolpath(name: setup.name, operationID: setup.id, kind: .profile, tool: tool,
                          moves: builder.finish(), metadata: meta)]
+    }
+
+    /// The last-pass settings when they apply (closed vectors cut outside/inside, allowance > 0).
+    func effectiveLastPass(tolerance: Double) -> ProfileLastPass? {
+        guard let lp = params.lastPass, params.side != .on, lp.allowance > tolerance else { return nil }
+        return lp
+    }
+
+    /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`.
+    private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
+                          context: CAMContext, builder: inout ToolpathBuilder) {
+        guard !chains.isEmpty else { return }
+        let tol = context.tolerance
+        let ordered = ChainOrdering.nearestNeighbour(chains, from: start, allowReverse: true,
+                                                     predecessors: ChainOrdering.innerFirstPredecessors(chains),
+                                                     tolerance: tol)
+        var manualCenters: [[Double]]?
+        if params.tabs.isEnabled, let anchors = params.tabs.manualTabs {
+            manualCenters = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) },
+                                               document: context.document, tolerance: tol)
+        }
+        for (i, chain) in ordered.enumerated() {
+            cut(chain, passes: passes, tool: tool, wasteRegion: wasteRegion, manualTabs: manualCenters?[i],
+                builder: &builder, tolerance: tol)
+        }
     }
 
     /// `manualTabs`: user-placed tab centres for this loop (nil = automatic layout).
@@ -118,6 +147,11 @@ public struct ProfileOperation: ToolpathOperation {
             if !useLeads { s0 = pass.endS }
         }
     }
+}
+
+extension CutDirection {
+    /// The opposite cutting direction.
+    public var reversed: CutDirection { self == .climb ? .conventional : .climb }
 }
 
 /// Tells which side of a toolpath loop is waste (for lead-ins).

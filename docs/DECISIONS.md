@@ -295,3 +295,7 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## toolpaths-2d (parity round 1)
+
+- **toolpaths-2d** — tp-profile-last-pass: `ProfileParameters.lastPass: ProfileLastPass?` (nil = off, so old files decode). When on (closed vectors cut outside/inside, allowance > tolerance), every roughing pass is offset by an extra `allowance`; after ALL roughing loops the tool cuts the true offset once more, inner loops first, in the opposite direction when `reverseDirection` is set. By default the last pass is one lap at the full cut depth (`fullDepth`), otherwise it repeats the normal depth passes. Tabs, ramps and leads apply to the last pass as well. The last pass plunges from the material-top gap (not a rapid into the roughed slot), because the allowance strip is still standing there. Ignored for "On" and for open vectors.

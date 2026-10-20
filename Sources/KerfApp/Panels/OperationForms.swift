@@ -110,6 +110,8 @@ struct ProfileForm: View {
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
         }
         Divider()
+        InspectorSection(title: "Last Pass") { ProfileLastPassForm(lastPass: $params.lastPass, side: params.side, units: units) }
+        Divider()
         InspectorSection(title: "Tabs") {
             Toggle("Add tabs", isOn: $params.tabs.isEnabled)
             if params.tabs.isEnabled {
@@ -349,6 +351,38 @@ struct Relief3DForm: View {
                                     defaultValue: units == .inch ? 0.02 : 0.5)
                 NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
             }
+        }
+    }
+}
+
+/// Separate last pass (finishing lap that removes a side allowance).
+struct ProfileLastPassForm: View {
+    @Binding var lastPass: ProfileLastPass?
+    var side: ProfileSide
+    var units: LengthUnit
+
+    private var enabled: Binding<Bool> {
+        Binding(get: { lastPass != nil }, set: { on in
+            lastPass = on ? ProfileLastPass(allowance: units == .inch ? 0.01 : 0.25) : nil
+        })
+    }
+
+    private func field<T>(_ kp: WritableKeyPath<ProfileLastPass, T>, _ fallback: T) -> Binding<T> {
+        Binding(get: { lastPass?[keyPath: kp] ?? fallback }, set: { v in lastPass?[keyPath: kp] = v })
+    }
+
+    var body: some View {
+        Toggle("Separate last pass", isOn: enabled)
+        if lastPass != nil {
+            LengthField("Last pass allowance", value: field(\.allowance, 0), units: units,
+                        help: "Material the roughing passes leave on the wall for the last pass")
+            Toggle("Reverse direction", isOn: field(\.reverseDirection, false))
+            Toggle("Last pass at full depth", isOn: field(\.fullDepth, true))
+            Text(side == .on
+                 ? "Not used when cutting on the line."
+                 : "Roughing passes stay the allowance away from the wall; one more lap then cuts the wall to size.")
+                .font(.caption).foregroundStyle(side == .on ? .orange : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

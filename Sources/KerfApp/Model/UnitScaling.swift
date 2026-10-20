@@ -33,6 +33,7 @@ extension ProfileParameters {
         var p = self
         p.depth = depth.scaled(by: f); p.allowance *= f; p.tabs = tabs.scaled(by: f)
         p.ramp = ramp.scaled(by: f); p.lead = lead.scaled(by: f)
+        p.lastPass?.allowance *= f
         return p
     }
 }
