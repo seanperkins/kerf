@@ -25,6 +25,11 @@ struct ValidationReport {
         let jobName = project.document.name
         var sections: [Section] = []
         var seen = Set<String>()
+        let layout = LayoutChecks.materialFits(project.document.job, units: project.document.units, profile: profile)
+            + LayoutChecks.design(project.document, ignoredLayers: project.layoutIgnoredLayers)
+        if !layout.isEmpty {
+            sections.append(Section(id: "layout", title: "Material and machine", operationID: nil, issues: layout))
+        }
         for op in project.operations where op.setup.isEnabled {
             var issues: [GCodeIssue] = []
             if let r = results[op.id] {

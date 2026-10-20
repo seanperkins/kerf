@@ -143,7 +143,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `lay-tiling` | layout | Tiling large jobs | missing | P3 | Not implemented |
 | `lay-job-sheet` | layout | Job sheets / operator setup sheet | done | P1 | Model/JobSheet.swift (HTML), File > Export Job Sheet…; LayoutJobSheetTests |
 | `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | missing | P2 | Not implemented |
-| `lay-material-validation` | layout | Material-size and travel validation | partial | P1 | GCodeValidator checks travel span and spoilboard depth; no warning for vectors outside the material |
+| `lay-material-validation` | layout | Material-size and travel validation | done | P1 | PostCore/Validation/LayoutChecks.swift, Check Toolpaths "Material and machine"; LayoutChecksTests |
 | `lay-part-labels` | layout | Part labelling (IDs/names engraved or printed on parts) | missing | P3 | Not implemented |
 | `pv-3d-sim` | preview | 3D material removal simulation | done | P1 | CAMCore/Simulation/MaterialSimulator.swift, Preview/SimulationPreviewView.swift; SimMaterialSimulatorTests |
 | `pv-playback` | preview | Playback controls (play/pause, scrub, speed, jump to end, reset) | done | P1 | SimulationPreviewView.swift (rewind/play/end/slider/speed); SimTimelineTests |

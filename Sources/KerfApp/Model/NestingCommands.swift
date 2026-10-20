@@ -128,3 +128,8 @@ enum NestingCommands {
         }
     }
 }
+
+extension KerfProject {
+    /// Layers left out of the "vectors outside the material" check.
+    var layoutIgnoredLayers: Set<UUID> { [] }
+}
