@@ -19,6 +19,7 @@ extension CanvasNSView {
         let vt = viewTransform
 
         drawMaterial(ctx, doc, vt)
+        PlacedImageRenderer.drawAll(doc.document, in: ctx, transform: vt)
         drawGrid(ctx, doc)
         drawModels(ctx, doc, vt)
         drawShapes(ctx, doc, vt)

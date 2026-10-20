@@ -212,6 +212,7 @@ enum DesignSnapshot {
         cg.setStrokeColor(CGColor(gray: 0.35, alpha: 1))
         cg.setLineWidth(1)
         cg.stroke(r)
+        PlacedImageRenderer.drawAll(document, in: cg, transform: t)
         let hidden = Set(document.layers.filter { !$0.isVisible }.map(\.id))
         cg.setStrokeColor(CGColor(gray: 0.1, alpha: 0.8))
         cg.setLineWidth(0.8)

@@ -152,7 +152,7 @@ struct KerfCommands: Commands {
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = ImportService.allowedContentTypes
-        panel.message = "Import SVG, DXF, EPS, AI or PDF vectors, or an STL model"
+        panel.message = "Import vectors (SVG, DXF, EPS, AI, PDF), a tracing image or a 3D model"
         guard panel.runModal() == .OK else { return }
         doc.importFiles(panel.urls)
     }

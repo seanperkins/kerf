@@ -571,6 +571,7 @@ final class KerfDocument: ReferenceFileDocument {
                 let imported = p
                 perform("Import \(url.lastPathComponent)") { $0 = imported }
                 newShapes += outcome.shapeIDs
+                if !outcome.imageIDs.isEmpty && outcome.shapeIDs.isEmpty { requestCanvas(.fit) }
                 messages += outcome.warnings.map { "\(url.lastPathComponent): \($0)" }
             } catch {
                 messages.append("\(url.lastPathComponent): \(ImportService.describe(error))")

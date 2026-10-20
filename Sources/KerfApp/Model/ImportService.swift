@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 struct ImportOutcome: Equatable {
     var shapeIDs: [UUID] = []
     var modelIDs: [UUID] = []
+    var imageIDs: [UUID] = []
     var warnings: [String] = []
 }
 
@@ -14,7 +15,8 @@ struct ImportOutcome: Equatable {
 enum ImportService {
     static let vectorExtensions = ["svg", "dxf", "eps", "ai", "pdf"]
     static let meshExtensions = ["stl"]
-    static var allExtensions: [String] { vectorExtensions + meshExtensions }
+    static var imageExtensions: [String] { RasterCodec.fileExtensions }
+    static var allExtensions: [String] { vectorExtensions + meshExtensions + imageExtensions }
 
     static var allowedContentTypes: [UTType] {
         allExtensions.compactMap { UTType(filenameExtension: $0) }
@@ -43,11 +45,27 @@ enum ImportService {
             project.document.models.append(model)
             return ImportOutcome(modelIDs: [model.id])
         }
+        if imageExtensions.contains(ext) {
+            return try importBitmap(data: data, name: base, into: &project)
+        }
         guard let importer = FileFormats.importer(forExtension: ext) else {
             throw KerfIOError.unsupportedFormat(ext)
         }
-        let result = try importer.importVectors(from: data, targetUnits: units)
+        let result: ImportResult
+        var embedded: [PDFImporter.EmbeddedImage] = []
+        if ext == "pdf" || (ext == "ai" && data.starts(with: Data("%PDF".utf8))) {
+            (result, embedded) = try PDFImporter().importPage(from: data, targetUnits: units, includeImages: true)
+        } else {
+            result = try importer.importVectors(from: data, targetUnits: units)
+        }
         var outcome = ImportOutcome(warnings: result.warnings)
+        for (i, e) in embedded.enumerated() {
+            guard let info = RasterCodec.info(of: e.png) else { continue }
+            let img = PlacedImage(name: "\(base) image \(i + 1)", layerID: bitmapLayer(in: &project), png: e.png,
+                                  pixelWidth: info.pixels.width, pixelHeight: info.pixels.height, rect: e.rect)
+            project.document.placedImages.append(img)
+            outcome.imageIDs.append(img.id)
+        }
         // Keep importer layers; fall back to a layer named after the file.
         var layerMap: [UUID: UUID] = [:]
         for l in result.layers {
@@ -70,8 +88,31 @@ enum ImportService {
             project.document.add(s)
             outcome.shapeIDs.append(s.id)
         }
-        if outcome.shapeIDs.isEmpty { outcome.warnings.append("The file contained no supported vectors.") }
+        if outcome.shapeIDs.isEmpty && outcome.imageIDs.isEmpty {
+            outcome.warnings.append("The file contained no supported vectors.")
+        }
         return outcome
+    }
+
+    static let bitmapLayerName = "Bitmaps"
+
+    /// The layer tracing images go on (created on first use).
+    static func bitmapLayer(in project: inout KerfProject) -> UUID {
+        if let l = project.document.layers.first(where: { $0.name == bitmapLayerName }) { return l.id }
+        return project.addLayer(named: bitmapLayerName)
+    }
+
+    /// JPG/PNG/BMP/TIF/GIF/WebP → a faded tracing image centred on the material.
+    static func importBitmap(data: Data, name: String, into project: inout KerfProject) throws -> ImportOutcome {
+        guard let info = RasterCodec.info(of: data), let png = RasterCodec.png(fromEncoded: data) else {
+            throw KerfIOError.malformed("the image could not be decoded")
+        }
+        let rect = PlacedImage.defaultRect(pixels: info.pixels, physicalInches: info.inches, job: project.document.job,
+                                           units: project.document.units)
+        let img = PlacedImage(name: name.isEmpty ? "Image" : name, layerID: bitmapLayer(in: &project), png: png,
+                              pixelWidth: info.pixels.width, pixelHeight: info.pixels.height, rect: rect)
+        project.document.placedImages.append(img)
+        return ImportOutcome(imageIDs: [img.id])
     }
 
     /// Centres the mesh on the material, model top flush with the material top, and depth equal

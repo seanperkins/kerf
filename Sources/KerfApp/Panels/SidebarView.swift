@@ -83,6 +83,7 @@ struct DesignSidebar: View {
                         }
                     }
                 }
+                PlacedImagesSection(document: document)
             }
             .listStyle(.sidebar)
             .contextMenu(forSelectionType: UUID.self) { ids in

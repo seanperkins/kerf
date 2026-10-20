@@ -11,6 +11,8 @@ public struct Document: Codable, Hashable, Sendable {
     public var models: [PlacedModel]
     /// Grid spacing for snapping, in document units.
     public var gridSpacing: Double
+    /// Raster tracing images; nil when there are none (see `placedImages`).
+    public var images: [PlacedImage]?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

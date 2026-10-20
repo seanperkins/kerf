@@ -127,6 +127,7 @@ extension Document {
         d.gridSpacing = gridSpacing * f
         d.shapes = shapes.map { $0.transformed(.scale(f, f)) }
         d.models = models.map { $0.scaled(by: f) }
+        d.images = images?.map { var i = $0; i.rect = Rect2(min: $0.rect.min * f, max: $0.rect.max * f); return i }
         return d
     }
 }
