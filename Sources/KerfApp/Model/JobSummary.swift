@@ -28,14 +28,26 @@ struct JobSummary: Equatable {
     var rows: [Row]
     /// Tool loads (each is a manual tool change at the machine) in program order.
     var sequence: [ToolLoad]
-    var totalSeconds: TimeInterval
+    /// Cutting, rapids and dwell of the enabled toolpaths, summed one by one.
+    var machiningSeconds: TimeInterval
+    /// Allowance for one manual tool change (the user's time-estimate setting).
+    var toolChangeSeconds: TimeInterval = 0
+
+    /// False until at least one enabled toolpath has been calculated; a total of 0s then means
+    /// "not calculated", not "instant".
+    var hasEstimate: Bool { rows.contains { $0.isEnabled && $0.estimatedSeconds != nil } }
 
     /// Changes after the first tool is loaded.
     var toolChanges: Int { max(0, sequence.count - 1) }
+    /// What the tool changes add: the same allowance the 3D preview counts, so the sidebar and the
+    /// preview agree instead of showing two different times for one job.
+    var toolChangeAllowance: TimeInterval { Double(toolChanges) * toolChangeSeconds }
+    var totalSeconds: TimeInterval { machiningSeconds + toolChangeAllowance }
 
     static func label(_ tool: Tool) -> String { "T\(tool.number) · \(tool.name)" }
 
-    static func make(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool) -> JobSummary {
+    static func make(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool,
+                     toolChangeSeconds: TimeInterval = 0) -> JobSummary {
         let rows = operations.map { op -> Row in
             let r = results[op.id]
             var tools: [String] = []
@@ -47,7 +59,7 @@ struct JobSummary: Equatable {
         }
         let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: groupByTool)
         let total = rows.filter(\.isEnabled).compactMap(\.estimatedSeconds).reduce(0, +)
-        return JobSummary(rows: rows, sequence: sequence(of: tps), totalSeconds: total)
+        return JobSummary(rows: rows, sequence: sequence(of: tps), machiningSeconds: total, toolChangeSeconds: toolChangeSeconds)
     }
 
     /// Consecutive toolpaths sharing a tool form one load.

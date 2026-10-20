@@ -55,6 +55,33 @@ private enum Job {
         #expect(s.sequence.map(\.number) == [1])
     }
 
+    @Test func totalAddsTheAllowanceForEachToolChange() {
+        // The sidebar total used to leave tool changes out, while the 3D preview counted them.
+        let p = Job.project()
+        let results = Job.results(p)
+        let bare = JobSummary.make(operations: p.operations, results: results, groupByTool: true)
+        let allowed = JobSummary.make(operations: p.operations, results: results, groupByTool: true, toolChangeSeconds: 90)
+        #expect(bare.toolChangeAllowance == 0 && bare.totalSeconds == bare.machiningSeconds)
+        #expect(allowed.machiningSeconds == bare.machiningSeconds)
+        #expect(allowed.toolChangeAllowance == 2 * 90)  // T1, T6, T1
+        #expect(abs(allowed.totalSeconds - (bare.machiningSeconds + 180)) < 1e-6)
+    }
+
+    @Test func nothingCalculatedMeansNoEstimate() {
+        // The sidebar read "Estimated time: 0s · No tools" before anything was calculated.
+        let p = Job.project()
+        #expect(!JobSummary.make(operations: p.operations, results: [:], groupByTool: true).hasEstimate)
+        #expect(JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true).hasEstimate)
+    }
+
+    @Test func aSingleToolJobHasNoAllowance() {
+        var p = Job.project()
+        p.operations[1].editableSetup.isEnabled = false  // the V-carve is the only T6 toolpath
+        let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true, toolChangeSeconds: 90)
+        #expect(s.toolChanges == 0 && s.toolChangeAllowance == 0)
+        #expect(s.totalSeconds == s.machiningSeconds)
+    }
+
     @Test func uncalculatedRowsHaveNoTime() {
         let p = Job.project()
         let s = JobSummary.make(operations: p.operations, results: [:], groupByTool: true)
