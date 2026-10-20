@@ -110,7 +110,7 @@ struct ProfileForm: View {
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
         }
         Divider()
-        InspectorSection(title: "Tabs") {
+        InspectorSection(title: "Tabs", helpTopic: .tabs) {
             Toggle("Add tabs", isOn: $params.tabs.isEnabled)
             if params.tabs.isEnabled {
                 LengthField("Length", value: $params.tabs.length, units: units)
@@ -137,7 +137,7 @@ struct ProfileForm: View {
             }
         }
         Divider()
-        InspectorSection(title: "Ramps & Leads") {
+        InspectorSection(title: "Ramps & Leads", helpTopic: .tabs) {
             RampForm(ramp: $params.ramp, units: units)
             Picker("Lead in/out", selection: $params.lead.type) {
                 Text("None").tag(LeadType.none)

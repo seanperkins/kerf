@@ -19,6 +19,7 @@ struct ValidationSheet: View {
                 Text("Check Toolpaths").font(.title2.bold())
                 Spacer()
                 Text(document.postProfile.name).foregroundStyle(.secondary)
+                HelpButton(topic: .checkToolpaths)
             }
             if calcTask != nil {
                 CalculationProgressView(count: calculatingCount) { calcTask?.cancel(); calcTask = nil }

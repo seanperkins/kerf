@@ -24,7 +24,7 @@ struct OperationEditor: View {
     private var library: ToolLibrary { document.mergedLibrary }
 
     var body: some View {
-        InspectorSection(title: draft.kind.displayName + " Toolpath") {
+        InspectorSection(title: draft.kind.displayName + " Toolpath", helpTopic: HelpTopic.forOperation(draft.kind)) {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
             ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID), library: library,

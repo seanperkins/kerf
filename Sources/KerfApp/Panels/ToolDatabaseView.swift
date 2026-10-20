@@ -78,7 +78,7 @@ struct ToolEditor: View {
     var body: some View {
         let u = tool.units
         Form {
-            Section("Tool") {
+            Section {
                 TextField("Name", text: $tool.name)
                 Picker("Type", selection: $tool.kind) {
                     ForEach(ToolKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -88,6 +88,8 @@ struct ToolEditor: View {
                     ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .pickerStyle(.segmented)
+            } header: {
+                HStack { Text("Tool"); Spacer(); HelpButton(topic: .toolDatabase).controlSize(.small) }
             }
             Section("Geometry") {
                 LengthField("Diameter", value: $tool.diameter, units: u)

@@ -50,6 +50,7 @@ struct GeneralPreferences: View {
                 Toggle("Show the Welcome window at launch", isOn: $model.prefs.showWelcomeAtLaunch)
             }
             HStack {
+                HelpButton(topic: .preferences)
                 Spacer()
                 Button("Restore Defaults") { model.resetToDefaults() }
                     .help("Reset every setting on all tabs (machines you added are kept)")
@@ -131,6 +132,7 @@ struct MachinePreferences: View {
                             .help("Copy the selected machine so you can edit its size and posts")
                         Button("Folder") { openFolder() }
                             .help("Open the folder that holds custom machine files (JSON)")
+                        HelpButton(topic: .machines)
                     }
                 }
                 if let binding = Binding($draft) {

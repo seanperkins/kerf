@@ -37,7 +37,7 @@ struct DrawingOptionsView: View {
 
     var body: some View {
         let units = document.units
-        InspectorSection(title: document.activeTool.title) {
+        InspectorSection(title: document.activeTool.title, helpTopic: .drawing) {
             switch document.activeTool {
             case .rectangle, .ellipse:
                 Text("Drag a box. Hold Shift for a square/circle.").font(.callout).foregroundStyle(.secondary)
@@ -151,7 +151,7 @@ struct ShapeInspector: View {
             }
         }
         Divider()
-        InspectorSection(title: "Arrange") {
+        InspectorSection(title: "Arrange", helpTopic: .transforms) {
             AlignButtons(document: document)
         }
         Divider()
@@ -293,7 +293,7 @@ struct JobSummaryView: View {
     var body: some View {
         let j = document.document.job
         let u = document.units.abbreviation
-        InspectorSection(title: "Job") {
+        InspectorSection(title: "Job", helpTopic: .jobSetup) {
             LabeledContent("Material", value: GCodeExporter.materialDescription(document.document))
             LabeledContent("XY origin", value: j.xyOrigin.displayName)
             LabeledContent("Z zero", value: j.zZero.displayName)
@@ -304,7 +304,7 @@ struct JobSummaryView: View {
             Button("Job Setup…") { document.sheet = .jobSetup }
         }
         Divider()
-        InspectorSection(title: "Getting Started") {
+        InspectorSection(title: "Getting Started", helpTopic: .gettingStarted) {
             Text("1. Set the material size and zero in Job Setup.\n2. Draw shapes with the palette or File › Import.\n3. Select vectors and add a toolpath.\n4. Calculate, check the preview, then Export G-code.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }

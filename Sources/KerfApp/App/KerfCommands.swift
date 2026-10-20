@@ -113,6 +113,12 @@ struct KerfCommands: Commands {
             Toggle("Snap to Objects", isOn: Binding(get: { document?.snapToObjects ?? true }, set: { document?.snapToObjects = $0 }))
                 .keyboardShortcut("'", modifiers: [.command, .shift])
         }
+        CommandGroup(replacing: .help) {
+            Button("Kerf Help") { showHelp(.gettingStarted) }
+                .keyboardShortcut("?", modifiers: .command)
+            Button("Keyboard Shortcuts") { showHelp(.shortcuts) }
+            Button("Running a Safe Air Cut") { showHelp(.airCut) }
+        }
         CommandMenu("Toolpaths") {
             Menu("New Toolpath") {
                 ForEach(OperationFactory.menuKinds, id: \.self) { kind in
@@ -138,6 +144,11 @@ struct KerfCommands: Commands {
             Button("Reload Post Profiles") { PostProfileCatalog.shared.reload() }
             Button("Open Post Profiles Folder") { openPostFolder() }
         }
+    }
+
+    private func showHelp(_ topic: HelpTopic) {
+        HelpNavigator.shared.topic = topic
+        openWindow(id: HelpView.windowID)
     }
 
     private func withSelection(_ name: String, _ change: @escaping (Set<UUID>, inout KerfProject) -> Void) {

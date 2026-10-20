@@ -23,7 +23,7 @@ struct ExportGCodeSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Export G-code").font(.title2.bold())
+            HStack { Text("Export G-code").font(.title2.bold()); Spacer(); HelpButton(topic: .exportGCode) }
             Form {
                 Picker("Toolpaths", selection: $scope) {
                     Text("All enabled toolpaths").tag(GCodeExportScope.all)
@@ -185,7 +185,7 @@ struct OffsetSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Offset Vectors").font(.title3.bold())
+            HStack { Text("Offset Vectors").font(.title3.bold()); Spacer(); HelpButton(topic: .transforms) }
             Form {
                 LengthField("Distance", value: $distance, units: document.units)
                 Picker("Direction", selection: $outward) {

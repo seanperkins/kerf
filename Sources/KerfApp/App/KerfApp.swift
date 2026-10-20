@@ -38,5 +38,10 @@ struct KerfApp: App {
         Settings {
             PreferencesView()
         }
+
+        Window("Kerf Help", id: HelpView.windowID) {
+            HelpView()
+        }
+        .defaultSize(width: 860, height: 600)
     }
 }

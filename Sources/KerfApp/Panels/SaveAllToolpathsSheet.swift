@@ -24,7 +24,7 @@ struct SaveAllToolpathsSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Save All Toolpaths").font(.title2.bold())
+            HStack { Text("Save All Toolpaths").font(.title2.bold()); Spacer(); HelpButton(topic: .saveAllToolpaths) }
             Form {
                 Picker("Output", selection: $mode) {
                     ForEach(SaveAllMode.allCases) { Text($0.title).tag($0) }

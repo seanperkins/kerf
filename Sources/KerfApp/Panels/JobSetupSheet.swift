@@ -15,7 +15,7 @@ struct JobSetupSheet: View {
     var body: some View {
         let u = form.units
         VStack(alignment: .leading, spacing: 0) {
-            Text("Job Setup").font(.title2.bold()).padding([.horizontal, .top], 20)
+            HStack { Text("Job Setup").font(.title2.bold()); Spacer(); HelpButton(topic: .jobSetup) }.padding([.horizontal, .top], 20)
             Form {
                 Section("Job") {
                     TextField("Job name", text: $form.name)

@@ -20,7 +20,7 @@ struct InlayWizardSheet: View {
     var body: some View {
         let problems = model.problems(library: library)
         VStack(alignment: .leading, spacing: 0) {
-            Text("Inlay Wizard").font(.title2.bold()).padding([.horizontal, .top], 20)
+            HStack { Text("Inlay Wizard").font(.title2.bold()); Spacer(); HelpButton(topic: .inlay) }.padding([.horizontal, .top], 20)
             Text("Creates two V-carve toolpaths: a pocket in the base board and a mirrored plug for the insert board.")
                 .font(.callout).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.top, 4)
             Form {
