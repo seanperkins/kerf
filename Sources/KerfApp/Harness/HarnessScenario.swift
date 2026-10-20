@@ -54,7 +54,8 @@ struct HarnessScenario: Decodable {
         "selectToolpath": "name: a toolpath to select (also shows the Toolpaths tab)",
         "calculate": "calculate all toolpaths and wait",
         "sheet": "value: " + sheets.sorted().joined(separator: " | "),
-        "closeSheet": "close the open sheet",
+        "closeSheet": "close the open sheet or alert",
+        "import": "name: a file to import as File > Import does, relative to the repo root (scripts/ui.sh runs from there). An import alert stays open until a closeSheet step",
         "press": "name: click the first control whose label, title, help or id contains this text; value: optional role such as AXButton. Does not toggle disclosure groups: use expand",
         "key": "value: escape | return | tab | space, sent to the open sheet (or the window)",
         "expand": "name: open a collapsible inspector section by its title (Last Pass, Ramps, Array Copies...)",
@@ -111,6 +112,8 @@ struct HarnessScenario: Decodable {
             guard let v = step.value, keys[v] != nil else { throw fail("value must be one of \(keys.keys.sorted())") }
         case "expand":
             guard step.name?.isEmpty == false else { throw fail("name must be the section's title") }
+        case "import":
+            guard step.name?.isEmpty == false else { throw fail("name must be the path of the file to import") }
         case "wait":
             guard let s = step.seconds, s >= 0 else { throw fail("seconds is required") }
         case "capture", "captureSheet", "menus":

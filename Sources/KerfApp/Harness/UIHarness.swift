@@ -190,7 +190,15 @@ final class UIHarness {
             await settle(0.9)
         case "closeSheet":
             doc.sheet = nil
-            await settle()
+            doc.alert = nil
+            await settle(0.7)
+        case "import":
+            let path = step.name ?? ""
+            let url = path.hasPrefix("/") ? URL(fileURLWithPath: path)
+                : URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(path)
+            guard FileManager.default.fileExists(atPath: url.path) else { throw HarnessError(message: "import: no file at \(url.path)") }
+            doc.importFiles([url])
+            await settle(0.9)
         case "key":
             guard let key = HarnessScenario.keys[step.value ?? ""] else { throw HarnessError(message: "unknown key") }
             let target = try requireWindow().attachedSheet ?? requireWindow()
