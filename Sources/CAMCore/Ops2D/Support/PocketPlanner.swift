@@ -142,17 +142,19 @@ public struct PocketPlanner: Sendable {
         return false
     }
 
-    /// Zig-zag raster at `angle` degrees, optionally followed by the wall contour.
-    public func rasterClearing(angle: Double, profilePass: Bool, from start: Vec2) -> [[Chain2D]] {
+    /// Zig-zag raster at `angle` degrees, optionally followed (or preceded, `profileFirst`) by the
+    /// wall contour.
+    public func rasterClearing(angle: Double, profilePass: Bool, profileFirst: Bool = false,
+                               from start: Vec2) -> [[Chain2D]] {
         let boundary = centerRegion
         let outers = boundary.filter { Polygon2D.signedArea($0) > 0 }
         guard !outers.isEmpty else { return [] }
         var items: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
         for seg in rasterLines(in: boundary, angle: angle) {
-            items.append((Chain2D(points: seg, isClosed: false), 0, seg[seg.count / 2]))
+            items.append((Chain2D(points: seg, isClosed: false), profileFirst ? 1 : 0, seg[seg.count / 2]))
         }
         if profilePass {
-            for loop in boundary { items.append((chain(loop), 1, loop[0])) }
+            for loop in boundary { items.append((chain(loop), profileFirst ? 0 : 1, loop[0])) }
         }
         return order(items, outers: outers, from: start)
     }

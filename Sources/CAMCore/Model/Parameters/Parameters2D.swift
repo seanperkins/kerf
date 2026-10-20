@@ -125,6 +125,9 @@ public struct PocketParameters: Codable, Hashable, Sendable {
     /// Several clearance tools, cut in list order (largest first); each one only machines what the
     /// previous tools could not reach. When non-nil it replaces `clearanceToolID` (toolpaths-2d).
     public var clearanceToolIDs: [UUID]?
+    /// Raster with a profile pass: cut the wall pass before the raster instead of after it
+    /// (nil/false = after; toolpaths-2d addition).
+    public var profilePassFirst: Bool?
 
     public init(depth: DepthSettings = DepthSettings(cutDepth: 0.25), strategy: PocketStrategy = .offset,
                 direction: CutDirection = .climb, allowance: Double = 0, clearanceToolID: UUID? = nil,

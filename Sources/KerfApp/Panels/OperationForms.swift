@@ -52,6 +52,8 @@ struct DirectionPicker: View {
 
 struct PocketStrategyForm: View {
     @Binding var strategy: PocketStrategy
+    /// When given, the raster profile pass is a None / First / Last choice (Pocket only).
+    var profileFirst: Binding<Bool?>? = nil
 
     private var isRaster: Binding<Bool> {
         Binding(get: { if case .raster = strategy { return true } else { return false } },
@@ -74,7 +76,22 @@ struct PocketStrategyForm: View {
         .pickerStyle(.segmented)
         if isRaster.wrappedValue {
             NumberField("Raster angle", value: angle, unit: "°")
-            Toggle("Final profile pass", isOn: profilePass)
+            if let profileFirst {
+                Picker("Profile pass", selection: Binding(get: {
+                    !profilePass.wrappedValue ? 0 : (profileFirst.wrappedValue == true ? 1 : 2)
+                }, set: { v in
+                    profilePass.wrappedValue = v != 0
+                    profileFirst.wrappedValue = v == 1 ? true : nil
+                })) {
+                    Text("None").tag(0)
+                    Text("First").tag(1)
+                    Text("Last").tag(2)
+                }
+                .pickerStyle(.segmented)
+                .help("Wall clean-up pass before or after the raster")
+            } else {
+                Toggle("Final profile pass", isOn: profilePass)
+            }
         }
     }
 }
@@ -193,7 +210,7 @@ struct PocketForm: View {
         InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown) }
         Divider()
         InspectorSection(title: "Clearing") {
-            PocketStrategyForm(strategy: $params.strategy)
+            PocketStrategyForm(strategy: $params.strategy, profileFirst: $params.profilePassFirst)
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units)
         }
