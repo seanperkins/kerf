@@ -10,6 +10,7 @@ extension DepthSettings {
     func scaled(by f: Double) -> DepthSettings {
         var d = self
         d.startDepth *= f; d.cutDepth *= f; d.passDepth = passDepth.map { $0 * f }; d.finalPassDepth *= f
+        d.customPasses = customPasses.map { $0.map { $0 * f } }
         return d
     }
 }

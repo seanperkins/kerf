@@ -8,15 +8,13 @@ struct DepthForm: View {
     @Binding var depth: DepthSettings
     var units: LengthUnit
     var showFinalPass = true
+    /// The tool's stepdown in document units (for the pass list; nil = unknown).
+    var toolStepdown: Double? = nil
 
     var body: some View {
         LengthField("Start depth", value: $depth.startDepth, units: units, help: "Depth below the material top where cutting starts")
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
-        OptionalLengthField(label: "Pass depth", value: $depth.passDepth, units: units,
-                            defaultValue: units == .inch ? 0.125 : 3)
-        if showFinalPass {
-            LengthField("Final pass", value: $depth.finalPassDepth, units: units, help: "Thin last pass (0 = none)")
-        }
+        PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: toolStepdown)
         if depth.cutDepth <= depth.startDepth {
             Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(.orange)
         }
@@ -87,6 +85,7 @@ struct ProfileForm: View {
     /// The operation's vectors (to seed manual tabs).
     var shapes: [Shape] = []
     var isEditingTabs: Binding<Bool> = .constant(false)
+    var toolStepdown: Double? = nil
 
     private var manualBinding: Binding<Bool> {
         Binding(get: { params.tabs.isManual }, set: { manual in
@@ -96,7 +95,7 @@ struct ProfileForm: View {
     }
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units) }
+        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown) }
         Divider()
         InspectorSection(title: "Machine Vectors") {
             Picker("Side", selection: $params.side) {
@@ -166,9 +165,10 @@ struct PocketForm: View {
     var units: LengthUnit
     var library: ToolLibrary
     var finishToolID: UUID?
+    var toolStepdown: Double? = nil
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units) }
+        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown) }
         Divider()
         InspectorSection(title: "Clearing") {
             PocketStrategyForm(strategy: $params.strategy)

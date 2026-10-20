@@ -74,10 +74,11 @@ struct OperationEditor: View {
         switch draft {
         case .profile(let o):
             ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units,
-                        shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding)
+                        shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding,
+                        toolStepdown: primaryStepdown)
         case .pocket(let o):
             PocketForm(params: paramsBinding(o.params) { .pocket(PocketOperation(setup: draft.setup, params: $0)) },
-                       units: units, library: library, finishToolID: draft.setup.toolID)
+                       units: units, library: library, finishToolID: draft.setup.toolID, toolStepdown: primaryStepdown)
         case .drill(let o):
             DrillForm(params: paramsBinding(o.params) { .drill(DrillOperation(setup: draft.setup, params: $0)) }, units: units)
         case .vcarve(let o):
@@ -139,6 +140,9 @@ struct OperationEditor: View {
             }
         }
     }
+
+    /// The primary tool's stepdown in document units.
+    private var primaryStepdown: Double? { library.tool(id: draft.setup.toolID)?.converted(to: units).stepdown }
 
     // MARK: Bindings
 

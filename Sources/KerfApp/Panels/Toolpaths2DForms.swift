@@ -13,7 +13,9 @@ struct EngraveForm: View {
     var tool: Tool?
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units) }
+        InspectorSection(title: "Cutting Depths") {
+            DepthForm(depth: $params.depth, units: units, toolStepdown: tool?.stepdown)
+        }
         Divider()
         InspectorSection(title: "Quick Engrave") {
             DirectionPicker(direction: $params.direction)
@@ -90,6 +92,83 @@ struct ChamferForm: View {
             return (message, false)
         } catch {
             return nil
+        }
+    }
+}
+
+/// Pass depth editor: even passes, exact step, or a hand-edited list of pass depths.
+struct PassEditor: View {
+    @Binding var depth: DepthSettings
+    var units: LengthUnit
+    var showFinalPass = true
+    var toolStepdown: Double?
+
+    enum Mode: Hashable { case even, exact, custom }
+
+    private var mode: Binding<Mode> {
+        Binding(get: {
+            if depth.customPasses != nil { return .custom }
+            return depth.exactStep == true ? .exact : .even
+        }, set: { m in
+            switch m {
+            case .even: depth.customPasses = nil; depth.exactStep = nil
+            case .exact: depth.customPasses = nil; depth.exactStep = true
+            case .custom:
+                // Seed the list with the passes the current settings would make.
+                depth.customPasses = Array(computed.dropLast())
+            }
+        })
+    }
+
+    private var stepdown: Double? { depth.passDepth ?? toolStepdown }
+    private var computed: [Double] {
+        var d = depth
+        d.customPasses = nil
+        return d.passDepths(toolStepdown: stepdown ?? max(depth.cutDepth - depth.startDepth, 1e-6))
+    }
+
+    var body: some View {
+        Picker("Passes", selection: mode) {
+            Text("Even").tag(Mode.even)
+            Text("Exact step").tag(Mode.exact)
+            Text("Custom").tag(Mode.custom)
+        }
+        .pickerStyle(.segmented)
+        .help("Even: divide the depth evenly. Exact step: every pass is the pass depth, the remainder goes last. Custom: edit each pass depth.")
+        if let custom = depth.customPasses {
+            ForEach(Array(custom.enumerated()), id: \.offset) { i, value in
+                HStack {
+                    LengthField("Pass \(i + 1)", value: Binding(get: { value }, set: { v in
+                        guard var list = depth.customPasses, i < list.count else { return }
+                        list[i] = v
+                        depth.customPasses = list
+                    }), units: units)
+                    Button { depth.customPasses?.remove(at: i) } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.borderless).help("Remove this pass")
+                }
+            }
+            LabeledContent("Pass \(custom.count + 1)") {
+                Text("\(fmt(depth.cutDepth)) \(units.abbreviation) (cut depth)").foregroundStyle(.secondary)
+            }
+            Button {
+                let last = depth.customPasses?.last ?? depth.startDepth
+                depth.customPasses?.append((last + depth.cutDepth) / 2)
+            } label: { Label("Add Pass", systemImage: "plus") }
+        } else {
+            OptionalLengthField(label: "Pass depth", value: $depth.passDepth, units: units,
+                                defaultValue: units == .inch ? 0.125 : 3)
+            if showFinalPass {
+                LengthField("Last pass thickness", value: $depth.finalPassDepth, units: units,
+                            help: "Material left for a thin last pass (0 = none)")
+            }
+        }
+        if stepdown != nil || depth.customPasses != nil {
+            let passes = depth.passDepths(toolStepdown: stepdown ?? 1)
+            if !passes.isEmpty {
+                Text("\(passes.count) pass\(passes.count == 1 ? "" : "es"): " + passes.map(fmt).joined(separator: ", ")
+                     + " \(units.abbreviation)")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }
