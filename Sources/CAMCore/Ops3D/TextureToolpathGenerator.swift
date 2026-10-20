@@ -28,7 +28,7 @@ public enum TextureToolpathGenerator {
         guard let range = RasterPattern.offsetRange(region: region, angleDegrees: params.angle) else {
             throw CAMError.noGeometry
         }
-        var rng = SplitMix64(seed: params.seed)
+        var rng = ReliefSplitMix64(seed: params.seed)
 
         // Row offsets with jitter (never crossing the neighbouring row).
         var offsets: [Double] = []
@@ -87,7 +87,7 @@ public enum TextureToolpathGenerator {
 }
 
 /// Small deterministic PRNG (SplitMix64) so textures are reproducible across runs/platforms.
-struct SplitMix64 {
+struct ReliefSplitMix64 {
     private var state: UInt64
     init(seed: UInt64) { state = seed }
 
