@@ -44,15 +44,28 @@ public struct RoughingSettings: Codable, Hashable, Sendable {
     }
 }
 
-/// Raster finishing with the operation's primary tool (ball / flat / V).
+/// Pattern of 3D finishing passes.
+public enum FinishingStrategy: String, Codable, CaseIterable, Sendable {
+    /// Parallel lines at `FinishingSettings.angle`.
+    case raster
+    /// Contour-parallel rings from the boundary inwards.
+    case offset
+    /// One continuous spiral from the boundary inwards (rings where the area splits).
+    case spiral
+}
+
+/// Finishing with the operation's primary tool (ball / flat / V).
 public struct FinishingSettings: Codable, Hashable, Sendable {
     public var isEnabled: Bool
     /// Stepover; nil = the tool's stepover.
     public var stepover: Double?
     /// Raster angle in degrees.
     public var angle: Double
+    /// Pass pattern; nil = raster (files from before strategies existed).
+    public var strategy: FinishingStrategy?
 
-    public init(isEnabled: Bool = true, stepover: Double? = nil, angle: Double = 0) {
-        self.isEnabled = isEnabled; self.stepover = stepover; self.angle = angle
+    public init(isEnabled: Bool = true, stepover: Double? = nil, angle: Double = 0,
+                strategy: FinishingStrategy? = nil) {
+        self.isEnabled = isEnabled; self.stepover = stepover; self.angle = angle; self.strategy = strategy
     }
 }

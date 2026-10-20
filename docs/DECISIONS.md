@@ -313,3 +313,12 @@
   cells no model covers sit at the deepest model's bottom plane. The default area is the union of
   the models' footprints. Missing combined models are skipped with a toolpath warning (a missing
   primary model is still an error). The inspector lists the other models under "Combine with".
+- **cam-3d** — **Offset and spiral 3D finishing (3d-finish-offset).** `FinishingSettings.strategy`
+  (optional; nil = raster). Offset = the boundary region's inward rings (`PocketPlanner.offsetLevels`,
+  radius 0) cut outermost first, each started at the point nearest the tool and linked along the
+  surface when the next ring is within 2.5 × stepover. Spiral = each run of levels with exactly one
+  ring is blended into one path (going once round ring k while moving linearly onto ring k+1,
+  matched by arc-length fraction), ending with a full lap of the innermost ring; where the area
+  splits into several rings those levels are cut as offset rings. Every point is dropped with the
+  drop-cutter, so no pattern can gouge the model; on very non-convex boundaries a blended spiral
+  point may stray slightly outside the boundary between two rings.

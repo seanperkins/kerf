@@ -132,7 +132,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `3d-multiple-models` | cam-3d | Multiple models / composite model | done | P2 | Relief3DParameters.additionalModelIDs, composite ReliefHeightmap.rasterize, inspector "Combine with"; ReliefCompositeTests |
 | `3d-roughing` | cam-3d | 3D roughing (Z-level, raster) with allowance | done | P1 | Ops3D/ReliefRoughing.swift + ReliefLevelRegions.swift: offset or raster (+ profile pass) per Z level; ReliefRoughingTests |
 | `3d-finish-raster` | cam-3d | 3D finishing raster | done | P1 | Ops3D/ReliefFinishing.swift, DropCutter.swift; Relief3DTests |
-| `3d-finish-offset` | cam-3d | 3D finishing offset / spiral strategies | missing | P2 | Raster only |
+| `3d-finish-offset` | cam-3d | 3D finishing offset / spiral strategies | done | P2 | FinishingSettings.strategy (raster/offset/spiral), Ops3D/ReliefFinishing.swift, inspector "Pattern"; ReliefFinishOffsetTests |
 | `3d-boundary` | cam-3d | Limit 3D machining to boundary vectors | done | P2 | Relief3DParameters.boundaryShapeIDs, OperationForms "Use Selection as Boundary" |
 | `3d-rest-machining` | cam-3d | 3D rest machining | missing | P3 | Not implemented |
 | `3d-project-2d` | cam-3d | Project 2D toolpaths onto 3D surface | missing | P3 | Not implemented |

@@ -75,9 +75,17 @@ public struct Relief3DOperation: ToolpathOperation {
         }
         if params.finishing.isEnabled {
             let stepover = max(params.finishing.stepover ?? finishTool.stepover, 1e-4)
-            let moves = ReliefFinishing.moves(map: map, region: region, tool: finishTool, stepover: stepover,
+            let moves: [Move]
+            switch params.finishing.strategy ?? .raster {
+            case .raster:
+                moves = ReliefFinishing.moves(map: map, region: region, tool: finishTool, stepover: stepover,
                                               angle: params.finishing.angle, coords: coords,
                                               tolerance: context.tolerance, clearance: clearance)
+            case .offset, .spiral:
+                moves = ReliefFinishing.offsetMoves(map: map, region: region, tool: finishTool, stepover: stepover,
+                                                    spiral: params.finishing.strategy == .spiral, coords: coords,
+                                                    tolerance: context.tolerance, clearance: clearance)
+            }
             if !moves.isEmpty {
                 var meta = metadata
                 meta["pass"] = "finishing"

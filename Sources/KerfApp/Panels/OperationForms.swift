@@ -362,7 +362,16 @@ struct Relief3DForm: View {
             if params.finishing.isEnabled {
                 OptionalLengthField(label: "Stepover", value: $params.finishing.stepover, units: units,
                                     defaultValue: units == .inch ? 0.02 : 0.5)
-                NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
+                Picker("Pattern", selection: Binding(get: { params.finishing.strategy ?? .raster },
+                                                     set: { params.finishing.strategy = $0 })) {
+                    Text("Raster").tag(FinishingStrategy.raster)
+                    Text("Offset").tag(FinishingStrategy.offset)
+                    Text("Spiral").tag(FinishingStrategy.spiral)
+                }
+                .pickerStyle(.segmented)
+                if (params.finishing.strategy ?? .raster) == .raster {
+                    NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
+                }
             }
         }
     }
