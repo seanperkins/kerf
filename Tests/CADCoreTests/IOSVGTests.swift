@@ -93,6 +93,15 @@ import Testing
         #expect(!pl.isClosed && pl.paths[0].segments.count == 2)
     }
 
+    @Test func illustratorStyleFileWithDoctypeAndPointUnits() throws {
+        let r = try SVGImporter().importVectors(from: IOFixtures.data("illustrator-pt.svg"), targetUnits: .inch)
+        #expect(r.layers.map(\.name) == ["Artwork"])
+        #expect(r.shapes.count == 2 && r.shapes.allSatisfy { $0.isClosed })
+        // 144pt = 2in across 192 user units.
+        #expect(approx(r.shapes[0].bounds(), Rect2(x: 0, y: 0, width: 1, height: 1), 1e-6))
+        #expect(approx(r.shapes[1].bounds(tolerance: 1e-6).max.x, 2, 1e-4))
+    }
+
     @Test func malformedInputThrows() {
         #expect(throws: KerfIOError.self) {
             try SVGImporter().importVectors(from: Data("<html/>".utf8), targetUnits: .inch)
