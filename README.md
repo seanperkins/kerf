@@ -34,7 +34,16 @@ first test build.
 
 ## Build and run
 
-Requires the Swift Command Line Tools; Xcode is not needed.
+Requires an Apple Silicon Mac on macOS 14+ with Swift 6 (Command Line Tools are enough;
+Xcode works too). Install the tools with `xcode-select --install` if `swift --version` fails.
+
+```sh
+git clone https://github.com/seanperkins/kerf.git && cd kerf
+scripts/bundle.sh && open dist/Kerf.app
+```
+
+The bundle is ad-hoc signed, so macOS treats a copy downloaded from elsewhere as unverified.
+A locally built one opens normally.
 
 ```sh
 swift build                 # debug build

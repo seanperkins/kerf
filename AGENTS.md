@@ -1,0 +1,64 @@
+# AGENTS.md
+
+Guidance for coding agents working on Kerf. Read [README.md](README.md) for what the app does.
+
+## Commands
+
+```sh
+swift build                          # debug build
+scripts/test.sh                      # full swift-testing suite (~900 tests, ~20 s)
+scripts/test.sh --filter Ops2D       # subset
+scripts/bundle.sh                    # release build → dist/Kerf.app (ad-hoc signed)
+scripts/run.sh                       # debug bundle + launch
+KERF_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
+KERF_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
+```
+
+Done means `swift build` and `scripts/test.sh` are both green. Judge a test run by its
+`Test run with N tests ... passed` line, not the exit code.
+
+## Toolchain rules
+
+- SwiftPM only. The project must build with Command Line Tools alone: no `.xcodeproj`,
+  no `xcodebuild`, no `.metal` files (compile Metal shader source at runtime if needed).
+- Tests use swift-testing (`import Testing`, `@Test`, `#expect`), not XCTest. Always run
+  them through `scripts/test.sh`, which adds the framework paths a CLT-only machine needs.
+- Don't write a source file and run tests in the same shell command; the test helper can
+  hang. If a run sits at 0% CPU, kill `swift-test` / `swiftpm-testing-helper` and retry once.
+- Swift tools 6.0, macOS 14+, Apple Silicon.
+
+## Layout
+
+| Module | Role |
+|---|---|
+| `Sources/CGeom` | C++ wrapper over vendored Clipper2 (offsets, booleans) and Boost.Polygon Voronoi (medial axis). Never edit `Vendor/`; wrap here. |
+| `Sources/CADCore` | Geometry, `Document` model, importers/exporters (SVG, DXF, EPS, PDF, STL/OBJ/DAE), text outlines. |
+| `Sources/CAMCore` | Toolpath operations (pure functions of shapes + tool + parameters), simulation, time estimates. |
+| `Sources/PostCore` | Template-driven post processor (JSON `PostProfile`s) and `GCodeValidator`. |
+| `Sources/KerfApp` | SwiftUI/AppKit app: document, canvas, inspector, dialogs, 3D preview. |
+
+Each module has a matching test target in `Tests/`. Fixtures and golden `.tap` files live in
+`Tests/Fixtures/`.
+
+## Machine safety
+
+This software drives a real router (the Avid PRO6096, Mach4, 60×96 in). Treat G-code
+changes as safety-critical:
+
+- All depth → machine-Z conversion goes through the single Z-zero helper so the
+  material-top and spoilboard modes both stay correct. Test both modes for any Z-related change.
+- Every program must pass `GCodeValidator`. Don't weaken a validator check to make a test pass.
+- Changing post output means regenerating the golden files on purpose and reviewing the diff.
+- Retract to safe Z before XY rapids; keep-out zones and the move home are checked on export.
+
+## Docs to keep current
+
+- `docs/PARITY.md`: feature status against VCarve Pro. Update it when you add or finish a feature.
+- `docs/DECISIONS.md`: append a short entry for each non-obvious design decision.
+- `TESTING.md`: the manual test script and air-cut procedure.
+- `THIRD_PARTY.md`: any new vendored code and its licence.
+
+## Commits
+
+Conventional commits (`feat(cam): …`, `fix(post): …`), one logical change per commit, with
+build and tests green. Never commit the Vectric `*.exe` installers (they're gitignored).
