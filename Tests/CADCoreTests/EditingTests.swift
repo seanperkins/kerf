@@ -283,12 +283,39 @@ private func close(_ a: Vec2, _ b: Vec2, _ tol: Double = 1e-9) -> Bool { a.isApp
         #expect(g != nil)
         #expect(doc.expandToGroups([b.id]) == [b.id, a.id])
         #expect(doc.groupMembers(of: c.id) == [c.id])
-        // Grouping a group member with another shape absorbs the whole group.
+        // Grouping a group member with another shape nests the whole group inside the new one.
         let g2 = doc.group([a.id, c.id])!
         #expect(doc.shapes.allSatisfy { $0.groupID == g2 })
+        #expect(doc.groupDepth(of: a.id) == 2 && doc.groupDepth(of: c.id) == 1)
+        #expect(doc.group([a.id, b.id, c.id]) == nil)  // already exactly one group
+        // Ungroup peels one level: a and b are back in their own group.
         doc.ungroup([c.id])
-        #expect(doc.shapes.allSatisfy { $0.groupID == nil })
+        #expect(doc.shape(id: a.id)?.groupID == g && doc.shape(id: b.id)?.groupID == g)
+        #expect(doc.shape(id: c.id)?.groupID == nil)
+        doc.ungroup([a.id])
+        #expect(doc.shapes.allSatisfy { $0.groupID == nil && $0.innerGroupIDs == nil })
         #expect(doc.group([a.id]) == nil)
+    }
+
+    @Test func ungroupAllLevelsAndPruning() {
+        var doc = Document()
+        let l = doc.defaultLayerID
+        let a = Shape(layerID: l, paths: []), b = Shape(layerID: l, paths: []), c = Shape(layerID: l, paths: [])
+        [a, b, c].forEach { doc.add($0) }
+        let inner = doc.group([a.id, b.id])!
+        doc.group([a.id, c.id])
+        doc.ungroupAllLevels([b.id])
+        #expect(doc.shapes.allSatisfy { $0.groupID == nil && $0.innerGroupIDs == nil })
+        // Deleting the outer group's other member leaves a and b in their inner group.
+        doc.group([a.id, b.id])
+        doc.group([a.id, c.id])
+        doc.removeShapes(ids: [c.id])
+        doc.pruneSingletonGroups()
+        #expect(doc.groupDepth(of: a.id) == 2)  // the outer group still has two members
+        doc.removeShapes(ids: [b.id])
+        doc.pruneSingletonGroups()
+        #expect(doc.shape(id: a.id)?.groupID == nil)
+        _ = inner
     }
 
     @Test func singletonGroupsArePruned() {

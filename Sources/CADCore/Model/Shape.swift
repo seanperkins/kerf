@@ -27,6 +27,9 @@ public struct Shape: Codable, Hashable, Identifiable, Sendable {
     public var groupID: UUID?
     /// Live text the paths were outlined from (nil = plain vectors). Optional so older files decode.
     public var text: TextSpec?
+    /// Groups this shape belonged to before `groupID` was formed, outermost first (nested
+    /// groups: ungrouping restores them one level at a time). Nil = not nested.
+    public var innerGroupIDs: [UUID]?
 
     public init(id: UUID = UUID(), name: String = "", layerID: UUID, paths: [Path],
                 origin: ShapeOrigin = .drawn, isLocked: Bool = false, groupID: UUID? = nil, text: TextSpec? = nil) {

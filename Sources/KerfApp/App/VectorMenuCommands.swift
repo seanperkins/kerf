@@ -10,6 +10,13 @@ struct VectorMenuCommands: Commands {
 
     var body: some Commands {
         CommandMenu("Vectors") {
+            Button("Ungroup All Levels") {
+                guard let doc = document else { return }
+                let ids = doc.selectedShapes.map(\.id)
+                doc.perform("Ungroup All Levels") { $0.document.ungroupAllLevels(ids) }
+            }
+            .disabled(!(document?.selectedShapes.contains { $0.groupID != nil } ?? false))
+            Divider()
             sheetButton("Mirror…", .mirror)
             sheetButton("Shear / Distort…", .distort)
             Divider()

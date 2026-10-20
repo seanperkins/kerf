@@ -11,10 +11,14 @@ enum ShapeClipboard {
             var c = offset == .zero ? s : s.transformed(.translation(offset))
             c.id = UUID()
             if !layers.contains(c.layerID) { c.layerID = fallbackLayer }
-            if let g = s.groupID {
-                if groupMap[g] == nil { groupMap[g] = UUID() }
-                c.groupID = groupMap[g]
+            func remap(_ g: UUID) -> UUID {
+                if let n = groupMap[g] { return n }
+                let n = UUID()
+                groupMap[g] = n
+                return n
             }
+            c.groupID = s.groupID.map(remap)
+            c.innerGroupIDs = s.innerGroupIDs?.map(remap)
             return c
         }
     }
