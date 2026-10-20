@@ -28,6 +28,8 @@ struct KerfCommands: Commands {
             Button("Import…") { runImportPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(document == nil)
+            Button("Import 3D Model as 2D Parts…") { document?.runModelPartsPanel() }
+                .disabled(document == nil)
             Button("Export Vectors…") { runExportVectorsPanel() }
                 .disabled(document == nil)
             Button("Export G-code…") { document?.sheet = .exportGCode(.all) }

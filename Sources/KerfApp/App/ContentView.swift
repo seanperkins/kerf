@@ -58,6 +58,7 @@ struct ContentView: View {
             case .partLabels: PartLabelsSheet(document: document)
             case .variables: DocumentVariablesSheet(document: document)
             case .drawing(let kind): DrawingSheetHost(document: document, kind: kind)
+            case .io(let s): IOSheetHost(document: document, sheet: s)
             }
         }
         .alert(item: $document.alert) { a in

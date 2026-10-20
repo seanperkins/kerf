@@ -42,6 +42,8 @@ enum DocumentSheet: Identifiable, Equatable {
     case variables
     /// Drawing-tool dialogs (dog-bones, arrays, validator, …).
     case drawing(DrawingSheet)
+    /// File / IO dialogs (model parts, job notes, clipart…), see `IOSheets.swift`.
+    case io(IOSheet)
 
     var id: String {
         switch self {
@@ -59,6 +61,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .partLabels: return "partLabels"
         case .variables: return "variables"
         case .drawing(let d): return "drawing-\(d.rawValue)"
+        case .io(let s): return "io-\(s.id)"
         }
     }
 }
@@ -98,7 +101,7 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var tabEditingOperationID: UUID?
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
-    private var deferredAlert: AlertMessage?
+    var deferredAlert: AlertMessage?
     @Published var showToolpaths = true
     @Published var results: [UUID: ToolpathResult] = [:]
     @Published var calculating: Set<UUID> = []

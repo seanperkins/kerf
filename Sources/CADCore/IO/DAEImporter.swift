@@ -9,10 +9,31 @@ public struct DAEImporter: MeshImporter {
     public init() {}
 
     public func importMesh(from data: Data, targetUnits: LengthUnit) throws -> Mesh3D {
+        let tris = try parts(from: data, targetUnits: targetUnits, split: false).flatMap(\.triangles)
+        guard !tris.isEmpty else { throw KerfIOError.malformed("the COLLADA file contains no triangles") }
+        return STLImporter.indexed(tris, scale: 1)
+    }
+
+    /// One mesh per part: the scene's top-level nodes (SketchUp groups / component instances),
+    /// descending through single wrapper nodes that hold no geometry of their own. Used by
+    /// "Import 3D Model as 2D Parts".
+    public func importParts(from data: Data, targetUnits: LengthUnit) throws -> [MeshPart] {
+        let parts = try parts(from: data, targetUnits: targetUnits, split: true)
+            .filter { !$0.triangles.isEmpty }
+            .map { MeshPart(name: $0.name, mesh: STLImporter.indexed($0.triangles, scale: 1)) }
+            .filter { $0.mesh.triangleCount > 0 }
+        guard !parts.isEmpty else { throw KerfIOError.malformed("the COLLADA file contains no triangles") }
+        return parts
+    }
+
+    private typealias RawPart = (name: String, triangles: [(Vec3, Vec3, Vec3)])
+
+    private func parts(from data: Data, targetUnits: LengthUnit, split: Bool) throws -> [RawPart] {
         let root = try XMLTree.parse(data)
         guard root.name == "COLLADA" else { throw KerfIOError.malformed("not a COLLADA document") }
         var ids: [String: XMLTree] = [:]
         root.forEach { if let id = $0.attributes["id"] { ids[id] = $0 } }
+        func ref(_ url: String?) -> XMLTree? { url.flatMap { ids[String($0.dropFirst())] } }
 
         let asset = root.child("asset")
         let meter = asset?.child("unit")?.attributes["meter"].flatMap(Double.init) ?? 1
@@ -23,58 +44,96 @@ public struct DAEImporter: MeshImporter {
         if up == "Y_UP" { base = Matrix4.yUpToZUp.multiplied(by: base) }
         if up == "X_UP" { base = Matrix4.xUpToZUp.multiplied(by: base) }
 
-        var tris: [(Vec3, Vec3, Vec3)] = []
-        var depth = 0
-        func visit(_ node: XMLTree, _ parent: Matrix4) {
-            guard depth < 32 else { return }
-            depth += 1
-            defer { depth -= 1 }
+        func local(_ node: XMLTree, _ parent: Matrix4) -> Matrix4 {
             var m = parent
             for c in node.children {
+                let v = c.numbers
                 switch c.name {
-                case "matrix":
-                    let v = c.numbers
-                    if v.count == 16 { m = m.multiplied(by: Matrix4(rowMajor: v)) }
-                case "translate":
-                    let v = c.numbers
-                    if v.count == 3 { m = m.multiplied(by: .translation(v[0], v[1], v[2])) }
-                case "scale":
-                    let v = c.numbers
-                    if v.count == 3 { m = m.multiplied(by: .scale(v[0], v[1], v[2])) }
-                case "rotate":
-                    let v = c.numbers
-                    if v.count == 4 { m = m.multiplied(by: .rotation(axis: Vec3(v[0], v[1], v[2]), degrees: v[3])) }
+                case "matrix" where v.count == 16: m = m.multiplied(by: Matrix4(rowMajor: v))
+                case "translate" where v.count == 3: m = m.multiplied(by: .translation(v[0], v[1], v[2]))
+                case "scale" where v.count == 3: m = m.multiplied(by: .scale(v[0], v[1], v[2]))
+                case "rotate" where v.count == 4:
+                    m = m.multiplied(by: .rotation(axis: Vec3(v[0], v[1], v[2]), degrees: v[3]))
                 default: break
                 }
             }
+            return m
+        }
+
+        var depth = 0
+        func visit(_ node: XMLTree, _ parent: Matrix4, into tris: inout [(Vec3, Vec3, Vec3)]) {
+            guard depth < 32 else { return }
+            depth += 1
+            defer { depth -= 1 }
+            let m = local(node, parent)
             for c in node.children {
                 switch c.name {
                 case "instance_geometry":
-                    if let g = c.attributes["url"].flatMap({ ids[String($0.dropFirst())] }) {
+                    if let g = ref(c.attributes["url"]) {
                         tris += Self.triangles(of: g, ids: ids).map { (m.apply($0.0), m.apply($0.1), m.apply($0.2)) }
                     }
                 case "instance_node":
-                    if let n = c.attributes["url"].flatMap({ ids[String($0.dropFirst())] }) { visit(n, m) }
+                    if let n = ref(c.attributes["url"]) { visit(n, m, into: &tris) }
                 case "node":
-                    visit(c, m)
+                    visit(c, m, into: &tris)
                 default: break
                 }
             }
         }
 
-        let sceneURL = root.child("scene")?.child("instance_visual_scene")?.attributes["url"]
-        let scene = sceneURL.flatMap { ids[String($0.dropFirst())] }
-            ?? root.child("library_visual_scenes")?.child("visual_scene")
-        if let scene {
-            for n in scene.children where n.name == "node" { visit(n, base) }
-        } else {
-            // No scene: take every geometry untransformed.
-            for g in root.child("library_geometries")?.children ?? [] where g.name == "geometry" {
-                tris += Self.triangles(of: g, ids: ids).map { (base.apply($0.0), base.apply($0.1), base.apply($0.2)) }
+        /// Child nodes of `node` (instance_node targets resolved) with their parent matrix.
+        func childNodes(_ node: XMLTree, _ m: Matrix4) -> [(XMLTree, Matrix4)] {
+            node.children.compactMap { c in
+                switch c.name {
+                case "node": return (c, m)
+                case "instance_node": return ref(c.attributes["url"]).map { ($0, m) }
+                default: return nil
+                }
             }
         }
-        guard !tris.isEmpty else { throw KerfIOError.malformed("the COLLADA file contains no triangles") }
-        return STLImporter.indexed(tris, scale: 1)
+        /// A part's name: the node's name, or the component it instances when the node is an
+        /// unnamed / generated instance wrapper.
+        func name(_ node: XMLTree, index: Int) -> String {
+            let own = node.attributes["name"] ?? ""
+            let generic = own.isEmpty || own.lowercased().hasPrefix("instance")
+            if generic, let inst = node.children.first(where: { $0.name == "instance_node" }),
+               let target = ref(inst.attributes["url"]), let n = target.attributes["name"] ?? target.attributes["id"],
+               !n.isEmpty {
+                return n
+            }
+            return own.isEmpty ? "Part \(index + 1)" : own
+        }
+
+        let scene = ref(root.child("scene")?.child("instance_visual_scene")?.attributes["url"])
+            ?? root.child("library_visual_scenes")?.child("visual_scene")
+        guard let scene else {
+            // No scene: take every geometry untransformed (one part each).
+            let geoms = (root.child("library_geometries")?.children ?? []).filter { $0.name == "geometry" }
+            return geoms.enumerated().map { i, g in
+                (g.attributes["name"] ?? "Part \(i + 1)",
+                 Self.triangles(of: g, ids: ids).map { (base.apply($0.0), base.apply($0.1), base.apply($0.2)) })
+            }
+        }
+        var roots: [(XMLTree, Matrix4)] = scene.children.filter { $0.name == "node" }.map { ($0, base) }
+        if !split {
+            var all: [(Vec3, Vec3, Vec3)] = []
+            for (n, m) in roots { visit(n, m, into: &all) }
+            return [("Model", all)]
+        }
+        // Unwrap single wrapper nodes (e.g. one "SketchUp" node around the whole model).
+        var unwraps = 0
+        while roots.count == 1, unwraps < 32,
+              !roots[0].0.children.contains(where: { $0.name == "instance_geometry" }) {
+            let kids = childNodes(roots[0].0, local(roots[0].0, roots[0].1))
+            guard !kids.isEmpty else { break }
+            roots = kids
+            unwraps += 1
+        }
+        return roots.enumerated().map { i, r in
+            var tris: [(Vec3, Vec3, Vec3)] = []
+            visit(r.0, r.1, into: &tris)
+            return (name(r.0, index: i), tris)
+        }
     }
 
     /// Triangles of one `<geometry>` in its own coordinates.

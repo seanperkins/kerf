@@ -136,7 +136,7 @@ enum ImportService {
         switch error {
         case KerfIOError.notImplemented(let what): return "\(what) is not available in this build yet."
         case KerfIOError.unsupportedFormat("skp"):
-            return "SketchUp files cannot be read directly. In SketchUp use File > Export > 3D Model and choose COLLADA (.dae) or STL, then import that file."
+            return "SketchUp files cannot be read directly. In SketchUp use File > Export > 3D Model and choose COLLADA (.dae) or STL, then import that file: File > Import… places it as a 3D model; File > Import 3D Model as 2D Parts… turns each group or component into a flat outline to cut."
         case KerfIOError.unsupportedFormat(let ext): return "Kerf cannot import .\(ext) files."
         case KerfIOError.malformed(let msg): return "The file could not be read: \(msg)"
         default: return error.localizedDescription

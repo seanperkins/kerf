@@ -68,7 +68,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `io-image-crop` | io | Picture editing: position, size, crop and fade a placed bitmap | done | P3 | *r2* PlacedImage.crop/opacity, Panels/ImagePanels.swift image editor |
 | `io-stl-import` | io | STL 3D model import | done | P1 | CADCore/IO/STLImporter.swift, ModelPlacementSheet; STLImporterTests |
 | `io-obj-3d-import` | io | OBJ / other 3D formats import | done | P2 | OBJ model import |
-| `io-skp-import` | io | SketchUp import | partial | P3 | No .skp reader (needs Trimble SDK); COLLADA .dae importer instead, with guidance on .skp |
+| `io-skp-import` | io | SketchUp import | partial | P3 | No .skp reader (needs Trimble SDK); SketchUp COLLADA export imports as a 3D model or, via File > Import 3D Model as 2D Parts…, as flat part outlines (CADCore/IO/MeshParts.swift; IOMeshPartsTests, IOModelPartsTests) |
 | `io-vector-export` | io | Vector export (SVG, DXF) | done | P1 | CADCore/IO/SVGExporter.swift, DXFExporter.swift; KerfCommands Export Vectors |
 | `io-eps-ai-export` | io | EPS / AI / PDF vector export | done | P3 | EPS / AI export |
 | `io-project-file` | io | Native project file with versioning | done | P1 | CADCore/Persistence/KerfFile.swift; IOKerfFileTests, DocumentTests |
