@@ -28,6 +28,9 @@ struct NestingOptions: Equatable {
     var precision: NestPrecision = .normal
     /// Keep clear of vectors that are not being nested.
     var avoidOtherVectors = true
+    /// Put parts that do not fit on the material onto extra sheets (layers "Sheet 2", …).
+    var overflowSheets = false
+    var maxSheets = 10
 
     static func defaults(for units: LengthUnit) -> NestingOptions {
         units == .inch ? NestingOptions(spacing: 0.375, margin: 0.25)
@@ -67,6 +70,8 @@ enum NestingCommands {
     /// Copies beyond the first are new shapes and are added to every toolpath that uses the
     /// original. Parts that do not fit stay where they are.
     static func nest(_ ids: [UUID], options: NestingOptions, in project: inout KerfProject) -> NestingReport {
+        // Nesting always fills sheet 1 first, so put it on the material.
+        NestSheets.activate(1, in: &project.document)
         let doc = project.document
         let shapes = doc.shapes(ids: doc.expandToGroups(ids)).filter { project.isEditable($0) }
         let tol = doc.units == .inch ? 0.002 : 0.05
@@ -77,34 +82,60 @@ enum NestingCommands {
         let moving = Set(groups.flatMap(\.shapeIDs))
         var obstacles: [[Vec2]] = []
         if options.avoidOtherVectors {
-            let others = doc.shapes.filter { !moving.contains($0.id) && project.isVisible($0) }
+            let onMaterial = NestSheets.activeDocument(doc)
+            let others = onMaterial.shapes.filter { !moving.contains($0.id) && project.isVisible($0) }
             for s in others { obstacles += NestPartBuilder.parts(from: [s], tolerance: tol).flatMap(\.outline) }
         }
         let parts = groups.map { NestPart(outline: $0.outline, quantity: max(1, options.quantity)) }
-        let result = Nester.nest(parts, settings: options.settings(for: doc.job), firstSheetObstacles: obstacles)
+        let sheets = options.overflowSheets ? max(1, options.maxSheets) : 1
+        let result = Nester.nest(parts, settings: options.settings(for: doc.job, maxSheets: sheets),
+                                 firstSheetObstacles: obstacles)
         return apply(result, groups: groups, in: &project)
     }
 
-    /// Moves originals / creates copies according to `result`.
+    /// Moves originals / creates copies according to `result`. Sheet 1 is the material; parts
+    /// for sheet k ≥ 2 go to that sheet's layer, parked beside the material.
     static func apply(_ result: NestResult, groups: [NestPartGroup], in project: inout KerfProject) -> NestingReport {
         var placedIDs: [UUID] = []
         // Copies are made from the shapes as they were before any part moved.
         let before = Dictionary(uniqueKeysWithValues: project.document.shapes.map { ($0.id, $0) })
+        let baseLayer = project.document.layers.first { $0.sheet == nil }?.id ?? project.document.defaultLayerID
         for pl in result.placements {
             let group = groups[pl.part]
+            var t = pl.transform
+            var layer: UUID?
+            if pl.sheet > 0 {
+                let n = pl.sheet + 1
+                layer = NestSheets.ensureLayer(forSheet: n, in: &project.document)
+                t = t.concatenating(.translation(NestSheets.offset(ofSheet: n, in: project.document)))
+            }
             if pl.copy == 0 {
-                project.transformShapes(Set(group.shapeIDs), by: pl.transform)
+                let ids = Set(group.shapeIDs)
+                project.transformShapes(ids, by: t)
+                for i in project.document.shapes.indices where ids.contains(project.document.shapes[i].id) {
+                    let onSheetLayer = project.document.layer(id: project.document.shapes[i].layerID)?.sheet != nil
+                    if let l = layer {
+                        project.document.shapes[i].layerID = l
+                    } else if onSheetLayer {
+                        project.document.shapes[i].layerID = baseLayer
+                    }
+                }
                 placedIDs += group.shapeIDs
             } else {
                 let originals = group.shapeIDs.compactMap { before[$0] }
                 var groupMap: [UUID: UUID] = [:]
                 var idMap: [UUID: UUID] = [:]
                 for s in originals {
-                    var c = s.transformed(pl.transform)
+                    var c = s.transformed(t)
                     c.id = UUID()
                     if let g = s.groupID {
                         if groupMap[g] == nil { groupMap[g] = UUID() }
                         c.groupID = groupMap[g]
+                    }
+                    if let l = layer {
+                        c.layerID = l
+                    } else if project.document.layer(id: c.layerID)?.sheet != nil {
+                        c.layerID = baseLayer
                     }
                     project.document.add(c)
                     idMap[s.id] = c.id
@@ -113,6 +144,7 @@ enum NestingCommands {
                 addCopies(idMap, toOperationsOf: &project)
             }
         }
+        NestSheets.removeEmptySheets(in: &project.document)
         return NestingReport(parts: groups.count, placed: result.placements.count, unplaced: result.unplacedCount,
                              sheets: result.sheetsUsed, utilisation: result.utilisation, placedShapeIDs: placedIDs)
     }
@@ -130,6 +162,6 @@ enum NestingCommands {
 }
 
 extension KerfProject {
-    /// Layers left out of the "vectors outside the material" check.
-    var layoutIgnoredLayers: Set<UUID> { [] }
+    /// Layers left out of the "vectors outside the material" check: sheets parked beside it.
+    var layoutIgnoredLayers: Set<UUID> { NestSheets.parkedLayerIDs(in: document) }
 }

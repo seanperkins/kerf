@@ -43,6 +43,11 @@ struct NestingSheet: View {
                 IntField("Copies of each part", value: $options.quantity, range: 1...500)
                 Toggle("Nest small parts inside holes", isOn: $options.nestInHoles)
                 Toggle("Keep clear of other vectors", isOn: $options.avoidOtherVectors)
+                Toggle("Put parts that do not fit on extra sheets", isOn: $options.overflowSheets)
+                    .help("Extra sheets are layers \"Sheet 2\", \"Sheet 3\", … shown beside the material")
+                if options.overflowSheets {
+                    IntField("Maximum sheets", value: $options.maxSheets, range: 2...100)
+                }
                 Picker("Precision", selection: $options.precision) {
                     ForEach(NestPrecision.allCases) { Text($0.title).tag($0) }
                 }

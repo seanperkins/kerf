@@ -56,6 +56,23 @@ struct JobSheet: Equatable {
     var materialSize: Vec2
     var layerColors: [UUID: String]
 
+    /// One entry per nesting sheet (shapes moved onto the material frame), or nil when the
+    /// document has a single sheet.
+    static func sheets(of project: KerfProject) -> [Sheet]? {
+        let doc = project.document
+        guard NestSheets.hasSheets(doc) else { return nil }
+        let active = NestSheets.activeSheet(in: doc)
+        return NestSheets.numbers(in: doc).map { n in
+            let shapes = NestSheets.shapes(onSheet: n, in: doc).filter { project.isVisible($0) || n != active }
+            let parts = NestPartBuilder.parts(from: shapes).enumerated().map { i, part in
+                part.shapeIDs.lazy.compactMap { id in shapes.first { $0.id == id }?.name }.first { !$0.isEmpty }
+                    ?? "Part \(i + 1)"
+            }
+            return Sheet(title: "Sheet \(n)" + (n == active ? " (on the material now)" : ""), shapes: shapes,
+                         partNames: parts)
+        }
+    }
+
     static func fmt(_ v: Double, _ units: LengthUnit) -> String {
         RulerTicks.label((v * 10000).rounded() / 10000) + " " + units.abbreviation
     }

@@ -111,6 +111,14 @@ struct KerfCommands: Commands {
             Menu("Layout") {
                 Button("Nest Parts…") { document?.sheet = .nesting }
                     .disabled(document?.project.document.shapes.isEmpty ?? true)
+                Menu("Sheet on Material") {
+                    ForEach(document.map { NestSheets.numbers(in: $0.document) } ?? [1], id: \.self) { n in
+                        Button("Sheet \(n)" + (document.map { NestSheets.activeSheet(in: $0.document) == n } == true ? " ✓" : "")) {
+                            document?.showSheetOnMaterial(n)
+                        }
+                    }
+                }
+                .disabled(!(document.map { NestSheets.hasSheets($0.document) } ?? false))
             }
             Divider()
             Toggle("Snap to Grid", isOn: Binding(get: { document?.snapToGrid ?? true }, set: { document?.snapToGrid = $0 }))

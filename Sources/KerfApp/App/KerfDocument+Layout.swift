@@ -31,6 +31,12 @@ extension KerfDocument {
     func makeJobSheet(date: Date = Date()) -> JobSheet {
         JobSheet.make(project: project, results: results, profile: postProfile,
                       groupByTool: UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey),
-                      rapidRate: rapidRateInDocumentUnits, date: date)
+                      rapidRate: rapidRateInDocumentUnits, date: date, sheets: JobSheet.sheets(of: project))
+    }
+
+    /// Design > Layout > Sheet on Material: swaps which nesting sheet is machined.
+    func showSheetOnMaterial(_ n: Int) {
+        perform("Sheet \(n) on Material") { NestSheets.activate(n, in: &$0.document) }
+        requestCanvas(.fit)
     }
 }
