@@ -1,0 +1,214 @@
+import CADCore
+import CAMCore
+import Foundation
+import Testing
+@testable import PostCore
+
+private let tool = PostFixtures.endMill
+
+private func job(_ tps: [Toolpath], units: LengthUnit = .inch) -> PostJob {
+    PostJob(name: "T", units: units, job: PostFixtures.job(), toolpaths: tps)
+}
+
+private func lines(_ program: String) -> [String] { program.split(separator: "\n").map(String.init) }
+
+/// Lines after the last header/tool-change comment for the first toolpath.
+private func body(_ program: String) -> [String] {
+    let l = lines(program)
+    guard let i = l.firstIndex(where: { $0.hasPrefix("( Toolpath:") }) else { return [] }
+    return Array(l[(i + 1)...])
+}
+
+@Test func postRequiresToolpaths() {
+    #expect(throws: PostError.noToolpaths) {
+        try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(job([]))
+    }
+    let empty = Toolpath(name: "e", kind: .profile, tool: tool)
+    #expect(throws: PostError.noToolpaths) {
+        try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(job([empty]))
+    }
+}
+
+@Test func postRejectsSpindleSpeedOutsideMachineRange() {
+    let tp = Toolpath(name: "x", kind: .profile, tool: tool, spindleRPM: 30000,
+                      moves: [.rapid(to: Vec3(0, 0, 0.2))])
+    #expect(throws: PostError.spindleSpeedOutOfRange(30000)) {
+        try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(job([tp]))
+    }
+}
+
+@Test func xyRapidBelowSafeZIsPrecededByRetract() throws {
+    let tp = Toolpath(name: "x", kind: .profile, tool: tool, moves: [
+        .rapid(to: Vec3(0, 0, 0.2)),
+        .linear(to: Vec3(0, 0, -0.1), feed: 30),
+        .rapid(to: Vec3(2, 0, -0.05)),   // bad generator output: XY rapid low
+    ])
+    let b = body(try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(job([tp])))
+    #expect(Array(b.prefix(5)) == ["G0 X0.0000 Y0.0000", "G1 Z-0.1000 F30.0", "G0 Z0.2000",
+                                   "X2.0000", "Z-0.0500"])
+}
+
+@Test func feedIsModalUnlessProfileDisablesIt() throws {
+    let tp = Toolpath(name: "x", kind: .profile, tool: tool, moves: [
+        .rapid(to: Vec3(0, 0, 0.2)),
+        .linear(to: Vec3(0, 0, -0.1), feed: 30),
+        .linear(to: Vec3(1, 0, -0.1), feed: 100),
+        .linear(to: Vec3(1, 1, -0.1), feed: 100),
+        .rapid(to: Vec3(1, 1, 0.2)),
+    ])
+    let modal = body(try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(job([tp])))
+    #expect(Array(modal.prefix(4)) == ["G0 X0.0000 Y0.0000", "G1 Z-0.1000 F30.0", "X1.0000 F100.0", "Y1.0000"])
+
+    var p = BuiltInPosts.avidMach4Inch
+    p.modal = false
+    let full = body(try TemplatePostProcessor(profile: p).post(job([tp])))
+    #expect(full[3] == "G1 X1.0000 Y1.0000 Z-0.1000 F100.0")
+}
+
+@Test func arcsAsIncrementalAbsoluteOrLinearized() throws {
+    let tp = Toolpath(name: "x", kind: .profile, tool: tool, moves: [
+        .rapid(to: Vec3(2, 1, 0.2)),
+        .linear(to: Vec3(2, 1, -0.1), feed: 30),
+        .arcCW(to: Vec3(0, 1, -0.1), center: Vec2(1, 1), feed: 100),
+        .rapid(to: Vec3(0, 1, 0.2)),
+    ])
+    var p = BuiltInPosts.avidMach4Inch
+    #expect(body(try TemplatePostProcessor(profile: p).post(job([tp])))[2]
+            == "G2 X0.0000 Y1.0000 I-1.0000 J0.0000 F100.0")
+    p.arcOutput = .absoluteIJ
+    #expect(body(try TemplatePostProcessor(profile: p).post(job([tp])))[2]
+            == "G2 X0.0000 Y1.0000 I1.0000 J1.0000 F100.0")
+    p.arcOutput = .linearize
+    let lin = try TemplatePostProcessor(profile: p).post(job([tp]))
+    #expect(!lines(lin).contains { $0.hasPrefix("G2 ") || $0.hasPrefix("G3 ") })
+    let pts = body(lin).dropFirst(2).prefix { !$0.hasPrefix("G0") }
+    #expect(pts.count > 20)
+    #expect(pts.last?.contains("X0.0000 Y1.0000") == true)
+    // Every linearised point lies on the unit circle around (1,1) and below the start (CW from +X).
+    #expect(lin.components(separatedBy: "\n").contains { $0.contains("Y0.0") })
+}
+
+@Test func helicalArcsAreLinearizedWhenUnsupported() throws {
+    let tp = Toolpath(name: "x", kind: .profile, tool: tool, moves: [
+        .rapid(to: Vec3(2, 1, 0.2)),
+        .linear(to: Vec3(2, 1, 0), feed: 30),
+        .arcCCW(to: Vec3(2, 1, -0.1), center: Vec2(1, 1), feed: 100),   // full-circle helix
+        .rapid(to: Vec3(2, 1, 0.2)),
+    ])
+    var p = BuiltInPosts.avidMach4Inch
+    #expect(body(try TemplatePostProcessor(profile: p).post(job([tp])))[2]
+            == "G3 X2.0000 Y1.0000 Z-0.1000 I-1.0000 J0.0000 F100.0")
+    p.helicalArcs = false
+    let out = try TemplatePostProcessor(profile: p).post(job([tp]))
+    #expect(!lines(out).contains { $0.hasPrefix("G3 ") })
+}
+
+@Test func lineNumbersSkipComments() throws {
+    var p = BuiltInPosts.avidMach4Inch
+    p.lineNumbers = true
+    let l = lines(try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()))
+    #expect(l.first?.hasPrefix("(") == true)
+    let numbered = l.filter { $0.hasPrefix("N") }
+    #expect(numbered.first == "N10 G20")
+    #expect(numbered.count == l.filter { !$0.hasPrefix("(") }.count)
+    #expect(l.contains("(Change to Tool: 1/4\" End Mill [2 flute])"))
+}
+
+@Test func toolLengthOffsetIsOptional() throws {
+    var p = BuiltInPosts.avidMach4Inch
+    #expect(!(try TemplatePostProcessor(profile: p).post(PostFixtures.postJob())).contains("G43"))
+    p.useToolLengthOffset = true
+    let l = lines(try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()))
+    let i = try #require(l.firstIndex(of: "T1 M6"))
+    #expect(l[i + 1] == "G43 H1")
+    #expect(l.contains("G43 H6"))
+}
+
+@Test func combinedExportGroupsByToolWithOneChangeEach() throws {
+    let tps = PostFixtures.toolpaths()
+    let a2 = Toolpath(name: "Pocket 1", kind: .pocket, tool: PostFixtures.endMill, moves: tps[0].moves)
+    let out = try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch)
+        .postCombined(job([tps[0], tps[1], a2]))
+    let l = lines(out)
+    #expect(l.filter { $0 == "T1 M6" }.count == 1)
+    #expect(l.filter { $0 == "T6 M6" }.count == 1)
+    let names = l.filter { $0.hasPrefix("( Toolpath:") }
+    #expect(names == ["( Toolpath: Profile 1 [Profile] )", "( Toolpath: Pocket 1 [Pocket] )",
+                      "( Toolpath: V-Carve 1 [V-Carve] )"])
+    // Spindle stops before every tool change.
+    for (i, line) in l.enumerated() where line.hasSuffix(" M6") { #expect(l[i - 2] == "M5") }
+}
+
+@Test func rpmChangeWithinToolRestartsSpindle() throws {
+    let tps = PostFixtures.toolpaths()
+    let slower = Toolpath(name: "Slow", kind: .profile, tool: PostFixtures.endMill, spindleRPM: 12000,
+                          moves: tps[0].moves)
+    let l = lines(try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(job([tps[0], slower])))
+    #expect(l.filter { $0.hasPrefix("M3 ") } == ["M3 S18000", "M3 S12000"])
+    #expect(l.filter { $0 == "G4 P3" }.count == 2)
+}
+
+@Test func dwellMovesAndSpindleDwellUseTemplate() throws {
+    var p = BuiltInPosts.avidMach4Inch
+    p.spindleDwellSeconds = 0
+    let tp = Toolpath(name: "d", kind: .drill, tool: PostFixtures.endMill, moves: [
+        .rapid(to: Vec3(1, 1, 0.2)), .linear(to: Vec3(1, 1, -0.2), feed: 20), .dwell(seconds: 0.5),
+        .rapid(to: Vec3(1, 1, 0.2)),
+    ])
+    let l = lines(try TemplatePostProcessor(profile: p).post(job([tp])))
+    #expect(l.filter { $0.hasPrefix("G4 ") } == ["G4 P0.5"])
+}
+
+@Test func millimetreDocumentPostedInInches() throws {
+    let tp = Toolpath(name: "x", kind: .profile, tool: PostFixtures.endMill.converted(to: .millimeter), moves: [
+        .rapid(to: Vec3(25.4, 50.8, 5.08)),
+        .linear(to: Vec3(25.4, 50.8, -6.35), feed: 762),
+        .rapid(to: Vec3(25.4, 50.8, 5.08)),
+    ])
+    let pj = PostJob(name: "mm", units: .millimeter, job: PostFixtures.job().scaled(by: 25.4), toolpaths: [tp])
+    let out = try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(pj)
+    #expect(body(out).prefix(2) == ["G0 X1.0000 Y2.0000", "G1 Z-0.2500 F30.0"])
+    #expect(out.contains("( Material: 12.0000 x 8.0000 x 0.7500 in )"))
+}
+
+@Test func headerDescribesJob() throws {
+    let out = try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(PostFixtures.postJob())
+    for s in ["( Job: Golden )", "( Post: Avid PRO6096 Mach4 [inch] v1.0 )",
+              "( Z zero: material top [bottom at Z-0.7500] )", "( XY origin: lower left )",
+              "(   T6: 60 deg V-Bit 1/2\" - V-Bit, dia 0.5000 in )", "( Estimated time: "] {
+        #expect(out.contains(s), "missing \(s)")
+    }
+    var p = BuiltInPosts.avidMach4Inch
+    p.headerComments = false
+    #expect(lines(try TemplatePostProcessor(profile: p).post(PostFixtures.postJob())).first == "G20")
+}
+
+@Test func customProfileFromJSONWithSemicolonComments() throws {
+    var p = BuiltInPosts.genericGRBLMM
+    p.id = "custom"; p.commentStyle = .semicolon; p.footer = ["M5", "M2"]
+    let loaded = try PostProfile.fromJSON(p.toJSON())
+    let out = try TemplatePostProcessor(profile: loaded).post(PostFixtures.postJob())
+    #expect(out.hasPrefix("; Job: Golden\n"))
+    #expect(out.hasSuffix("M5\nM2\n"))
+    #expect(TemplatePostProcessor(profile: loaded).fileName(for: "Sign") == "Sign.nc")
+    #expect(TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).fileName(for: "") == "Untitled.tap")
+}
+
+@Test func timeEstimateCountsFeedsRapidsAndDwells() {
+    let tp = Toolpath(name: "x", kind: .profile, tool: tool, moves: [
+        .rapid(to: Vec3(0, 0, 0)),
+        .linear(to: Vec3(10, 0, 0), feed: 60),     // 10 s
+        .rapid(to: Vec3(10, 60, 0)),               // 60 in at 600 ipm = 6 s
+        .dwell(seconds: 2),
+    ])
+    let t = PostTimeEstimator.estimate([tp], rapidRate: 600, spindleDwell: 3)
+    #expect(abs(t - 21) < 1e-9)
+}
+
+@Test func numberFormatting() {
+    #expect(NumberFormat.fixed(-0.00001, decimals: 4) == "0.0000")
+    #expect(NumberFormat.fixed(1.23456, decimals: 3) == "1.235")
+    #expect(NumberFormat.compact(3) == "3" && NumberFormat.compact(0.25) == "0.25")
+    #expect(NumberFormat.duration(3725) == "1h 02m 05s")
+    #expect(PostProfile.asciiOnly("90° café") == "90 deg cafe")
+}
