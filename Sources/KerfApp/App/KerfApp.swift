@@ -31,7 +31,10 @@ struct KerfApp: App {
                 .environmentObject(toolLibrary)
                 .frame(minWidth: 1000, minHeight: 640)
         }
-        .commands { KerfCommands() }
+        .commands {
+            KerfCommands()
+            VectorMenuCommands()
+        }
 
         Window("Tool Database", id: ToolDatabaseView.windowID) {
             ToolDatabaseView()

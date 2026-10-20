@@ -17,6 +17,14 @@ import Testing
         #expect(out[2].groupID == nil)
     }
 
+    @Test func copiesRemapNestedGroups() {
+        let l = UUID(), outer = UUID(), inner = UUID()
+        var a = Shape(layerID: l, paths: [], groupID: outer)
+        a.innerGroupIDs = [inner]
+        let out = ShapeClipboard.copies(of: [a], offset: .zero, layers: [l], fallbackLayer: l)
+        #expect(out[0].groupID != outer && out[0].innerGroupIDs?.count == 1 && out[0].innerGroupIDs?[0] != inner)
+    }
+
     @Test func pasteOffsetsOnlyWhenOriginalsExist() {
         let s = Shape(layerID: UUID(), paths: [])
         #expect(ShapeClipboard.pasteOffset(for: [s], existing: [s.id], grid: 0.25) == Vec2(0.25, -0.25))

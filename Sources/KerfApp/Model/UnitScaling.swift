@@ -234,6 +234,13 @@ extension Document {
         }
         d.otherSheets = otherSheets?.map { var s = $0; s.job = $0.job.scaled(by: f); return s }
         d.images = images?.map { var i = $0; i.rect = Rect2(min: $0.rect.min * f, max: $0.rect.max * f); return i }
+        d.guides = guides?.map { GuideLine(isVertical: $0.isVertical, position: $0.position * f) }
+        d.dimensions = dimensions?.map { dim in
+            var c = dim
+            c.points = dim.points.map { $0 * f }
+            c.offset = dim.offset * f
+            return c
+        }
         return d
     }
 }

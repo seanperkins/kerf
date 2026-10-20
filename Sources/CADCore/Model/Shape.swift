@@ -25,11 +25,16 @@ public struct Shape: Codable, Hashable, Identifiable, Sendable {
     /// Shapes sharing a group ID are selected and transformed together (nil = ungrouped).
     /// Optional so files written before grouping existed still decode.
     public var groupID: UUID?
+    /// Live text the paths were outlined from (nil = plain vectors). Optional so older files decode.
+    public var text: TextSpec?
+    /// Groups this shape belonged to before `groupID` was formed, outermost first (nested
+    /// groups: ungrouping restores them one level at a time). Nil = not nested.
+    public var innerGroupIDs: [UUID]?
 
     public init(id: UUID = UUID(), name: String = "", layerID: UUID, paths: [Path],
-                origin: ShapeOrigin = .drawn, isLocked: Bool = false, groupID: UUID? = nil) {
+                origin: ShapeOrigin = .drawn, isLocked: Bool = false, groupID: UUID? = nil, text: TextSpec? = nil) {
         self.id = id; self.name = name; self.layerID = layerID; self.paths = paths
-        self.origin = origin; self.isLocked = isLocked; self.groupID = groupID
+        self.origin = origin; self.isLocked = isLocked; self.groupID = groupID; self.text = text
     }
 
     public var isClosed: Bool { !paths.isEmpty && paths.allSatisfy(\.isClosed) }
@@ -41,6 +46,7 @@ public struct Shape: Codable, Hashable, Identifiable, Sendable {
     public func transformed(_ t: Transform2D) -> Shape {
         var s = self
         s.paths = paths.map { $0.transformed(t) }
+        s.text?.transform = (text?.transform ?? .identity).concatenating(t)
         return s
     }
 }

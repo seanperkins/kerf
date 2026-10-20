@@ -28,15 +28,18 @@ public struct TextOutliner: Sendable {
     /// Outline paths for `text`; `alignment` positions each line relative to `origin.x`.
     /// `lineSpacing` multiplies the font's natural line height.
     public func outlines(for text: String, fontName: String, size: Double, origin: Vec2,
-                         alignment: TextAlignment, lineSpacing: Double = 1) throws -> [Path] {
+                         alignment: TextAlignment, lineSpacing: Double = 1, letterSpacing: Double = 0) throws -> [Path] {
         guard size > 0 else { return [] }
         let font = try Self.font(named: fontName, capHeight: size)
         let lineHeight = (CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)) * lineSpacing
         var out: [Path] = []
         for (i, line) in text.components(separatedBy: "\n").enumerated() where !line.isEmpty {
-            let attr = NSAttributedString(string: line, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+            var attrs: [NSAttributedString.Key: Any] = [NSAttributedString.Key(kCTFontAttributeName as String): font]
+            if letterSpacing != 0 { attrs[NSAttributedString.Key(kCTKernAttributeName as String)] = letterSpacing }
+            let attr = NSAttributedString(string: line, attributes: attrs)
             let ctLine = CTLineCreateWithAttributedString(attr)
-            let width = CTLineGetTypographicBounds(ctLine, nil, nil, nil)
+            // Kerning follows every character, the last included: not part of the visible width.
+            let width = CTLineGetTypographicBounds(ctLine, nil, nil, nil) - letterSpacing
             let factor: Double = alignment == .left ? 0 : alignment == .center ? 0.5 : 1
             let lineOrigin = Vec2(origin.x - width * factor, origin.y - Double(i) * lineHeight)
             out += glyphOutlines(ctLine, at: lineOrigin, fallback: font)
@@ -64,6 +67,27 @@ public struct TextOutliner: Sendable {
         let font = CTFontCreateCopyWithAttributes(try Self.font(named: fontName, capHeight: 70), pointSize, nil, nil)
         let attr = NSAttributedString(string: text, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
         return CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attr), nil, nil, nil)
+    }
+
+    /// Outlines of live text, in document coordinates.
+    public func outlines(for spec: TextSpec) throws -> [Path] {
+        if let adj = spec.letterAdjustments, !adj.isEmpty {
+            return try TextKerning.outlines(for: spec, adjustments: adj, outliner: self)
+        }
+        if StrokeFont.isStrokeFont(spec.fontName) {
+            return StrokeFont.outlines(for: spec.string, size: spec.size, origin: .zero, alignment: spec.alignment,
+                                       lineSpacing: spec.lineSpacing, letterSpacing: spec.letterSpacing)
+                .map { $0.transformed(spec.transform) }
+        }
+        return try outlines(for: spec.string, fontName: spec.fontName, size: spec.size, origin: .zero, alignment: spec.alignment,
+                     lineSpacing: spec.lineSpacing, letterSpacing: spec.letterSpacing)
+            .map { $0.transformed(spec.transform) }
+    }
+
+    /// An editable text `Shape` built from `spec`.
+    public func shape(for spec: TextSpec, layerID: UUID) throws -> Shape {
+        Shape(name: spec.string.replacingOccurrences(of: "\n", with: " "), layerID: layerID, paths: try outlines(for: spec),
+              origin: .text(spec.string, fontName: spec.fontName, size: spec.displayedSize), text: spec)
     }
 
     /// A text `Shape` (provenance recorded for re-editing).

@@ -11,10 +11,14 @@ enum ShapeClipboard {
             var c = offset == .zero ? s : s.transformed(.translation(offset))
             c.id = UUID()
             if !layers.contains(c.layerID) { c.layerID = fallbackLayer }
-            if let g = s.groupID {
-                if groupMap[g] == nil { groupMap[g] = UUID() }
-                c.groupID = groupMap[g]
+            func remap(_ g: UUID) -> UUID {
+                if let n = groupMap[g] { return n }
+                let n = UUID()
+                groupMap[g] = n
+                return n
             }
+            c.groupID = s.groupID.map(remap)
+            c.innerGroupIDs = s.innerGroupIDs?.map(remap)
             return c
         }
     }
@@ -52,7 +56,9 @@ extension KerfProject {
     @discardableResult
     mutating func editNodes(of id: UUID, _ f: (Shape) -> Shape?) -> Bool {
         guard let i = document.shapes.firstIndex(where: { $0.id == id }), isEditable(document.shapes[i]),
-              let s = f(document.shapes[i]) else { return false }
+              var s = f(document.shapes[i]) else { return false }
+        // Node edits turn live text into plain curves.
+        if s.paths != document.shapes[i].paths { s.text = nil }
         document.shapes[i] = s
         return true
     }

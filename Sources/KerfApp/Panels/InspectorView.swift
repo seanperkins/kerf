@@ -62,23 +62,39 @@ struct DrawingOptionsView: View {
             case .pen:
                 Text("Click for a corner node, click-drag for a smooth node. Click the first node to close; double-click or Return to finish; Delete removes the last node.")
                     .font(.callout).foregroundStyle(.secondary)
+            case .arc:
+                ArcToolOptions(document: document)
+            case .trim:
+                TrimToolOptions(document: document)
+            case .measure:
+                MeasureToolOptions(document: document)
+            case .dimension:
+                DimensionToolOptions(document: document)
+            case .freehand:
+                Text("Drag to sketch. The stroke is smoothed into curves when you let go; end near the start to close it.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .text:
-                TextField("Text", text: $document.drawingOptions.text)
+                TextField("Text", text: $document.drawingOptions.text, axis: .vertical).lineLimit(1...6)
                 Picker("Font", selection: $document.drawingOptions.fontName) {
                     ForEach(fonts, id: \.self) { Text($0).tag($0) }
                 }
                 LengthField("Height", value: $document.drawingOptions.fontSize, units: units)
-                Text("Click on the canvas to place the text baseline.").font(.callout).foregroundStyle(.secondary)
+                TextLayoutFields(alignment: $document.drawingOptions.textAlignment,
+                                 lineSpacing: $document.drawingOptions.lineSpacing,
+                                 letterSpacing: $document.drawingOptions.letterSpacing, units: units)
+                Text("Click on the canvas to place the text. The click is the start, centre or end of the first baseline, following the justification. Text stays editable until converted to curves.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .select, .nodeEdit:
                 EmptyView()
             }
+            QuickEntryHelp(tool: document.activeTool)
             Toggle("Snap to grid", isOn: $document.snapToGrid)
             Toggle("Snap to objects", isOn: $document.snapToObjects)
             Button("Done") { document.activeTool = .select }
         }
         .onAppear {
             let fromCore = TextOutliner.availableFontNames()
-            fonts = fromCore.isEmpty ? NSFontManager.shared.availableFontFamilies : fromCore
+            fonts = [StrokeFont.name] + (fromCore.isEmpty ? NSFontManager.shared.availableFontFamilies : fromCore)
             if !fonts.contains(document.drawingOptions.fontName), let f = fonts.first { document.drawingOptions.fontName = f }
         }
         if document.activeTool.isDragShape {
@@ -119,6 +135,10 @@ struct ShapeInspector: View {
                                                set: { l in document.perform("Move to Layer") { $0.moveShapes(ids, toLayer: l) } })) {
                 ForEach(document.document.layers) { Text($0.name).tag($0.id) }
             }
+        }
+        if shapes.count == 1, let s = shapes.first, s.text != nil {
+            Divider()
+            TextEditSection(document: document, shape: s).id(s.id)
         }
         Divider()
         InspectorSection(title: "Position & Size") {

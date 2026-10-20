@@ -40,6 +40,8 @@ enum DocumentSheet: Identifiable, Equatable {
     case tiling
     case partLabels
     case variables
+    /// Drawing-tool dialogs (dog-bones, arrays, validator, …).
+    case drawing(DrawingSheet)
 
     var id: String {
         switch self {
@@ -56,6 +58,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .tiling: return "tiling"
         case .partLabels: return "partLabels"
         case .variables: return "variables"
+        case .drawing(let d): return "drawing-\(d.rawValue)"
         }
     }
 }
@@ -122,6 +125,12 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
     /// Cursor position in document units (for the status bar).
     @Published var cursorPosition: Vec2?
+    /// Problem locations circled on the canvas (vector validator); cleared by the user.
+    @Published var highlightMarkers: [Vec2] = []
+    /// Snap to guides (and, with object snapping, to horizontal/vertical lines through nodes).
+    @Published var snapToGuides = true
+    /// Last Measure-tool reading (shown on the canvas and in the inspector).
+    @Published var measurement: Measurement?
 
     weak var undoManager: UndoManager?
     /// Where the document is saved (from the window's document configuration), for the Finder icon.

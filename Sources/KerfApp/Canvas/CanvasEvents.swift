@@ -28,6 +28,7 @@ extension CanvasNSView {
         if spaceHeld || event.modifierFlags.contains(.option) && doc.activeTool == .select && !tabEditing {
             drag = .pan(lastView: v); NSCursor.closedHand.set(); return
         }
+        if !tabEditing, guideMouseDown(event, doc) { needsDisplay = true; return }
         if tabEditing {
             tabMouseDown(event, doc)
             needsDisplay = true
@@ -55,6 +56,18 @@ extension CanvasNSView {
                 clickPoints.append(first); finishClickShape(); return
             }
             clickPoints.append(p)
+        case .trim:
+            trimClick(docPoint(event, snapped: false), doc)
+        case .measure:
+            let p = docPoint(event)
+            drawingState.measureDrag = (p, p)
+        case .freehand:
+            drawingState.freehand = [docPoint(event)]
+        case .dimension:
+            dimensionClick(event, doc)
+        case .arc:
+            clickPoints.append(docPoint(event))
+            if clickPoints.count >= 3 { finishClickShape() }
         case .text:
             placeText(at: docPoint(event))
         default:
@@ -66,6 +79,7 @@ extension CanvasNSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let doc = document else { return }
+        if extrasMouseDragged(event) { return }
         let v = viewPoint(event)
         updateHover(event)
         switch drag {
@@ -139,6 +153,7 @@ extension CanvasNSView {
 
     override func mouseUp(with event: NSEvent) {
         guard let doc = document else { drag = .none; return }
+        if extrasMouseUp(event) { drag = .none; return }
         switch drag {
         case .pending(_, let hit, let extend):
             if let id = hit { doc.select(id, extending: extend) } else if !extend { doc.clearSelection() }
@@ -206,7 +221,7 @@ extension CanvasNSView {
 
     func updateHover(_ event: NSEvent) {
         let drawing = document?.activeTool.isClickBuilt == true || (document?.activeTool.isDragShape ?? false)
-            || document?.activeTool == .text
+            || document?.activeTool == .text || document?.activeTool == .measure
         let p = docPoint(event, snapped: drawing)
         if !drawing { lastSnap = nil }
         hoverDoc = p
@@ -232,6 +247,7 @@ extension CanvasNSView {
 
     override func keyDown(with event: NSEvent) {
         guard let doc = document else { return super.keyDown(with: event) }
+        if handleDrawingToolKey(event, doc) { needsDisplay = true; return }
         let step = doc.document.gridSpacing * (event.modifierFlags.contains(.shift) ? 10 : 1)
         let nodeMode = doc.activeTool == .nodeEdit && !doc.nodeSelection.isEmpty
         func nudge(_ d: Vec2) {
@@ -293,6 +309,10 @@ extension CanvasNSView {
             shape = pen.path(closed: closed).map { Shape(name: "Curve", layerID: doc.currentLayerID, paths: [$0]) }
         case .curve:
             shape = DrawingTools.smoothCurve(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
+        case .arc:
+            shape = DrawingTools.arc(points: clickPoints, fromCenter: doc.drawingOptions.arcFromCenter, layerID: doc.currentLayerID)
+        case .dimension:
+            shape = nil
         default:
             shape = DrawingTools.polyline(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
         }
@@ -304,10 +324,11 @@ extension CanvasNSView {
         let o = doc.drawingOptions
         guard !o.text.isEmpty else { return }
         do {
-            let paths = try TextOutliner().outlines(for: o.text, fontName: o.fontName, size: o.fontSize, origin: p)
-            guard !paths.isEmpty else { return }
-            doc.addShape(Shape(name: o.text, layerID: doc.currentLayerID, paths: paths,
-                               origin: .text(o.text, fontName: o.fontName, size: o.fontSize)), actionName: "Add Text")
+            let spec = TextSpec(string: o.text, fontName: o.fontName, size: o.fontSize, alignment: o.textAlignment,
+                                lineSpacing: o.lineSpacing, letterSpacing: o.letterSpacing, anchor: p)
+            let s = try TextOutliner().shape(for: spec, layerID: doc.currentLayerID)
+            guard !s.paths.isEmpty else { return }
+            doc.addShape(s, actionName: "Add Text")
         } catch {
             doc.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
         }

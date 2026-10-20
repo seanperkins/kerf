@@ -54,6 +54,8 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
     var snapCache: (revision: Int, excluded: Set<UUID>, engine: SnapEngine)?
     var hoverDoc: Vec2?
     var spaceHeld = false
+    /// Drawing-tool extras (typed entry, measure, guides) — see CanvasDrawingTools.swift.
+    var drawingState = CanvasDrawingState()
     private var didInitialFit = false
     private var lastRequestSerial = 0
     private var trackingArea: NSTrackingArea?
@@ -187,20 +189,22 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
 
     func docPoint(_ event: NSEvent, snapped: Bool = true, excluding: Set<UUID> = []) -> Vec2 {
         let p = viewport.toDocument(viewPoint(event))
-        guard snapped, !event.modifierFlags.contains(.command) else { lastSnap = nil; return p }
+        guard snapped, !event.modifierFlags.contains(.command) else { lastSnap = nil; drawingState.axisHint = nil; return p }
         return snap(p, excluding: excluding)
     }
 
     /// Snaps a document point to object points and/or the grid per the document's settings.
     func snap(_ p: Vec2, excluding: Set<UUID> = []) -> Vec2 {
         guard let doc = document else { return p }
+        drawingState.axisHint = nil
         let grid = doc.snapToGrid ? doc.document.gridSpacing : 0
         guard doc.snapToObjects else {
             lastSnap = grid > 0 ? .init(point: Snapping.snap(p, grid: grid), kind: .grid) : nil
-            return lastSnap?.point ?? p
+            return axisSnap(p, grid: grid, excluding: excluding) ?? lastSnap?.point ?? p
         }
         let r = snapEngine(excluding: excluding).snap(p, tolerance: snapTolerance, grid: grid)
         lastSnap = r
+        if r.kind == .grid || r.kind == .none, let a = axisSnap(p, grid: grid, excluding: excluding) { return a }
         return r.point
     }
 
