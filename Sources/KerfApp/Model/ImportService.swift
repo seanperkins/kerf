@@ -14,12 +14,17 @@ struct ImportOutcome: Equatable {
 /// placed 3D model centred on the material.
 enum ImportService {
     static let vectorExtensions = ["svg", "dxf", "eps", "ai", "pdf"]
-    static let meshExtensions = ["stl"]
+    static let meshExtensions = ["stl", "obj"]
     static var imageExtensions: [String] { RasterCodec.fileExtensions }
     static var allExtensions: [String] { vectorExtensions + meshExtensions + imageExtensions }
 
     static var allowedContentTypes: [UTType] {
         allExtensions.compactMap { UTType(filenameExtension: $0) }
+    }
+
+    /// STL or OBJ reader by file extension (both assume millimetres).
+    static func meshImporter(for fileName: String) -> any MeshImporter {
+        (fileName as NSString).pathExtension.lowercased() == "obj" ? OBJImporter() : STLImporter()
     }
 
     static func isMesh(_ fileName: String) -> Bool {
@@ -29,8 +34,8 @@ enum ImportService {
     /// Reads an STL into a placement form (the app shows it as the "Place 3D Model" dialog).
     static func placementForm(data: Data, fileName: String, project: KerfProject,
                               library: ToolLibrary) throws -> ModelPlacementForm {
-        let mesh = try STLImporter().importMesh(from: data, targetUnits: project.document.units)
-        guard mesh.triangleCount > 0 else { throw KerfIOError.malformed("the STL contains no triangles") }
+        let mesh = try meshImporter(for: fileName).importMesh(from: data, targetUnits: project.document.units)
+        guard mesh.triangleCount > 0 else { throw KerfIOError.malformed("the model contains no triangles") }
         return ModelPlacementForm(mesh: mesh, name: (fileName as NSString).deletingPathExtension,
                                   job: project.document.job, library: library)
     }
@@ -40,7 +45,7 @@ enum ImportService {
         let base = (fileName as NSString).deletingPathExtension
         let units = project.document.units
         if meshExtensions.contains(ext) {
-            let mesh = try STLImporter().importMesh(from: data, targetUnits: units)
+            let mesh = try meshImporter(for: fileName).importMesh(from: data, targetUnits: units)
             let model = place(mesh: mesh, name: base, job: project.document.job)
             project.document.models.append(model)
             return ImportOutcome(modelIDs: [model.id])
