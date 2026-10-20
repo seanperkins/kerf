@@ -136,3 +136,26 @@
     alternate direction.
   - Texture uses a seeded SplitMix64 to place sine-shaped dips along lines at `angle`, retracting
     between strokes.
+- **cam-vcarve** — Selected closed vectors are merged with the even-odd rule (Clipper union,
+  snapped to the Voronoi grid: 1e-4 in / 1e-3 mm), so nested contours are holes (text
+  counters). Open vectors are ignored with a toolpath warning.
+- **cam-vcarve** — Depth = startDepth + min(max(0, r − tipRadius) / tan(angle/2), limit), where
+  limit = min(flatDepth, bit's full cutting depth). `flatDepth` is measured below `startDepth`.
+  When the bit itself limits depth (no flat depth set), the toolpath carries a warning and the
+  flat area is cleared like a flat-depth carve.
+- **cam-vcarve** — Flat area = region inset by tipRadius + limit·tan(angle/2). With a clearance
+  tool it is pocketed (offset or raster, stepped by the clearance tool's stepdown) and the V-bit
+  traces the flat area's boundary at the flat depth plus the clamped medial axis (corner
+  cleanup). Without one the V-bit clears it with offset/raster passes at its own stepover.
+  Toolpath order: clearance tool first, then V-bit.
+- **cam-vcarve** — `VCarveParameters.passDepth == nil` means a single pass (per the model doc);
+  with a value, pass k only re-cuts where the target depth exceeds level k−1.
+- **cam-vcarve** — Plunges go from safe Z at the plunge rate; medial-axis chains are walked
+  through junctions to minimise lifts, gaps ≤ 0.002 in (0.05 mm) are linked at depth.
+- **cam-vcarve** — Inlay: female = V-carve flat at `pocketDepth` P. Male = V-carve of
+  (mirrored vectors' bounds grown by `maleBoundaryMargin`) minus the mirrored vectors, start
+  depth S, total depth P (male flat depth below start = P − S). Walls coincide when the plug top
+  sits S below the female surface, so the bottom gap is P − S; `glueGap` is enforced as the
+  minimum bottom gap (S + glueGap ≤ P, else invalidParameter). Gaps are reported in toolpath
+  metadata (`bottomGap`, `boardGap`). The male is generated in place (mirrored about its own
+  bounds centre) — cut it on a separate board; `part: .both` emits female then male toolpaths.
