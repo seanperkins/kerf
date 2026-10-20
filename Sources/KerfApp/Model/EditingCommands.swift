@@ -63,8 +63,8 @@ extension KerfProject {
         return true
     }
 
-    mutating func moveNodes(_ refs: Set<NodeRef>, by delta: Vec2) {
-        for id in Set(refs.map(\.shapeID)) { editNodes(of: id) { ShapeNodes.moveNodes($0, refs, by: delta) } }
+    mutating func moveNodes(_ refs: Set<NodeRef>, by delta: Vec2, mirror: NodeMirrorMode = .off) {
+        for id in Set(refs.map(\.shapeID)) { editNodes(of: id) { NodeMirror.moveNodes($0, refs, by: delta, mode: mirror) } }
     }
 
     /// Deletes nodes; shapes whose paths would degenerate are left unchanged.

@@ -25,7 +25,9 @@ extension CanvasNSView {
             let d = nodeDragDelta(anchor: anchor, start: s, current: c, flags: NSEvent.modifierFlags)
             var out: [UUID: Shape] = [:]
             for id in Set(doc.nodeSelection.map(\.shapeID)) {
-                if let shape = doc.project.document.shape(id: id) { out[id] = ShapeNodes.moveNodes(shape, doc.nodeSelection, by: d) }
+                if let shape = doc.project.document.shape(id: id) {
+                    out[id] = NodeMirror.moveNodes(shape, doc.nodeSelection, by: d, mode: doc.drawingOptions.nodeMirror)
+                }
             }
             return out
         case .bezierHandle(let r, let h, let c):
@@ -96,6 +98,7 @@ extension CanvasNSView {
         let preview = nodeDragPreview
         ctx.saveGState()
         ctx.setLineWidth(1)
+        drawMirrorAxes(ctx, doc.drawingOptions.nodeMirror)
         for original in nodeTargets {
             let s = ShapeNodes.editable(preview[original.id] ?? original)
             for (pi, p) in s.paths.enumerated() {
@@ -122,6 +125,27 @@ extension CanvasNSView {
                     ctx.stroke(r)
                 }
             }
+        }
+        ctx.restoreGState()
+    }
+
+    /// Dashed centre lines of each edited shape while mirror mode is on.
+    private func drawMirrorAxes(_ ctx: CGContext, _ mode: NodeMirrorMode) {
+        guard mode != .off else { return }
+        ctx.saveGState()
+        ctx.setStrokeColor(NSColor.systemPurple.withAlphaComponent(0.7).cgColor)
+        ctx.setLineDash(phase: 0, lengths: [6, 4])
+        for s in nodeTargets {
+            let b = s.bounds()
+            guard !b.isEmpty else { continue }
+            let c = b.center, pad = viewport.documentLength(12)
+            if mode != .topBottom {
+                ctx.move(to: viewport.toView(Vec2(c.x, b.min.y - pad)).cg); ctx.addLine(to: viewport.toView(Vec2(c.x, b.max.y + pad)).cg)
+            }
+            if mode != .leftRight {
+                ctx.move(to: viewport.toView(Vec2(b.min.x - pad, c.y)).cg); ctx.addLine(to: viewport.toView(Vec2(b.max.x + pad, c.y)).cg)
+            }
+            ctx.strokePath()
         }
         ctx.restoreGState()
     }

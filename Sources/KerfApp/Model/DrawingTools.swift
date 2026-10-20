@@ -109,6 +109,8 @@ struct DrawingOptions: Equatable {
     var exactCenter = Vec2(6, 6)
     var exactWidth = 4.0
     var exactHeight = 2.0
+    /// Node tool: symmetric editing about the shape's centre lines.
+    var nodeMirror = NodeMirrorMode.off
 }
 
 /// Builds shapes from canvas gestures (document coordinates). Pure, unit-agnostic.

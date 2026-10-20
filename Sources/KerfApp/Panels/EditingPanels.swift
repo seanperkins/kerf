@@ -25,7 +25,8 @@ struct NodeInspector: View {
                 Button("Move Node") {
                     guard let r = single, let cur = document.project.nodePosition(r) else { return }
                     let d = position - cur
-                    document.perform("Move Node") { $0.moveNodes([r], by: d) }
+                    let mirror = document.drawingOptions.nodeMirror
+                    document.perform("Move Node") { $0.moveNodes([r], by: d, mirror: mirror) }
                 }
             }
             Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {
@@ -64,6 +65,10 @@ struct NodeInspector: View {
             .disabled(nodes.isEmpty)
             Text("Drag nodes or handles (Option breaks a smooth node). Shift-click adds nodes; drag on empty space to box-select. Double-click a segment to insert a node. Delete removes nodes; arrows nudge.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Picker("Mirror", selection: $document.drawingOptions.nodeMirror) {
+                ForEach(NodeMirrorMode.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .help("Symmetric editing: moving a node or handle also moves its mirror partner across the vector's centre line(s)")
             Toggle("Snap to grid", isOn: $document.snapToGrid)
             Toggle("Snap to objects", isOn: $document.snapToObjects)
             Button("Done") { document.activeTool = .select }

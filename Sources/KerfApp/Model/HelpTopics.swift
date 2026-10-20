@@ -196,6 +196,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Press **N** (or Design ▸ Edit Nodes) to edit the points of a vector. Drag nodes or curve handles; Shift-click to select several. The inspector can make nodes smooth or corners, convert segments between lines and curves, insert nodes and break a path.
 
             The first node edit turns arcs into curves and the shape becomes a plain drawn vector (it loses its rectangle/circle settings).
+
+            **Mirror** in the inspector edits symmetrically: moving a node or handle also moves its partner on the other side of the vector's centre line (Left – Right, Top – Bottom or Both). Nodes on a centre line only slide along it, so a symmetric shape stays symmetric.
             """
         case .layers:
             return """

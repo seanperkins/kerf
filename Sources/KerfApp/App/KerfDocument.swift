@@ -356,8 +356,8 @@ final class KerfDocument: ReferenceFileDocument {
 
     func moveSelectedNodes(by d: Vec2) {
         guard !nodeSelection.isEmpty, d != .zero else { return }
-        let refs = nodeSelection
-        perform("Move Nodes") { $0.moveNodes(refs, by: d) }
+        let refs = nodeSelection, mirror = drawingOptions.nodeMirror
+        perform("Move Nodes") { $0.moveNodes(refs, by: d, mirror: mirror) }
     }
 
     func deleteSelectedNodes() {
