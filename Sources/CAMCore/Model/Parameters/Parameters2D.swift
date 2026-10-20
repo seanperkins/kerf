@@ -93,6 +93,9 @@ public struct ProfileParameters: Codable, Hashable, Sendable {
     public var startPoint: ProfileStartPoint?
     /// Part cutting order (nil = nearest; toolpaths-2d addition).
     public var order: ProfileOrder?
+    /// Keep the toolpath square at the part's external corners instead of rolling round them
+    /// (nil/false = round; toolpaths-2d addition).
+    public var sharpCorners: Bool?
 
     public init(depth: DepthSettings = DepthSettings(cutDepth: 0.75), side: ProfileSide = .outside,
                 direction: CutDirection = .climb, allowance: Double = 0, tabs: TabSettings = TabSettings(),

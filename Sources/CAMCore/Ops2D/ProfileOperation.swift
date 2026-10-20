@@ -23,12 +23,13 @@ public struct ProfileOperation: ToolpathOperation {
         let (closed, open) = ShapeGeometry.loops(of: shapes, tolerance: tol)
         let lastPass = effectiveLastPass(tolerance: tol)
         let finalOffset = tool.radius + params.allowance
+        let join: GeomKernel.Join = params.sharpCorners == true ? .miter(limit: ProfileGeometry.sharpMiterLimit) : .round
         let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset + (lastPass?.allowance ?? 0),
-                                         direction: params.direction, tolerance: tol)
+                                         direction: params.direction, tolerance: tol, join: join)
         let finishPlan = lastPass.map {
             ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset,
                                   direction: $0.reverseDirection ? params.direction.reversed : params.direction,
-                                  tolerance: tol)
+                                  tolerance: tol, join: join)
         }
         var chains = plan.chains
         var openOffsetFailures = 0
@@ -208,17 +209,20 @@ public enum ProfileGeometry {
     /// Offsets the even-odd region of `closed` by `offset` (outside grows, inside shrinks,
     /// on = none) and orients the loops for the cut direction (climb on a clockwise spindle
     /// keeps the finished part on the right of travel).
+    /// Miter limit (multiple of the offset) for sharp corners; sharper corners are squared off there.
+    public static let sharpMiterLimit = 4.0
+
     public static func loops(closed: [[Vec2]], side: ProfileSide, offset: Double, direction: CutDirection,
-                             tolerance: Double) -> Plan {
+                             tolerance: Double, join: GeomKernel.Join = .round) -> Plan {
         let region = Polygon2D.region(fromLoops: closed)
         var loops: [[Vec2]]
         switch side {
         case .on:
             loops = closed.map { Polygon2D.signedArea($0) < 0 ? $0.reversed() : $0 }
         case .outside:
-            loops = GeomKernel.offset(region, by: max(offset, 0), join: .round, arcTolerance: tolerance)
+            loops = GeomKernel.offset(region, by: max(offset, 0), join: join, arcTolerance: tolerance)
         case .inside:
-            loops = GeomKernel.offset(region, by: -max(offset, 0), join: .round, arcTolerance: tolerance)
+            loops = GeomKernel.offset(region, by: -max(offset, 0), join: join, arcTolerance: tolerance)
         }
         loops = loops.map { Polygon2D.deduplicated($0, closed: true, tolerance: tolerance * 1e-3) }.filter { $0.count > 2 }
         // Region loops come back with the region on the left (outer CCW, holes CW).

@@ -133,6 +133,9 @@ struct ProfileForm: View {
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
+            Toggle("Sharp external corners", isOn: Binding(get: { params.sharpCorners == true },
+                                                           set: { params.sharpCorners = $0 ? true : nil }))
+                .help("Run straight out to a square corner instead of rolling round the part's corners")
         }
         Divider()
         InspectorSection(title: "Last Pass") { ProfileLastPassForm(lastPass: $params.lastPass, side: params.side, units: units) }
