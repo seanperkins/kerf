@@ -295,3 +295,7 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## io (round 1)
+
+- **io** — Job sheet (io-setup-sheet): File → Job Sheet… writes a self-contained HTML page (inline CSS, preview PNG as a data URI) and opens it in the default browser, which handles printing and PDF. Content: material size/thickness, units, Z zero, XY origin, safe/home Z, post, total time, tool changes, tool list in program order (with a tick column for the operator), one row per toolpath (tool, diameter, rpm, feed/plunge, deepest cut, time) and warnings for uncalculated/failed toolpaths. Order and grouping follow the shared "group by tool" setting. `JobSheet` (pure) and `DesignSnapshot` (offscreen CG picture of material, vectors, toolpaths and origin) live in `KerfApp/Model`.
