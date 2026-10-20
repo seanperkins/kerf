@@ -69,6 +69,7 @@ extension VCarveParameters {
     func scaled(by f: Double) -> VCarveParameters {
         var p = self
         p.startDepth *= f; p.flatDepth = flatDepth.map { $0 * f }; p.passDepth = passDepth.map { $0 * f }
+        p.openVectorDepth = openVectorDepth.map { $0 * f }
         return p
     }
 }
@@ -77,6 +78,24 @@ extension InlayParameters {
     func scaled(by f: Double) -> InlayParameters {
         var p = self
         p.pocketDepth *= f; p.maleStartDepth *= f; p.glueGap *= f; p.maleBoundaryMargin *= f
+        p.surfaceClearance = surfaceClearance.map { $0 * f }
+        return p
+    }
+}
+
+extension PhotoVCarveParameters {
+    func scaled(by f: Double) -> PhotoVCarveParameters {
+        var p = self
+        p.origin = Vec2(origin.x * f, origin.y * f); p.width *= f; p.lineSpacing *= f; p.minDepth *= f; p.startDepth *= f
+        return p
+    }
+
+    /// Picture as large as fits in 80% of the material, centred, keeping the image's aspect.
+    func fitted(in job: JobSetup) -> PhotoVCarveParameters {
+        var p = self
+        let aspect = image?.aspect ?? 1
+        p.width = min(job.width * 0.8, job.height * 0.8 / aspect)
+        p.origin = Vec2((job.width - p.width) / 2, (job.height - p.width * aspect) / 2)
         return p
     }
 }
@@ -103,6 +122,7 @@ extension AnyOperation {
         case .fluting(var o): o.params = o.params.scaled(by: f); return .fluting(o)
         case .texture(var o): o.params = o.params.scaled(by: f); return .texture(o)
         case .relief3D(var o): o.params = o.params.scaled(by: f); return .relief3D(o)
+        case .photoVCarve(var o): o.params = o.params.scaled(by: f); return .photoVCarve(o)
         }
     }
 }

@@ -220,13 +220,103 @@ struct VCarveForm: View {
                                 defaultValue: units == .inch ? 0.125 : 3)
             if params.flatDepth != nil {
                 OptionalToolPicker(title: "Flat area tool", toolID: $params.flatClearanceToolID, library: library,
-                                   kinds: [.endMill, .ballNose])
+                                   kinds: ClearanceToolList.kinds)
                 if params.flatClearanceToolID != nil {
+                    ClearanceToolList(tools: $params.extraClearanceTools, library: library)
                     PocketStrategyForm(strategy: $params.flatClearanceStrategy)
                 }
             }
             OptionalLengthField(label: "Max pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.1 : 2.5)
+        }
+        Divider()
+        InspectorSection(title: "Open Vectors") {
+            OptionalLengthField(label: "Engrave at depth", value: $params.openVectorDepth, units: units,
+                                defaultValue: units == .inch ? 0.05 : 1.25)
+            if params.openVectorDepth != nil {
+                NumberField("Taper ends", value: Binding(get: { params.openVectorTaper * 100 },
+                                                         set: { params.openVectorTaper = min(max($0 / 100, 0), 0.5) }),
+                            unit: "%", help: "Share of each line's length over which its ends rise to the surface (0 = constant depth, max 50%)")
+                Text("Open vectors are engraved along the line with the V-bit; tapered ends give sketch-style strokes.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Open vectors in the selection are ignored.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        Divider()
+        InspectorSection(title: "Order") {
+            Toggle("Use vector start points", isOn: $params.useVectorStartPoints)
+                .help("Start outlines and engraved lines at each vector's start point")
+            Toggle("Use vector selection order", isOn: $params.useSelectionOrder)
+                .help("Carve the vectors in the order they were selected instead of the shortest route")
+        }
+    }
+}
+
+/// Plug outer boundary mode, its margin and the optional surface clearance.
+struct PlugBoundaryFields: View {
+    @Binding var boundary: InlayPlugBoundary
+    @Binding var margin: Double
+    @Binding var surfaceClearance: Double?
+    var defaultClearance: Double
+    var units: LengthUnit
+
+    var body: some View {
+        Picker("Plug boundary", selection: $boundary) {
+            Text("Boundary offset").tag(InlayPlugBoundary.boundaryOffset)
+            Text("Vector offset").tag(InlayPlugBoundary.vectorOffset)
+            Text("Sheet limits").tag(InlayPlugBoundary.sheetLimits)
+        }
+        if boundary != .sheetLimits {
+            LengthField(boundary == .vectorOffset ? "Outline margin" : "Box margin", value: $margin, units: units,
+                        help: boundary == .vectorOffset
+                            ? "Waste cleared around the plug's own outline (least material removed; free the plug afterwards)"
+                            : "Waste cleared out to the plug's bounding box grown by this margin")
+        }
+        OptionalLengthField(label: "Surface clearance", value: $surfaceClearance, units: units,
+                            defaultValue: max(defaultClearance, units == .inch ? 0.05 : 1))
+        Text("Surface clearance: how far the plug board stays above the pocket board when seated (default: pocket depth − plug start depth).")
+            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Further flat-area clearance tools (after the first): each one only clears what the tools
+/// above it could not reach, so list them largest first.
+struct ClearanceToolList: View {
+    static let kinds: [ToolKind] = [.endMill, .ballNose, .engraving]
+    @Binding var tools: [VCarveClearanceTool]
+    var library: ToolLibrary
+
+    private var choices: [Tool] { library.tools.filter { Self.kinds.contains($0.kind) } }
+
+    var body: some View {
+        ForEach(tools.indices, id: \.self) { i in row(i) }
+        Button("Add Smaller Clearance Tool") {
+            if let t = choices.min(by: { $0.diameter < $1.diameter }) { tools.append(VCarveClearanceTool(toolID: t.id)) }
+        }
+        .disabled(choices.isEmpty)
+        if !tools.isEmpty {
+            Text("Tools run in this order; each one only clears what the tools before it could not reach.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// One extra tool. Bindings are index-guarded: SwiftUI may re-read a row after removal.
+    @ViewBuilder private func row(_ i: Int) -> some View {
+        let id = i < tools.count ? tools[i].toolID : UUID()
+        HStack {
+            Picker("Then tool \(i + 2)", selection: Binding(get: { i < tools.count ? tools[i].toolID : id },
+                                                            set: { if i < tools.count { tools[i].toolID = $0 } })) {
+                if library.tool(id: id) == nil { Text("Missing tool").tag(id) }
+                ForEach(choices) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
+            }
+            Button { if i < tools.count { tools.remove(at: i) } } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless).help("Remove this clearance tool")
+        }
+        if library.tool(id: id)?.angle != nil {
+            Toggle("Corner sharpen", isOn: Binding(get: { i < tools.count && tools[i].cornerSharpen },
+                                                   set: { if i < tools.count { tools[i].cornerSharpen = $0 } }))
+                .help("Lift this tapered tool into corners it cannot reach at the flat depth, so they finish crisp")
         }
     }
 }
@@ -247,9 +337,14 @@ struct InlayForm: View {
             LengthField("Plug start depth", value: $params.maleStartDepth, units: units)
             LengthField("Glue gap", value: $params.glueGap, units: units)
             Toggle("Mirror plug", isOn: $params.mirrorMale)
-            LengthField("Plug boundary margin", value: $params.maleBoundaryMargin, units: units)
+            PlugBoundaryFields(boundary: $params.plugBoundary, margin: $params.maleBoundaryMargin,
+                               surfaceClearance: $params.surfaceClearance,
+                               defaultClearance: params.pocketDepth - params.maleStartDepth, units: units)
             OptionalToolPicker(title: "Flat area tool", toolID: $params.flatClearanceToolID, library: library,
-                               kinds: [.endMill, .ballNose])
+                               kinds: ClearanceToolList.kinds)
+            if params.flatClearanceToolID != nil {
+                ClearanceToolList(tools: $params.extraClearanceTools, library: library)
+            }
             let gap = params.pocketDepth - params.maleStartDepth
             if params.maleStartDepth + params.glueGap > params.pocketDepth + 1e-9 {
                 Text("Plug start depth + glue gap must not exceed the pocket depth.").font(.caption).foregroundStyle(.orange)

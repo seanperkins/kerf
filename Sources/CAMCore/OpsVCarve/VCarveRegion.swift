@@ -63,6 +63,25 @@ struct VCarveRegion {
         return VCarveRegion(polygons: out, scale: scale)
     }
 
+    /// Boolean with another region on the same grid (even-odd fill on both sides).
+    func combined(_ op: GeomKernel.BooleanOp, with other: VCarveRegion) -> VCarveRegion {
+        let precision = Int32(log10(scale).rounded())
+        let out = GeomKernel.boolean(op, subject: polygons, clip: other.polygons, fillRule: .evenOdd, precision: precision)
+        return VCarveRegion(polygons: out, scale: scale)
+    }
+
+    /// Total enclosed area (holes subtract).
+    var area: Double {
+        polygons.reduce(0) { sum, poly in
+            var a = 0.0
+            for i in poly.indices {
+                let p = poly[i], q = poly[(i + 1) % poly.count]
+                a += p.x * q.y - q.x * p.y
+            }
+            return sum + a / 2
+        }
+    }
+
     /// Rounds to the grid and drops consecutive duplicates (including the closing point).
     static func snapped(_ poly: [Vec2], scale: Double) -> [Vec2] {
         var out: [Vec2] = []

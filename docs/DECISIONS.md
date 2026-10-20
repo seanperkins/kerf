@@ -295,3 +295,57 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## vcarve-parity (round 1)
+
+- **vcarve-parity** — Multiple flat-area clearance tools: `flatClearanceToolID` stays the first
+  tool and `extraClearanceTools: [VCarveClearanceTool]` (V-carve and inlay) adds more, run in
+  list order like Vectric's clearance tool list (the UI says to list them largest first; the
+  order is not re-sorted). Tool k only cuts where the flat area minus everything earlier tools
+  swept (their centre region grown by their floor radius) is non-empty: its centre region is
+  (flat area inset by its wall clearance) ∩ (rest grown by its floor radius), cleared with
+  rings/raster at its own stepdown. A later tool with nothing left is dropped with a warning.
+  Tapered engraving tools may be clearance tools: their wall clearance is tip radius + flat
+  depth · max(0, tan(tool half-angle) − tan(V half-angle)), capped at the tool radius.
+  New parameter fields are decoded with `decodeIfPresent`, so older `.kerf` files open unchanged.
+- **vcarve-parity** — Corner sharpening is a per-tool flag on the extra clearance tools
+  (`VCarveClearanceTool.cornerSharpen`, shown only for tools with an angle), as in Vectric where it
+  applies to second-or-later engraving tools. After its flat-depth clearing, the tool follows the
+  region's medial axis wherever it lies in the flat area but outside everything already swept,
+  at depth start + min(flat, (R − tip radius) / max(tan tool half-angle, tan V half-angle)), so the
+  cone never cuts the V walls. The V-bit still traces the flat boundary and full medial axis
+  afterwards, as before.
+- **vcarve-parity** — Inlay plug boundary: `InlayParameters.plugBoundary` = `.boundaryOffset`
+  (the old behaviour: bounds grown by `maleBoundaryMargin`), `.vectorOffset` (outer loops of the
+  mirrored vectors grown by the margin, so counters are still cleared) or `.sheetLimits` (the
+  whole material rectangle; slow without a clearance tool on a big sheet, like any huge flat
+  area). `surfaceClearance` (nil = P − S, the old value) is the plug carve's depth below its
+  start depth, i.e. how far the plug board's cleared floor sits above the pocket board when
+  seated; it is reported as `boardGap`, must be > 0 and, when set, less than the material
+  thickness. The bottom (glue) gap stays P − S.
+- **vcarve-parity** — V-bit engraving of open vectors lives in the V-Carve toolpath:
+  `VCarveParameters.openVectorDepth` (nil = ignore open vectors with a warning, as before) engraves
+  each selected open vector along the line at start depth + depth; `openVectorTaper` (0…0.5) eases
+  each end from the surface over that share of the length with a cosine profile (sketch-style
+  strokes that start and end as points). The strokes join the V-bit's carve strokes, so pass
+  depth, ordering and the move writer apply. A selection of only open vectors is valid when
+  engraving is on. Closed vectors are still V-carved, never engraved along their outline.
+- **vcarve-parity** — V-Carve `useSelectionOrder` / `useVectorStartPoints` (Vectric's "Use
+  Vector Selection Order" / "Use Vector Start Points"). Strokes are assigned to the first selected
+  shape (selection order = `setup.shapeIDs`, which the app fills in click order) that contains
+  their middle point, or whose open path they lie on. Selection order cuts each shape's strokes
+  together, per pass, shapes in order; strokes in no shape go last. Start points rotate closed
+  loops (flat-area outlines, clearance rings) to begin at the vertex nearest the shape's first
+  path start, start each shape's walk there, and keep engraved open vectors in their drawn
+  direction. Medial-axis chains are not re-split at start points. Inlay does not offer these
+  options (its plug geometry is mirrored).
+- **vcarve-parity** — PhotoVCarve is a new operation kind `.photoVCarve` (`PhotoVCarveOperation`,
+  additive enum cases in `OperationKind`/`AnyOperation` and their app switches). The picture is
+  loaded with ImageIO, downsampled to ≤ 800 px on the long side, converted to 8-bit grey and
+  stored in the operation (`GrayImage`, base64 in the `.kerf` JSON) so the file is
+  self-contained. Grooves are parallel lines at `angle`, `lineSpacing` apart, across a
+  placement rectangle (origin + width, height from the aspect); along each line the groove's
+  top width = darkness × spacing, i.e. depth = max(0, w/2 − tip radius) / tan(half-angle), capped
+  by the bit; samples shallower than `minDepth` lift the bit. Lines alternate direction. No
+  bitmap is drawn on the canvas yet; the toolpath overlay shows the placement. New Photo
+  V-Carve toolpaths start centred at 80% of the material.

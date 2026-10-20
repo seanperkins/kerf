@@ -31,30 +31,38 @@ public struct InlayOperation: ToolpathOperation {
         guard p.maleStartDepth + p.glueGap <= p.pocketDepth + 1e-9 else {
             throw CAMError.invalidParameter("male start depth + glue gap must not exceed the pocket depth")
         }
+        let clearanceDepth = p.effectiveSurfaceClearance
+        guard clearanceDepth > 0 else { throw CAMError.invalidParameter("inlay surface clearance must be positive") }
+        if p.surfaceClearance != nil, p.part != .female, clearanceDepth >= context.document.job.thickness {
+            throw CAMError.invalidParameter("inlay surface clearance must be less than the material thickness")
+        }
         let (paths, skipped) = try VCarveEngine.closedPaths(context.shapes(for: setup))
         let vbit = try context.tool(setup.toolID)
         _ = try VCarveEngine.validateVBit(vbit)
-        let clearance = try p.flatClearanceToolID.map { try context.tool($0) }
+        let clearance = try VCarveEngine.clearanceTools(p.clearanceToolIDs, context: context)
         let gap = p.pocketDepth - p.maleStartDepth
-        var metadata = ["bottomGap": String(format: "%.4f", gap), "boardGap": String(format: "%.4f", gap)]
+        var metadata = ["bottomGap": String(format: "%.4f", gap), "boardGap": String(format: "%.4f", clearanceDepth)]
         if skipped > 0 { metadata["warning"] = "\(skipped) open vector(s) ignored" }
 
         var out: [Toolpath] = []
         if p.part != .male {
             let region = VCarveRegion(paths: paths, tolerance: context.tolerance, units: context.units)
             guard !region.isEmpty else { throw CAMError.invalidGeometry("selected vectors enclose no area") }
-            out += try carve(region, part: "Female", start: 0, vbit: vbit, clearance: clearance,
+            out += try carve(region, part: "Female", start: 0, depthBelowStart: p.pocketDepth, vbit: vbit,
+                             clearance: clearance,
                              context: context, metadata: metadata)
         }
         if p.part != .female {
-            out += try carve(maleRegion(paths, context: context), part: "Male", start: p.maleStartDepth, vbit: vbit,
-                             clearance: clearance, context: context, metadata: metadata)
+            out += try carve(maleRegion(paths, context: context), part: "Male", start: p.maleStartDepth,
+                             depthBelowStart: clearanceDepth, vbit: vbit, clearance: clearance, context: context,
+                             metadata: metadata)
         }
         guard !out.isEmpty else { throw CAMError.invalidGeometry("nothing to carve") }
         return out
     }
 
-    /// Mirrored vectors subtracted from their bounds grown by the margin.
+    /// Mirrored vectors subtracted from the plug boundary (bounds or outline grown by the
+    /// margin, or the material sheet).
     func maleRegion(_ paths: [Path], context: CAMContext) throws -> VCarveRegion {
         let shapeRegion = VCarveRegion(paths: paths, tolerance: context.tolerance, units: context.units)
         guard !shapeRegion.isEmpty else { throw CAMError.invalidGeometry("selected vectors enclose no area") }
@@ -64,22 +72,36 @@ public struct InlayOperation: ToolpathOperation {
             let m = Transform2D.mirror(horizontalAxis: false, about: b.center)
             polys = polys.map { Array($0.map(m.apply).reversed()) }
         }
-        let g = b.insetBy(-params.maleBoundaryMargin)
-        let frame = [g.min, Vec2(g.max.x, g.min.y), g.max, Vec2(g.min.x, g.max.y)]
         let precision = Int32(log10(shapeRegion.scale).rounded())
-        let complement = GeomKernel.boolean(.difference, subject: [frame], clip: polys, fillRule: .evenOdd,
+        let frame: [[Vec2]]
+        switch params.plugBoundary {
+        case .boundaryOffset:
+            let g = b.insetBy(-params.maleBoundaryMargin)
+            frame = [[g.min, Vec2(g.max.x, g.min.y), g.max, Vec2(g.min.x, g.max.y)]]
+        case .vectorOffset:
+            let mirrored = VCarveRegion(polygons: polys, scale: shapeRegion.scale)
+            // Outer loops only: counters (the hole of an "O") are waste on the plug too.
+            frame = mirrored.offset(by: params.maleBoundaryMargin, arcTolerance: context.tolerance).polygons
+                .filter { VCarveRegion(polygons: [$0], scale: shapeRegion.scale).area > 0 }
+        case .sheetLimits:
+            let job = context.document.job
+            frame = [[Vec2(0, 0), Vec2(job.width, 0), Vec2(job.width, job.height), Vec2(0, job.height)]]
+        }
+        let complement = GeomKernel.boolean(.difference, subject: frame, clip: polys, fillRule: .evenOdd,
                                             precision: precision)
         let region = VCarveRegion(polygons: complement, scale: shapeRegion.scale)
         guard !region.isEmpty else { throw CAMError.invalidGeometry("male boundary margin leaves nothing to carve") }
         return region
     }
 
-    private func carve(_ region: VCarveRegion, part: String, start: Double, vbit: Tool, clearance: Tool?,
+    private func carve(_ region: VCarveRegion, part: String, start: Double, depthBelowStart: Double, vbit: Tool,
+                       clearance: [Tool],
                        context: CAMContext, metadata: [String: String]) throws -> [Toolpath] {
         var engine = VCarveEngine(region: region, vbit: vbit, context: context)
         engine.startDepth = start
-        engine.flatDepth = params.pocketDepth - start
-        engine.clearanceTool = clearance
+        engine.flatDepth = depthBelowStart
+        engine.clearanceTools = clearance
+        engine.cornerSharpen = [false] + params.extraClearanceTools.map(\.cornerSharpen)
         let result = try engine.run()
         var meta = metadata
         meta["part"] = part.lowercased()
@@ -87,17 +109,7 @@ public struct InlayOperation: ToolpathOperation {
         if !result.warnings.isEmpty {
             meta["warning"] = ([meta["warning"]].compactMap { $0 } + result.warnings).joined(separator: "; ")
         }
-        var out: [Toolpath] = []
-        if let clr = clearance,
-           let tp = VCarveEngine.toolpath(name: "\(setup.name) \(part) (flat clearance)", operationID: setup.id,
-                                          kind: Self.kind, tool: clr, passes: result.clearancePasses,
-                                          context: context, metadata: meta) {
-            out.append(tp)
-        }
-        if let tp = VCarveEngine.toolpath(name: "\(setup.name) \(part)", operationID: setup.id, kind: Self.kind,
-                                          tool: vbit, passes: result.vbitPasses, context: context, metadata: meta) {
-            out.append(tp)
-        }
-        return out
+        return VCarveEngine.toolpaths(name: "\(setup.name) \(part)", operationID: setup.id, kind: Self.kind,
+                                      vbit: vbit, result: result, context: context, metadata: meta)
     }
 }
