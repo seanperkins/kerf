@@ -145,6 +145,8 @@ struct KerfCommands: Commands {
             Button("Save All Toolpaths…") { document?.sheet = .saveAllToolpaths }
                 .keyboardShortcut("s", modifiers: [.command, .option])
                 .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Save Tiled G-code…") { document?.sheet = .tiling }
+                .disabled(document?.project.operations.isEmpty ?? true)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("t", modifiers: [.command, .option])

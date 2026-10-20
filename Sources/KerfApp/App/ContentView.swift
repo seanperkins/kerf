@@ -43,6 +43,7 @@ struct ContentView: View {
             case .validation: ValidationSheet(document: document)
             case .nesting: NestingSheet(document: document)
             case .fixtures: FixturesSheet(document: document)
+            case .tiling: TilingSheet(document: document)
             }
         }
         .alert(item: $document.alert) { a in

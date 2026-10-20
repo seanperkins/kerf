@@ -1,0 +1,46 @@
+import CADCore
+import CAMCore
+import Foundation
+import PostCore
+
+/// Toolpaths > Save Tiled G-code…: one program per tile for jobs larger than the machine.
+enum TiledExport {
+    /// Default tile = the post profile's X/Y travel in document units.
+    static func defaultSettings(profile: PostProfile, units: LengthUnit) -> TilingSettings {
+        let f = profile.units.factor(to: units)
+        return TilingSettings(tileWidth: profile.limits.xTravel * f, tileHeight: profile.limits.yTravel * f, overlap: 0)
+    }
+
+    struct File {
+        var tile: ToolpathTile
+        var fileName: String
+        var title: String
+        var result: GCodeExportResult
+    }
+
+    /// Posts and validates every tile that has something to cut.
+    static func files(project: KerfProject, results: [UUID: ToolpathResult], profile: PostProfile,
+                      groupByTool: Bool, settings: TilingSettings) -> [File] {
+        let doc = project.document
+        let all = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
+                                          groupByTool: groupByTool)
+        let tiles = ToolpathTiling.tile(all, job: doc.job, units: doc.units, settings: settings)
+        let total = tiles.count
+        let base = GCodeExporter.suggestedFileName(jobName: doc.name, operationName: nil, profile: profile)
+        let stem = (base as NSString).deletingPathExtension
+        return tiles.filter { !$0.toolpaths.isEmpty }.map { tile in
+            let at = "X\(RulerTicks.label(round4(tile.region.min.x))) Y\(RulerTicks.label(round4(tile.region.min.y)))"
+            let title = "\(doc.name) tile \(tile.number) of \(total) - zero XY at material \(at)"
+            // The tile's own project: its job, and the design moved into the tile frame so
+            // material and keep-out checks line up with the clipped toolpaths.
+            var p = project
+            p.document.job = tile.job
+            p.document.shapes = doc.shapes.map { $0.transformed(.translation(-tile.region.min)) }
+            let r = GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title)
+            let name = String(format: "%@_tile%02d.%@", stem, tile.number, profile.fileExtension)
+            return File(tile: tile, fileName: name, title: title, result: r)
+        }
+    }
+
+    private static func round4(_ v: Double) -> Double { (v * 10000).rounded() / 10000 }
+}
