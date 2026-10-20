@@ -67,6 +67,7 @@ struct OptionalLengthField: View {
     @Binding var value: Double?
     var units: LengthUnit
     var defaultValue: Double
+    var help: String? = nil
 
     var body: some View {
         HStack {
@@ -80,7 +81,7 @@ struct OptionalLengthField: View {
                 Text(units.abbreviation).foregroundStyle(.secondary).frame(width: 34, alignment: .leading)
             }
         }
-        .help(FieldHelp.text(for: label) ?? label)
+        .help(help ?? FieldHelp.text(for: label) ?? label)
     }
 }
 
@@ -88,9 +89,10 @@ struct IntField: View {
     var label: String
     @Binding var value: Int
     var range: ClosedRange<Int>
+    var help: String?
 
-    init(_ label: String, value: Binding<Int>, range: ClosedRange<Int> = 0...10_000) {
-        self.label = label; self._value = value; self.range = range
+    init(_ label: String, value: Binding<Int>, range: ClosedRange<Int> = 0...10_000, help: String? = nil) {
+        self.label = label; self._value = value; self.range = range; self.help = help
     }
 
     var body: some View {
@@ -103,7 +105,14 @@ struct IntField: View {
                 Stepper(label, value: $value, in: range).labelsHidden()
             }
         }
+        .help(help ?? FieldHelp.text(for: label) ?? label)
     }
+}
+
+extension View {
+    /// The one-line tooltip for a labeled setting (`FieldHelp`), for toggles and pickers, whose
+    /// labels do not go through `NumberField`.
+    func fieldHelp(_ label: String) -> some View { help(FieldHelp.text(for: label) ?? label) }
 }
 
 extension LengthUnit {

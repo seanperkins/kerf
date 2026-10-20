@@ -160,11 +160,13 @@ struct ToolEditor: View {
                 Picker("Type", selection: $tool.kind) {
                     ForEach(ToolKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
+                    .fieldHelp("Type")
                 IntField("Tool number", value: $tool.number, range: 0...999)
                 Picker("Units", selection: Binding(get: { tool.units }, set: { tool = tool.converted(to: $0) })) {
                     ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                    .fieldHelp("Units")
             } header: {
                 HStack { Text("Tool"); Spacer(); HelpButton(topic: .toolDatabase).controlSize(.small) }
             }

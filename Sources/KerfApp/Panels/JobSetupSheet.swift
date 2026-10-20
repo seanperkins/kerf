@@ -31,6 +31,7 @@ struct JobSetupSheet: View {
                             ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
                         }
                         .pickerStyle(.segmented)
+                            .fieldHelp("Units")
                     }
                     FormGroup("Machine") {
                         Picker("Machine", selection: Binding(get: { form.machineID ?? "" }, set: { id in
@@ -65,6 +66,7 @@ struct JobSetupSheet: View {
                         }
                         .pickerStyle(.radioGroup)
                         .labelsHidden()
+                            .fieldHelp("Z zero")
                         Text(form.job.zZero == .materialTop
                              ? "Touch off on top of the material. Cuts have negative Z."
                              : "Touch off on the spoilboard. The material top is Z = thickness.")
@@ -79,6 +81,7 @@ struct JobSetupSheet: View {
                         }
                         Toggle("Offset the datum", isOn: Binding(get: { form.job.datumOffset != nil },
                                                                  set: { form.job.datumOffset = $0 ? (form.job.datumOffset ?? .zero) : nil }))
+                            .fieldHelp("Offset the datum")
                         if form.job.datumOffset != nil {
                             LengthField("Offset X", value: Binding(get: { form.job.datumOffset?.x ?? 0 },
                                                                    set: { form.job.datumOffset?.x = $0 }), units: u,
@@ -165,14 +168,17 @@ struct TwoSidedSection: View {
         FormGroup("Sides") {
             Toggle("Two-sided job", isOn: Binding(get: { job.twoSided != nil },
                                                   set: { job.twoSided = $0 ? (job.twoSided ?? TwoSidedSetup()) : nil }))
+                .fieldHelp("Two-sided job")
             if let t = job.twoSided {
                 Picker("Flip the material", selection: Binding(get: { t.flip }, set: { job.twoSided?.flip = $0 })) {
                     ForEach(FlipAxis.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
+                    .fieldHelp("Flip the material")
                 Picker("Bottom side Z zero", selection: Binding(get: { t.bottomZZero }, set: { job.twoSided?.bottomZZero = $0 })) {
                     Text("Same as top side").tag(ZZeroMode?.none)
                     ForEach(ZZeroMode.allCases, id: \.self) { Text($0.displayName).tag(ZZeroMode?.some($0)) }
                 }
+                    .fieldHelp("Bottom side Z zero")
                 Text("Each side is drawn as seen from above while it faces up; the other side shows mirrored and dashed. Use the center origin, or stock cut exactly to size, so the second side registers to the first.")
                     .font(.caption).foregroundStyle(.secondary)
             }
