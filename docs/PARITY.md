@@ -81,41 +81,41 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `io-save-toolpaths` | io | Save toolpaths (single, combined, per tool) | done | P1 | Panels/SaveAllToolpathsSheet.swift, Model/GCodeBatchExport.swift; AdvancedToolpathDocumentTests |
 | `io-file-thumbnails` | io | File thumbnails / Quick Look | missing | P3 | Not implemented |
 | `tp-profile-basic` | toolpaths-2d | Profile: inside/outside/on, climb/conventional, allowance, multi-pass | done | P1 | CAMCore/Ops2D/ProfileOperation.swift; Ops2DProfileTests; e2e sign |
-| `tp-profile-open-sides` | toolpaths-2d | Profile open vectors left/right | missing | P2 | Open vectors always cut on the line (DECISIONS cam-2d) |
-| `tp-profile-last-pass` | toolpaths-2d | Separate last pass (allowance, reverse direction) | partial | P1 | DepthSettings.finalPassDepth is a shallower depth pass only; no side-allowance last pass or reverse |
-| `tp-pass-editor` | toolpaths-2d | Pass depth editor (exact step, custom passes, last-pass thickness) | partial | P2 | passDepth override + finalPassDepth (Parameters/CommonParameters.swift); no per-pass list |
-| `tp-profile-start-point` | toolpaths-2d | Use vector start point / optimise start points | missing | P2 | Start chosen automatically (ProfileOperation) |
-| `tp-profile-order` | toolpaths-2d | Profile ordering (selection order, left→right, bottom→top, grid) | partial | P2 | Greedy nearest neighbour + inner-before-outer (ChainOrdering.swift); no user ordering options |
+| `tp-profile-open-sides` | toolpaths-2d | Profile open vectors left/right | done | P2 | ProfileParameters.openVectorSide, Ops2D/Support/OpenOffset.swift; Ops2DOpenSideTests |
+| `tp-profile-last-pass` | toolpaths-2d | Separate last pass (allowance, reverse direction) | done | P1 | ProfileParameters.lastPass (allowance, reverse, full depth); ProfileOperation; Tests/CAMCoreTests/Ops2DLastPassTests.swift |
+| `tp-pass-editor` | toolpaths-2d | Pass depth editor (exact step, custom passes, last-pass thickness) | done | P2 | DepthSettings.customPasses / exactStep, PassEditor form; Ops2DPassDepthTests |
+| `tp-profile-start-point` | toolpaths-2d | Use vector start point / optimise start points | done | P2 | ProfileParameters.startPoint, Ops2D/Support/StartPoints.swift; Ops2DStartPointTests |
+| `tp-profile-order` | toolpaths-2d | Profile ordering (selection order, left→right, bottom→top, grid) | done | P2 | ProfileParameters.order, Ops2D/Support/ProfileOrdering.swift; Ops2DProfileOrderTests |
 | `tp-tabs-auto` | toolpaths-2d | Tabs: automatic count/spacing, rectangular or triangular (3D) | done | P1 | TabSettings, Ops2D/Support/PassShaping.swift; Ops2DProfileTests |
 | `tp-tabs-manual` | toolpaths-2d | Tabs: on-canvas placement and editing | done | P1 | Model/TabEditor.swift, Panels/TabEditingBanner.swift; Ops2DManualTabTests |
 | `tp-ramps` | toolpaths-2d | Ramps (smooth, zig-zag, spiral) by distance/angle | done | P1 | RampSettings, PassShaping.swift; Ops2DProfileTests |
 | `tp-leads` | toolpaths-2d | Lead-in/out (linear, arc) and overcut | done | P1 | Ops2D/Support/Leads.swift; Ops2DProfileTests |
-| `tp-sharp-corners` | toolpaths-2d | Sharp external corners (square corners) | missing | P2 | Profiles use Clipper round joins only (DECISIONS cam-2d) |
+| `tp-sharp-corners` | toolpaths-2d | Sharp external corners (square corners) | done | P2 | ProfileParameters.sharpCorners (miter joins); Ops2DSharpCornerTests |
 | `tp-pocket-offset-raster` | toolpaths-2d | Pocket: offset and raster with angle, islands | done | P1 | CAMCore/Ops2D/PocketOperation.swift, PocketPlanner.swift; Ops2DPocketTests |
-| `tp-pocket-profile-pass` | toolpaths-2d | Pocket profile pass first/last/none | partial | P2 | Raster has a boolean final profile pass only; no "first" option |
-| `tp-pocket-multi-tool` | toolpaths-2d | Pocket with multiple clearance tools (rest machining) | partial | P1 | One clearance tool + finish tool (PocketParameters.clearanceToolID) |
+| `tp-pocket-profile-pass` | toolpaths-2d | Pocket profile pass first/last/none | done | P2 | PocketParameters.profilePassFirst; Pocket form None/First/Last; Ops2DPocketProfilePassTests |
+| `tp-pocket-multi-tool` | toolpaths-2d | Pocket with multiple clearance tools (rest machining) | done | P1 | PocketParameters.clearanceToolIDs, PocketPlanner.restClearing(fullWalls:); ClearanceToolsEditor; Ops2DPocketMultiToolTests |
 | `tp-pocket-ramp-allowance` | toolpaths-2d | Pocket ramp plunges and pocket allowance | done | P1 | PocketParameters.ramp/allowance; Ops2DPocketTests |
 | `tp-drilling` | toolpaths-2d | Drilling with peck, dwell, retract | done | P1 | CAMCore/Ops2D/DrillOperation.swift; Ops2DDrillTests |
 | `tp-drill-bank` | toolpaths-2d | Drill bank / multi-spindle drilling | missing | P3 | Avid has a single spindle; not needed |
-| `tp-helical-hole` | toolpaths-2d | Helical hole milling / thread milling | missing | P2 | Only drill plunges; spiral ramp exists for profiles |
-| `tp-quick-engrave` | toolpaths-2d | Quick engrave (follow vector on centreline) | partial | P1 | Achievable via Profile side=on; no dedicated engrave toolpath with V-bit width preview |
-| `tp-chamfer` | toolpaths-2d | Chamfer toolpath | missing | P1 | No chamfer operation (AnyOperation.swift) |
-| `tp-inlay-straight` | toolpaths-2d | Straight-wall (end-mill) inlay toolpath | missing | P3 | Only V-carve inlay |
-| `tp-prism` | toolpaths-2d | Prism (raised bevel) carving | missing | P2 | No prism operation |
-| `tp-moulding` | toolpaths-2d | Moulding toolpath (profile swept along rail) | missing | P3 | No moulding operation |
+| `tp-helical-hole` | toolpaths-2d | Helical hole milling / thread milling | done | P2 | HoleMillOperation (helical bore + internal thread milling); Ops2DHoleMillTests |
+| `tp-quick-engrave` | toolpaths-2d | Quick engrave (follow vector on centreline) | done | P1 | EngraveOperation (OperationKind.engrave), groove width in form + metadata; Ops2DEngraveChamferTests |
+| `tp-chamfer` | toolpaths-2d | Chamfer toolpath | done | P1 | ChamferOperation (width or depth, tip clearance, side); ChamferForm; Ops2DEngraveChamferTests |
+| `tp-inlay-straight` | toolpaths-2d | Straight-wall (end-mill) inlay toolpath | done | P3 | StraightInlayOperation (matched close(open(S,r),r) outline); Ops2DStraightInlayTests |
+| `tp-prism` | toolpaths-2d | Prism (raised bevel) carving | done | P2 | PrismOperation (per-shape depth from inscribed radius); Ops2DPrismTests |
+| `tp-moulding` | toolpaths-2d | Moulding toolpath (profile swept along rail) | partial | P3 | MouldingOperation: section swept along rail offsets with 1D drop-cutter; exact for straight rails, curved rails approximate; Ops2DMouldingTests |
 | `tp-fluting` | toolpaths-2d | Fluting with ramp in/out | done | P2 | CAMCore/Ops2D/FlutingOperation.swift; Ops2DFlutingTextureTests |
 | `tp-texture` | toolpaths-2d | Texture toolpath | done | P3 | CAMCore/Ops2D/TextureOperation.swift; Ops2DFlutingTextureTests |
-| `tp-templates` | toolpaths-2d | Toolpath templates (save/load, auto vector selection) | missing | P2 | Not implemented |
-| `tp-merge` | toolpaths-2d | Merge toolpaths | missing | P3 | Group-by-tool export reduces tool changes but toolpaths are not merged |
-| `tp-array-copy` | toolpaths-2d | Array copy toolpath | missing | P3 | Not implemented |
+| `tp-templates` | toolpaths-2d | Toolpath templates (save/load, auto vector selection) | done | P2 | CAMCore/Templates/ToolpathTemplate.swift, TemplateService, Toolpaths menu; Tests/KerfAppTests/ToolpathTemplateTests.swift |
+| `tp-merge` | toolpaths-2d | Merge toolpaths | done | P3 | MergeOperation, Merge With Next / Split Merged commands; MergeToolpathTests |
+| `tp-array-copy` | toolpaths-2d | Array copy toolpath | done | P3 | OperationSetup.arrayCopy, ToolpathArray; Array Copies inspector section; Ops2DArrayCopyTests |
 | `tp-order-visibility` | toolpaths-2d | Toolpath list: reorder, duplicate, enable, show/hide, recalc, stale status | done | P1 | Panels/SidebarView.swift ToolpathsSidebar/ToolpathRow; ProjectModelTests |
 | `tp-tool-database` | toolpaths-2d | Tool database (kinds, cutting data, units, numbers) | done | P1 | CADCore/Model/ToolLibrary.swift, Panels/ToolDatabaseView.swift |
-| `tp-tool-groups-materials` | toolpaths-2d | Tool groups and per-material cutting data | missing | P2 | Flat tool list, one set of cutting data per tool |
-| `tp-feeds-calculator` | toolpaths-2d | Feeds and speeds calculator (chip load) | missing | P2 | Not implemented |
-| `tp-tool-edit-per-toolpath` | toolpaths-2d | Per-toolpath tool parameter override | missing | P2 | Operations reference library tools by id; no local override |
+| `tp-tool-groups-materials` | toolpaths-2d | Tool groups and per-material cutting data | done | P2 | Tool.group, Tool.materials, JobSetup.material, CAMContext.tool; ToolDataSections; Ops2DToolDataTests, ToolGroupingTests |
+| `tp-feeds-calculator` | toolpaths-2d | Feeds and speeds calculator (chip load) | done | P2 | CAMCore/Tools/FeedsAndSpeeds.swift; tool editor calculator section; Ops2DToolDataTests |
+| `tp-tool-edit-per-toolpath` | toolpaths-2d | Per-toolpath tool parameter override | done | P2 | OperationSetup.toolOverride via CAMContext.toolOverrides; ToolOverrideSection; Ops2DToolDataTests |
 | `tp-arc-output` | toolpaths-2d | Arc (G2/G3) and helical arc output | done | P2 | ArcFitter.swift; PostProfile arcOutput/helicalArcs; PostGoldenTests |
 | `tp-tiling` | toolpaths-2d | Toolpath tiling for jobs larger than the bed | missing | P3 | Avid 60x96 bed is large; not implemented |
-| `tp-keepout` | toolpaths-2d | Keep-out zones | missing | P2 | Not implemented |
+| `tp-keepout` | toolpaths-2d | Keep-out zones | partial | P2 | Document.keepOutZones, KeepOut.violations as export/Check errors, Keep-Out Zones sheet, canvas hatching; toolpaths are checked, not re-routed; Ops2DKeepOutTests, KeepOutZoneTests |
 | `vc-basic` | vcarve | V-carve (medial-axis depth from V angle) | done | P1 | CAMCore/OpsVCarve/VCarveOperation.swift, VCarveMedialAxis.swift; VCarveTests |
 | `vc-flat-depth` | vcarve | Flat depth with flat-area clearance (offset/raster) | done | P1 | VCarvePocketing.swift, VCarveParameters.flatDepth/flatClearanceToolID; VCarveTests |
 | `vc-multi-clearance` | vcarve | Multiple clearance tools for flat areas | partial | P2 | One flat clearance tool (VCarveParameters.flatClearanceToolID) |
