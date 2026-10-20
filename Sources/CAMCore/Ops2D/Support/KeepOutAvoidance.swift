@@ -91,6 +91,51 @@ public enum KeepOutAvoidance {
         return out
     }
 
+    /// Clearance height above the material top used to lift over these zones (highest
+    /// lift-over top + 2 × margin, the height `apply` and `link` travel at); nil when no zone
+    /// is marked lift-over.
+    public static func clearanceHeight(zones: [KeepOutZone], margin: Double) -> Double? {
+        zones.filter { $0.liftOver == true && $0.outline.count > 2 }.map { $0.height + 2 * max(margin, 0) }.max()
+    }
+
+    /// Raises the travel after the last toolpath (the post footer's move home: `points`, in
+    /// order, machine frame) over lift-over zones that are taller than it. The lifted travel is
+    /// appended to the last toolpath and ends where the footer would put the tool, so the
+    /// footer's own moves then go nowhere; it never descends inside a zone.
+    public static func linkTravel(after toolpaths: [Toolpath], through points: [Vec3], zones: [KeepOutZone],
+                                  coords: MachineCoordinates, margin: Double, tolerance: Double) -> [Toolpath] {
+        let active = zones.filter { $0.liftOver == true && $0.outline.count > 2 }
+        guard !active.isEmpty, !points.isEmpty,
+              let i = toolpaths.lastIndex(where: { $0.moves.contains { $0.target != nil } }),
+              let end = toolpaths[i].moves.last(where: { $0.target != nil })?.target else { return toolpaths }
+        let m = max(margin, 0)
+        let clearZ = max(coords.safeZ, active.map { coords.z(aboveTop: $0.height + 2 * m) }.max() ?? coords.safeZ)
+        let topZ = active.map { coords.z(aboveTop: $0.height + m) }.max() ?? coords.safeZ
+        let loops = active.map { z -> [Vec2] in
+            let o = z.outline.map { coords.machineXY($0) }
+            return Polygon2D.signedArea(o) < 0 ? o.reversed() : o
+        }
+        let tp = toolpaths[i]
+        let region = GeomKernel.offset(loops, by: tp.tool.radius + m + 4 * max(tolerance, 1e-6), join: .round,
+                                       arcTolerance: tolerance)
+        guard !region.isEmpty else { return toolpaths }
+        var router = Router(region: region, box: Rect2(points: region.flatMap { $0 }), topZ: topZ, clearZ: clearZ,
+                            approachZ: coords.z(aboveTop: m), plunge: tp.tool.plungeRate, tolerance: tolerance)
+        let routed = router.route([.rapid(to: end)] + points.map { .rapid(to: $0) })
+        guard router.raisedRapids > 0 else { return toolpaths }
+        var tail: [Move] = []
+        var at = end
+        for mv in routed.dropFirst() {
+            guard let t = mv.target, t.distance(to: at) > 1e-9 else { continue }
+            tail.append(mv); at = t
+        }
+        var out = toolpaths
+        out[i].moves += tail
+        let n = Int(tp.metadata["keep-out lifts"] ?? "0") ?? 0
+        out[i].metadata["keep-out lifts"] = String(n + router.raisedRapids)
+        return out
+    }
+
     struct Router {
         let region: [[Vec2]]
         let box: Rect2

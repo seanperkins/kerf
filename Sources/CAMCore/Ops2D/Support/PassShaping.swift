@@ -28,6 +28,9 @@ public enum PassShaping {
     ///   - toDepth: this pass's depth.
     ///   - overcut: extra distance past the start on closed loops.
     ///   - spiralFinish: for spiral ramps, append a flat lap at `toDepth` (last pass).
+    /// Upper bound on zig-zag legs per pass (even).
+    static let maxZigzagLegs = 200
+
     public static func pass(on chain: ArcLengthChain, s0: Double, fromDepth: Double, toDepth: Double,
                             ramp: RampSettings, overcut: Double = 0, spiralFinish: Bool = true) -> ChainPass {
         let L = chain.length
@@ -58,9 +61,12 @@ public enum PassShaping {
             }
             return ChainPass(pieces: [piece], endS: end)
         case .zigzag:
-            let lz = min(max(ramp.length, 1e-6), L)
+            // A zero or tiny length is floored at the shortest leg that keeps the max angle in
+            // two legs (as the smooth ramp floors at drop / tan); legs are capped so a very
+            // short open vector cannot turn one pass into thousands of legs.
+            let lz = min(max(ramp.length, drop / tanA / 2), L)
             let perLeg = lz * tanA
-            var legs = max(2, Int(ceil(drop / perLeg - 1e-9)))
+            var legs = min(Self.maxZigzagLegs, max(2, Int(ceil(drop / perLeg - 1e-9))))
             if legs % 2 == 1 { legs += 1 }
             var pieces: [[StationPoint]] = []
             for k in 0..<legs {

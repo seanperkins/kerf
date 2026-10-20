@@ -36,6 +36,11 @@ enum TiledExport {
             var p = project
             p.document.job = tile.job
             p.document.shapes = doc.shapes.map { $0.transformed(.translation(-tile.region.min)) }
+            p.document.keepOutZones = doc.keepOutZones?.map { z in
+                var moved = z
+                moved.outline = z.outline.map { $0 - tile.region.min }
+                return moved
+            }
             let r = GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title)
             let name = String(format: "%@_tile%02d.%@", stem, tile.number, profile.fileExtension)
             return File(tile: tile, fileName: name, title: title, result: r)

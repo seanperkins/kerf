@@ -83,7 +83,7 @@ public struct Relief3DOperation: ToolpathOperation {
         var result: [Toolpath] = []
 
         if params.roughing.isEnabled {
-            let moves = ReliefRoughing.moves(map: map, region: region, tool: roughTool,
+            let moves = try ReliefRoughing.moves(map: map, region: region, tool: roughTool,
                                              allowance: params.roughing.allowance,
                                              passDepth: params.roughing.passDepth, strategy: params.roughing.strategy,
                                              coords: coords, clearance: clearance, tolerance: context.tolerance)

@@ -16,6 +16,7 @@ public struct FlutingOperation: ToolpathOperation {
         let tool = try context.tool(setup.toolID)
         let shapes = context.shapes(for: setup)
         guard !shapes.isEmpty else { throw CAMError.noGeometry }
+        try params.depth.validatePassDepth(toolStepdown: tool.stepdown)
         let passes = params.depth.passDepths(toolStepdown: tool.stepdown)
         guard !passes.isEmpty else { throw CAMError.invalidParameter("Cut depth must be deeper than start depth") }
         let tol = context.tolerance

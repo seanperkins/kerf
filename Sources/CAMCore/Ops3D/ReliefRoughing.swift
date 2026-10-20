@@ -11,14 +11,15 @@ import Foundation
 enum ReliefRoughing {
     static func moves(map: ReliefHeightmap, region: [[Vec2]], tool: Tool, allowance: Double, passDepth: Double?,
                       strategy: PocketStrategy, coords: MachineCoordinates, clearance: Double,
-                      tolerance: Double) -> [Move] {
+                      tolerance: Double) throws -> [Move] {
         let levels = ReliefLevelRegions(map: map, toolRadius: tool.radius, allowance: allowance, boundary: region,
                                         tolerance: tolerance)
         let stepover = min(max(tool.stepover, 1e-4), tool.diameter * 0.9)
         let deepest = levels.deepestFloor
         guard deepest > 1e-9 else { return [] }
-        let depths = DepthSettings(startDepth: 0, cutDepth: deepest, passDepth: passDepth)
-            .passDepths(toolStepdown: tool.stepdown)
+        let settings = DepthSettings(startDepth: 0, cutDepth: deepest, passDepth: passDepth)
+        try settings.validatePassDepth(toolStepdown: tool.stepdown)
+        let depths = settings.passDepths(toolStepdown: tool.stepdown)
 
         var writer = PathWriter3D(coords: coords, feedRate: tool.feedRate, plungeRate: tool.plungeRate,
                                   clearance: clearance)

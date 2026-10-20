@@ -58,6 +58,63 @@ enum GCodeExporter {
                                      tolerance: tol)
     }
 
+    /// Name of the modelled end-of-program travel in keep-out messages.
+    static let homeMoveName = "Move home (end of program)"
+
+    /// The footer's travel after the last toolpath, machine frame, document units: the post
+    /// retracts to safe Z, then the built-in footers go to Home Z and across to home XY. Only
+    /// the moves the profile's footer actually makes ({HOME_Z}, {HOME_X}/{HOME_Y}) are included,
+    /// Z first. Empty when the footer does not go home.
+    static func homeTravel(from end: Vec3, document doc: Document, profile: PostProfile) -> [Vec3] {
+        let footer = profile.footer.joined(separator: "\n")
+        let goesZ = footer.contains("{HOME_Z}")
+        let goesXY = footer.contains("{HOME_X}") || footer.contains("{HOME_Y}")
+        guard goesZ || goesXY else { return [] }
+        let coords = MachineCoordinates(job: doc.job)
+        var pts = [Vec3(end.xy, z: max(end.z, coords.safeZ))]
+        var z = pts[0].z
+        if goesZ { z = coords.homeZ; pts.append(Vec3(end.xy, z: z)) }
+        if goesXY { pts.append(Vec3(doc.job.home, z: z)) }
+        return pts
+    }
+
+    /// The footer's travel home as a rapid-only toolpath with the last toolpath's tool, so the
+    /// keep-out checks see it as the next move of the program; nil when there is none.
+    static func homeMove(after toolpaths: [Toolpath], document doc: Document, profile: PostProfile) -> Toolpath? {
+        guard let last = toolpaths.last(where: { $0.moves.contains { $0.target != nil } }),
+              let end = last.moves.last(where: { $0.target != nil })?.target else { return nil }
+        let pts = homeTravel(from: end, document: doc, profile: profile)
+        guard !pts.isEmpty else { return nil }
+        var tp = last
+        tp.name = homeMoveName
+        tp.moves = pts.map { .rapid(to: $0) }
+        tp.metadata = [:]
+        return tp
+    }
+
+    /// Raises the footer's move home over "lift over" keep-out zones taller than Home Z.
+    static func linkHomeOverKeepOutZones(_ toolpaths: [Toolpath], document doc: Document,
+                                         profile: PostProfile) -> [Toolpath] {
+        guard let zones = doc.keepOutZones, zones.contains(where: { $0.liftOver == true }),
+              let home = homeMove(after: toolpaths, document: doc, profile: profile) else { return toolpaths }
+        let margin = doc.units == .inch ? 0.05 : 1.0
+        let tol = doc.units == .inch ? 0.0005 : 0.01
+        return KeepOutAvoidance.linkTravel(after: toolpaths, through: home.moves.compactMap(\.target), zones: zones,
+                                           coords: MachineCoordinates(job: doc.job), margin: margin, tolerance: tol)
+    }
+
+    /// Height above the material top for the first XY move after each tool change: above the
+    /// tallest keep-out zone or clamp (+ 2 × the check's clearance) when that is above safe Z,
+    /// since where the tool change leaves the spindle is unknown. nil = safe Z is enough.
+    static func approachHeight(document doc: Document) -> Double? {
+        let margin = doc.units == .inch ? 0.05 : 1.0
+        let tops = (doc.keepOutZones ?? []).filter { $0.outline.count > 2 }.map(\.height)
+            + Fixtures.zones(in: doc).map(\.height)
+        guard let h = tops.max() else { return nil }
+        let clear = h + 2 * margin
+        return clear > doc.job.safeZ + 1e-9 ? clear : nil
+    }
+
     static func materialDescription(_ doc: Document) -> String {
         let j = doc.job
         func f(_ v: Double) -> String { RulerTicks.label(v) }
@@ -73,14 +130,23 @@ enum GCodeExporter {
         }
         // Travel between toolpaths crosses lift-over zones at safe Z unless raised here: each
         // operation was re-routed on its own, so only the final order shows these moves.
-        let toolpaths = linkOverKeepOutZones(toolpaths, document: doc)
+        // The footer's move home is a fixed path too: lifted the same way, then checked.
+        let toolpaths = linkHomeOverKeepOutZones(linkOverKeepOutZones(toolpaths, document: doc), document: doc,
+                                                 profile: profile)
+        let checked = toolpaths + [homeMove(after: toolpaths, document: doc, profile: profile)].compactMap { $0 }
         let validator = GCodeValidator(profile: profile, job: doc.job, units: doc.units)
         var issues = validator.validate(toolpaths: toolpaths)
-        issues += keepOutIssues(toolpaths, document: doc)
+        issues += keepOutIssues(checked, document: doc)
         issues += LayoutChecks.toolpaths(toolpaths, job: doc.job, units: doc.units)
-        issues += LayoutChecks.keepOut(toolpaths, zones: Fixtures.zones(in: doc), job: doc.job, units: doc.units)
+        issues += LayoutChecks.keepOut(checked, zones: Fixtures.zones(in: doc), job: doc.job, units: doc.units).map { i in
+            guard i.message.contains(homeMoveName) else { return i }
+            var fixed = i
+            fixed.message = i.message.replacingOccurrences(of: "raise safe Z", with: "raise Home Z")
+            return fixed
+        }
         // The post header already prints W x H x T, so no extra material description.
-        let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths)
+        let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths,
+                          approachHeight: approachHeight(document: doc))
         do {
             let text = try TemplatePostProcessor(profile: profile).post(job)
             issues += validator.validate(gcode: text)

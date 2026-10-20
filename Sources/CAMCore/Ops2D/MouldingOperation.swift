@@ -69,6 +69,7 @@ public struct MouldingOperation: ToolpathOperation {
         // Optional roughing levels (each pass limited to the level), then the finishing passes.
         var levels: [Double] = []
         let maxDepth = passes.map(\.depth).max()!
+        if params.roughing { try DepthSettings(cutDepth: maxDepth).validatePassDepth(toolStepdown: tool.stepdown) }
         if params.roughing, maxDepth > tool.stepdown + 1e-9 {
             levels = DepthSettings(cutDepth: maxDepth).passDepths(toolStepdown: tool.stepdown).dropLast()
         }

@@ -179,6 +179,10 @@ struct ToolEditor: View {
             }
             Section("Cutting data") {
                 LengthField("Pass depth (stepdown)", value: $tool.stepdown, units: u)
+                if !(tool.stepdown > 0) {
+                    Text("Pass depth must be positive; toolpaths using this tool will not calculate.")
+                        .font(.caption).foregroundStyle(.red)
+                }
                 LabeledContent("Stepover") {
                     HStack {
                         TextField("Stepover", value: $tool.stepover, format: decimalFormat)

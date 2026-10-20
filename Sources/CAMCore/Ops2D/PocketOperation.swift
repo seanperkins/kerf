@@ -91,6 +91,7 @@ public struct PocketOperation: ToolpathOperation {
     /// connecting move stays inside the tool-centre region.
     private func emit(_ groups: [[Chain2D]], planner: PocketPlanner, tool: Tool, context: CAMContext,
                       name: String) throws -> Toolpath {
+        try params.depth.validatePassDepth(toolStepdown: tool.stepdown)
         let passes = params.depth.passDepths(toolStepdown: tool.stepdown)
         guard !passes.isEmpty else { throw CAMError.invalidParameter("Cut depth must be deeper than start depth") }
         let tol = context.tolerance

@@ -48,6 +48,27 @@ import Testing
         #expect(files[1].result.text?.contains("tile 2 of 2") == true)
     }
 
+    /// A keep-out zone in tile 2 is moved into the tile frame with the toolpaths, so a
+    /// profile running through it is reported there (it is reported untiled too).
+    @Test func keepOutZonesAreCheckedInTheirTilesFrame() {
+        let d = doc()
+        // Over the right profile's bottom edge (rect 90..100 x 8..14), clear of the pocket.
+        var p = d.project
+        p.document.keepOutZones = [KeepOutZone(name: "Clamp", outline: [Vec2(94, 7), Vec2(96, 7), Vec2(96, 9),
+                                                                                   Vec2(94, 9)], height: 1)]
+        let whole = GCodeExporter.export(project: p,
+                                         toolpaths: GCodeExporter.toolpaths(scope: .all, operations: p.operations,
+                                                                            results: d.results, groupByTool: false),
+                                         profile: BuiltInPosts.avidMach4Inch, jobName: "Bench")
+        #expect(whole.issues.contains { $0.severity == .error && $0.message.contains("Clamp") })
+        let files = TiledExport.files(project: p, results: d.results, profile: BuiltInPosts.avidMach4Inch,
+                                      groupByTool: false, settings: TilingSettings(tileWidth: 60, tileHeight: 96))
+        #expect(files.count == 2)
+        #expect(!files[0].result.issues.contains { $0.message.contains("Clamp") })
+        #expect(files[1].result.issues.contains { $0.severity == .error && $0.message.contains("Clamp") },
+                "\(files[1].result.issues)")
+    }
+
     @Test func aJobThatFitsIsOneTile() {
         let d = doc()
         let files = TiledExport.files(project: d.project, results: d.results, profile: BuiltInPosts.avidMach4Inch,

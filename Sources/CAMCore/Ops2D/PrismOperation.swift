@@ -56,7 +56,9 @@ public struct PrismOperation: ToolpathOperation {
             remaining.removeAll { $0 == k }
             let job = jobs[k]
             deepest = max(deepest, job.depth)
-            let passes = DepthSettings(cutDepth: job.depth, passDepth: params.passDepth).passDepths(toolStepdown: tool.stepdown)
+            let depth = DepthSettings(cutDepth: job.depth, passDepth: params.passDepth)
+            try depth.validatePassDepth(toolStepdown: tool.stepdown)
+            let passes = depth.passDepths(toolStepdown: tool.stepdown)
             for chain in ChainOrdering.nearestNeighbour(job.loops, from: cur, tolerance: tol) {
                 let alc = ArcLengthChain(chain)
                 var prev = 0.0, s0 = 0.0

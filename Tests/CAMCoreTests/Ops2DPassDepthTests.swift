@@ -48,3 +48,47 @@ private func mils(_ d: [Double]) -> [Double] { d.map { ($0 * 1000).rounded() } }
     let d = try JSONDecoder().decode(DepthSettings.self, from: Data(json.utf8))
     #expect(d.customPasses == nil && d.exactStep == nil)
 }
+
+/// A pass depth or stepdown of 0 or less is an error, not 750 000 passes.
+@Test(arguments: [0.0, -0.1])
+func ops2DNonPositivePassDepthIsRejected(step: Double) throws {
+    let (ctx, ids) = Ops2DFixture.document([Ops2DFixture.rect(0, 0, 2, 2)])
+    let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: Ops2DFixture.endMill.id, shapeIDs: ids),
+                              params: ProfileParameters(depth: DepthSettings(cutDepth: 0.75, passDepth: step)))
+    #expect(throws: CAMError.self) { try op.generate(in: ctx) }
+    // The pocket and the tool's own stepdown are checked the same way.
+    let pocket = PocketOperation(setup: OperationSetup(name: "K", toolID: Ops2DFixture.endMill.id, shapeIDs: ids),
+                                 params: PocketParameters(depth: DepthSettings(cutDepth: 0.75, passDepth: step)))
+    #expect(throws: CAMError.self) { try pocket.generate(in: ctx) }
+    #expect(throws: CAMError.self) {
+        try DepthSettings(cutDepth: 0.75).validatePassDepth(toolStepdown: step)
+    }
+    // The helper itself (also used for the form's preview) stays bounded.
+    #expect(DepthSettings(cutDepth: 0.75, passDepth: step).passDepths(toolStepdown: 0.125).count == 1)
+    #expect(DepthSettings(cutDepth: 0.75, passDepth: 1e-9).passDepths(toolStepdown: 0.125).count
+                <= DepthSettings.maxComputedPasses)
+}
+
+/// A zig-zag ramp of length 0 (forced on open vectors) ramps at the max angle in two legs
+/// instead of hundreds of thousands of legs.
+@Test func ops2DZeroLengthZigzagRampIsBounded() throws {
+    let open = Path(start: Vec2(1, 1), segments: [.line(to: Vec2(5, 1))], isClosed: false)
+    let (ctx, ids) = Ops2DFixture.document(shapePaths: [open])
+    var params = ProfileParameters(depth: DepthSettings(cutDepth: 0.75))
+    params.side = .on
+    params.tabs.isEnabled = false
+    params.ramp = RampSettings(isEnabled: true, type: .smooth, length: 0, maxAngle: 10)
+    let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: Ops2DFixture.endMill.id, shapeIDs: ids),
+                              params: params)
+    let tp = try op.generate(in: ctx)[0]
+    #expect(tp.moves.count < 2000, "\(tp.moves.count) moves")
+    // Every ramp leg respects the max angle.
+    var cur: Vec3?
+    for m in tp.moves {
+        guard let t = m.target else { continue }
+        defer { cur = t }
+        guard let s = cur, case .linear = m, s.xy.distance(to: t.xy) > 1e-6 else { continue }
+        let slope = abs(t.z - s.z) / s.xy.distance(to: t.xy)
+        #expect(slope <= tan(10.0 * .pi / 180) + 1e-6)
+    }
+}

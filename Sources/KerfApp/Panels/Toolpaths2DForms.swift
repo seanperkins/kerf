@@ -162,7 +162,9 @@ struct PassEditor: View {
                             help: "Material left for a thin last pass (0 = none)")
             }
         }
-        if stepdown != nil || depth.customPasses != nil {
+        if depth.customPasses == nil, let s = stepdown, !(s > 0) {
+            Text("Pass depth must be positive.").font(.caption).foregroundStyle(.red)
+        } else if stepdown != nil || depth.customPasses != nil {
             let passes = depth.passDepths(toolStepdown: stepdown ?? 1)
             if !passes.isEmpty {
                 Text("\(passes.count) pass\(passes.count == 1 ? "" : "es"): " + passes.map(fmt).joined(separator: ", ")

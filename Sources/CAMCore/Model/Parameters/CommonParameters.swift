@@ -52,10 +52,27 @@ public struct DepthSettings: Codable, Hashable, Sendable {
 
     /// Pass depths from startDepth (exclusive) to cutDepth (inclusive), evenly spaced and
     /// never deeper than `stepdown` apart. Shared helper so every op paces passes the same way.
+    /// At most this many computed passes: a tiny or zero step (a typo in a field) must never
+    /// turn into millions of passes. Operations reject a non-positive step first
+    /// (`validatePassDepth`); this only keeps the helper bounded for previews.
+    public static let maxComputedPasses = 10_000
+
+    /// Throws when the step that `passDepths` would use is not a positive number (a pass depth
+    /// or tool stepdown of 0 or less). Hand-edited passes do not use the step.
+    public func validatePassDepth(toolStepdown: Double) throws {
+        if let custom = customPasses, !custom.isEmpty { return }
+        let step = passDepth ?? toolStepdown
+        guard step.isFinite, step > 0 else {
+            throw CAMError.invalidParameter(passDepth != nil ? "Pass depth must be positive"
+                                                             : "Tool pass depth (stepdown) must be positive")
+        }
+    }
+
     public func passDepths(toolStepdown: Double) -> [Double] {
-        let step = max(passDepth ?? toolStepdown, 1e-6)
         let total = cutDepth - startDepth
         guard total > 1e-12 else { return [] }
+        let raw = passDepth ?? toolStepdown
+        let step = max(raw.isFinite && raw > 0 ? raw : total, total / Double(Self.maxComputedPasses))
         if let custom = customPasses, !custom.isEmpty {
             var depths: [Double] = []
             for d in custom.sorted() where d > startDepth + 1e-9 && d < cutDepth - 1e-9 {

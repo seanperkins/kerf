@@ -17,11 +17,15 @@ public struct PostJob: Sendable {
     /// Toolpaths in output order. A tool change is emitted whenever the tool changes.
     public var toolpaths: [Toolpath]
     public var materialDescription: String?
+    /// Height above the material top (job units) to climb to after each tool change, and at
+    /// the start, before the first XY move, when it is above safe Z: the tool then crosses
+    /// keep-out zones and clamps taller than safe Z wherever the tool change left it. nil = safe Z.
+    public var approachHeight: Double?
 
     public init(name: String, units: LengthUnit, job: JobSetup, toolpaths: [Toolpath],
-                materialDescription: String? = nil) {
+                materialDescription: String? = nil, approachHeight: Double? = nil) {
         self.name = name; self.units = units; self.job = job; self.toolpaths = toolpaths
-        self.materialDescription = materialDescription
+        self.materialDescription = materialDescription; self.approachHeight = approachHeight
     }
 }
 

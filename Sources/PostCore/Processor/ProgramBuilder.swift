@@ -13,6 +13,8 @@ struct ProgramBuilder {
     private let setup: JobSetup
     private let toolpaths: [Toolpath]
     private let coords: MachineCoordinates
+    /// Machine Z for the first XY move after a tool change (never below safe Z).
+    private let approachZ: Double
 
     init(profile: PostProfile, job: PostJob) {
         self.profile = profile
@@ -21,6 +23,8 @@ struct ProgramBuilder {
         setup = job.job.scaled(by: f)
         toolpaths = job.toolpaths.map { $0.scaled(from: job.units, to: profile.units) }
         coords = MachineCoordinates(job: setup)
+        let c = coords
+        approachZ = max(c.safeZ, job.approachHeight.map { c.z(aboveTop: $0 * f) } ?? c.safeZ)
     }
 
     func build() throws -> String {
@@ -47,6 +51,11 @@ struct ProgramBuilder {
                 writeToolChange(tp, into: &w)
                 currentTool = tp.tool.id
                 currentRPM = nil
+                // Cross to the first point at the approach height; the toolpath's own first
+                // move then only descends.
+                if approachZ > coords.safeZ + 1e-9, let first = tp.moves.first(where: { $0.target != nil })?.target {
+                    w.rapid(to: Vec3(first.xy, z: approachZ))
+                }
             }
             if tp.spindleRPM != currentRPM {
                 writeSpindleStart(tp, into: &w)
@@ -125,7 +134,7 @@ struct ProgramBuilder {
         }
         // The controller may have moved during the change: restate everything.
         w.resetModalState()
-        w.forceRapidZ(coords.safeZ)
+        w.forceRapidZ(approachZ)
     }
 
     private func writeSpindleStart(_ tp: Toolpath, into w: inout GCodeWriter) {
