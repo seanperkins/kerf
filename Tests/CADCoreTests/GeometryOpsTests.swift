@@ -51,6 +51,59 @@ import Testing
     }
 }
 
+@Suite struct GeometryNearMissTests {
+    @Test func reportsAPathWhoseOwnEndsNearlyMeet() throws {
+        // A square outline that stops 0.2 short of where it started.
+        let p = Path(points: [Vec2(0, 0), Vec2(10, 0), Vec2(10, 10), Vec2(0, 10), Vec2(0, 0.2)], closed: false)
+        let r = try #require(PathOps.nearlyMeetingEnds([p], beyond: 0.01, upTo: 1))
+        #expect(r.vectorCount == 1)
+        #expect(approx(r.smallestGap, 0.2) && approx(r.largestGap, 0.2))
+    }
+
+    @Test func countsBothPiecesAcrossAGap() throws {
+        let a = Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false)
+        let b = Path(points: [Vec2(5.3, 0), Vec2(10, 0)], closed: false)
+        let r = try #require(PathOps.nearlyMeetingEnds([a, b], beyond: 0.01, upTo: 1))
+        #expect(r.vectorCount == 2)
+        #expect(approx(r.smallestGap, 0.3) && approx(r.largestGap, 0.3))
+    }
+
+    @Test func reportsTheRangeOfGaps() throws {
+        let paths = [
+            Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+            Path(points: [Vec2(5.1, 0), Vec2(10, 0)], closed: false),
+            Path(points: [Vec2(20, 0), Vec2(25, 0)], closed: false),
+            Path(points: [Vec2(25.4, 0), Vec2(30, 0)], closed: false),
+        ]
+        let r = try #require(PathOps.nearlyMeetingEnds(paths, beyond: 0.01, upTo: 1))
+        #expect(r.vectorCount == 4)
+        #expect(approx(r.smallestGap, 0.1) && approx(r.largestGap, 0.4))
+    }
+
+    @Test func ignoresEndsThatMeetAreFarApartOrBelongToClosedPaths() {
+        let lone = Path(points: [Vec2(0, 0), Vec2(10, 0)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([lone], beyond: 0.01, upTo: 1) == nil)
+        let touching = [Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+                        Path(points: [Vec2(5.005, 0), Vec2(10, 0)], closed: false)]
+        #expect(PathOps.nearlyMeetingEnds(touching, beyond: 0.01, upTo: 1) == nil)
+        let tooFar = [Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+                      Path(points: [Vec2(7, 0), Vec2(10, 0)], closed: false)]
+        #expect(PathOps.nearlyMeetingEnds(tooFar, beyond: 0.01, upTo: 1) == nil)
+        let sq = ShapeFactory.rectangle(Rect2(x: 0, y: 0, width: 1, height: 1))
+        #expect(PathOps.nearlyMeetingEnds([sq], beyond: 0.01, upTo: 1) == nil)
+    }
+
+    @Test func handlesThousandsOfPathsQuickly() throws {
+        // Short collinear pieces, each a hair apart: a grid lookup keeps this linear, not quadratic.
+        let paths = (0..<6000).map { i in
+            Path(points: [Vec2(Double(i) * 1.3, 0), Vec2(Double(i) * 1.3 + 1, 0)], closed: false)
+        }
+        let r = try #require(PathOps.nearlyMeetingEnds(paths, beyond: 0.01, upTo: 0.5))
+        #expect(r.vectorCount == 6000)
+        #expect(approx(r.smallestGap, 0.3, 1e-9))
+    }
+}
+
 @Suite struct GeometryOrientationTests {
     @Test func normalizedOrientationMakesOuterCCWAndHolesCW() {
         let outer = ShapeFactory.rectangle(Rect2(x: 0, y: 0, width: 10, height: 10)).reversed()

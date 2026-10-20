@@ -82,6 +82,53 @@ public enum PathOps {
         return result
     }
 
+    /// How many open vectors have ends that nearly meet, and how far apart those ends are.
+    public struct EndGapReport: Equatable, Sendable {
+        public var vectorCount: Int
+        public var smallestGap: Double
+        public var largestGap: Double
+    }
+
+    /// Finds open paths with an end that lies more than `tolerance` but no more than `limit` from
+    /// another end: the signature of a gap in a drawing that `joinOpenPaths(tolerance:)` leaves
+    /// open. A path's own two ends count, so an outline that stops short of closing is found.
+    /// A grid lookup keeps this linear in the number of ends. Nil when there is no such pair.
+    public static func nearlyMeetingEnds(_ paths: [Path], beyond tolerance: Double, upTo limit: Double) -> EndGapReport? {
+        guard limit > 0, limit > tolerance else { return nil }
+        var ends: [(point: Vec2, path: Int)] = []
+        for (i, p) in paths.enumerated() where !p.isClosed && !p.isEmpty {
+            ends.append((p.start, i))
+            ends.append((p.end, i))
+        }
+        guard ends.count > 1 else { return nil }
+
+        struct Cell: Hashable { var x: Int; var y: Int }
+        func cell(_ v: Vec2) -> Cell { Cell(x: Int((v.x / limit).rounded(.down)), y: Int((v.y / limit).rounded(.down))) }
+        var grid: [Cell: [Int]] = [:]
+        for (i, e) in ends.enumerated() { grid[cell(e.point), default: []].append(i) }
+
+        var involved = Set<Int>()
+        var smallest = Double.infinity, largest = 0.0
+        for (i, e) in ends.enumerated() {
+            let c = cell(e.point)
+            var nearest = Double.infinity
+            for dx in -1...1 {
+                for dy in -1...1 {
+                    for j in grid[Cell(x: c.x + dx, y: c.y + dy)] ?? [] where j != i {
+                        let d = e.point.distance(to: ends[j].point)
+                        if d > tolerance && d <= limit { nearest = min(nearest, d) }
+                    }
+                }
+            }
+            guard nearest.isFinite else { continue }
+            involved.insert(e.path)
+            smallest = min(smallest, nearest)
+            largest = max(largest, nearest)
+        }
+        guard !involved.isEmpty else { return nil }
+        return EndGapReport(vectorCount: involved.count, smallestGap: smallest, largestGap: largest)
+    }
+
     /// Returns `path` closed if its end is within `tolerance` of its start (the last point is
     /// snapped onto the start); otherwise unchanged.
     public static func closeIfNearlyClosed(_ path: Path, tolerance: Double) -> Path {

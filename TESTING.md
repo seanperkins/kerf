@@ -39,6 +39,8 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    (only the date or job name may differ). Toolpaths → Check Toolpaths… (⇧⌘K) should report no errors.
 5. **Import.** Make a new document (⌘N). Use File → Import… (⇧⌘I) to import `bracket-plate.dxf`.
    The plate and its six inner features should appear.
+   Then import `Tests/Fixtures/CADCore/outline-with-gap.dxf`: it arrives as one open vector, and the
+   Import alert names the layer (Cabinet) and a gap of about 0.2 mm (0.0079 in), not joined at 0.0005 in.
 6. **Draw.** Use the canvas tools (V select, N node edit, R rectangle, C circle, E ellipse, L line,
    P Bézier pen, T text). In the Arrange menu, try Align, Boolean (union/subtract/intersect),
    Offset…, Mirror, Rotate, Group/Ungroup and Join/Close vectors. Use ⌘Z/⇧⌘Z to undo and redo.
