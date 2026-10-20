@@ -27,5 +27,9 @@ struct KerfApp: App {
                 .environmentObject(toolLibrary)
         }
         .defaultSize(width: 820, height: 600)
+
+        Settings {
+            PreferencesView()
+        }
     }
 }

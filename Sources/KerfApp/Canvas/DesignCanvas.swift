@@ -5,6 +5,8 @@ import SwiftUI
 /// SwiftUI wrapper for the AppKit canvas.
 struct DesignCanvas: NSViewRepresentable {
     @ObservedObject var document: KerfDocument
+    /// Redraws when canvas colours change in Preferences.
+    @ObservedObject private var preferences = PreferencesModel.shared
 
     func makeNSView(context: Context) -> CanvasNSView {
         let v = CanvasNSView()

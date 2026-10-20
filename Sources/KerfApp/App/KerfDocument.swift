@@ -119,12 +119,10 @@ final class KerfDocument: ReferenceFileDocument {
     }
 
     convenience init() {
-        let doc = Document()
-        var project = KerfProject(document: doc, postProfileID: PostProfileStore.defaultID(for: doc.units))
-        if let m = MachineCatalog.shared.machine(id: BuiltInMachines.defaultID) {
-            MachineResolver.select(machine: m, in: &project, profiles: PostProfileCatalog.shared.profiles)
-        }
-        self.init(project: project)
+        let prefs = PreferencesModel.shared.prefs
+        self.init(project: prefs.newProject(machines: MachineCatalog.shared.machines,
+                                            profiles: PostProfileCatalog.shared.profiles))
+        applyWindowPreferences(prefs)
     }
 
     required convenience init(configuration: ReadConfiguration) throws {
@@ -132,6 +130,13 @@ final class KerfDocument: ReferenceFileDocument {
             throw CocoaError(.fileReadCorruptFile)
         }
         self.init(project: try KerfProject.decode(from: data))
+        applyWindowPreferences(PreferencesModel.shared.prefs)
+    }
+
+    /// Per-window editing defaults from Preferences (snapping).
+    func applyWindowPreferences(_ prefs: AppPreferences) {
+        snapToGrid = prefs.snapToGrid
+        snapToObjects = prefs.snapToObjects
     }
 
     func snapshot(contentType: UTType) throws -> KerfProject {
