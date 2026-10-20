@@ -329,6 +329,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .toolDatabase:
             return """
             Toolpaths ▸ Tool Database (⇧⌘T) lists your cutters. Each tool has a type, diameter, angle (V-bits), stepdown, stepover, spindle speed, feed and plunge rates. Tools are shared by all jobs and saved in Application Support/Kerf/tools.json; jobs also keep a copy of the tools they use.
+
+            To move tools to another Mac, use **Share ▸ Export All Tools…** (or Export Selected Tool…) and save a `.kerftools` file, then **Share ▸ Import Tools…** on the other machine. Import also reads another Mac's `tools.json` and CSV files (columns name, type, diameter, plus optional units, number, flutes, angle, stepdown, stepover, rpm, feed, plunge, group, notes). If an imported tool already exists with different settings, choose Replace Existing, Keep Both or Keep Existing. Clashing tool numbers are changed to a free number.
             """
         case .preview:
             return """

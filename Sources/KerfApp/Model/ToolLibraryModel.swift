@@ -90,6 +90,29 @@ final class ToolLibraryModel: ObservableObject {
         mutate { lib in missing.forEach { lib.upsert($0) } }
     }
 
+    /// Tools in a `.kerftools`/`tools.json`/`.csv` file, and which of them would overwrite a
+    /// different library tool with the same id.
+    func readImport(_ url: URL) throws -> (tools: [Tool], conflicts: [Tool]) {
+        let tools = try ToolLibraryExchange.read(url)
+        return (tools, library.conflicts(with: tools))
+    }
+
+    /// Merges imported tools into the library (see `ToolLibrary.merge`).
+    @discardableResult
+    func importTools(_ tools: [Tool], policy: ToolImportPolicy) -> ToolImportReport {
+        var lib = library
+        let report = lib.merge(tools, policy: policy)
+        guard lib != library else { return report }
+        mutate { $0 = lib }
+        return report
+    }
+
+    /// Writes the tools with `ids` (all tools when nil) in the format of `url`'s extension.
+    func export(ids: Set<UUID>?, to url: URL) throws {
+        let tools = ids.map { ids in library.tools.filter { ids.contains($0.id) } } ?? library.tools
+        try ToolLibraryExchange.write(tools, to: url)
+    }
+
     private func mutate(_ change: (inout ToolLibrary) -> Void) {
         change(&library)
         revision += 1
