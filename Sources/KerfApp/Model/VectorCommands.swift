@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve
     var id: String { rawValue }
 }
 
@@ -61,6 +61,43 @@ enum VectorCommands {
         let t = Transform2D.scale(sx, sy, about: b.center).concatenating(.translation(box.center - b.center))
         project.transformShapes(textIDs, by: t)
         return true
+    }
+
+    /// Circle used to bend text into an arc: text centred on top (convex) or along the bottom
+    /// (concave), reading left to right either way.
+    static func bendCircle(baselineCenter c: Vec2, radius r: Double, convex: Bool) -> Path {
+        let center = convex ? c - Vec2(0, r) : c + Vec2(0, r)
+        let start = convex ? center - Vec2(0, r) : center + Vec2(0, r)
+        let mid = convex ? center + Vec2(0, r) : center - Vec2(0, r)
+        return Path(start: start, segments: [.arc(to: mid, center: center, clockwise: convex),
+                                             .arc(to: start, center: center, clockwise: convex)], isClosed: true)
+    }
+
+    /// Text along a curve: the live text `textID` laid along `curveID` (or, with no curve, bent
+    /// into an arc of `bendRadius`). Adds a plain-vector shape and returns its ID; the original
+    /// text is deleted unless `keepOriginal`.
+    static func textOnCurve(textID: UUID, curveID: UUID?, bendRadius: Double, convex: Bool,
+                            placement: TextOnPath.Placement, offset: Double, flip: Bool, keepOriginal: Bool,
+                            in project: inout KerfProject) throws -> UUID? {
+        guard let s = project.document.shape(id: textID), let spec = s.text else { return nil }
+        let glyphs = try TextOutliner().glyphs(for: spec.string, fontName: spec.fontName, size: spec.displayedSize,
+                                               letterSpacing: spec.letterSpacing * spec.scale)
+        let guide: Path
+        if let cid = curveID, let curve = project.document.shape(id: cid), let p = curve.paths.first {
+            guide = p
+        } else {
+            guard bendRadius > 0 else { return nil }
+            let b = s.bounds()
+            guide = bendCircle(baselineCenter: Vec2(b.center.x, b.min.y), radius: bendRadius, convex: convex)
+        }
+        let paths = TextOnPath.layout(glyphs, along: guide, placement: curveID == nil ? .center : placement,
+                                      offset: offset, flip: flip, tolerance: tolerance(project.document.units) / 4)
+        guard !paths.isEmpty else { return nil }
+        let n = Shape(name: spec.string.replacingOccurrences(of: "\n", with: " "), layerID: s.layerID, paths: paths,
+                      origin: .derived(operation: "text on curve"))
+        project.document.add(n)
+        if !keepOriginal { project.deleteShapes([textID]) }
+        return n.id
     }
 
     /// Turns live text into plain vectors (no further text editing).

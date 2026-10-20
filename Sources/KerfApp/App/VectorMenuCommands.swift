@@ -12,6 +12,7 @@ struct VectorMenuCommands: Commands {
             sheetButton("Mirror…", .mirror)
             Divider()
             sheetButton("Fit Text to Box…", .textFit)
+            sheetButton("Text on Curve / Arc…", .textOnCurve)
             Button("Convert Text to Curves") {
                 guard let doc = document else { return }
                 let ids = doc.selection

@@ -18,6 +18,7 @@ struct DrawingSheetHost: View {
         case .arrayCircular: CircularArraySheet(document: document)
         case .curveFit: CurveFitSheet(document: document)
         case .textFit: TextFitSheet(document: document)
+        case .textOnCurve: TextOnCurveSheet(document: document)
         }
     }
 }

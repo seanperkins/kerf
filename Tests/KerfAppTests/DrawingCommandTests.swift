@@ -50,6 +50,19 @@ import Testing
         #expect(!VectorCommands.fitTextToBox([box.id], margin: 0, stretch: false, in: &p))
     }
 
+    @Test func textBentIntoArc() throws {
+        var p = AppTestSupport.project()
+        let s = try TextOutliner().shape(for: TextSpec(string: "ARCH", fontName: "Helvetica", size: 1, alignment: .center,
+                                                       anchor: Vec2(10, 5)), layerID: p.document.defaultLayerID)
+        p.document.add(s)
+        let id = try #require(try VectorCommands.textOnCurve(textID: s.id, curveID: nil, bendRadius: 4, convex: true,
+                                                             placement: .center, offset: 0, flip: false, keepOriginal: false, in: &p))
+        #expect(p.document.shape(id: s.id) == nil)
+        let b = p.document.shape(id: id)!.bounds()
+        #expect(abs(b.center.x - 10) < 0.2)
+        #expect(b.min.y > 4.5)  // arched about a circle centred 4 below the baseline
+    }
+
     @Test func repairDeletesDuplicatesAndPrunesOperations() {
         var p = AppTestSupport.project()
         let orig = p.document.shapes[0]

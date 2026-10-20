@@ -32,6 +32,72 @@ struct TextFitSheet: View {
     }
 }
 
+/// Text on a curve / arc text.
+struct TextOnCurveSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var useCurve = true
+    @State private var radius: Double
+    @State private var convex = true
+    @State private var placement = TextOnPath.Placement.center
+    @State private var offset = 0.0
+    @State private var flip = false
+    @State private var keepOriginal = false
+
+    init(document: KerfDocument) {
+        self.document = document
+        _radius = State(initialValue: document.units == .inch ? 6 : 150)
+    }
+
+    var body: some View {
+        let text = document.selectedShapes.first { $0.text != nil }
+        let curve = document.selectedShapes.first { $0.text == nil && !$0.paths.isEmpty }
+        let onCurve = useCurve && curve != nil
+        DrawingDialog(title: "Text on Curve", action: "Place Text", disabled: text == nil || (!onCurve && radius <= 0),
+                      note: text == nil ? "Select live text, plus the curve to follow."
+                          : onCurve ? "The text follows the selected vector from its start point; it becomes plain vectors."
+                          : "The text is bent round a circle of this radius; it becomes plain vectors.",
+                      perform: {
+                          guard let t = text else { return }
+                          let (c, r, cv, pl, o, f, k) = (onCurve ? curve?.id : nil, radius, convex, placement, offset, flip, keepOriginal)
+                          var newID: UUID?
+                          do {
+                              var p = document.project
+                              newID = try VectorCommands.textOnCurve(textID: t.id, curveID: c, bendRadius: r, convex: cv, placement: pl,
+                                                                      offset: o, flip: f, keepOriginal: k, in: &p)
+                              let updated = p
+                              document.perform("Text on Curve") { $0 = updated }
+                          } catch {
+                              document.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
+                          }
+                          if let id = newID { document.setSelection([id]) }
+                      }) {
+            if curve != nil {
+                Picker("Shape", selection: $useCurve) {
+                    Text("Follow selected vector").tag(true)
+                    Text("Bend into arc").tag(false)
+                }
+            }
+            if onCurve {
+                Picker("Position", selection: $placement) {
+                    Text("From start").tag(TextOnPath.Placement.start)
+                    Text("Centred").tag(TextOnPath.Placement.center)
+                    Text("To end").tag(TextOnPath.Placement.end)
+                }
+                LengthField("Offset from curve", value: $offset, units: document.units)
+                Toggle("Other side (reverse direction)", isOn: $flip)
+            } else {
+                LengthField("Arc radius", value: $radius, units: document.units)
+                Picker("Bend", selection: $convex) {
+                    Text("Arch up").tag(true)
+                    Text("Smile down").tag(false)
+                }
+                .pickerStyle(.segmented)
+            }
+            Toggle("Keep the original text", isOn: $keepOriginal)
+        }
+    }
+}
+
 /// Justification, line spacing and letter spacing fields (text tool and text inspector).
 struct TextLayoutFields: View {
     @Binding var alignment: CADCore.TextAlignment
