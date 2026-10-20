@@ -139,7 +139,8 @@ struct JobSheet: Equatable {
         }
 
         var warnings = (LayoutChecks.materialFits(job, units: u, profile: profile)
-            + LayoutChecks.design(doc, ignoredLayers: project.layoutIgnoredLayers)).map(\.message)
+            + LayoutChecks.design(doc, ignoredLayers: project.layoutIgnoredLayers)
+            + PreflightChecks.issues(project: project, toolpaths: toolpaths, units: u)).map(\.message)
         for op in project.operations where op.setup.isEnabled {
             if let r = results[op.id] {
                 if let e = r.error { warnings.append("\(op.setup.name): \(e)") }
