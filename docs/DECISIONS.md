@@ -291,3 +291,7 @@
 - **packaging** — `relief.stl` is an ASCII STL in mm (75 x 75 mm, 1–6 mm tall, closed solid). `bracket-plate.dxf` is an 8 x 5 in plate with 4 bolt holes, a slot and a bore. Both go through the same importers the app uses.
 - **packaging** — There is no app icon yet. `bundle.sh` copies `Resources/AppIcon.icns` if it exists.
 - **packaging** — TESTING.md tells users to air-cut with Z zeroed 1–2 in above the material and the spindle off before any real cut.
+
+## parity
+
+- **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
