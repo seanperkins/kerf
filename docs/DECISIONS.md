@@ -339,3 +339,13 @@
   path start, start each shape's walk there, and keep engraved open vectors in their drawn
   direction. Medial-axis chains are not re-split at start points. Inlay does not offer these
   options (its plug geometry is mirrored).
+- **vcarve-parity** — PhotoVCarve is a new operation kind `.photoVCarve` (`PhotoVCarveOperation`,
+  additive enum cases in `OperationKind`/`AnyOperation` and their app switches). The picture is
+  loaded with ImageIO, downsampled to ≤ 800 px on the long side, converted to 8-bit grey and
+  stored in the operation (`GrayImage`, base64 in the `.kerf` JSON) so the file is
+  self-contained. Grooves are parallel lines at `angle`, `lineSpacing` apart, across a
+  placement rectangle (origin + width, height from the aspect); along each line the groove's
+  top width = darkness × spacing, i.e. depth = max(0, w/2 − tip radius) / tan(half-angle), capped
+  by the bit; samples shallower than `minDepth` lift the bit. Lines alternate direction. No
+  bitmap is drawn on the canvas yet; the toolpath overlay shows the placement. New Photo
+  V-Carve toolpaths start centred at 80% of the material.

@@ -29,7 +29,7 @@ struct OperationEditor: View {
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
             ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID), library: library,
                        preferred: OperationFactory.preferredToolKinds(for: draft.kind))
-            if draft.kind != .relief3D {
+            if draft.kind != .relief3D && draft.kind != .photoVCarve {
                 vectorsRow
             }
         }
@@ -90,6 +90,9 @@ struct OperationEditor: View {
             FlutingForm(params: paramsBinding(o.params) { .fluting(FlutingOperation(setup: draft.setup, params: $0)) }, units: units)
         case .texture(let o):
             TextureForm(params: paramsBinding(o.params) { .texture(TextureOperation(setup: draft.setup, params: $0)) }, units: units)
+        case .photoVCarve(let o):
+            PhotoVCarveForm(params: paramsBinding(o.params) { .photoVCarve(PhotoVCarveOperation(setup: draft.setup, params: $0)) },
+                            units: units, job: document.document.job)
         case .relief3D(let o):
             Relief3DForm(params: paramsBinding(o.params) { .relief3D(Relief3DOperation(setup: draft.setup, params: $0)) },
                          units: units, library: library, models: document.document.models,

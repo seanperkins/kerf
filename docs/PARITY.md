@@ -118,16 +118,16 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `tp-keepout` | toolpaths-2d | Keep-out zones | missing | P2 | Not implemented |
 | `vc-basic` | vcarve | V-carve (medial-axis depth from V angle) | done | P1 | CAMCore/OpsVCarve/VCarveOperation.swift, VCarveMedialAxis.swift; VCarveTests |
 | `vc-flat-depth` | vcarve | Flat depth with flat-area clearance (offset/raster) | done | P1 | VCarvePocketing.swift, VCarveParameters.flatDepth/flatClearanceToolID; VCarveTests |
-| `vc-multi-clearance` | vcarve | Multiple clearance tools for flat areas | partial | P2 | One flat clearance tool (VCarveParameters.flatClearanceToolID) |
+| `vc-multi-clearance` | vcarve | Multiple clearance tools for flat areas | done | P2 | VCarveParameters.extraClearanceTools, VCarveEngine.clearFlatArea (rest machining); VCarveParityTests |
 | `vc-start-depth` | vcarve | Start depth (carve inside a pocket) | done | P2 | VCarveParameters.startDepth; VCarveTests |
-| `vc-corner-sharpen` | vcarve | Corner sharpening | partial | P2 | V-bit traces the clamped medial axis at the flat boundary (DECISIONS cam-vcarve); no explicit lift-into-corner option |
+| `vc-corner-sharpen` | vcarve | Corner sharpening | done | P2 | VCarveClearanceTool.cornerSharpen, VCarveEngine.cornerStrokes; VCarveParityTests |
 | `vc-multi-pass` | vcarve | Multi-pass deep V-carving | done | P2 | VCarveParameters.passDepth; VCarveTests |
 | `vc-inlay` | vcarve | V-carve inlay (pocket + plug, glue gap, start depth, boundary) | done | P1 | CAMCore/OpsVCarve/InlayOperation.swift, Panels/InlayWizardSheet.swift; VCarveInlayTests |
-| `vc-inlay-boundary-options` | vcarve | Inlay plug boundary options and surface clearance | partial | P2 | maleBoundaryMargin (boundary offset) only; no sheet-limits or vector-offset modes, no surface clearance |
-| `vc-vbit-engrave` | vcarve | Engraving with V-bit on open vectors (sketch carving) | partial | P2 | V-carve ignores open vectors with a warning; Profile on-line works at fixed depth |
+| `vc-inlay-boundary-options` | vcarve | Inlay plug boundary options and surface clearance | done | P2 | InlayParameters.plugBoundary/surfaceClearance; VCarveParityTests |
+| `vc-vbit-engrave` | vcarve | Engraving with V-bit on open vectors (sketch carving) | done | P2 | VCarveParameters.openVectorDepth/openVectorTaper, VCarveEngraving.swift; VCarveParityTests |
 | `vc-small-detail` | vcarve | Small-detail / thin-feature handling | done | P2 | Voronoi on snapped grid with sampled radii (DECISIONS scaffold/cam-vcarve); VCarveTests |
-| `vc-vector-start-order` | vcarve | V-carve vector start points / selection order | missing | P3 | Chains walked to minimise lifts only |
-| `vc-photo` | vcarve | PhotoVCarve (image to V-groove engraving) | missing | P3 | No bitmap support |
+| `vc-vector-start-order` | vcarve | V-carve vector start points / selection order | done | P3 | VCarveParameters.useVectorStartPoints/useSelectionOrder, VCarveOrdering.swift; VCarveParityTests |
+| `vc-photo` | vcarve | PhotoVCarve (image to V-groove engraving) | done | P3 | PhotoVCarveOperation, PhotoImageLoader, Panels/PhotoVCarveForm.swift; VCarvePhotoTests |
 | `3d-import-place` | cam-3d | 3D model import, size, position and Z offset | done | P1 | Panels/ModelPlacementSheet.swift, CAMCore/Ops3D/ModelPlacement.swift; Relief3DTests |
 | `3d-multiple-models` | cam-3d | Multiple models / composite model | partial | P2 | Document holds many PlacedModels but each Relief3D op machines one model |
 | `3d-roughing` | cam-3d | 3D roughing (Z-level, raster) with allowance | partial | P1 | ReliefRoughing.swift raster only; offset strategy and profile pass ignored (DECISIONS cam-3d) |

@@ -2,7 +2,7 @@ import CADCore
 import Foundation
 
 public enum OperationKind: String, Codable, CaseIterable, Sendable {
-    case profile, pocket, drill, vcarve, inlay, fluting, texture, relief3D
+    case profile, pocket, drill, vcarve, inlay, fluting, texture, relief3D, photoVCarve
 
     public var displayName: String {
         switch self {
@@ -14,6 +14,7 @@ public enum OperationKind: String, Codable, CaseIterable, Sendable {
         case .fluting: return "Fluting"
         case .texture: return "Texture"
         case .relief3D: return "3D Relief"
+        case .photoVCarve: return "Photo V-Carve"
         }
     }
 }

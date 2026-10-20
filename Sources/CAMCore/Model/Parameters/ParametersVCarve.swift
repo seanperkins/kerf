@@ -162,3 +162,48 @@ extension InlayParameters {
                   surfaceClearance: try c.decodeIfPresent(Double.self, forKey: .surfaceClearance))
     }
 }
+
+/// 8-bit greyscale bitmap (row 0 = top), stored in the project so the toolpath recalculates
+/// without the original file.
+public struct GrayImage: Codable, Hashable, Sendable {
+    public var width: Int
+    public var height: Int
+    /// `width * height` bytes, 0 = black, 255 = white.
+    public var pixels: Data
+
+    public init(width: Int, height: Int, pixels: Data) {
+        self.width = width; self.height = height; self.pixels = pixels
+    }
+
+    /// Height / width.
+    public var aspect: Double { width > 0 ? Double(height) / Double(width) : 1 }
+}
+
+/// PhotoVCarve: a photo engraved as parallel V-grooves whose width follows the darkness.
+public struct PhotoVCarveParameters: Codable, Hashable, Sendable {
+    public var image: GrayImage?
+    public var imageName: String
+    /// Lower-left corner of the picture in the material frame.
+    public var origin: Vec2
+    /// Picture width; the height follows the image's aspect ratio.
+    public var width: Double
+    /// Groove direction in degrees (0 = horizontal lines).
+    public var angle: Double
+    /// Distance between groove centre lines; black areas are carved this wide.
+    public var lineSpacing: Double
+    /// Carve light areas instead of dark ones (for dark material / light fill).
+    public var invert: Bool
+    /// Grooves shallower than this are not cut (the bit lifts).
+    public var minDepth: Double
+    public var startDepth: Double
+
+    public init(image: GrayImage? = nil, imageName: String = "", origin: Vec2 = Vec2(1, 1), width: Double = 10,
+                angle: Double = 0, lineSpacing: Double = 0.1, invert: Bool = false, minDepth: Double = 0.005,
+                startDepth: Double = 0) {
+        self.image = image; self.imageName = imageName; self.origin = origin; self.width = width
+        self.angle = angle; self.lineSpacing = lineSpacing; self.invert = invert; self.minDepth = minDepth
+        self.startDepth = startDepth
+    }
+
+    public var height: Double { width * (image?.aspect ?? 1) }
+}
