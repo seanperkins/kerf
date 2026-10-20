@@ -57,6 +57,17 @@ public struct ArcLengthChain: Sendable {
         return d.length > 0 ? d.normalized : Vec2(1, 0)
     }
 
+    /// Parameter (in [0, length]) and distance of the point on the chain closest to `q`.
+    public func project(_ q: Vec2) -> (s: Double, distance: Double) {
+        var best = (s: 0.0, distance: Double.infinity)
+        for i in 0..<max(walk.count - 1, 0) {
+            let (c, t) = Polygon2D.closestPoint(onSegment: walk[i], walk[i + 1], to: q)
+            let d = c.distance(to: q)
+            if d < best.distance { best = (cumulative[i] + t * (cumulative[i + 1] - cumulative[i]), d) }
+        }
+        return best
+    }
+
     /// Unwrapped parameters of all walk vertices strictly between s0 and s1 (s0 < s1).
     func vertexParameters(between s0: Double, and s1: Double) -> [Double] {
         let L = length
