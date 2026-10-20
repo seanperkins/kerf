@@ -17,6 +17,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     case prism(PrismOperation)
     case merge(MergeOperation)
     case straightInlay(StraightInlayOperation)
+    case moulding(MouldingOperation)
 
     public var operation: any ToolpathOperation {
         switch self {
@@ -34,6 +35,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .prism(let o): return o
         case .merge(let o): return o
         case .straightInlay(let o): return o
+        case .moulding(let o): return o
         }
     }
 

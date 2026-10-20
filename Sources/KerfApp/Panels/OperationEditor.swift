@@ -115,6 +115,9 @@ struct OperationEditor: View {
         case .straightInlay(let o):
             StraightInlayForm(params: paramsBinding(o.params) { .straightInlay(StraightInlayOperation(setup: draft.setup, params: $0)) },
                               units: units)
+        case .moulding(let o):
+            MouldingForm(params: paramsBinding(o.params) { .moulding(MouldingOperation(setup: draft.setup, params: $0)) },
+                         units: units, document: document.document, selection: document.selectedShapes.map(\.id))
         case .merge(let o):
             MergeForm(operation: o, onSplit: { document.splitMergedOperation(o.setup.id) })
         case .relief3D(let o):

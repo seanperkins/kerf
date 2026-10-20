@@ -22,6 +22,7 @@ extension AnyOperation {
             case .prism(var o): o.setup = newValue; self = .prism(o)
             case .merge(var o): o.setup = newValue; self = .merge(o)
             case .straightInlay(var o): o.setup = newValue; self = .straightInlay(o)
+            case .moulding(var o): o.setup = newValue; self = .moulding(o)
             }
         }
     }
@@ -45,7 +46,7 @@ extension AnyOperation {
 /// in inches; millimetre documents get them scaled by 25.4).
 enum OperationFactory {
     /// Kinds offered in the "New toolpath" menu, in VCarve-like order.
-    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .straightInlay, .fluting, .texture, .relief3D]
+    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .straightInlay, .fluting, .moulding, .texture, .relief3D]
 
     /// Title in the "New toolpath" menus (Inlay opens the pocket + plug wizard).
     static func menuTitle(_ kind: OperationKind) -> String {
@@ -72,6 +73,7 @@ enum OperationFactory {
         switch kind {
         case .profile, .pocket, .holeMill, .merge: return [.endMill, .ballNose]
         case .straightInlay: return [.endMill]
+        case .moulding: return [.ballNose, .endMill, .vBit]
         case .drill: return [.drill, .endMill]
         case .vcarve, .inlay, .chamfer, .prism: return [.vBit, .engraving]
         case .engrave: return [.engraving, .vBit, .ballNose, .endMill]
@@ -132,6 +134,15 @@ enum OperationFactory {
             return .chamfer(ChamferOperation(setup: setup, params: ChamferParameters().scaled(by: f)))
         case .merge:
             return nil
+        case .moulding:
+            // With two or more vectors selected, the last one selected is the cross-section.
+            var s = setup
+            var p = MouldingParameters()
+            if shapeIDs.count > 1, let last = shapeIDs.last {
+                p.sectionShapeID = last
+                s.shapeIDs = Array(shapeIDs.dropLast())
+            }
+            return .moulding(MouldingOperation(setup: s, params: p.scaled(by: f)))
         case .straightInlay:
             var p = StraightInlayParameters().scaled(by: f)
             p.plugDepth = min(p.plugDepth, thickness)

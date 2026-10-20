@@ -141,6 +141,14 @@ extension StraightInlayParameters {
     }
 }
 
+extension MouldingParameters {
+    func scaled(by f: Double) -> MouldingParameters {
+        var p = self
+        p.startDepth *= f; p.stepover = stepover.map { $0 * f }
+        return p
+    }
+}
+
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
         let op = scaledParameters(by: f)
@@ -168,6 +176,7 @@ extension AnyOperation {
         case .prism(var o): o.params = o.params.scaled(by: f); return .prism(o)
         case .merge(var o): o.params.children = o.params.children.map { $0.scaled(by: f) }; return .merge(o)
         case .straightInlay(var o): o.params = o.params.scaled(by: f); return .straightInlay(o)
+        case .moulding(var o): o.params = o.params.scaled(by: f); return .moulding(o)
         }
     }
 }

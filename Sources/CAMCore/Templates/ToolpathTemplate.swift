@@ -143,6 +143,7 @@ extension AnyOperation {
         case .prism(var o): o.setup = setup; return .prism(o)
         case .merge(var o): o.setup = setup; return .merge(o)
         case .straightInlay(var o): o.setup = setup; return .straightInlay(o)
+        case .moulding(var o): o.setup = setup; return .moulding(o)
         }
     }
 
@@ -173,6 +174,9 @@ extension AnyOperation {
         case .relief3D(var o):
             o.params.boundaryShapeIDs = []
             return .relief3D(o)
+        case .moulding(var o):
+            o.params.sectionShapeID = nil
+            return .moulding(o)
         case let other:
             return other
         }

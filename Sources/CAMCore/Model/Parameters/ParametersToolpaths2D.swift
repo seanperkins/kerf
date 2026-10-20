@@ -194,3 +194,24 @@ public struct StraightInlayParameters: Codable, Hashable, Sendable {
         self.mirrorPlug = mirrorPlug; self.passDepth = passDepth
     }
 }
+
+/// Moulding: sweeps a cross-section vector along rail vectors (toolpaths-2d addition).
+public struct MouldingParameters: Codable, Hashable, Sendable {
+    /// The cross-section vector. Its bounding box maps X → distance from the rail (min X on the
+    /// rail) and Y → height (max Y = the material top, lower = deeper).
+    public var sectionShapeID: UUID?
+    /// Which side of open rails the section extends to (closed rails: inside).
+    public var side: OpenVectorSide
+    /// Extra depth added under the whole section (0 = the section's top is the material top).
+    public var startDepth: Double
+    /// Distance between passes across the section; nil = the tool's stepover.
+    public var stepover: Double?
+    /// Rough in levels of the tool's stepdown before the finishing passes.
+    public var roughing: Bool
+
+    public init(sectionShapeID: UUID? = nil, side: OpenVectorSide = .left, startDepth: Double = 0,
+                stepover: Double? = nil, roughing: Bool = true) {
+        self.sectionShapeID = sectionShapeID; self.side = side; self.startDepth = startDepth
+        self.stepover = stepover; self.roughing = roughing
+    }
+}

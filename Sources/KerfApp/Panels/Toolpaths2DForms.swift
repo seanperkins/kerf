@@ -294,3 +294,34 @@ struct StraightInlayForm: View {
         }
     }
 }
+
+struct MouldingForm: View {
+    @Binding var params: MouldingParameters
+    var units: LengthUnit
+    var document: Document
+    var selection: [UUID]
+
+    var body: some View {
+        InspectorSection(title: "Moulding") {
+            let section = params.sectionShapeID.flatMap { document.shape(id: $0) }
+            LabeledContent("Cross-section") {
+                Text(section.map { $0.name.isEmpty ? "1 vector" : $0.name } ?? "None").foregroundStyle(section == nil ? .orange : .primary)
+            }
+            HStack {
+                Button("Use Selected Vector") { params.sectionShapeID = selection.last }.disabled(selection.count != 1)
+                Button("Clear") { params.sectionShapeID = nil }.disabled(params.sectionShapeID == nil)
+            }
+            Picker("Section side (open rails)", selection: $params.side) {
+                Text("Left").tag(OpenVectorSide.left)
+                Text("Right").tag(OpenVectorSide.right)
+            }
+            .pickerStyle(.segmented)
+            LengthField("Start depth", value: $params.startDepth, units: units, help: "Extra depth under the whole section")
+            OptionalLengthField(label: "Stepover", value: $params.stepover, units: units,
+                                defaultValue: units == .inch ? 0.02 : 0.5)
+            Toggle("Rough in levels first", isOn: $params.roughing)
+            Text("The toolpath's vectors are the rails. The cross-section's width runs out from the rail (left or right of an open rail, inwards on a closed one) and its top is the material top. Use a ball nose for curved sections.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
