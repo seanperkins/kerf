@@ -332,3 +332,13 @@
   max(stepover, tool radius / 2), contoured and clipped to the boundary, and the chosen finishing
   pattern runs only there. It assumes the larger tool covered the whole area including its reach.
   If nothing is left and the operation has no roughing toolpath, it fails with a clear message.
+- **cam-3d** — **Projecting 2D toolpaths onto a model (3d-project-2d).** `OperationSetup.projectOntoModelID`
+  (optional, additive) is honoured in `AnyOperation.generate` for every kind except 3D Relief, so
+  calculation, export and Check Toolpaths all see the projected moves. `ReliefProjection` (Ops3D)
+  linearises arcs, subdivides cutting moves to the heightmap cell (0.01 in / 0.25 mm, capped like
+  relief), and sets each point's depth to the toolpath tool's drop-cutter depth on the model plus
+  its original depth below the material top; points are thinned within the document tolerance.
+  XY rapids are unchanged (safe Z); vertical rapids below the material top are clamped to the top
+  so a pass never rapids into material that was cleared somewhere else before projection. Outside
+  the model's triangles the surface is its bottom plane (same as 3D Relief). Inspector:
+  "Project onto 3D" picker under the vectors row, shown when the document has models.
