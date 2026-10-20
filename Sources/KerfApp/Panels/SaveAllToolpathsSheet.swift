@@ -13,6 +13,8 @@ struct SaveAllToolpathsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var mode: SaveAllMode = .oneFileInOrder
     @State private var profileID = ""
+    /// The id shown on open; the project keeps its own reference unless the user picks another.
+    @State private var initialProfileID = ""
     @State private var posted: [(file: PlannedGCodeFile, result: GCodeExportResult)] = []
     @State private var confirmErrors = false
     @State private var calcTask: Task<Void, Never>?
@@ -59,6 +61,7 @@ struct SaveAllToolpathsSheet: View {
         .frame(width: 620, height: 600)
         .onAppear {
             profileID = document.postProfile.id
+            initialProfileID = profileID
             run()
         }
         .onDisappear { calcTask?.cancel() }
@@ -120,6 +123,15 @@ struct SaveAllToolpathsSheet: View {
         let files = GCodeBatchExport.plan(mode: mode, operations: document.outputProject.operations,
                                           results: document.results, jobName: document.document.name, profile: profile)
         posted = GCodeBatchExport.post(files, project: document.outputProject, profile: profile, jobName: document.document.name)
+        let missing = document.postProfileIssues
+            + GCodeExporter.missingOperationIssues(document.outputProject.operations, results: document.results)
+        if !missing.isEmpty {
+            posted = posted.map { item in
+                var r = item.result
+                r.issues.insert(contentsOf: missing, at: 0)
+                return (item.file, r)
+            }
+        }
     }
 
     private func save() {
@@ -153,7 +165,7 @@ struct SaveAllToolpathsSheet: View {
     private func finishSaving(_ write: () throws -> Void) {
         do {
             try write()
-            if document.project.postProfileID != profileID { document.setPostProfile(profileID) }
+            if profileID != initialProfileID { document.setPostProfile(profileID) }
             dismiss()
         } catch {
             document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)

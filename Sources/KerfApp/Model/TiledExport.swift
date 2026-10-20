@@ -28,6 +28,7 @@ enum TiledExport {
         let total = tiles.count
         let base = GCodeExporter.suggestedFileName(jobName: doc.name, operationName: nil, profile: profile)
         let stem = (base as NSString).deletingPathExtension
+        let missing = GCodeExporter.missingOperationIssues(project.operations, results: results)
         return tiles.filter { !$0.toolpaths.isEmpty }.map { tile in
             let at = "X\(RulerTicks.label(round4(tile.region.min.x))) Y\(RulerTicks.label(round4(tile.region.min.y)))"
             let title = "\(doc.name) tile \(tile.number) of \(total) - zero XY at material \(at)"
@@ -41,7 +42,8 @@ enum TiledExport {
                 moved.outline = z.outline.map { $0 - tile.region.min }
                 return moved
             }
-            let r = GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title)
+            var r = GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title)
+            r.issues.insert(contentsOf: missing, at: 0)
             let name = String(format: "%@_tile%02d.%@", stem, tile.number, profile.fileExtension)
             return File(tile: tile, fileName: name, title: title, result: r)
         }

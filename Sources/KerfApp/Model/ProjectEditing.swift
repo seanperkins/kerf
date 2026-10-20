@@ -69,12 +69,21 @@ extension KerfProject {
         return layer.id
     }
 
-    /// Deletes a layer, moving its shapes to the first remaining layer. The last layer stays.
+    /// Deletes a layer. Its shapes move to another ordinary layer of the same sheet and side so
+    /// nothing jumps to the other side of a two-sided job; a keep-out layer's clamp outlines are
+    /// deleted with it, because as plain vectors they would become parts and the keep-out check
+    /// would silently stop covering them. The last layer stays.
     mutating func deleteLayer(_ id: UUID) {
         guard document.layers.count > 1, let idx = document.layers.firstIndex(where: { $0.id == id }) else { return }
-        document.layers.remove(at: idx)
-        let target = document.defaultLayerID
-        for i in document.shapes.indices where document.shapes[i].layerID == id { document.shapes[i].layerID = target }
+        let gone = document.layers.remove(at: idx)
+        if gone.keepOut != nil {
+            deleteShapes(Set(document.shapes.filter { $0.layerID == id }.map(\.id)))
+            return
+        }
+        let ordinary = document.layers.filter { $0.keepOut == nil && $0.sheet == nil }
+        let target = ordinary.first { $0.side == gone.side && $0.sheetID == gone.sheetID }
+            ?? ordinary.first ?? document.layers[0]
+        for i in document.shapes.indices where document.shapes[i].layerID == id { document.shapes[i].layerID = target.id }
     }
 
     mutating func updateLayer(_ layer: Layer) {

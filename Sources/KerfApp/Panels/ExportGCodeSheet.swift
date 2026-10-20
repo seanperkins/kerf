@@ -13,6 +13,8 @@ struct ExportGCodeSheet: View {
     @State var scope: GCodeExportScope
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var profileID: String = ""
+    /// The id shown on open; the project keeps its own reference unless the user picks another.
+    @State private var initialProfileID: String = ""
     @State private var result: GCodeExportResult?
     @State private var confirmErrors = false
     @State private var calcTask: Task<Void, Never>?
@@ -64,6 +66,7 @@ struct ExportGCodeSheet: View {
         .frame(width: 620, height: 640)
         .onAppear {
             profileID = document.postProfile.id
+            initialProfileID = profileID
             run()
         }
         .onDisappear { calcTask?.cancel() }
@@ -143,15 +146,11 @@ struct ExportGCodeSheet: View {
     private func post() {
         let tps = GCodeExporter.toolpaths(scope: scope, operations: document.outputProject.operations,
                                           results: document.results, groupByTool: groupByTool)
-        let failed = targetOperations().compactMap { id -> String? in
-            guard let r = document.results[id], let e = r.error else { return nil }
-            return "\(r.operation.setup.name): \(e)"
-        }
+        let missing = GCodeExporter.missingOperationIssues(targetOperations().compactMap { document.operation($0) },
+                                                           results: document.results)
         var r = GCodeExporter.export(project: document.outputProject(for: scope), toolpaths: tps, profile: profile,
                                      jobName: document.document.name)
-        if !failed.isEmpty {
-            r.issues.insert(contentsOf: failed.map { GCodeIssue(severity: .warning, message: "Skipped — \($0)") }, at: 0)
-        }
+        r.issues.insert(contentsOf: document.postProfileIssues + missing, at: 0)
         result = r
     }
 
@@ -170,7 +169,7 @@ struct ExportGCodeSheet: View {
             guard response == .OK, let url = panel.url else { return }
             do {
                 try text.write(to: url, atomically: true, encoding: .utf8)
-                if document.project.postProfileID != profileID { document.setPostProfile(profileID) }
+                if profileID != initialProfileID { document.setPostProfile(profileID) }
                 dismiss()
             } catch {
                 document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)

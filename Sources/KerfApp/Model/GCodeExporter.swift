@@ -48,6 +48,19 @@ enum GCodeExporter {
         return out
     }
 
+    /// Errors for enabled operations that have no toolpaths to export (the calculation failed
+    /// or never ran): a program with a step missing must not be saved without the explicit
+    /// "Save Anyway" confirmation.
+    static func missingOperationIssues(_ operations: [AnyOperation], results: [UUID: ToolpathResult]) -> [GCodeIssue] {
+        operations.filter(\.setup.isEnabled).compactMap { op in
+            guard let r = results[op.id] else {
+                return GCodeIssue(severity: .error, message: "\(op.setup.name) is missing from the program: not calculated")
+            }
+            guard let e = r.error else { return nil }
+            return GCodeIssue(severity: .error, message: "\(op.setup.name) is missing from the program: \(e)")
+        }
+    }
+
     /// Errors for toolpaths that come over a keep-out zone below its top (+ clearance margin).
     static func keepOutIssues(_ toolpaths: [Toolpath], document doc: Document) -> [GCodeIssue] {
         guard let zones = doc.keepOutZones, !zones.isEmpty else { return [] }

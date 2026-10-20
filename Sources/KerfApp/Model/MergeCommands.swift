@@ -13,6 +13,9 @@ extension KerfProject {
         if a.setup.toolID != b.setup.toolID { return "The next toolpath uses a different tool." }
         // A merged operation is one toolpath; a stop in the middle of it has nowhere to go.
         if a.setup.pauseAfter != nil { return "This toolpath pauses the machine after it. Turn the pause off to merge it with the next one." }
+        if a.setup.isEnabled != b.setup.isEnabled {
+            return "One of the toolpaths is turned off; merging would turn it on."
+        }
         return nil
     }
 
@@ -25,7 +28,7 @@ extension KerfProject {
         if case .merge = a { name = a.setup.name } else { name = "\(a.setup.name) + \(b.setup.name)" }
         guard var merged = MergeOperation.merging([a, b], name: name) else { return nil }
         if case .merge = a { merged.setup.id = a.id }
-        merged.setup.isEnabled = a.setup.isEnabled || b.setup.isEnabled
+        merged.setup.isEnabled = a.setup.isEnabled && b.setup.isEnabled
         // The pause after the last part is the pause after the whole.
         merged.setup.pauseAfter = b.setup.pauseAfter
         operations.replaceSubrange(i...(i + 1), with: [.merge(merged)])

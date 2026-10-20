@@ -247,6 +247,15 @@ final class KerfDocument: ReferenceFileDocument {
     /// The machine this job is set up for (nil = a custom post with its own limits).
     var machine: MachineDefinition? { MachineCatalog.shared.machine(for: project) }
 
+    /// An error when the project's post profile is not installed on this Mac: `postProfile`
+    /// then falls back to the default, which may be a different dialect and machine.
+    var postProfileIssues: [GCodeIssue] {
+        guard let id = project.postProfileID, !PostProfileCatalog.shared.profiles.contains(where: { $0.id == id })
+        else { return [] }
+        return [GCodeIssue(severity: .error,
+                           message: "The project's post \"\(id)\" is not installed; \"\(postProfile.name)\" is shown instead. Pick a post before saving.")]
+    }
+
     /// Post `id` with this job's machine limits applied.
     func effectiveProfile(id: String?) -> PostProfile {
         MachineResolver.effectiveProfile(PostProfileCatalog.shared.profile(id: id), machine: machine)

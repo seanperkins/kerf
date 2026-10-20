@@ -91,8 +91,8 @@ enum DesignCommands {
         case .intersect:
             paths = rest.reduce(first.paths) { PathOps.intersect($0, with: $1.paths, tolerance: tol) }
         }
+        guard !paths.isEmpty else { return nil }   // nothing to replace them with: leave the inputs alone
         project.deleteShapes(Set(shapes.map(\.id)))
-        guard !paths.isEmpty else { return nil }
         let s = Shape(name: mode.title, layerID: first.layerID, paths: paths, origin: .derived(operation: mode.rawValue))
         project.document.add(s)
         return s.id

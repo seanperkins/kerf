@@ -92,7 +92,7 @@ struct TilingSheet: View {
     private func run() {
         calcTask?.cancel()
         calcTask = nil
-        let stale = document.project.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
+        let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
         guard !stale.isEmpty else { post(); return }
         files = []
         calculatingCount = stale.count
@@ -106,7 +106,7 @@ struct TilingSheet: View {
 
     private func post() {
         guard settings.tileWidth > 0, settings.tileHeight > 0 else { files = []; return }
-        files = TiledExport.files(project: document.project, results: document.results, profile: document.postProfile,
+        files = TiledExport.files(project: document.outputProject, results: document.results, profile: document.postProfile,
                                   groupByTool: groupByTool, settings: settings)
     }
 
