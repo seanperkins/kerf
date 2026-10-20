@@ -46,13 +46,19 @@ struct OperationEditor: View {
             }
         }
         Divider()
+        // Calculate and its result sit above the parameters: with 25-45 controls below them they were
+        // off-screen in the Pocket and Profile forms.
+        actionRow
+        resultView
+        Divider()
         parameterForm
         Divider()
-        InspectorSection(title: "Array Copies") {
+        InspectorSection(title: "Array Copies", collapsedByDefault: true) {
             ArrayCopyForm(array: setupBinding(\.arrayCopy), units: units)
         }
-        Divider()
-        resultView
+    }
+
+    private var actionRow: some View {
         HStack {
             Button("Calculate") { save(); document.calculate([draft.id]) }
                 .keyboardShortcut(.return, modifiers: .command)
@@ -61,6 +67,7 @@ struct OperationEditor: View {
                 .help("Undo every change made since this toolpath was selected")
             Spacer()
             Button(role: .destructive) { document.deleteOperation(draft.id) } label: { Image(systemName: "trash") }
+                .buttonStyle(.icon)
                 .help("Delete toolpath")
                 .accessibilityLabel("Delete toolpath")
         }

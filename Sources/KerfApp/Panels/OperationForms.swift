@@ -121,6 +121,11 @@ struct ProfileForm: View {
                 Text("On").tag(ProfileSide.on)
             }
             .pickerStyle(.segmented)
+            DirectionPicker(direction: $params.direction)
+            LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
+        }
+        Divider()
+        InspectorSection(title: "Order & Corners", collapsedByDefault: true) {
             Picker("Open vectors", selection: Binding(get: { params.openVectorSide ?? .on },
                                                       set: { params.openVectorSide = $0 == .on ? nil : $0 })) {
                 Text("On").tag(OpenVectorSide.on)
@@ -147,15 +152,13 @@ struct ProfileForm: View {
                 Text("Grid (rows from bottom)").tag(ProfileOrder.grid)
             }
             .help("Order the parts are cut in. Holes are always cut before the part around them.")
-            DirectionPicker(direction: $params.direction)
-            LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
             Toggle("Sharp external corners", isOn: Binding(get: { params.sharpCorners == true },
                                                            set: { params.sharpCorners = $0 ? true : nil }))
                 .help("Run straight out to a square corner instead of rolling round the part's corners")
         }
         Divider()
-        InspectorSection(title: "Last Pass") { ProfileLastPassForm(lastPass: $params.lastPass, side: params.side, units: units) }
+        InspectorSection(title: "Last Pass", collapsedByDefault: true) { ProfileLastPassForm(lastPass: $params.lastPass, side: params.side, units: units) }
         Divider()
         InspectorSection(title: "Tabs", helpTopic: .tabs) {
             Toggle("Add tabs", isOn: $params.tabs.isEnabled)
@@ -184,7 +187,7 @@ struct ProfileForm: View {
             }
         }
         Divider()
-        InspectorSection(title: "Ramps & Leads", helpTopic: .tabs) {
+        InspectorSection(title: "Ramps & Leads", helpTopic: .tabs, collapsedByDefault: true) {
             RampForm(ramp: $params.ramp, units: units)
             Picker("Lead in/out", selection: $params.lead.type) {
                 Text("None").tag(LeadType.none)
@@ -219,7 +222,7 @@ struct PocketForm: View {
             ClearanceToolsEditor(params: $params, library: library, finishToolID: finishToolID)
         }
         Divider()
-        InspectorSection(title: "Ramps") { RampForm(ramp: $params.ramp, units: units) }
+        InspectorSection(title: "Ramps", collapsedByDefault: true) { RampForm(ramp: $params.ramp, units: units) }
     }
 }
 

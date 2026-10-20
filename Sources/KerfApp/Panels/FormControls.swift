@@ -129,26 +129,78 @@ extension ZZeroMode {
     var shortName: String { self == .materialTop ? "Material" : "Bed" }
 }
 
+/// Open or closed state of collapsible inspector sections, remembered per section title.
+enum SectionState {
+    static func key(for title: String) -> String {
+        let slug = title.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }).joined(separator: "-")
+        return "kerf.inspector.expanded." + slug
+    }
+
+    static func initiallyExpanded(collapsedByDefault: Bool) -> Bool { !collapsedByDefault }
+}
+
 /// Section header used in inspectors.
 struct InspectorSection<Content: View>: View {
     var title: String
     /// Shows a "?" button that opens this help topic.
     var helpTopic: HelpTopic? = nil
+    /// For a rarely changed group: a disclosure group that starts closed and remembers whether it was
+    /// opened, so the common settings are not buried under every option.
+    var collapsedByDefault = false
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-                if let helpTopic {
-                    Spacer()
-                    HelpButton(topic: helpTopic).controlSize(.small)
+        Group {
+            if collapsedByDefault {
+                CollapsibleSectionBody(title: title, helpTopic: helpTopic, content: content)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: title, helpTopic: helpTopic)
+                    content
                 }
             }
-            content
         }
         .environment(\.numberFieldsFillRow, true)
         .padding(.vertical, 4)
+    }
+}
+
+private struct SectionHeader: View {
+    var title: String
+    var helpTopic: HelpTopic?
+
+    var body: some View {
+        HStack {
+            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+            if let helpTopic {
+                Spacer()
+                HelpButton(topic: helpTopic).controlSize(.small)
+            }
+        }
+    }
+}
+
+private struct CollapsibleSectionBody<Content: View>: View {
+    var title: String
+    var helpTopic: HelpTopic?
+    var content: Content
+    @AppStorage private var expanded: Bool
+
+    init(title: String, helpTopic: HelpTopic?, content: Content) {
+        self.title = title
+        self.helpTopic = helpTopic
+        self.content = content
+        _expanded = AppStorage(wrappedValue: SectionState.initiallyExpanded(collapsedByDefault: true),
+                               SectionState.key(for: title))
+    }
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 8) { content }
+                .padding(.top, 8)
+        } label: {
+            SectionHeader(title: title, helpTopic: helpTopic)
+        }
     }
 }
 
