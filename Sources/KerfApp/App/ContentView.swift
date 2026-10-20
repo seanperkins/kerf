@@ -30,7 +30,11 @@ struct ContentView: View {
         .toolbar { toolbarContent }
         .navigationTitle(document.document.name)
         .focusedSceneObject(document)
-        .onAppear { document.undoManager = undoManager }
+        .onAppear {
+            document.undoManager = undoManager
+            RecoveryCoordinator.shared.register(document)
+        }
+        .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
         .sheet(item: $document.sheet, onDismiss: { document.sheetDismissed() }) { sheet in
             switch sheet {

@@ -12,6 +12,8 @@ struct KerfCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .importExport) {
+            Button("Recover Unsaved Work…") { RecoveryPrompt.offer(interactive: true) }
+            Divider()
             Button("Import…") { runImportPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(document == nil)

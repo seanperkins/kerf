@@ -6,6 +6,13 @@ final class KerfAppDelegate: NSObject, NSApplicationDelegate {
         // Needed when launched as a bare SwiftPM executable (no bundle).
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        RecoveryCoordinator.shared.start()
+        // Let the first windows open before asking about work left by a crash.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { RecoveryPrompt.offer(interactive: false) }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        RecoveryCoordinator.shared.cleanUpOnQuit()
     }
 }
 

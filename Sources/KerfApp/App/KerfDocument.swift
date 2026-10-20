@@ -112,8 +112,15 @@ final class KerfDocument: ReferenceFileDocument {
     let toolLibrary: ToolLibraryModel
     private var cancellables: Set<AnyCancellable> = []
 
+    /// Identifies this window's crash-recovery copy.
+    let recoveryID = UUID()
+    /// The project as last opened or saved; unsaved changes = `project` differs from it.
+    private(set) var lastSavedProject: KerfProject
+    var needsRecovery: Bool { project != lastSavedProject }
+
     init(project: KerfProject, toolLibrary: ToolLibraryModel = .shared) {
         self.project = project
+        self.lastSavedProject = project
         self.toolLibrary = toolLibrary
         toolLibrary.$revision.dropFirst().sink { [weak self] _ in self?.designRevision += 1 }.store(in: &cancellables)
     }
@@ -142,6 +149,7 @@ final class KerfDocument: ReferenceFileDocument {
     func snapshot(contentType: UTType) throws -> KerfProject {
         // After a save, the next live toolpath edit opens a new undo step (re-dirtying the file).
         liveOperationEdit = nil
+        lastSavedProject = project
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
         return p
