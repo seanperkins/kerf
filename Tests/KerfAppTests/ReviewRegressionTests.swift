@@ -53,6 +53,30 @@ import Testing
         #expect(p.document.shapes.count == 3)
     }
 
+    /// A locked shape, or a shape on a locked layer, stays put however it was selected
+    /// (sidebar rows and "Select Shapes on Layer" can select what the canvas cannot pick).
+    @Test func locksAreEnforcedForDeleteTransformAndMove() {
+        var p = AppTestSupport.project()
+        let free = p.document.shapes[0].id, onLockedLayer = p.document.shapes[1].id
+        let locked = p.addLayer(named: "Locked")
+        p.moveShapes([onLockedLayer], toLayer: locked)
+        if let i = p.document.layers.firstIndex(where: { $0.id == locked }) { p.document.layers[i].isLocked = true }
+        let before = p.document.shape(id: onLockedLayer)!.bounds()
+        p.transformShapes([free, onLockedLayer], by: .translation(Vec2(1, 1)))
+        #expect(p.document.shape(id: onLockedLayer)!.bounds().min == before.min)
+        #expect(p.document.shape(id: free)!.bounds().min == Vec2(2, 2))
+        p.moveShapes([onLockedLayer], toLayer: p.document.defaultLayerID)
+        #expect(p.document.shape(id: onLockedLayer)!.layerID == locked)
+        p.deleteShapes([free, onLockedLayer])
+        #expect(p.document.shape(id: onLockedLayer) != nil && p.document.shape(id: free) == nil)
+        // A shape lock protects it too; deleting the layer itself still removes clamp outlines (see above).
+        var q = AppTestSupport.project()
+        let id = q.document.shapes[0].id
+        q.document.shapes[0].isLocked = true
+        q.deleteShapes([id])
+        #expect(q.document.shape(id: id) != nil)
+    }
+
     /// Intersecting two shapes that do not overlap leaves both in place.
     @Test func booleanWithAnEmptyResultKeepsTheInputs() {
         var p = AppTestSupport.project()

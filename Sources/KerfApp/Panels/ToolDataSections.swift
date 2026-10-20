@@ -114,7 +114,7 @@ struct FeedsCalculatorSection: View {
                 }
             }
             HStack {
-                Text("Feed = \(Int(tool.spindleRPM)) RPM × \(tool.flutes) flutes × chip load = \(feed, format: .number.precision(.fractionLength(0...1))) \(u.feedUnit)")
+                Text("Feed = \(String(format: "%.0f", tool.spindleRPM)) RPM ×\(tool.flutes) flutes × chip load = \(feed, format: .number.precision(.fractionLength(0...1))) \(u.feedUnit)")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Apply") { tool.feedRate = feed }.disabled(feed <= 0)

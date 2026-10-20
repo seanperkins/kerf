@@ -41,6 +41,18 @@ public struct GCodeValidator: Sendable {
     public func validate(toolpaths: [Toolpath]) -> [GCodeIssue] {
         var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units)
         var pos: Vec3?
+        // Two different tools with one T number post as one tool: the controller sees no change
+        // and the second geometry cuts with the first bit in the spindle.
+        var byNumber: [Int: [Tool]] = [:]
+        for tp in toolpaths where !byNumber[tp.tool.number, default: []].contains(where: { $0.id == tp.tool.id }) {
+            byNumber[tp.tool.number, default: []].append(tp.tool)
+        }
+        for (number, tools) in byNumber where tools.count > 1 {
+            let sameGeometry = tools.allSatisfy { $0.kind == tools[0].kind && $0.diameter == tools[0].diameter && $0.angle == tools[0].angle }
+            check.issues.add("tool-number-\(number)", sameGeometry ? .warning : .error, line: nil,
+                             "T\(number) is used by \(tools.count) different tools (\(tools.map(\.name).joined(separator: ", ")))"
+                                 + (sameGeometry ? "" : " with different geometry; give each tool its own number"))
+        }
         for tp in toolpaths {
             if tp.moves.isEmpty {
                 check.issues.add("empty-\(tp.id)", .warning, line: nil, "Toolpath '\(tp.name)' has no moves")

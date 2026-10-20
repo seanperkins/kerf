@@ -259,7 +259,7 @@ struct ToolPicker: View {
         let u = t.units.abbreviation
         var s = "⌀\(RulerTicks.label(t.diameter)) \(u) · \(t.kind.displayName)"
         if let a = t.angle { s += " \(RulerTicks.label(a))°" }
-        s += " · \(Int(t.spindleRPM)) RPM · F\(RulerTicks.label(t.feedRate)) / P\(RulerTicks.label(t.plungeRate)) \(t.units.feedUnit)"
+        s += " · \(String(format: "%.0f", t.spindleRPM)) RPM · F\(RulerTicks.label(t.feedRate)) / P\(RulerTicks.label(t.plungeRate)) \(t.units.feedUnit)"
         return s
     }
 }

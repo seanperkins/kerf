@@ -91,6 +91,23 @@ private func warns(_ issues: [GCodeIssue], _ fragment: String) -> Bool {
     #expect(clean.isEmpty, "\(clean)")
 }
 
+@Test func twoToolsWithOneNumberAreReported() {
+    var other = PostFixtures.vBit          // a different tool (id, geometry)...
+    other.number = tool.number             // ...posting as the same T word
+    var twin = tool                        // same geometry, different id
+    twin.id = UUID()
+    func tp(_ t: Tool, _ name: String) -> Toolpath {
+        Toolpath(name: name, kind: .profile, tool: t, moves: [.rapid(to: Vec3(1, 1, 0.2)), .linear(to: Vec3(1, 1, -0.1), feed: 30),
+                                                             .rapid(to: Vec3(1, 1, 0.2))])
+    }
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job(), units: .inch)
+    let clash = v.validate(toolpaths: [tp(tool, "a"), tp(other, "b")])
+    #expect(clash.contains { $0.severity == .error && $0.message.contains("T\(tool.number) is used by 2 different tools") })
+    let same = v.validate(toolpaths: [tp(tool, "a"), tp(twin, "b")])
+    #expect(same.contains { $0.severity == .warning && $0.message.contains("T\(tool.number)") })
+    #expect(v.validate(toolpaths: [tp(tool, "a"), tp(tool, "b")]).isEmpty)
+}
+
 // MARK: Reader
 
 @Test func readerSurvivesHugeToolNumbersAndTinyPecks() {

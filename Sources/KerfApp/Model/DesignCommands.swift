@@ -78,7 +78,7 @@ enum DesignCommands {
     /// Boolean of closed shapes. Union/intersect combine all; subtract removes the others from
     /// the first-selected (`primary`). Result replaces the inputs. Returns the new shape's id.
     static func boolean(_ mode: BooleanMode, ids: [UUID], in project: inout KerfProject) -> UUID? {
-        let shapes = project.document.shapes(ids: ids).filter { $0.isClosed && !$0.isLocked }
+        let shapes = project.document.shapes(ids: ids).filter { $0.isClosed && project.isEditable($0) }
         guard shapes.count >= 2 else { return nil }
         let tol = project.document.units == .inch ? 0.0005 : 0.01
         let first = shapes[0], rest = Array(shapes.dropFirst())

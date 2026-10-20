@@ -14,8 +14,14 @@ extension KerfProject {
 
     func isVisible(_ shape: Shape) -> Bool { document.layer(id: shape.layerID)?.isVisible ?? true }
 
-    /// Removes shapes and drops their IDs from every operation's selection.
+    /// Removes the editable shapes among `ids` (a locked shape or layer keeps its shapes) and
+    /// drops their IDs from every operation's selection.
     mutating func deleteShapes(_ ids: Set<UUID>) {
+        // Callers may pass ids of shapes already gone (a removed sheet's vectors): those still
+        // leave the operations below; only shapes present and protected are kept.
+        let protected = Set(document.shapes.filter { ids.contains($0.id) && !isEditable($0) }.map(\.id))
+        let ids = ids.subtracting(protected)
+        guard !ids.isEmpty else { return }
         document.removeShapes(ids: ids)
         document.pruneSingletonGroups()
         for i in operations.indices {
@@ -25,8 +31,11 @@ extension KerfProject {
         }
     }
 
+    /// Transforms the editable shapes among `ids`: a locked shape, or one on a locked or hidden
+    /// layer, stays put however it was selected (sidebar rows and "Select Shapes on Layer" can
+    /// select what the canvas cannot pick).
     mutating func transformShapes(_ ids: Set<UUID>, by t: Transform2D) {
-        for i in document.shapes.indices where ids.contains(document.shapes[i].id) && !document.shapes[i].isLocked {
+        for i in document.shapes.indices where ids.contains(document.shapes[i].id) && isEditable(document.shapes[i]) {
             var s = document.shapes[i].transformed(t)
             // A non-uniform transform invalidates parametric provenance.
             if !t.isConformal { s.origin = .derived(operation: "transform") }
@@ -48,7 +57,7 @@ extension KerfProject {
     }
 
     mutating func moveShapes(_ ids: Set<UUID>, toLayer layerID: UUID) {
-        for i in document.shapes.indices where ids.contains(document.shapes[i].id) {
+        for i in document.shapes.indices where ids.contains(document.shapes[i].id) && isEditable(document.shapes[i]) {
             document.shapes[i].layerID = layerID
         }
     }
@@ -77,7 +86,9 @@ extension KerfProject {
         guard document.layers.count > 1, let idx = document.layers.firstIndex(where: { $0.id == id }) else { return }
         let gone = document.layers.remove(at: idx)
         if gone.keepOut != nil {
-            deleteShapes(Set(document.shapes.filter { $0.layerID == id }.map(\.id)))
+            // Straight removal: the layer is gone, so its lock no longer protects the outlines.
+            document.removeShapes(ids: Set(document.shapes.filter { $0.layerID == id }.map(\.id)))
+            document.pruneSingletonGroups()
             return
         }
         let ordinary = document.layers.filter { $0.keepOut == nil && $0.sheet == nil }

@@ -183,7 +183,8 @@ enum GCodeExporter {
                                      toolpathCount: toolpaths.count)
         } catch PostError.spindleSpeedOutOfRange(let rpm) {
             return GCodeExportResult(text: nil, issues: issues,
-                                     errorMessage: "Spindle speed \(Int(rpm)) RPM is outside the machine's range (\(Int(profile.minRPM))–\(Int(profile.maxRPM))).",
+                                     errorMessage: String(format: "Spindle speed %.0f RPM is outside the machine's range (%.0f–%.0f).",
+                                                          rpm, profile.minRPM, profile.maxRPM),
                                      toolpathCount: toolpaths.count)
         } catch {
             return GCodeExportResult(text: nil, issues: issues, errorMessage: "\(error)", toolpathCount: toolpaths.count)
