@@ -37,6 +37,9 @@ struct SimulationPreviewView: View {
     var units: LengthUnit
     var toolpaths: [Toolpath]
     var rapidRate: Double
+    /// When set, a picker chooses which toolpaths are simulated (all / visible / selected).
+    var scope: Binding<PreviewScope>? = nil
+    var emptyMessage = "No toolpaths to simulate"
 
     @StateObject private var model = SimulationPreviewModel()
     @ObservedObject private var timeStore = TimeEstimateStore.shared
@@ -66,7 +69,7 @@ struct SimulationPreviewView: View {
     private var infoBadge: some View {
         VStack(alignment: .leading, spacing: 2) {
             if toolpaths.isEmpty {
-                Text("No toolpaths to simulate").font(.callout.bold())
+                Text(emptyMessage).font(.callout.bold())
             } else {
                 Text(model.activeToolpathName ?? "—").font(.callout.bold())
                 Text("Estimated time \(MachiningTimeEstimator.format(model.totalTime))")
@@ -80,6 +83,20 @@ struct SimulationPreviewView: View {
     }
 
     private var controls: some View {
+        HStack(spacing: 10) {
+            if let scope {
+                Picker("Simulate", selection: scope) {
+                    ForEach(PreviewScope.allCases) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+                .help("Which toolpaths to simulate")
+            }
+            playbackControls
+        }
+    }
+
+    private var playbackControls: some View {
         HStack(spacing: 10) {
             Button(action: model.rewind) { Image(systemName: "backward.end.fill") }
                 .help("Back to start")
