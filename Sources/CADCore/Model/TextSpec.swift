@@ -16,6 +16,19 @@ public struct TextSpec: Codable, Hashable, Sendable {
     /// Extra space added after every character (layout units, may be negative).
     public var letterSpacing: Double
     public var transform: Transform2D
+    /// Per-letter nudges (kerning): letters are numbered in order, newlines not counted.
+    /// Optional so specs written before it existed still decode.
+    public var letterAdjustments: [LetterAdjustment]?
+
+    /// Moves and/or rotates one letter of the text (layout units / degrees about its centre).
+    public struct LetterAdjustment: Codable, Hashable, Sendable {
+        public var index: Int
+        public var offset: Vec2
+        public var rotation: Double
+        public init(index: Int, offset: Vec2 = .zero, rotation: Double = 0) {
+            self.index = index; self.offset = offset; self.rotation = rotation
+        }
+    }
 
     public init(string: String, fontName: String, size: Double, alignment: TextAlignment = .left,
                 lineSpacing: Double = 1, letterSpacing: Double = 0, transform: Transform2D = .identity) {

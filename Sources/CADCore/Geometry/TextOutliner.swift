@@ -49,6 +49,9 @@ public struct TextOutliner: Sendable {
 
     /// Outlines of live text, in document coordinates.
     public func outlines(for spec: TextSpec) throws -> [Path] {
+        if let adj = spec.letterAdjustments, !adj.isEmpty {
+            return try TextKerning.outlines(for: spec, adjustments: adj, outliner: self)
+        }
         if StrokeFont.isStrokeFont(spec.fontName) {
             return StrokeFont.outlines(for: spec.string, size: spec.size, origin: .zero, alignment: spec.alignment,
                                        lineSpacing: spec.lineSpacing, letterSpacing: spec.letterSpacing)

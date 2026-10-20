@@ -126,6 +126,11 @@ struct TextEditSection: View {
     @State private var height = 1.0
     @State private var letterSpacing = 0.0
     @State private var fonts: [String] = []
+    @State private var letter = 1
+    @State private var letterOffset = Vec2.zero
+    @State private var letterRotation = 0.0
+
+    private var letterCount: Int { shape.text.flatMap { try? TextKerning.letterCount($0) } ?? 1 }
 
     var body: some View {
         InspectorSection(title: "Text") {
@@ -148,7 +153,21 @@ struct TextEditSection: View {
                 }
                 .help("Make the text plain vectors (needed for node editing)")
             }
+            Divider()
+            Text("Letter spacing by hand").font(.subheadline.bold())
+            IntField("Letter number", value: $letter, range: 1...max(1, letterCount))
+            LengthField("Move X", value: $letterOffset.x, units: document.units)
+            LengthField("Move Y", value: $letterOffset.y, units: document.units)
+            NumberField("Rotate", value: $letterRotation, unit: "°")
+            HStack {
+                Button("Apply to Letter") { applyLetter() }
+                Button("Reset Letters") { setAdjustments(nil) }
+                    .disabled(shape.text?.letterAdjustments == nil)
+            }
+            Text("Letters are counted from the first, across lines; the move is added to the normal position.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
+        .onChange(of: letter) { _, _ in loadLetter() }
         .onAppear {
             fonts = TextOutliner.availableFontNames()
             if fonts.isEmpty { fonts = NSFontManager.shared.availableFontFamilies }
@@ -164,6 +183,37 @@ struct TextEditSection: View {
         height = t.displayedSize
         letterSpacing = t.letterSpacing * t.scale
         if !fonts.contains(t.fontName) { fonts.insert(t.fontName, at: 0) }
+        loadLetter()
+    }
+
+    private func loadLetter() {
+        guard let t = shape.text else { return }
+        let a = t.letterAdjustments?.first { $0.index == letter - 1 }
+        letterOffset = (a?.offset ?? .zero) * t.scale
+        letterRotation = a?.rotation ?? 0
+    }
+
+    private func applyLetter() {
+        guard let t = shape.text, t.scale > 0 else { return }
+        var list = (t.letterAdjustments ?? []).filter { $0.index != letter - 1 }
+        if letterOffset != .zero || letterRotation != 0 {
+            list.append(TextSpec.LetterAdjustment(index: letter - 1, offset: letterOffset / t.scale, rotation: letterRotation))
+        }
+        setAdjustments(list.isEmpty ? nil : list.sorted { $0.index < $1.index })
+    }
+
+    private func setAdjustments(_ list: [TextSpec.LetterAdjustment]?) {
+        guard var spec = shape.text else { return }
+        spec.letterAdjustments = list
+        let id = shape.id
+        do {
+            var p = document.project
+            try VectorCommands.updateText(id, spec: spec, in: &p)
+            let updated = p
+            document.perform("Adjust Letters") { $0 = updated }
+        } catch {
+            document.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
+        }
     }
 
     private func apply() {
