@@ -9,8 +9,9 @@ import SwiftUI
 /// SCNView wrapper with built-in orbit (drag), zoom (scroll/pinch) and pan (option-drag).
 struct StockSceneView: NSViewRepresentable {
     let stockScene: StockScene
-    /// When set, a click on the stock reports its material-frame point (z = -depth).
-    var onPick: ((Vec3) -> Void)? = nil
+    /// When set, a click reports its material-frame point: on the stock when it was hit, else on
+    /// the material-top plane (z = 0).
+    var onPick: ((Preview3DPick) -> Void)? = nil
 
     final class Coordinator: NSObject {
         var parent: StockSceneView
@@ -20,10 +21,30 @@ struct StockSceneView: NSViewRepresentable {
         @MainActor @objc func clicked(_ g: NSClickGestureRecognizer) {
             guard let view, let onPick = parent.onPick else { return }
             let loc = g.location(in: view)
+            let scene = parent.stockScene
             let hits = view.hitTest(loc, options: [.searchMode: SCNHitTestSearchMode.all.rawValue,
                                                    .ignoreHiddenNodes: true])
-            guard let hit = hits.first(where: { parent.stockScene.isStock($0.node) }) else { return }
-            onPick(parent.stockScene.materialPoint(fromWorld: hit.worldCoordinates))
+            let world: SCNVector3
+            let point: Vec3
+            let onStock: Bool
+            if let hit = hits.first(where: { scene.isStock($0.node) }) {
+                world = hit.worldCoordinates
+                point = scene.materialPoint(fromWorld: world)
+                onStock = true
+            } else {
+                let near = view.unprojectPoint(SCNVector3(loc.x, loc.y, 0))
+                let far = view.unprojectPoint(SCNVector3(loc.x, loc.y, 1))
+                guard let p = scene.materialTopPoint(near: near, far: far) else { return }
+                point = p
+                world = scene.content.convertPosition(SCNVector3(p.x, p.y, p.z), to: nil)
+                onStock = false
+            }
+            // About 8 pixels at the clicked depth, in material units.
+            let screen = view.projectPoint(world)
+            let side = view.unprojectPoint(SCNVector3(screen.x + 8, screen.y, screen.z))
+            let tolerance = point.distance(to: scene.materialPoint(fromWorld: side))
+            onPick(Preview3DPick(point: point, tolerance: tolerance.isFinite && tolerance > 0 ? tolerance : 1e-3,
+                                 onStock: onStock))
         }
     }
 
@@ -68,6 +89,12 @@ struct SimulationPreviewView: View {
     var documentName = "Untitled"
     /// Design vectors (material-frame polylines) that "Show ▸ Vectors" draws on the stock top.
     var vectors: [[Vec2]] = []
+    /// Selected design vectors, drawn highlighted.
+    var selectedVectors: [[Vec2]] = []
+    /// When set, the Draw tool is offered; called with each finished polyline and whether it closed.
+    var onDrawShape: (([Vec2], Bool) -> Void)? = nil
+    /// When set, the Select tool is offered; called with the clicked point and a pick tolerance.
+    var onSelectAt: ((Vec2, Double) -> Void)? = nil
 
     @StateObject private var model = SimulationPreviewModel()
     @ObservedObject private var timeStore = TimeEstimateStore.shared
@@ -84,6 +111,10 @@ struct SimulationPreviewView: View {
                     measureBadge.padding(8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
+                if model.tool == .draw {
+                    drawBadge.padding(8)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
             }
             Divider()
             controls.padding(.horizontal, 12).padding(.vertical, 8)
@@ -93,19 +124,23 @@ struct SimulationPreviewView: View {
         .onChange(of: job) { _, _ in configure() }
         .onChange(of: rapidRate) { _, _ in configure() }
         .onChange(of: vectors) { _, v in model.setVectors(v) }
+        .onChange(of: selectedVectors) { _, v in model.setSelectedVectors(v) }
         .onChange(of: timeStore.settings) { _, _ in configure() }
         .onChange(of: appearanceStore.settings) { _, s in model.setAppearance(s.appearance) }
     }
 
-    private var pickHandler: ((Vec3) -> Void)? {
-        guard model.isMeasuring else { return nil }
+    private var pickHandler: ((Preview3DPick) -> Void)? {
+        guard model.tool != .none else { return nil }
         let m = model
-        return { p in m.pick(p) }
+        return { p in m.handle(p) }
     }
 
     private func configure() {
         model.setAppearance(appearanceStore.settings.appearance)
         model.setVectors(vectors)
+        model.setSelectedVectors(selectedVectors)
+        model.onDrawShape = onDrawShape
+        model.onSelectAt = onSelectAt
         model.configure(job: job, toolpaths: toolpaths, rapidRate: rapidRate, units: units,
                         timeSettings: timeStore.settings)
     }
@@ -142,6 +177,45 @@ struct SimulationPreviewView: View {
         .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
     }
 
+    private var drawBadge: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text(model.drawing.isEmpty
+                 ? "Click the stock to start a line. Click the first point to close it, the last point (or Return) to finish."
+                 : "\(model.drawing.points.count) point\(model.drawing.points.count == 1 ? "" : "s") · click the first point to close, the last point or Return to finish")
+                .font(.caption)
+            if !model.drawing.isEmpty {
+                Button("Undo Point") { model.undoDrawingPoint() }.controlSize(.small)
+                Button("Finish") { model.finishDrawing() }
+                    .controlSize(.small)
+                    .keyboardShortcut(.return, modifiers: [])
+                Button("Cancel") { model.cancelDrawing() }
+                    .controlSize(.small)
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(6)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    /// Select / draw buttons (only where the host can apply them to the design).
+    @ViewBuilder private var designTools: some View {
+        if onSelectAt != nil {
+            Toggle(isOn: toolBinding(.select)) { Image(systemName: "cursorarrow") }
+                .toggleStyle(.button)
+                .help("Select vectors by clicking them in the 3D view")
+        }
+        if onDrawShape != nil {
+            Toggle(isOn: toolBinding(.draw)) { Image(systemName: "pencil.line") }
+                .toggleStyle(.button)
+                .help("Draw a polyline on the material top by clicking points in the 3D view")
+        }
+    }
+
+    private func toolBinding(_ t: Preview3DTool) -> Binding<Bool> {
+        Binding(get: { model.tool == t }, set: { model.tool = $0 ? t : .none })
+    }
+
     private var controls: some View {
         HStack(spacing: 10) {
             if let scope {
@@ -153,6 +227,7 @@ struct SimulationPreviewView: View {
                 .help("Which toolpaths to simulate")
             }
             playbackControls
+            designTools
         }
     }
 
@@ -190,7 +265,7 @@ struct SimulationPreviewView: View {
                 Image(systemName: "camera")
             }
             .help("Save the preview as an image…")
-            Toggle(isOn: $model.isMeasuring) { Image(systemName: "ruler") }
+            Toggle(isOn: toolBinding(.measure)) { Image(systemName: "ruler") }
                 .toggleStyle(.button)
                 .help("Measure: click the stock for a depth, click again for a distance")
             Button { showAppearance.toggle() } label: { Image(systemName: "paintpalette") }
