@@ -7,18 +7,25 @@ final class KerfAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
 @main
 struct KerfApp: App {
     @NSApplicationDelegateAdaptor(KerfAppDelegate.self) private var appDelegate
+    @StateObject private var toolLibrary = ToolLibraryModel.shared
 
     var body: some Scene {
-        WindowGroup("Kerf") {
-            ContentView()
-                .frame(minWidth: 900, minHeight: 600)
+        DocumentGroup(newDocument: { KerfDocument() }) { file in
+            ContentView(document: file.document)
+                .environmentObject(toolLibrary)
+                .frame(minWidth: 1000, minHeight: 640)
         }
+        .commands { KerfCommands() }
+
+        Window("Tool Database", id: ToolDatabaseView.windowID) {
+            ToolDatabaseView()
+                .environmentObject(toolLibrary)
+        }
+        .defaultSize(width: 820, height: 600)
     }
 }

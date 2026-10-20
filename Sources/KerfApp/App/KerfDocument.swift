@@ -1,0 +1,388 @@
+import CADCore
+import CAMCore
+import Combine
+import Foundation
+import PostCore
+import SwiftUI
+import UniformTypeIdentifiers
+
+extension UTType {
+    /// Native project file (JSON). Declared in Info.plist by scripts/bundle.sh.
+    static let kerfProject = UTType(exportedAs: "com.seanperkins.kerf.project", conformingTo: .json)
+}
+
+enum SidebarTab: String, CaseIterable, Identifiable {
+    case design = "Design", toolpaths = "Toolpaths"
+    var id: String { rawValue }
+}
+
+enum CenterMode: String, CaseIterable, Identifiable {
+    case design2D = "2D", preview3D = "3D"
+    var id: String { rawValue }
+}
+
+enum DocumentSheet: Identifiable, Equatable {
+    case jobSetup
+    case exportGCode(GCodeExportScope)
+    case offset
+
+    var id: String {
+        switch self {
+        case .jobSetup: return "job"
+        case .exportGCode: return "export"
+        case .offset: return "offset"
+        }
+    }
+}
+
+struct AlertMessage: Identifiable {
+    let id = UUID()
+    var title: String
+    var message: String
+}
+
+/// Requests from menus/toolbar to the canvas (zoom etc.). `serial` makes repeats observable.
+struct CanvasRequest: Equatable {
+    enum Kind: Equatable { case fit, zoomIn, zoomOut, fitSelection }
+    var kind: Kind
+    var serial: Int
+}
+
+/// One open `.kerf` document: the project plus per-window editing state. All project edits go
+/// through `perform`, which registers snapshot-based undo with the window's undo manager.
+final class KerfDocument: ReferenceFileDocument {
+    typealias Snapshot = KerfProject
+
+    static var readableContentTypes: [UTType] { [.kerfProject] }
+    static var writableContentTypes: [UTType] { [.kerfProject] }
+
+    @Published private(set) var project: KerfProject
+    /// Bumped whenever the design (not the operations) changes; toolpaths compare against it.
+    @Published private(set) var designRevision = 0
+
+    // Editing state (not saved).
+    @Published var selection: Set<UUID> = []
+    /// Selection order (first = primary, e.g. the shape others are subtracted from).
+    private(set) var selectionOrder: [UUID] = []
+    @Published var selectedOperationID: UUID?
+    @Published var hiddenToolpaths: Set<UUID> = []
+    @Published var showToolpaths = true
+    @Published var results: [UUID: ToolpathResult] = [:]
+    @Published var calculating: Set<UUID> = []
+    @Published var activeTool: CanvasTool = .select
+    @Published var drawingOptions = DrawingOptions()
+    @Published var snapToGrid = true
+    @Published var sidebarTab: SidebarTab = .design
+    @Published var centerMode: CenterMode = .design2D
+    @Published var sheet: DocumentSheet?
+    @Published var alert: AlertMessage?
+    @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
+    /// Cursor position in document units (for the status bar).
+    @Published var cursorPosition: Vec2?
+
+    weak var undoManager: UndoManager?
+    let toolLibrary: ToolLibraryModel
+    private var cancellables: Set<AnyCancellable> = []
+
+    init(project: KerfProject, toolLibrary: ToolLibraryModel = .shared) {
+        self.project = project
+        self.toolLibrary = toolLibrary
+        toolLibrary.$revision.dropFirst().sink { [weak self] _ in self?.designRevision += 1 }.store(in: &cancellables)
+    }
+
+    convenience init() {
+        let doc = Document()
+        self.init(project: KerfProject(document: doc, postProfileID: PostProfileStore.defaultID(for: doc.units)))
+    }
+
+    required convenience init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.init(project: try KerfProject.decode(from: data))
+    }
+
+    func snapshot(contentType: UTType) throws -> KerfProject {
+        var p = project
+        p.refreshToolSnapshot(from: toolLibrary.library)
+        return p
+    }
+
+    func fileWrapper(snapshot: KerfProject, configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: try snapshot.encoded())
+    }
+
+    // MARK: Undoable edits
+
+    /// Applies `change` to a copy of the project; registers undo only if something changed.
+    func perform(_ actionName: String, _ change: (inout KerfProject) -> Void) {
+        var p = project
+        change(&p)
+        guard p != project else { return }
+        replaceProject(p, actionName: actionName)
+    }
+
+    private func replaceProject(_ new: KerfProject, actionName: String) {
+        let old = project
+        if old.document != new.document { designRevision += 1 }
+        project = new
+        undoManager?.registerUndo(withTarget: self) { doc in doc.replaceProject(old, actionName: actionName) }
+        undoManager?.setActionName(actionName)
+        pruneState()
+    }
+
+    private func pruneState() {
+        let ids = Set(project.document.shapes.map(\.id))
+        if !selection.isSubset(of: ids) { setSelection(selectionOrder.filter(ids.contains)) }
+        let opIDs = Set(project.operations.map(\.id))
+        if let sel = selectedOperationID, !opIDs.contains(sel) { selectedOperationID = nil }
+        results = results.filter { opIDs.contains($0.key) }
+    }
+
+    // MARK: Derived
+
+    var document: Document { project.document }
+    var units: LengthUnit { project.document.units }
+    var mergedLibrary: ToolLibrary { project.mergedTools(with: toolLibrary.library) }
+
+    var postProfile: PostProfile {
+        PostProfileCatalog.shared.profile(id: project.postProfileID ?? PostProfileStore.defaultID(for: units))
+    }
+
+    /// Profile rapid rate converted to document units per minute.
+    var rapidRateInDocumentUnits: Double {
+        postProfile.rapidRate * postProfile.units.factor(to: units)
+    }
+
+    func operation(_ id: UUID?) -> AnyOperation? {
+        guard let id else { return nil }
+        return project.operations.first { $0.id == id }
+    }
+
+    var selectedShapes: [Shape] { project.document.shapes(ids: selectionOrder) }
+
+    // MARK: Selection
+
+    func setSelection(_ ids: [UUID]) {
+        var seen = Set<UUID>()
+        selectionOrder = ids.filter { seen.insert($0).inserted }
+        selection = Set(selectionOrder)
+    }
+
+    func select(_ id: UUID, extending: Bool) {
+        if extending {
+            if selection.contains(id) { setSelection(selectionOrder.filter { $0 != id }) } else { setSelection(selectionOrder + [id]) }
+        } else {
+            setSelection([id])
+        }
+    }
+
+    func addToSelection(_ ids: [UUID]) { setSelection(selectionOrder + ids) }
+
+    func selectAll() {
+        setSelection(project.document.shapes.filter { project.isEditable($0) }.map(\.id))
+    }
+
+    func clearSelection() { setSelection([]) }
+
+    // MARK: Shape edits
+
+    func addShape(_ shape: Shape, actionName: String) {
+        var s = shape
+        if project.document.layer(id: s.layerID) == nil { s.layerID = currentLayerID }
+        perform(actionName) { $0.document.add(s) }
+        setSelection([s.id])
+    }
+
+    /// Layer new shapes go to: the layer of the primary selection, else the first unlocked visible one.
+    var currentLayerID: UUID {
+        if let first = selectedShapes.first { return first.layerID }
+        return project.document.layers.first { $0.isVisible && !$0.isLocked }?.id ?? project.document.defaultLayerID
+    }
+
+    func deleteSelection() {
+        guard !selection.isEmpty else { return }
+        let ids = selection
+        perform(ids.count == 1 ? "Delete Shape" : "Delete Shapes") { $0.deleteShapes(ids) }
+    }
+
+    func translateSelection(by d: Vec2, actionName: String = "Move") {
+        guard !selection.isEmpty, d != .zero else { return }
+        let ids = selection
+        perform(actionName) { $0.transformShapes(ids, by: .translation(d)) }
+    }
+
+    func duplicateSelection() {
+        guard !selection.isEmpty else { return }
+        let ids = selection
+        var newIDs: [UUID] = []
+        let g = project.document.gridSpacing
+        perform("Duplicate") { newIDs = $0.duplicateShapes(ids, offset: Vec2(g, -g)) }
+        setSelection(newIDs)
+    }
+
+    // MARK: Operations
+
+    func addOperation(_ kind: OperationKind) {
+        guard let op = OperationFactory.make(kind: kind, project: project, library: mergedLibrary,
+                                             shapeIDs: selectionOrder) else {
+            alert = AlertMessage(title: "No 3D model",
+                                 message: "Import an STL model (File > Import) before adding a 3D toolpath.")
+            return
+        }
+        perform("New \(kind.displayName) Toolpath") { $0.upsertOperation(op) }
+        sidebarTab = .toolpaths
+        selectedOperationID = op.id
+    }
+
+    func updateOperation(_ op: AnyOperation) {
+        perform("Edit Toolpath") { $0.upsertOperation(op) }
+    }
+
+    func deleteOperation(_ id: UUID) {
+        perform("Delete Toolpath") { $0.deleteOperation(id) }
+    }
+
+    func duplicateOperation(_ id: UUID) {
+        guard var op = operation(id) else { return }
+        var s = op.editableSetup
+        s.id = UUID()
+        s.name = OperationFactory.defaultName(for: op.kind, existing: project.operations)
+        op.editableSetup = s
+        let copy = op
+        perform("Duplicate Toolpath") { $0.operations.append(copy) }
+        selectedOperationID = copy.id
+    }
+
+    func setOperationEnabled(_ id: UUID, _ enabled: Bool) {
+        guard var op = operation(id) else { return }
+        var s = op.editableSetup
+        s.isEnabled = enabled
+        op.editableSetup = s
+        let o = op
+        perform(enabled ? "Enable Toolpath" : "Disable Toolpath") { $0.upsertOperation(o) }
+    }
+
+    func toggleToolpathVisibility(_ id: UUID) {
+        if hiddenToolpaths.contains(id) { hiddenToolpaths.remove(id) } else { hiddenToolpaths.insert(id) }
+    }
+
+    /// True when the operation has no result or was edited after its last calculation.
+    func isStale(_ id: UUID) -> Bool {
+        guard let r = results[id], let op = operation(id) else { return true }
+        return r.operation != op || r.designRevision != designRevision
+    }
+
+    /// Generates toolpaths off the main thread; results arrive asynchronously.
+    func calculate(_ ids: [UUID]) {
+        let snapshot = project, library = toolLibrary.library, rev = designRevision
+        let rapid = rapidRateInDocumentUnits
+        for id in ids {
+            guard let op = operation(id), !calculating.contains(id) else { continue }
+            calculating.insert(id)
+            DispatchQueue.global(qos: .userInitiated).async {
+                let r = ToolpathCalculator.calculate(op, project: snapshot, library: library, designRevision: rev,
+                                                     rapidRate: rapid)
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.calculating.remove(id)
+                    if self.operation(id) != nil { self.results[id] = r }
+                }
+            }
+        }
+    }
+
+    func calculateAll() { calculate(project.operations.filter(\.setup.isEnabled).map(\.id)) }
+
+    /// Calculates synchronously (used before exporting so the file matches the parameters).
+    func calculateNow(_ ids: [UUID]) {
+        for id in ids {
+            guard let op = operation(id) else { continue }
+            results[id] = ToolpathCalculator.calculate(op, project: project, library: toolLibrary.library,
+                                                       designRevision: designRevision,
+                                                       rapidRate: rapidRateInDocumentUnits)
+        }
+    }
+
+    var totalEstimatedSeconds: TimeInterval {
+        project.operations.filter(\.setup.isEnabled).compactMap { results[$0.id]?.estimatedSeconds }.reduce(0, +)
+    }
+
+    func setPostProfile(_ id: String) {
+        perform("Change Machine") { $0.postProfileID = id }
+    }
+
+    // MARK: Job setup
+
+    func applyJobSetup(_ form: JobSetupForm) {
+        perform("Job Setup") { $0 = form.apply(to: $0) }
+        requestCanvas(.fit)
+    }
+
+    func requestCanvas(_ kind: CanvasRequest.Kind) {
+        canvasRequest = CanvasRequest(kind: kind, serial: canvasRequest.serial + 1)
+    }
+
+    // MARK: Import / export
+
+    func importFiles(_ urls: [URL]) {
+        var messages: [String] = []
+        var newShapes: [UUID] = []
+        for url in urls {
+            do {
+                let data = try Data(contentsOf: url)
+                var outcome = ImportOutcome()
+                var p = project
+                outcome = try ImportService.importFile(data: data, fileName: url.lastPathComponent, into: &p)
+                let imported = p
+                perform("Import \(url.lastPathComponent)") { $0 = imported }
+                newShapes += outcome.shapeIDs
+                messages += outcome.warnings.map { "\(url.lastPathComponent): \($0)" }
+                if !outcome.modelIDs.isEmpty {
+                    messages.append("\(url.lastPathComponent): 3D model placed on the material. Add a 3D toolpath to machine it.")
+                }
+            } catch {
+                messages.append("\(url.lastPathComponent): \(ImportService.describe(error))")
+            }
+        }
+        if !newShapes.isEmpty { setSelection(newShapes); sidebarTab = .design; requestCanvas(.fit) }
+        if !messages.isEmpty { alert = AlertMessage(title: "Import", message: messages.joined(separator: "\n")) }
+    }
+
+    func exportVectors(to url: URL, selectionOnly: Bool) {
+        let ext = url.pathExtension.lowercased()
+        let shapes = selectionOnly && !selection.isEmpty ? selectedShapes : project.document.shapes
+        do {
+            let data: Data
+            switch ext {
+            case SVGExporter.fileExtension:
+                data = try SVGExporter().export(shapes: shapes, layers: project.document.layers, units: units)
+            case DXFExporter.fileExtension:
+                data = try DXFExporter().export(shapes: shapes, layers: project.document.layers, units: units)
+            default: throw KerfIOError.unsupportedFormat(ext)
+            }
+            try data.write(to: url, options: .atomic)
+        } catch {
+            alert = AlertMessage(title: "Export failed", message: ImportService.describe(error))
+        }
+    }
+}
+
+/// App-wide list of post profiles (built-ins + user JSON). Loaded once; `reload()` re-reads.
+final class PostProfileCatalog: ObservableObject {
+    static let shared = PostProfileCatalog()
+    @Published private(set) var profiles: [PostProfile]
+    let store: PostProfileStore
+
+    init(store: PostProfileStore = PostProfileStore()) {
+        self.store = store
+        profiles = store.allProfiles()
+    }
+
+    func reload() { profiles = store.allProfiles() }
+
+    func profile(id: String?) -> PostProfile {
+        profiles.first { $0.id == id } ?? profiles.first { $0.id == PostProfileStore.defaultProfileID }
+            ?? BuiltInPosts.avidMach4Inch
+    }
+}

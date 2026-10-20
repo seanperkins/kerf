@@ -1,0 +1,46 @@
+import AppKit
+import SwiftUI
+
+/// SwiftUI wrapper for the AppKit canvas.
+struct DesignCanvas: NSViewRepresentable {
+    @ObservedObject var document: KerfDocument
+
+    func makeNSView(context: Context) -> CanvasNSView {
+        let v = CanvasNSView()
+        v.document = document
+        return v
+    }
+
+    func updateNSView(_ v: CanvasNSView, context: Context) {
+        v.document = document
+        if document.activeTool != .polyline && document.activeTool != .curve { v.clickPoints = [] }
+        v.handle(document.canvasRequest)
+        v.needsDisplay = true
+    }
+}
+
+/// Vertical palette of drawing tools shown over the canvas' left edge.
+struct ToolPalette: View {
+    @ObservedObject var document: KerfDocument
+
+    var body: some View {
+        VStack(spacing: 2) {
+            ForEach(CanvasTool.allCases) { tool in
+                Button {
+                    document.activeTool = tool
+                } label: {
+                    Image(systemName: tool.systemImage)
+                        .frame(width: 28, height: 26)
+                        .background(document.activeTool == tool ? Color.accentColor.opacity(0.25) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help(tool.title)
+                if tool == .select { Divider().frame(width: 24) }
+            }
+        }
+        .padding(4)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .shadow(radius: 1)
+    }
+}
