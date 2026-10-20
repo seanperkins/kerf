@@ -28,12 +28,18 @@ struct KerfCommands: Commands {
             Button("Import…") { runImportPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(document == nil)
+            Button("Import 3D Model as 2D Parts…") { document?.runModelPartsPanel() }
+                .disabled(document == nil)
+            Button("Clipart…") { document?.sheet = .io(.clipart) }
+                .disabled(document == nil)
             Button("Export Vectors…") { runExportVectorsPanel() }
                 .disabled(document == nil)
             Button("Export G-code…") { document?.sheet = .exportGCode(.all) }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(document?.project.operations.isEmpty ?? true)
             Button("Export Job Sheet…") { document?.exportJobSheet() }
+                .disabled(document == nil)
+            Button("Job Notes…") { document?.sheet = .io(.jobNotes(openedWithFile: false)) }
                 .disabled(document == nil)
         }
         CommandGroup(after: .pasteboard) {

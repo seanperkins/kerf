@@ -42,6 +42,8 @@ enum DocumentSheet: Identifiable, Equatable {
     case variables
     /// Drawing-tool dialogs (dog-bones, arrays, validator, …).
     case drawing(DrawingSheet)
+    /// File / IO dialogs (model parts, job notes, clipart…), see `IOSheets.swift`.
+    case io(IOSheet)
 
     var id: String {
         switch self {
@@ -59,6 +61,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .partLabels: return "partLabels"
         case .variables: return "variables"
         case .drawing(let d): return "drawing-\(d.rawValue)"
+        case .io(let s): return "io-\(s.id)"
         }
     }
 }
@@ -102,7 +105,9 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var kerningShapeID: UUID?
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
-    private var deferredAlert: AlertMessage?
+    var deferredAlert: AlertMessage?
+    /// Expressions typed into numeric fields, linked to parameters on the next edit (io).
+    let expressionRecorder = ExpressionRecorder()
     @Published var showToolpaths = true
     @Published var results: [UUID: ToolpathResult] = [:]
     @Published var calculating: Set<UUID> = []
@@ -191,7 +196,7 @@ final class KerfDocument: ReferenceFileDocument {
     }
 
     func fileWrapper(snapshot: KerfProject, configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: try snapshot.encoded())
+        FileWrapper(regularFileWithContents: FileThumbnail.withQuickLookThumbnail(try snapshot.encoded(), for: snapshot.document))
     }
 
     // MARK: Undoable edits
@@ -200,6 +205,7 @@ final class KerfDocument: ReferenceFileDocument {
     func perform(_ actionName: String, _ change: (inout KerfProject) -> Void) {
         var p = project
         change(&p)
+        VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
         guard p != project else { return }
         replaceProject(p, actionName: actionName)
     }
@@ -427,6 +433,7 @@ final class KerfDocument: ReferenceFileDocument {
         if let live = liveOperationEdit, live.id == op.id, live.serial == editSerial {
             var p = project
             p.upsertOperation(op)
+            VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
             guard p != project else { return }
             project = p  // the open undo step already restores the state before the first edit
             return

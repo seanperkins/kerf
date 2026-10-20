@@ -96,6 +96,10 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 ## 4. Known limitations and stubs
 
 - The app is ad-hoc signed and not notarised (Gatekeeper warns on first launch). It has no app icon.
+- Finder / Quick Look thumbnails of `.kerf` files come from the bundled extension
+  (`Contents/PlugIns/KerfThumbnail.appex`). macOS picks it up once the app has been launched from
+  its final place (e.g. /Applications); `pluginkit -m -i com.seanperkins.kerf.thumbnail` shows whether
+  it is registered. Only files saved by this version carry the picture.
 - Toolpath results are not stored in `.kerf` files. After opening a file, run Calculate All
   (export also recalculates automatically).
 - 3D roughing needs an end mill in the library.

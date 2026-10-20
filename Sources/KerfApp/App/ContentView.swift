@@ -38,6 +38,7 @@ struct ContentView: View {
         .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
         .onAppear { document.fileURL = documentConfiguration?.fileURL }
+        .onAppear { document.showJobNotesOnOpenIfNeeded() }
         .onChange(of: documentConfiguration?.fileURL) { _, url in
             document.fileURL = url
             document.scheduleFileThumbnail()
@@ -58,6 +59,7 @@ struct ContentView: View {
             case .partLabels: PartLabelsSheet(document: document)
             case .variables: DocumentVariablesSheet(document: document)
             case .drawing(let kind): DrawingSheetHost(document: document, kind: kind)
+            case .io(let s): IOSheetHost(document: document, sheet: s)
             }
         }
         .alert(item: $document.alert) { a in
@@ -65,6 +67,7 @@ struct ContentView: View {
         }
         .environment(\.documentVariables, document.document.variableTable)
         .environment(\.expressionUnits, document.units)
+        .environment(\.expressionRecorder, document.expressionRecorder)
     }
 
     @ViewBuilder private var center: some View {

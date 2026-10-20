@@ -58,5 +58,20 @@ cat > $APP/Contents/Info.plist <<PLIST
 </dict>
 </plist>
 PLIST
-codesign -s - --force --deep $APP
+# Quick Look thumbnail extension (io-file-thumbnails): built with swiftc, since SwiftPM cannot
+# make an .appex. It must be sandboxed, so it is signed with its own entitlements before the app.
+# KERF_NO_QL_EXTENSION=1 skips it.
+if [[ -z "${KERF_NO_QL_EXTENSION:-}" ]]; then
+  APPEX=$APP/Contents/PlugIns/KerfThumbnail.appex
+  mkdir -p $APPEX/Contents/MacOS
+  OPT=-O; [[ $CONFIG == debug ]] && OPT=-Onone
+  swiftc $OPT -module-name KerfThumbnail -parse-as-library -application-extension \
+    -target "$(uname -m)-apple-macos14.0" -Xlinker -e -Xlinker _NSExtensionMain \
+    -framework QuickLookThumbnailing \
+    Extensions/QuickLookThumbnail/ThumbnailProvider.swift Sources/KerfApp/Model/QuickLookThumbnailData.swift \
+    -o $APPEX/Contents/MacOS/KerfThumbnail
+  sed "s/__VERSION__/${VERSION}/" Extensions/QuickLookThumbnail/Info.plist > $APPEX/Contents/Info.plist
+  codesign -s - --force --entitlements Extensions/QuickLookThumbnail/KerfThumbnail.entitlements $APPEX
+fi
+codesign -s - --force $APP
 echo "Built $APP"

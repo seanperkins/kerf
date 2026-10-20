@@ -68,7 +68,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `io-image-crop` | io | Picture editing: position, size, crop and fade a placed bitmap | done | P3 | *r2* PlacedImage.crop/opacity, Panels/ImagePanels.swift image editor |
 | `io-stl-import` | io | STL 3D model import | done | P1 | CADCore/IO/STLImporter.swift, ModelPlacementSheet; STLImporterTests |
 | `io-obj-3d-import` | io | OBJ / other 3D formats import | done | P2 | OBJ model import |
-| `io-skp-import` | io | SketchUp import | partial | P3 | No .skp reader (needs Trimble SDK); COLLADA .dae importer instead, with guidance on .skp |
+| `io-skp-import` | io | SketchUp import | partial | P3 | No .skp reader (needs Trimble SDK); SketchUp COLLADA export imports as a 3D model or, via File > Import 3D Model as 2D Parts…, as flat part outlines (CADCore/IO/MeshParts.swift; IOMeshPartsTests, IOModelPartsTests) |
 | `io-vector-export` | io | Vector export (SVG, DXF) | done | P1 | CADCore/IO/SVGExporter.swift, DXFExporter.swift; KerfCommands Export Vectors |
 | `io-eps-ai-export` | io | EPS / AI / PDF vector export | done | P3 | EPS / AI export |
 | `io-project-file` | io | Native project file with versioning | done | P1 | CADCore/Persistence/KerfFile.swift; IOKerfFileTests, DocumentTests |
@@ -78,16 +78,16 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `io-material-plunge-z` | io | Separate plunge Z (Z2) and XY datum offset | done | P2 | JobSetup.plungeGap |
 | `io-model-position` | io | Model position in material (gap above/below) | done | P2 | Model placement sheet position/datum; JobSetup.datumOffset |
 | `io-multiple-sheets` | io | Multiple sheets per job (different sizes/thicknesses) | done | P2 | Document.otherSheets / MaterialSheet; 3D models and relief stay on the primary sheet |
-| `io-document-variables` | io | Document variables in numeric fields | partial | P3 | Expressions and variables evaluated when typed; fields do not stay linked |
+| `io-document-variables` | io | Document variables in numeric fields | done | P3 | Job Setup and toolpath fields stay linked to expressions with variables (Document.variableLinks, KerfApp/Model/VariableLinks.swift; IOVariableLinkTests); drawing-panel fields are evaluated once |
 | `io-units-convert` | io | Unit switching inch↔mm with conversion | done | P1 | KerfApp/Model/UnitScaling.swift; ProjectModelTests |
 | `io-setup-sheet` | io | Job / setup sheet (printable report) | done | P1 | Covered by lay-job-sheet (File > Export Job Sheet…); the io job-sheet variant was dropped at merge |
 | `io-print` | io | Print 2D design / 3D view | done | P3 | File > Print / Print at Actual Size (2D design only) |
-| `io-job-notes` | io | Job notes saved with the file (shown on open, printed on the setup sheet) | missing | P3 | *r2* JobSheet only lists per-toolpath warnings; no document notes field |
-| `io-clipart-library` | io | Clipart browser (local folders and online clipart) | missing | P3 | *r2* no browser for the user's own vector/3D clipart folders |
+| `io-job-notes` | io | Job notes saved with the file (shown on open, printed on the setup sheet) | done | P3 | Document.notes / showNotesOnOpen, File > Job Notes…, JobSheet "Notes" section; IOJobNotesTests |
+| `io-clipart-library` | io | Clipart browser (local folders and online clipart) | partial | P3 | File > Clipart… browses the user's own folders (vectors, 3D models, .kerf) with thumbnails and search (KerfApp/Model/ClipartLibrary.swift; IOClipartTests); no online clipart and no bundled clipart |
 | `io-post-processors` | io | Post processor selection and custom posts | done | P1 | PostCore/Profiles/BuiltInPosts.swift, PostProfileStore; PostGoldenTests, PostProfileTests |
 | `io-gcode-validator` | io | G-code safety validation | done | P1 | PostCore/Validation/GCodeValidator.swift, ValidationSheet; PostValidatorTests |
 | `io-save-toolpaths` | io | Save toolpaths (single, combined, per tool) | done | P1 | Panels/SaveAllToolpathsSheet.swift, Model/GCodeBatchExport.swift; AdvancedToolpathDocumentTests |
-| `io-file-thumbnails` | io | File thumbnails / Quick Look | partial | P3 | Finder custom icon set on save (no Quick Look extension under SwiftPM) |
+| `io-file-thumbnails` | io | File thumbnails / Quick Look | done | P3 | Quick Look thumbnail extension built by scripts/bundle.sh (Extensions/QuickLookThumbnail) from a PNG embedded in each saved file, plus the Finder custom icon; IOQuickLookThumbnailTests |
 | `tp-profile-basic` | toolpaths-2d | Profile: inside/outside/on, climb/conventional, allowance, multi-pass | done | P1 | CAMCore/Ops2D/ProfileOperation.swift; Ops2DProfileTests; e2e sign |
 | `tp-profile-open-sides` | toolpaths-2d | Profile open vectors left/right | done | P2 | ProfileParameters.openVectorSide, Ops2D/Support/OpenOffset.swift; Ops2DOpenSideTests |
 | `tp-profile-last-pass` | toolpaths-2d | Separate last pass (allowance, reverse direction) | done | P1 | ProfileParameters.lastPass (allowance, reverse, full depth); ProfileOperation; Tests/CAMCoreTests/Ops2DLastPassTests.swift |

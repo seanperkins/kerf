@@ -19,6 +19,19 @@ enum FileThumbnail {
         return NSImage(cgImage: cg, size: NSSize(width: size, height: size))
     }
 
+    /// The saved file's bytes with a Quick Look picture embedded (see `QuickLookThumbnailData`):
+    /// the current sheet's top side, 256 px. Unchanged when thumbnails are turned off.
+    static func withQuickLookThumbnail(_ json: Data, for document: Document, enabled: Bool = isEnabled) -> Data {
+        guard enabled else { return json }
+        var d = document
+        let sheet = d.currentSheetID
+        let shown = Set(d.layers.filter { ($0.sheetID ?? MaterialSheet.primaryID) == sheet && ($0.side ?? .top) == .top }.map(\.id))
+        d.shapes = d.shapes.filter { shown.contains($0.layerID) }
+        d.images = d.images?.filter { $0.layerID.map(shown.contains) ?? true }
+        guard let png = DesignSnapshot.png(document: d, toolpaths: [], size: CGSize(width: 256, height: 256)) else { return json }
+        return QuickLookThumbnailData.embed(png, in: json)
+    }
+
     /// Sets `image` as the custom icon of `url` without changing its modification date.
     @discardableResult
     static func apply(_ image: NSImage, to url: URL, presenter: NSFilePresenter? = nil) -> Bool {
