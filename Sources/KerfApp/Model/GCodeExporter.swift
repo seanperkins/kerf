@@ -1,0 +1,78 @@
+import CADCore
+import CAMCore
+import Foundation
+import PostCore
+
+/// What to write into one G-code file.
+enum GCodeExportScope: Hashable {
+    /// All enabled, calculated toolpaths.
+    case all
+    /// A single operation's toolpaths.
+    case operation(UUID)
+}
+
+struct GCodeExportResult {
+    var text: String?
+    var issues: [GCodeIssue]
+    var errorMessage: String?
+    var toolpathCount: Int
+
+    var hasErrors: Bool { issues.contains { $0.severity == .error } }
+}
+
+/// Collects toolpaths, runs the post processor and the validator. Pure (no UI).
+enum GCodeExporter {
+    static func toolpaths(scope: GCodeExportScope, operations: [AnyOperation],
+                          results: [UUID: ToolpathResult], groupByTool: Bool) -> [Toolpath] {
+        switch scope {
+        case .operation(let id):
+            return results[id]?.toolpaths ?? []
+        case .all:
+            let tps = operations.filter(\.setup.isEnabled).flatMap { results[$0.id]?.toolpaths ?? [] }
+            return groupByTool ? ToolpathOrdering.groupedByTool(tps) : tps
+        }
+    }
+
+    static func materialDescription(_ doc: Document) -> String {
+        let j = doc.job
+        func f(_ v: Double) -> String { RulerTicks.label(v) }
+        return "\(f(j.width)) x \(f(j.height)) x \(f(j.thickness)) \(doc.units.abbreviation)"
+    }
+
+    static func export(project: KerfProject, toolpaths: [Toolpath], profile: PostProfile,
+                       jobName: String) -> GCodeExportResult {
+        let doc = project.document
+        guard !toolpaths.isEmpty else {
+            return GCodeExportResult(text: nil, issues: [], errorMessage: "There are no calculated toolpaths to export.",
+                                     toolpathCount: 0)
+        }
+        let validator = GCodeValidator(profile: profile, job: doc.job, units: doc.units)
+        var issues = validator.validate(toolpaths: toolpaths)
+        let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths,
+                          materialDescription: materialDescription(doc))
+        do {
+            let text = try TemplatePostProcessor(profile: profile).post(job)
+            issues += validator.validate(gcode: text)
+            return GCodeExportResult(text: text, issues: issues, errorMessage: nil, toolpathCount: toolpaths.count)
+        } catch PostError.notImplemented(let what) {
+            return GCodeExportResult(text: nil, issues: issues,
+                                     errorMessage: "\(what) is not available in this build yet.",
+                                     toolpathCount: toolpaths.count)
+        } catch PostError.spindleSpeedOutOfRange(let rpm) {
+            return GCodeExportResult(text: nil, issues: issues,
+                                     errorMessage: "Spindle speed \(Int(rpm)) RPM is outside the machine's range (\(Int(profile.minRPM))–\(Int(profile.maxRPM))).",
+                                     toolpathCount: toolpaths.count)
+        } catch {
+            return GCodeExportResult(text: nil, issues: issues, errorMessage: "\(error)", toolpathCount: toolpaths.count)
+        }
+    }
+
+    /// File name like "Sign_Profile_1.tap" (unsafe characters replaced).
+    static func suggestedFileName(jobName: String, operationName: String?, profile: PostProfile) -> String {
+        var base = jobName.isEmpty ? "Untitled" : jobName
+        if let op = operationName { base += "_" + op }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
+        let clean = String(base.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" })
+        return clean + "." + profile.fileExtension
+    }
+}
