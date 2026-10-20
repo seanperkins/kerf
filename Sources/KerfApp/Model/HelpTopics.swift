@@ -347,6 +347,10 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 
             The **3D** view simulates cutting the material. Press Play, scrub the timeline or change the speed. **2D | 3D** shows both side by side.
 
+            The **view** button (cube) resets the camera; its arrow picks a standard view (top, front, back, left, right, bottom, isometric) and switches **Orthographic** projection on or off. Drag to orbit, scroll to zoom.
+
+            The **Show** menu next to the Tool checkbox draws **toolpath lines** (cuts coloured by depth, rapid moves in orange) and the design **vectors** in the 3D view, on top of the simulated stock.
+
             **Toolpaths ▸ Preview G-code File…** simulates a saved program (.tap, .nc, …) from another job on this job's material, in its own window. It assumes the program uses this job's XY origin and Z zero. Tools named in a Kerf header are recognised; otherwise set each tool's type and diameter in the window. Nothing is added to the job. To reuse toolpath settings across jobs, use a toolpath template instead.
             """
         case .checkToolpaths:

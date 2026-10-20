@@ -30,7 +30,9 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    cut-out with tabs should look right. Try scrubbing and changing the speed, stepping one move at a
    time, and "run to next retract". Try the scope picker (all / visible / selected toolpaths), the
    material palette (wood type, painted top), the ruler (click the stock twice to measure), the
-   camera button (save a PNG) and the stopwatch (acceleration and calibration). Switch back with ⌥⌘1.
+   camera button (save a PNG) and the stopwatch (acceleration and calibration). Use the cube menu for
+   Top / Front / Left / Isometric views and Orthographic, and the Show menu to draw toolpath lines,
+   rapids and vectors in 3D. Switch back with ⌥⌘1.
 4. **Export.** File → Export G-code… (⇧⌘E) and save `test.tap`. It should match `samples/sign.tap`
    (only the date or job name may differ). Toolpaths → Check Toolpaths… (⇧⌘K) should report no errors.
 5. **Import.** Make a new document (⌘N). Use File → Import… (⌘I) to import `bracket-plate.dxf`.
