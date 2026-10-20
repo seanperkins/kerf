@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap
     var id: String { rawValue }
 }
 
@@ -153,6 +153,24 @@ enum VectorCommands {
         project.deleteShapes(editable.subtracting(kept))
         for s in fixed { project.document.replace(s) }
         return used.count
+    }
+
+    // MARK: Trace bitmap
+
+    /// Scales traced pixel outlines to `width` document units, centred on `center`.
+    static func placeTrace(_ paths: [Path], imageSize: Vec2, width: Double, center: Vec2) -> [Path] {
+        guard imageSize.x > 0, width > 0 else { return [] }
+        let s = width / imageSize.x
+        let t = Transform2D.scale(s, s).concatenating(.translation(center - imageSize * (s / 2)))
+        return paths.map { $0.transformed(t) }
+    }
+
+    /// Adds the traced outlines as one shape on `layer`. Returns its ID.
+    static func addTrace(_ paths: [Path], name: String, layer: UUID, in project: inout KerfProject) -> UUID? {
+        guard !paths.isEmpty else { return nil }
+        let s = Shape(name: name, layerID: layer, paths: paths, origin: .derived(operation: "trace bitmap"))
+        project.document.add(s)
+        return s.id
     }
 
     // MARK: Curve fitting

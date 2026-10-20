@@ -123,6 +123,16 @@ import Testing
         #expect(doc.alert?.message.contains("Deleted 1") == true)
     }
 
+    @Test func placeTraceScalesAndCentres() {
+        let px = [Path(points: [Vec2(0, 0), Vec2(100, 0), Vec2(100, 50), Vec2(0, 50)], closed: true)]
+        let placed = VectorCommands.placeTrace(px, imageSize: Vec2(100, 50), width: 10, center: Vec2(12, 6))
+        let b = placed[0].bounds()
+        #expect(b.min.isApproximatelyEqual(to: Vec2(7, 3.5), tolerance: 1e-9) && b.max.isApproximatelyEqual(to: Vec2(17, 8.5), tolerance: 1e-9))
+        var p = AppTestSupport.project()
+        let id = VectorCommands.addTrace(placed, name: "Trace logo", layer: p.document.defaultLayerID, in: &p)
+        #expect(p.document.shape(id: id!)?.name == "Trace logo")
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]

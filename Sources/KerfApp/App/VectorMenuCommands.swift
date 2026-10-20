@@ -26,6 +26,7 @@ struct VectorMenuCommands: Commands {
             Button("Trim Tool") { document?.activeTool = .trim }.disabled(document == nil)
             sheetButton("Trim to Boundary…", .trimBoundary)
             Divider()
+            sheetButton("Trace Bitmap…", .traceBitmap, needsSelection: false)
             sheetButton("Fit Curves to Vectors…", .curveFit)
             sheetButton("Fillet / Chamfer Corners…", .filletChamfer)
             sheetButton("Dog-bone Fillets…", .dogbone)
