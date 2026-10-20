@@ -111,6 +111,7 @@ struct StatusBar: View {
             Text(GCodeExporter.materialDescription(document.document))
             Text("Z0: " + document.outputProject.document.job.zZero.displayName)
             Text("Origin: " + document.document.job.xyOrigin.displayName)
+            if document.document.isMultiSheet { Text("Sheet: " + document.document.currentSheetName).bold() }
             if document.isTwoSided { Text("Side: " + document.activeSide.displayName).bold() }
             Text(document.postProfile.name)
             Spacer()

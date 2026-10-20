@@ -13,7 +13,8 @@ extension KerfDocument {
         let group = UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey)
         return JobSheet.make(project: outputProject, results: results, library: toolLibrary.library, profile: postProfile,
                              groupByTool: group,
-                             jobName: document.name + (isTwoSided ? " (\(activeSide.displayName) side)" : ""), notes: notes)
+                             jobName: document.name + (document.isMultiSheet ? " – \(document.currentSheetName)" : "")
+                                + (isTwoSided ? " (\(activeSide.displayName) side)" : ""), notes: notes)
     }
 
     /// Enabled, calculated toolpaths (for previews and the job sheet picture).
@@ -23,7 +24,9 @@ extension KerfDocument {
     }
 
     func jobSheetHTML(notes: String = "") -> String {
-        let png = DesignSnapshot.png(document: outputProject.document, toolpaths: calculatedToolpaths,
+        var shown = outputProject.document
+        shown.shapes = shown.shapes.filter { isOnActiveSide($0) }
+        let png = DesignSnapshot.png(document: shown, toolpaths: calculatedToolpaths,
                                      size: CGSize(width: 900, height: 600))
         return makeJobSheet(notes: notes).html(previewPNG: png)
     }

@@ -240,7 +240,7 @@ final class KerfDocument: ReferenceFileDocument {
     /// Layer new shapes go to: the layer of the primary selection, else the first unlocked visible one.
     var currentLayerID: UUID {
         if let first = selectedShapes.first { return first.layerID }
-        let onSide = project.document.layers.filter { !isTwoSided || ($0.side ?? .top) == activeSide }
+        let onSide = currentSheetLayers.filter { !isTwoSided || ($0.side ?? .top) == activeSide }
         return onSide.first { $0.isVisible && !$0.isLocked }?.id ?? onSide.first?.id ?? project.document.defaultLayerID
     }
 

@@ -19,6 +19,7 @@ struct JobSetupSheet: View {
             Form {
                 Section("Job") {
                     TextField("Job name", text: $form.name)
+                    if form.isMultiSheet { TextField("Sheet name", text: $form.sheetName) }
                     Picker("Units", selection: Binding(get: { form.units }, set: { form.setUnits($0) })) {
                         ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }

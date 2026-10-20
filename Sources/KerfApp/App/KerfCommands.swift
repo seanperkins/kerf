@@ -50,6 +50,7 @@ struct KerfCommands: Commands {
             }
             .keyboardShortcut("f", modifiers: [.command, .option])
             .disabled(!(document?.isTwoSided ?? false))
+            SheetsMenu(document: document)
             Divider()
             Menu("Draw") {
                 ForEach(CanvasTool.allCases) { tool in

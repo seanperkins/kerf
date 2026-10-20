@@ -48,7 +48,7 @@ struct DesignSidebar: View {
             }
             .padding(.horizontal, 10).padding(.top, 8)
             List(selection: selectionBinding) {
-                ForEach(document.document.layers) { layer in
+                ForEach(document.currentSheetLayers) { layer in
                     let shapes = document.document.shapes(inLayer: layer.id)
                     if !shapes.isEmpty {
                         Section(layer.name) {
@@ -143,7 +143,7 @@ struct LayersList: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             List {
-                ForEach(document.document.layers) { layer in
+                ForEach(document.currentSheetLayers) { layer in
                     LayerRow(document: document, layer: layer)
                 }
             }

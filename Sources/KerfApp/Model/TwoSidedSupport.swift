@@ -13,20 +13,47 @@ extension KerfProject {
         return document.side(ofShapes: op.setup.shapeIDs)
     }
 
-    /// What is exported for one side: that side's operations and its Z zero.
+    /// Sheet an operation machines (from its vectors' layers). nil = vectors on several sheets.
+    /// Operations without vectors (3D relief) belong to the primary sheet.
+    func sheetID(of op: AnyOperation) -> UUID? {
+        guard document.isMultiSheet else { return document.currentSheetID }
+        if op.setup.shapeIDs.isEmpty { return MaterialSheet.primaryID }
+        return document.sheetID(ofShapes: op.setup.shapeIDs)
+    }
+
+    /// Job setup an operation is machined with (its sheet and side), or an error message.
+    func machiningJob(for op: AnyOperation) -> Result<JobSetup, ToolpathSetupError> {
+        guard let sheet = sheetID(of: op) else { return .failure(.sheets) }
+        guard let job = document.job(ofSheet: sheet) else { return .failure(.sheets) }
+        guard job.isTwoSided else { return .success(job) }
+        var d = document
+        d.job = job
+        guard let side = d.side(ofShapes: op.setup.shapeIDs) else { return .failure(.sides) }
+        return .success(job.forSide(side))
+    }
+
+    /// What is exported for one side of the current sheet: those operations and their Z zero.
     func sideProject(_ side: JobSide) -> KerfProject {
-        guard document.job.isTwoSided else { return self }
+        guard document.job.isTwoSided || document.isMultiSheet else { return self }
         var p = self
         p.document.job = document.job.forSide(side)
-        p.operations = operations.filter { self.side(of: $0) == side }
+        p.operations = operations.filter {
+            self.sheetID(of: $0) == document.currentSheetID && (!document.job.isTwoSided || self.side(of: $0) == side)
+        }
         return p
     }
 
     /// Makes sure a two-sided job has a layer for the bottom side.
     mutating func ensureBottomLayer() {
-        guard document.job.isTwoSided, !document.layers.contains(where: { $0.side == .bottom }) else { return }
+        let sheet = document.currentSheetID
+        guard document.job.isTwoSided, !document.layers.contains(where: {
+            $0.side == .bottom && ($0.sheetID ?? MaterialSheet.primaryID) == sheet
+        }) else { return }
         let id = addLayer(named: Self.bottomLayerName)
-        if let i = document.layers.firstIndex(where: { $0.id == id }) { document.layers[i].side = .bottom }
+        if let i = document.layers.firstIndex(where: { $0.id == id }) {
+            document.layers[i].side = .bottom
+            document.layers[i].sheetID = document.activeSheetID
+        }
     }
 }
 
@@ -45,9 +72,22 @@ extension KerfDocument {
         return outputProject
     }
 
-    func isOnActiveSide(_ shape: Shape) -> Bool { !isTwoSided || document.side(of: shape) == activeSide }
+    /// True when the shape is in view: on the current sheet and, for two-sided jobs, the shown side.
+    func isOnActiveSide(_ shape: Shape) -> Bool {
+        (!document.isMultiSheet || document.sheetID(of: shape) == document.currentSheetID)
+            && (!isTwoSided || document.side(of: shape) == activeSide)
+    }
 
-    func isOnActiveSide(_ op: AnyOperation) -> Bool { !isTwoSided || project.side(of: op) == activeSide }
+    func isOnActiveSide(_ op: AnyOperation) -> Bool {
+        (!document.isMultiSheet || project.sheetID(of: op) == document.currentSheetID)
+            && (!isTwoSided || project.side(of: op) == activeSide)
+    }
+
+    /// Layers shown in the sidebar: those of the current sheet.
+    var currentSheetLayers: [Layer] {
+        guard document.isMultiSheet else { return document.layers }
+        return document.layers.filter { document.sheetID(ofLayer: $0.id) == document.currentSheetID }
+    }
 
     /// Shows the other side (selection is cleared: shapes on the hidden side cannot be edited).
     func showSide(_ side: JobSide) {
@@ -72,4 +112,15 @@ extension JobSide {
 
 extension FlipAxis {
     var displayName: String { self == .leftRight ? "Left–right (about Y)" : "Top–bottom (about X)" }
+}
+
+enum ToolpathSetupError: Error {
+    case sides, sheets
+
+    var message: String {
+        switch self {
+        case .sides: return "The toolpath's vectors are on both sides of a two-sided job."
+        case .sheets: return "The toolpath's vectors are on more than one material sheet."
+        }
+    }
 }

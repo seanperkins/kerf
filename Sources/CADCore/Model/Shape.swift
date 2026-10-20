@@ -55,6 +55,8 @@ public struct Layer: Codable, Hashable, Identifiable, Sendable {
     public var colorHex: String
     /// Side of a two-sided job the layer belongs to (nil = top / single-sided).
     public var side: JobSide?
+    /// Sheet of a multi-sheet job the layer belongs to (nil = the primary sheet).
+    public var sheetID: UUID?
 
     public init(id: UUID = UUID(), name: String, isVisible: Bool = true, isLocked: Bool = false,
                 colorHex: String = "#000000") {

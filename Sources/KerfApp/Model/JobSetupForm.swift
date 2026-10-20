@@ -9,9 +9,13 @@ struct JobSetupForm: Equatable {
     var job: JobSetup
     var gridSpacing: Double
     var name: String
+    /// Name of the current material sheet (multi-sheet jobs).
+    var sheetName: String
+    var isMultiSheet: Bool
 
     init(document: Document) {
         units = document.units; job = document.job; gridSpacing = document.gridSpacing; name = document.name
+        sheetName = document.currentSheetName; isMultiSheet = document.isMultiSheet
     }
 
     mutating func setUnits(_ new: LengthUnit) {
@@ -39,6 +43,7 @@ struct JobSetupForm: Equatable {
         p.document.job = job
         p.document.gridSpacing = gridSpacing
         p.document.name = name
+        if isMultiSheet, !sheetName.isEmpty { p.document.activeSheetName = sheetName }
         p.ensureBottomLayer()
         return p
     }

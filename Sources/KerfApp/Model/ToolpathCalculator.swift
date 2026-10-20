@@ -20,12 +20,11 @@ enum ToolpathCalculator {
     static func calculate(_ op: AnyOperation, project: KerfProject, library: ToolLibrary,
                           designRevision: Int, rapidRate: Double) -> ToolpathResult {
         var document = project.document
-        if document.job.isTwoSided {
-            guard let side = project.side(of: op) else {
-                return ToolpathResult(toolpaths: [], error: "The toolpath's vectors are on both sides of a two-sided job.",
-                                      operation: op, designRevision: designRevision, estimatedSeconds: 0)
-            }
-            document.job = document.job.forSide(side)
+        switch project.machiningJob(for: op) {
+        case .success(let job): document.job = job
+        case .failure(let e):
+            return ToolpathResult(toolpaths: [], error: e.message, operation: op, designRevision: designRevision,
+                                  estimatedSeconds: 0)
         }
         let context = CAMContext(document: document, tools: project.mergedTools(with: library))
         do {
