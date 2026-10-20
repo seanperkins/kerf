@@ -1,0 +1,43 @@
+import CADCore
+import Foundation
+
+/// Profiles shipped with Kerf. Users can add more as JSON (see docs/specs).
+public enum BuiltInPosts {
+    static let machPreamble = ["G90", "G17", "G40", "G49", "G80", "G94"]
+    static let machToolChange = ["M5", "(Change to Tool: {TOOL_NAME})", "T{T} M6"]
+    static let standardFooter = ["G0 Z{SAFE_Z}", "M5", "G0 X{HOME_X} Y{HOME_Y}", "M30"]
+
+    /// Avid PRO6096, Mach4, inches. 60" x 96" travel.
+    public static let avidMach4Inch = PostProfile(
+        id: "avid-pro6096-mach4-inch", name: "Avid PRO6096 Mach4 (inch)", version: "1.0",
+        fileExtension: "tap", units: .inch, decimals: 4, feedDecimals: 1,
+        preamble: machPreamble, toolChange: machToolChange, spindleDwellSeconds: 3,
+        minRPM: 6000, maxRPM: 24000, arcOutput: .incrementalIJ, arcTolerance: 0.0005,
+        footer: standardFooter,
+        limits: MachineLimits(xTravel: 60, yTravel: 96, zTravel: 8, maxSpoilboardCut: 0.05),
+        rapidRate: 600, maxFeed: 600)
+
+    /// Same machine, millimetres.
+    public static let avidMach4MM = PostProfile(
+        id: "avid-pro6096-mach4-mm", name: "Avid PRO6096 Mach4 (mm)", version: "1.0",
+        fileExtension: "tap", units: .millimeter, decimals: 3, feedDecimals: 0,
+        preamble: machPreamble, toolChange: machToolChange, spindleDwellSeconds: 3,
+        minRPM: 6000, maxRPM: 24000, arcOutput: .incrementalIJ, arcTolerance: 0.01,
+        footer: standardFooter,
+        limits: MachineLimits(xTravel: 1524, yTravel: 2438.4, zTravel: 203.2, maxSpoilboardCut: 1.0),
+        rapidRate: 15240, maxFeed: 15240)
+
+    /// Generic GRBL 1.1 (e.g. X-Carve). No M6: pauses with M0 for manual changes.
+    public static let genericGRBLMM = PostProfile(
+        id: "generic-grbl-mm", name: "Generic GRBL (mm)", version: "1.0",
+        fileExtension: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
+        preamble: ["G90", "G17", "G94"], toolChange: ["M5", "(Change to Tool: {TOOL_NAME})", "M0"],
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 30000, arcOutput: .incrementalIJ, arcTolerance: 0.01,
+        footer: ["G0 Z{SAFE_Z}", "M5", "G0 X{HOME_X} Y{HOME_Y}", "M2"],
+        limits: MachineLimits(xTravel: 750, yTravel: 750, zTravel: 65, maxSpoilboardCut: 1.0),
+        rapidRate: 8000, maxFeed: 8000)
+
+    public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM]
+
+    public static func profile(id: String) -> PostProfile? { all.first { $0.id == id } }
+}
