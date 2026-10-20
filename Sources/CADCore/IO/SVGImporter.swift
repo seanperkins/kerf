@@ -30,6 +30,7 @@ public struct SVGImporter: VectorImporter {
             }
         }
         if ctx.shapes.contains(where: { $0.layerID == defaultLayer.id }) { ctx.layers.insert(defaultLayer, at: 0) }
+        ctx.warnings += ImportGaps.warnings(shapes: ctx.shapes, layers: ctx.layers, units: targetUnits)
         return ImportResult(layers: ctx.layers, shapes: ctx.shapes, warnings: ctx.warnings, images: ctx.images)
     }
 
