@@ -6,6 +6,10 @@ import CAMCore
 struct CanvasDrawingState {
     /// Characters typed while a drawing tool is active (see `QuickEntry`).
     var quickEntry = ""
+    /// Guide being dragged: index of an existing guide (nil = new from a ruler).
+    var guideDrag: (index: Int?, guide: GuideLine)?
+    /// Last guide/alignment snap (drawn as dotted lines).
+    var axisHint: AxisSnap.Result?
 }
 
 /// Trim tool, typed entry ("quick keys") while drawing.

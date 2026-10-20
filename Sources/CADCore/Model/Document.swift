@@ -11,6 +11,8 @@ public struct Document: Codable, Hashable, Sendable {
     public var models: [PlacedModel]
     /// Grid spacing for snapping, in document units.
     public var gridSpacing: Double
+    /// Construction guides (optional so older files decode; nil = none).
+    public var guides: [GuideLine]?
 
     public init(name: String = "Untitled", units: LengthUnit = .inch, job: JobSetup? = nil,
                 layers: [Layer]? = nil, shapes: [Shape] = [], models: [PlacedModel] = [],

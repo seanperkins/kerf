@@ -127,6 +127,7 @@ extension Document {
         d.gridSpacing = gridSpacing * f
         d.shapes = shapes.map { $0.transformed(.scale(f, f)) }
         d.models = models.map { $0.scaled(by: f) }
+        d.guides = guides?.map { GuideLine(isVertical: $0.isVertical, position: $0.position * f) }
         return d
     }
 }

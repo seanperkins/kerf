@@ -5,6 +5,7 @@ import CAMCore
 /// Overlays for the drawing tools: validator markers.
 extension CanvasNSView {
     func drawDrawingOverlays(_ ctx: CGContext, _ doc: KerfDocument) {
+        drawGuides(ctx, doc)
         drawHighlightMarkers(ctx, doc)
         if doc.activeTool == .nodeEdit { drawStartMarkers(ctx, doc) }
         drawQuickEntry(doc)

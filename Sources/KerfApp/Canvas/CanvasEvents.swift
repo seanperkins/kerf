@@ -28,6 +28,7 @@ extension CanvasNSView {
         if spaceHeld || event.modifierFlags.contains(.option) && doc.activeTool == .select && !tabEditing {
             drag = .pan(lastView: v); NSCursor.closedHand.set(); return
         }
+        if !tabEditing, guideMouseDown(event, doc) { needsDisplay = true; return }
         if tabEditing {
             tabMouseDown(event, doc)
             needsDisplay = true
@@ -71,6 +72,7 @@ extension CanvasNSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let doc = document else { return }
+        if guideMouseDragged(event) { return }
         let v = viewPoint(event)
         updateHover(event)
         switch drag {
@@ -144,6 +146,7 @@ extension CanvasNSView {
 
     override func mouseUp(with event: NSEvent) {
         guard let doc = document else { drag = .none; return }
+        if guideMouseUp(event) { drag = .none; return }
         switch drag {
         case .pending(_, let hit, let extend):
             if let id = hit { doc.select(id, extending: extend) } else if !extend { doc.clearSelection() }

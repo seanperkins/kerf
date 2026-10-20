@@ -108,6 +108,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var cursorPosition: Vec2?
     /// Problem locations circled on the canvas (vector validator); cleared by the user.
     @Published var highlightMarkers: [Vec2] = []
+    /// Snap to guides (and, with object snapping, to horizontal/vertical lines through nodes).
+    @Published var snapToGuides = true
 
     weak var undoManager: UndoManager?
     /// Bumped by every undoable change (including undo/redo).

@@ -19,6 +19,10 @@ struct VectorMenuCommands: Commands {
             sheetButton("Fillet / Chamfer Corners…", .filletChamfer)
             sheetButton("Dog-bone Fillets…", .dogbone)
             Divider()
+            Toggle("Snap to Guides", isOn: Binding(get: { document?.snapToGuides ?? true }, set: { document?.snapToGuides = $0 }))
+            Button("Clear Guides") { document?.perform("Clear Guides") { $0.document.guides = nil } }
+                .disabled(document?.document.guides?.isEmpty ?? true)
+            Divider()
             sheetButton("Validate Vectors…", .validator, needsSelection: false)
             Button("Clear Problem Markers") { document?.highlightMarkers = [] }
                 .disabled(document?.highlightMarkers.isEmpty ?? true)
