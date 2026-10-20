@@ -174,6 +174,10 @@ struct LayerRow: View {
             TextField("Layer", text: $name, onCommit: { update { $0.name = name.isEmpty ? layer.name : name } })
                 .textFieldStyle(.plain)
             Spacer()
+            if document.isTwoSided {
+                Text(layer.side == .bottom ? "B" : "T").font(.caption2.bold()).foregroundStyle(.secondary)
+                    .help(layer.side == .bottom ? "Bottom side" : "Top side")
+            }
             Text("\(document.document.shapes(inLayer: layer.id).count)").font(.caption).foregroundStyle(.secondary)
         }
         .onAppear { name = layer.name }
@@ -192,6 +196,12 @@ struct LayerRow: View {
                 .disabled(document.document.layers.first?.id == layer.id)
             Button("Move Layer Down") { document.perform("Reorder Layers") { $0.moveLayer(layer.id, by: 1) } }
                 .disabled(document.document.layers.last?.id == layer.id)
+            if document.isTwoSided {
+                Divider()
+                Button(layer.side == .bottom ? "Move Layer to Top Side" : "Move Layer to Bottom Side") {
+                    document.setLayerSide(layer.id, layer.side == .bottom ? .top : .bottom)
+                }
+            }
             Divider()
             Button("Delete Layer") { document.perform("Delete Layer") { $0.deleteLayer(layer.id) } }
                 .disabled(document.document.layers.count <= 1)

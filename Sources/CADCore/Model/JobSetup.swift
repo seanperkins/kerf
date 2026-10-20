@@ -28,6 +28,8 @@ public struct JobSetup: Codable, Hashable, Sendable {
     public var homeZ: Double
     /// Home XY in machine coordinates (relative to the chosen XY origin).
     public var home: Vec2
+    /// Double-sided machining (nil = single-sided). See `TwoSided.swift`.
+    public var twoSided: TwoSidedSetup?
 
     public init(width: Double = 24, height: Double = 18, thickness: Double = 0.75,
                 xyOrigin: XYOrigin = .lowerLeft, zZero: ZZeroMode = .materialTop,

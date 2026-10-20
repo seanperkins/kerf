@@ -22,6 +22,7 @@ extension CanvasNSView {
         PlacedImageRenderer.drawAll(doc.document, in: ctx, transform: vt)
         drawGrid(ctx, doc)
         drawModels(ctx, doc, vt)
+        drawOtherSide(ctx, doc, vt)
         drawShapes(ctx, doc, vt)
         if doc.showToolpaths { drawToolpaths(ctx, doc, vt) }
         drawTabs(ctx, doc, vt)
@@ -126,7 +127,7 @@ extension CanvasNSView {
         let preview = selectionPreviewTransform
         let nodePreview = nodeDragPreview
         let selected = doc.selection
-        for s in project.document.shapes where project.isVisible(s) {
+        for s in project.document.shapes where project.isVisible(s) && doc.isOnActiveSide(s) {
             let layer = project.document.layer(id: s.layerID)
             let base = NSColor(hex: layer?.colorHex ?? "#000000") ?? .black
             let path = cgPath(s)
@@ -147,7 +148,7 @@ extension CanvasNSView {
 
     private func drawToolpaths(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform) {
         for (i, op) in doc.project.operations.enumerated() {
-            guard op.setup.isEnabled, !doc.hiddenToolpaths.contains(op.id), let r = doc.results[op.id],
+            guard op.setup.isEnabled, !doc.hiddenToolpaths.contains(op.id), doc.isOnActiveSide(op), let r = doc.results[op.id],
                   !r.toolpaths.isEmpty else { continue }
             let g = toolpathGeometry(op.id, r.toolpaths, job: doc.document.job)
             let selected = doc.selectedOperationID == op.id
@@ -330,5 +331,17 @@ extension CanvasNSView {
         NSColor.windowBackgroundColor.withAlphaComponent(0.85).setFill()
         NSBezierPath(roundedRect: r, xRadius: 4, yRadius: 4).fill()
         (text as NSString).draw(at: CGPoint(x: r.minX + 4, y: r.minY + 2), withAttributes: attrs)
+    }
+}
+
+extension CanvasNSView {
+    /// Two-sided jobs: the hidden side's vectors, mirrored through the stock and faded.
+    func drawOtherSide(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform) {
+        guard doc.isTwoSided else { return }
+        let project = doc.project
+        let mirror = doc.document.job.otherSideTransform.cg.concatenating(vt)
+        for s in project.document.shapes where project.isVisible(s) && !doc.isOnActiveSide(s) {
+            stroke(ctx, cgPath(s), mirror, color: NSColor.systemGray.withAlphaComponent(0.45), width: 1, dash: [3, 3])
+        }
     }
 }

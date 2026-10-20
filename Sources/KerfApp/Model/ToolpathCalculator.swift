@@ -19,7 +19,15 @@ enum ToolpathCalculator {
     /// Runs the operation's generator. Never throws: failures become `error` text.
     static func calculate(_ op: AnyOperation, project: KerfProject, library: ToolLibrary,
                           designRevision: Int, rapidRate: Double) -> ToolpathResult {
-        let context = CAMContext(document: project.document, tools: project.mergedTools(with: library))
+        var document = project.document
+        if document.job.isTwoSided {
+            guard let side = project.side(of: op) else {
+                return ToolpathResult(toolpaths: [], error: "The toolpath's vectors are on both sides of a two-sided job.",
+                                      operation: op, designRevision: designRevision, estimatedSeconds: 0)
+            }
+            document.job = document.job.forSide(side)
+        }
+        let context = CAMContext(document: document, tools: project.mergedTools(with: library))
         do {
             let tps = try op.generate(in: context)
             let secs = MachiningTimeEstimator.estimate(tps, rapidRate: rapidRate)

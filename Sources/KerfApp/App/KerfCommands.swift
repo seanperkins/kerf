@@ -45,6 +45,11 @@ struct KerfCommands: Commands {
         CommandMenu("Design") {
             Button("Job Setup…") { document?.sheet = .jobSetup }
                 .keyboardShortcut("j", modifiers: [.command, .shift])
+            Button(document?.activeSide == .bottom ? "Show Top Side" : "Show Bottom Side") {
+                if let d = document { d.showSide(d.activeSide.other) }
+            }
+            .keyboardShortcut("f", modifiers: [.command, .option])
+            .disabled(!(document?.isTwoSided ?? false))
             Divider()
             Menu("Draw") {
                 ForEach(CanvasTool.allCases) { tool in

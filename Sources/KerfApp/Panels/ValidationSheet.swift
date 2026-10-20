@@ -83,7 +83,7 @@ struct ValidationSheet: View {
     private func run() {
         calcTask?.cancel()
         calcTask = nil
-        let stale = document.project.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
+        let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
         guard !stale.isEmpty else { check(); return }
         calculatingCount = stale.count
         calcTask = Task { @MainActor in
@@ -95,7 +95,7 @@ struct ValidationSheet: View {
     }
 
     private func check() {
-        report = ValidationReport.make(project: document.project, results: document.results,
+        report = ValidationReport.make(project: document.outputProject, results: document.results,
                                        profile: document.postProfile, groupByTool: groupByTool)
     }
 }

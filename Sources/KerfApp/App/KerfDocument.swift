@@ -98,6 +98,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var snapToGrid = true
     @Published var sidebarTab: SidebarTab = .design
     @Published var centerMode: CenterMode = .design2D
+    /// Side shown and edited in a two-sided job.
+    @Published var activeSide: JobSide = .top
     @Published var sheet: DocumentSheet?
     @Published var alert: AlertMessage?
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
@@ -221,7 +223,7 @@ final class KerfDocument: ReferenceFileDocument {
     func addToSelection(_ ids: [UUID]) { setSelection(selectionOrder + project.document.expandToGroups(ids)) }
 
     func selectAll() {
-        setSelection(project.document.shapes.filter { project.isEditable($0) }.map(\.id))
+        setSelection(project.document.shapes.filter { project.isEditable($0) && isOnActiveSide($0) }.map(\.id))
     }
 
     func clearSelection() { setSelection([]) }
@@ -238,7 +240,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// Layer new shapes go to: the layer of the primary selection, else the first unlocked visible one.
     var currentLayerID: UUID {
         if let first = selectedShapes.first { return first.layerID }
-        return project.document.layers.first { $0.isVisible && !$0.isLocked }?.id ?? project.document.defaultLayerID
+        let onSide = project.document.layers.filter { !isTwoSided || ($0.side ?? .top) == activeSide }
+        return onSide.first { $0.isVisible && !$0.isLocked }?.id ?? onSide.first?.id ?? project.document.defaultLayerID
     }
 
     func deleteSelection() {
@@ -545,6 +548,7 @@ final class KerfDocument: ReferenceFileDocument {
 
     func applyJobSetup(_ form: JobSetupForm) {
         perform("Job Setup") { $0 = form.apply(to: $0) }
+        if !isTwoSided { activeSide = .top }
         requestCanvas(.fit)
     }
 

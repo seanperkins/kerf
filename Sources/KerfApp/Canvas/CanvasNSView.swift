@@ -178,7 +178,7 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
     /// Shapes that can be picked (visible, unlocked layers; unlocked shapes).
     var pickableShapes: [FlatShape] {
         guard let doc = document else { return [] }
-        return flatShapes(doc.project.document.shapes.filter { doc.project.isEditable($0) })
+        return flatShapes(doc.project.document.shapes.filter { doc.project.isEditable($0) && doc.isOnActiveSide($0) })
     }
 
     // MARK: Coordinates

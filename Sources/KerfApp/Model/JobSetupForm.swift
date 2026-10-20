@@ -38,6 +38,7 @@ struct JobSetupForm: Equatable {
         p.document.job = job
         p.document.gridSpacing = gridSpacing
         p.document.name = name
+        p.ensureBottomLayer()
         return p
     }
 }

@@ -11,18 +11,19 @@ extension KerfDocument {
     /// Job sheet for the current state: calculated toolpaths in the shared export order.
     func makeJobSheet(notes: String = "") -> JobSheet {
         let group = UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey)
-        return JobSheet.make(project: project, results: results, library: toolLibrary.library, profile: postProfile,
-                             groupByTool: group, jobName: document.name, notes: notes)
+        return JobSheet.make(project: outputProject, results: results, library: toolLibrary.library, profile: postProfile,
+                             groupByTool: group,
+                             jobName: document.name + (isTwoSided ? " (\(activeSide.displayName) side)" : ""), notes: notes)
     }
 
     /// Enabled, calculated toolpaths (for previews and the job sheet picture).
     var calculatedToolpaths: [Toolpath] {
         let group = UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey)
-        return GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results, groupByTool: group)
+        return GCodeExporter.toolpaths(scope: .all, operations: outputProject.operations, results: results, groupByTool: group)
     }
 
     func jobSheetHTML(notes: String = "") -> String {
-        let png = DesignSnapshot.png(document: document, toolpaths: calculatedToolpaths,
+        let png = DesignSnapshot.png(document: outputProject.document, toolpaths: calculatedToolpaths,
                                      size: CGSize(width: 900, height: 600))
         return makeJobSheet(notes: notes).html(previewPNG: png)
     }

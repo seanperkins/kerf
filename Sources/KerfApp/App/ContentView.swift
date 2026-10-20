@@ -109,8 +109,9 @@ struct StatusBar: View {
     var body: some View {
         HStack(spacing: 14) {
             Text(GCodeExporter.materialDescription(document.document))
-            Text("Z0: " + document.document.job.zZero.displayName)
+            Text("Z0: " + document.outputProject.document.job.zZero.displayName)
             Text("Origin: " + document.document.job.xyOrigin.displayName)
+            if document.isTwoSided { Text("Side: " + document.activeSide.displayName).bold() }
             Text(document.postProfile.name)
             Spacer()
             if !document.selection.isEmpty { Text("\(document.selection.count) selected") }

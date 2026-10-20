@@ -10,13 +10,13 @@ struct Preview3DHost: View {
 
     /// Enabled, calculated toolpaths in machining order.
     var toolpaths: [Toolpath] {
-        GCodeExporter.toolpaths(scope: .all, operations: document.project.operations, results: document.results,
+        GCodeExporter.toolpaths(scope: .all, operations: document.outputProject.operations, results: document.results,
                                 groupByTool: groupByTool)
     }
 
     var body: some View {
         SimulationPreviewView(
-            job: document.document.job, units: document.document.units, toolpaths: toolpaths,
+            job: document.outputProject.document.job, units: document.document.units, toolpaths: toolpaths,
             rapidRate: SimulationPreviewView.rapidRate(for: document.postProfile, units: document.document.units))
     }
 }

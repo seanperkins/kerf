@@ -53,6 +53,8 @@ public struct Layer: Codable, Hashable, Identifiable, Sendable {
     public var isLocked: Bool
     /// sRGB hex, e.g. "#1E90FF".
     public var colorHex: String
+    /// Side of a two-sided job the layer belongs to (nil = top / single-sided).
+    public var side: JobSide?
 
     public init(id: UUID = UUID(), name: String, isVisible: Bool = true, isLocked: Bool = false,
                 colorHex: String = "#000000") {
