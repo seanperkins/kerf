@@ -153,6 +153,8 @@ struct KerfCommands: Commands {
                     .disabled(document == nil)
                 Button("Label Parts…") { document?.sheet = .partLabels }
                     .disabled(document?.project.document.shapes.isEmpty ?? true)
+                Button("Production Plates…") { document?.sheet = .productionPlates }
+                    .disabled(document?.selection.isEmpty ?? true)
             }
             Divider()
             Toggle("Snap to Grid", isOn: Binding(get: { document?.snapToGrid ?? true }, set: { document?.snapToGrid = $0 }))

@@ -54,6 +54,7 @@ import Testing
             (AnyView(ModelPlacementSheet(document: doc, form: form)), "place-model.png", NSSize(width: 520, height: 680)),
             (AnyView(SaveAllToolpathsSheet(document: doc)), "save-all.png", NSSize(width: 620, height: 600)),
             (AnyView(ValidationSheet(document: doc)), "validation.png", NSSize(width: 640, height: 560)),
+            (AnyView(ProductionPlatesSheet(document: doc)), "production-plates.png", NSSize(width: 480, height: 720)),
         ]
         for (v, name, size) in views {
             let data = try render(v.environmentObject(doc.toolLibrary), name, size: size)

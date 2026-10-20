@@ -40,6 +40,7 @@ enum DocumentSheet: Identifiable, Equatable {
     case tiling
     case partLabels
     case variables
+    case productionPlates
     /// Drawing-tool dialogs (dog-bones, arrays, validator, …).
     case drawing(DrawingSheet)
     /// File / IO dialogs (model parts, job notes, clipart…), see `IOSheets.swift`.
@@ -60,6 +61,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .tiling: return "tiling"
         case .partLabels: return "partLabels"
         case .variables: return "variables"
+        case .productionPlates: return "productionPlates"
         case .drawing(let d): return "drawing-\(d.rawValue)"
         case .io(let s): return "io-\(s.id)"
         }

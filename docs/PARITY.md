@@ -157,7 +157,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `lay-fixtures` | layout | Fixture / clamp helpers and keep-out zones | done | P2 | CADCore/Layout/Fixtures.swift, Panels/FixturesSheet.swift, LayoutChecks.keepOut; LayoutFixture*Tests, LayoutKeepOutTests |
 | `lay-material-validation` | layout | Material-size and travel validation | done | P1 | PostCore/Validation/LayoutChecks.swift, Check Toolpaths "Material and machine"; LayoutChecksTests |
 | `lay-part-labels` | layout | Part labelling (IDs/names engraved or printed on parts) | done | P3 | Model/PartLabelCommands.swift, Layout > Label Parts…, job sheet part list; LayoutPartLabel*Tests |
-| `lay-production-plates` | layout | Production plate engraving: one design arrayed with text from a spreadsheet/CSV, toolpaths included | missing | P3 | *r2* No CSV/variable-text merge; plate maker, arrays and toolpath array copy exist |
+| `lay-production-plates` | layout | Production plate engraving: one design arrayed with text from a spreadsheet/CSV, toolpaths included | done | P3 | CADCore/Layout/ProductionPlates.swift (CSV + `{Field}` fill + grid), Model/ProductionPlateCommands.swift, Layout > Production Plates…; LayoutProductionPlate*Tests |
 | `pv-3d-sim` | preview | 3D material removal simulation | done | P1 | CAMCore/Simulation/MaterialSimulator.swift, Preview/SimulationPreviewView.swift; SimMaterialSimulatorTests |
 | `pv-playback` | preview | Playback controls (play/pause, scrub, speed, jump to end, reset) | done | P1 | SimulationPreviewView.swift (rewind/play/end/slider/speed); SimTimelineTests |
 | `pv-show-tool` | preview | Show tool during preview | done | P2 | SimulationPreviewModel.showTool |
