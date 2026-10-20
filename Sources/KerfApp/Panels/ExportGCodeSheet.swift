@@ -41,6 +41,9 @@ struct ExportGCodeSheet: View {
                 }
                 LabeledContent("Z zero", value: document.outputProject.document.job.zZero.displayName)
                 LabeledContent("XY origin", value: document.document.job.xyOrigin.displayName)
+                if let cut = result?.deepestCut {
+                    LabeledContent("Deepest cut", value: cut.text(units: document.units))
+                }
             }
             // Natural height: a fixed one clipped the last rows (and a two-sided job adds a row).
             .formStyle(.columns)

@@ -362,7 +362,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             return """
             File ▸ Export G-code… (⇧⌘E) writes one program. Choose all enabled toolpaths or a single one, and the post processor. **Group by tool** reorders toolpaths to reduce tool changes when that is safe (profiles that cut parts free stay last).
 
-            The validator runs on the output; if it reports errors you must confirm before saving.
+            The sheet reads the **deepest cut** back out of the program itself, in machine Z and against the material bottom, so you can check it against your Z zero before you run anything. The validator runs on the output; if it reports errors you must confirm before saving.
             """
         case .saveAllToolpaths:
             return """
