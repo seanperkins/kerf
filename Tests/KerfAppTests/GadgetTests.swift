@@ -262,10 +262,7 @@ import Testing
         let view = GadgetRunView(document: doc, script: g, problems: ["a warning"]) {}
         let host = NSHostingView(rootView: view)
         host.frame = NSRect(x: 0, y: 0, width: 420, height: 420)
-        host.layoutSubtreeIfNeeded()
-        let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-        host.cacheDisplay(in: host.bounds, to: rep)
-        #expect(rep.pixelsWide > 0)
+        #expect(AppTestSupport.looksDrawn(try #require(AppTestSupport.png(of: host))))
     }
 
     @Test @MainActor func runIsOneUndoStepAndSelectsResult() throws {

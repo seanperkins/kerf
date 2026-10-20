@@ -39,8 +39,8 @@ import Testing
     }
 
     /// Top orthographic render with toolpath lines. Set KERF_RENDER_DIR to keep the PNG.
-    @Test @MainActor func rendersTopOrthographicWithLines() throws {
-        guard MTLCreateSystemDefaultDevice() != nil else { return }
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "needs a Metal device"))
+    @MainActor func rendersTopOrthographicWithLines() throws {
         let scene = StockScene()
         scene.configure(job: job)
         scene.updateStock(HeightfieldMesh(heightfield: Heightfield(width: 10, height: 10, cellSize: 0.1),

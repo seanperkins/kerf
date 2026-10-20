@@ -40,11 +40,12 @@ struct EndToEndSignTests {
     }
 
     static func signSVG() throws -> Data {
-        if updateGolden || !FileManager.default.fileExists(atPath: svgURL.path) {
+        if updateGolden {
             try FileManager.default.createDirectory(at: svgURL.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
             try makeSignSVG().write(to: svgURL)
         }
+        // Never regenerate silently: a missing fixture must fail, not rebuild from the current code.
         return try Data(contentsOf: svgURL)
     }
 
@@ -96,7 +97,7 @@ struct EndToEndSignTests {
         return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "Sign")
     }
 
-    @Test("Fixture SVG imports onto four layers", .serialized)
+    @Test("Fixture SVG imports onto four layers")
     func fixtureImports() throws {
         let (project, _) = try Self.project(zZero: .materialTop)
         #expect(project.operations.count == 4)
@@ -139,19 +140,36 @@ struct EndToEndSignTests {
         }
 
         let golden = Self.fixtures.appendingPathComponent("golden/sign-\(zZero.rawValue).tap")
-        if Self.updateGolden || !FileManager.default.fileExists(atPath: golden.path) {
+        if Self.updateGolden {
             try FileManager.default.createDirectory(at: golden.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
             try text.write(to: golden, atomically: true, encoding: .utf8)
         }
+        // A missing golden is a failure, never a silent regeneration that compares the output to itself.
+        #expect(FileManager.default.fileExists(atPath: golden.path), "\(golden.lastPathComponent) is missing; create it on purpose with KERF_UPDATE_GOLDEN=1")
         let expected = try String(contentsOf: golden, encoding: .utf8)
         #expect(text == expected, "G-code differs from \(golden.lastPathComponent); rerun with KERF_UPDATE_GOLDEN=1 if intended")
     }
 
     @Test("Spoilboard program is the material-top program shifted by the thickness")
     func zModesAgree() throws {
-        let top = try #require(try Self.post(zZero: .materialTop).text)
-        let bed = try #require(try Self.post(zZero: .spoilboard).text)
-        #expect(top.split(separator: "\n").count == bed.split(separator: "\n").count)
+        let top = try #require(try Self.post(zZero: .materialTop).text).split(separator: "\n")
+        let bed = try #require(try Self.post(zZero: .spoilboard).text).split(separator: "\n")
+        #expect(top.count == bed.count)
+        // Every motion line matches word for word except Z, which is exactly 0.75 higher.
+        var zLines = 0
+        for (t, b) in zip(top, bed) where !t.hasPrefix("(") {
+            let tw = t.split(separator: " "), bw = b.split(separator: " ")
+            #expect(tw.count == bw.count, "\(t) vs \(b)")
+            for (x, y) in zip(tw, bw) {
+                if x.hasPrefix("Z"), let zt = Double(x.dropFirst()), let zb = Double(y.dropFirst()) {
+                    #expect(abs(zb - zt - 0.75) < 1e-9, "\(t) vs \(b)")
+                    zLines += 1
+                } else {
+                    #expect(x == y, "\(t) vs \(b)")
+                }
+            }
+        }
+        #expect(zLines > 100)
     }
 }

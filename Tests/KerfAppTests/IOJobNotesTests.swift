@@ -28,8 +28,11 @@ import Testing
         p.document.showsNotesOnOpen = true
         let loud = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
         loud.showJobNotesOnOpenIfNeeded()
-        await Task.yield()
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // The sheet is presented on a later main-queue turn; poll instead of trusting one fixed wait.
+        for _ in 0..<200 where loud.sheet == nil {
+            await Task.yield()
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
         #expect(quiet.sheet == nil)
         #expect(loud.sheet == .io(.jobNotes(openedWithFile: true)))
     }
@@ -52,9 +55,6 @@ import Testing
         let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
         let host = NSHostingView(rootView: JobNotesSheet(document: doc, openedWithFile: true))
         host.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
-        host.layoutSubtreeIfNeeded()
-        let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-        host.cacheDisplay(in: host.bounds, to: rep)
-        #expect(rep.pixelsWide > 0)
+        #expect(AppTestSupport.looksDrawn(try #require(AppTestSupport.png(of: host))))
     }
 }

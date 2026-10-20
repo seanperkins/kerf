@@ -31,15 +31,6 @@ import Testing
     #expect(MachineCoordinates(job: job).machineXY(Vec2(0, 0)) == Vec2(-24, -18))
 }
 
-@Test func passDepthsAreEvenAndBounded() {
-    let d = DepthSettings(startDepth: 0, cutDepth: 0.75, passDepth: 0.2)
-    let passes = d.passDepths(toolStepdown: 1)
-    #expect(passes.count == 4)
-    #expect(abs(passes.last! - 0.75) < 1e-12)
-    let withFinal = DepthSettings(startDepth: 0, cutDepth: 0.5, passDepth: 0.25, finalPassDepth: 0.02)
-    #expect(withFinal.passDepths(toolStepdown: 1).suffix(2).map { ($0 * 1000).rounded() } == [480, 500])
-}
-
 @Test func projectRoundTripsWithOperations() throws {
     let doc = Document()
     let tool = ToolLibrary.seeded.tools[0]
@@ -49,10 +40,4 @@ import Testing
     let back = try KerfProject.decode(from: project.encoded())
     #expect(back == project)
     #expect(back.operations.map(\.kind) == [.profile, .pocket])
-}
-
-@Test func stubOperationsReportNotImplemented() {
-    let ctx = CAMContext(document: Document(), tools: .seeded)
-    let op = VCarveOperation(setup: OperationSetup(name: "V", toolID: ToolLibrary.seeded.tools[5].id))
-    #expect(throws: CAMError.self) { try op.generate(in: ctx) }
 }

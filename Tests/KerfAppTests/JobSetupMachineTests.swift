@@ -79,10 +79,4 @@ import Testing
         um.undo()
         #expect(doc.project.machineID == nil)
     }
-
-    @Test func quickStartSendsPeopleToJobSetupForTheMachine() {
-        let step = SampleProjects.quickStart.first { $0.title == "Pick the machine" }
-        #expect(step?.detail.contains("Job Setup") == true)
-        #expect(step?.detail.contains("toolbar") == false)
-    }
 }

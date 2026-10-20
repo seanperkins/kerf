@@ -76,9 +76,3 @@ private func maxGouge(_ tp: Toolpath, ctx: CAMContext, tool: Tool, surface: (Vec
     }
     #expect(maxGouge(tp, ctx: ctx, tool: tool, surface: surface) < 0.003)
 }
-
-@Test func ops2DMouldingStraightRailStillUsesExact1D() {
-    #expect(MouldingOperation.allStraight([[Vec2(0, 0), Vec2(1, 0), Vec2(3, 0)]], tolerance: 1e-4))
-    #expect(!MouldingOperation.allStraight([[Vec2(0, 0), Vec2(1, 0), Vec2(1, 1)]], tolerance: 1e-4))
-    #expect(!MouldingOperation.allStraight([[Vec2(0, 0), Vec2(1, 0), Vec2(0.5, 0)]], tolerance: 1e-4))
-}

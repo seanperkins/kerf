@@ -92,9 +92,6 @@ import Testing
         let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
         let host = NSHostingView(rootView: ClipartBrowserSheet(document: doc))
         host.frame = NSRect(x: 0, y: 0, width: 760, height: 520)
-        host.layoutSubtreeIfNeeded()
-        let rep = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-        host.cacheDisplay(in: host.bounds, to: rep)
-        #expect(rep.pixelsWide > 0)
+        #expect(AppTestSupport.looksDrawn(try #require(AppTestSupport.png(of: host))))
     }
 }

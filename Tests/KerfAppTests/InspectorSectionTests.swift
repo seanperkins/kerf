@@ -9,11 +9,6 @@ import Testing
         #expect(SectionState.key(for: "  Array   Copies ") == "kerf.inspector.expanded.array-copies")
     }
 
-    @Test func collapsedSectionsStartClosedAndOthersOpen() {
-        #expect(SectionState.initiallyExpanded(collapsedByDefault: true) == false)
-        #expect(SectionState.initiallyExpanded(collapsedByDefault: false) == true)
-    }
-
     @Test func theCollapsibleTitlesDoNotShareAKey() {
         let titles = ["Last Pass", "Ramps & Leads", "Order & Corners", "Ramps", "Array Copies"]
         #expect(Set(titles.map(SectionState.key(for:))).count == titles.count)

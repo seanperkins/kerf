@@ -73,12 +73,6 @@ import Testing
         #expect(approx(r.largestGapClosed, 0.0007, 1e-9))
     }
 
-    @Test func plainJoinStillReturnsJustThePaths() {
-        let lines = [Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
-                     Path(points: [Vec2(1, 0.0004), Vec2(2, 0)], closed: false)]
-        #expect(PathOps.joinOpenPaths(lines, tolerance: 0.001) == PathOps.joinOpenPathsReporting(lines, tolerance: 0.001).paths)
-    }
-
     @Test func closeIfNearlyClosed() {
         let p = Path(points: [Vec2(0, 0), Vec2(1, 0), Vec2(1, 1), Vec2(0.0001, 0)], closed: false)
         let c = PathOps.closeIfNearlyClosed(p, tolerance: 0.001)

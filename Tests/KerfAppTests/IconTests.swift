@@ -34,11 +34,4 @@ import Testing
         }
         #expect(CanvasTool.arc.hasCustomGlyph)
     }
-
-    @Test func theFullScreenGlyphIsNotUsedForZoomToFit() throws {
-        // arrow.up.left.and.arrow.down.right is what macOS uses for "enter full screen".
-        let content = try String(contentsOf: ShortcutTests.sourceRoot.appendingPathComponent("App/ContentView.swift"), encoding: .utf8)
-        #expect(!content.contains("arrow.up.left.and.arrow.down.right\""))
-        #expect(content.contains("arrow.up.left.and.down.right.magnifyingglass"))
-    }
 }

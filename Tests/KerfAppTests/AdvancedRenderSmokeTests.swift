@@ -58,7 +58,7 @@ import Testing
         ]
         for (v, name, size) in views {
             let data = try render(v.environmentObject(doc.toolLibrary), name, size: size)
-            #expect(data.count > 1000)
+            #expect(AppTestSupport.looksDrawn(data), Comment(rawValue: name))
         }
     }
 
@@ -66,15 +66,15 @@ import Testing
         let doc = document()
         let sidebar = try render(SidebarView(document: doc).environmentObject(doc.toolLibrary), "toolpaths-sidebar.png",
                                  size: NSSize(width: 300, height: 700))
-        #expect(sidebar.count > 1000)
+        #expect(AppTestSupport.looksDrawn(sidebar))
         let inspector = try render(InspectorView(document: doc).environmentObject(doc.toolLibrary), "profile-inspector.png",
                                    size: NSSize(width: 320, height: 1400))
-        #expect(inspector.count > 1000)
+        #expect(AppTestSupport.looksDrawn(inspector))
         for (i, op) in doc.project.operations.enumerated() {
             doc.selectedOperationID = op.id
             let d = try render(InspectorView(document: doc).environmentObject(doc.toolLibrary), "inspector-\(i).png",
                                size: NSSize(width: 320, height: 1200))
-            #expect(d.count > 1000)
+            #expect(AppTestSupport.looksDrawn(d), "inspector \(i)")
         }
     }
 
@@ -90,6 +90,6 @@ import Testing
         if let dir = ProcessInfo.processInfo.environment["KERF_RENDER_DIR"] {
             try? data.write(to: URL(fileURLWithPath: dir).appendingPathComponent("tab-editor.png"))
         }
-        #expect(data.count > 1000)
+        #expect(AppTestSupport.looksDrawn(data))
     }
 }

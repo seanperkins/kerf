@@ -5,9 +5,8 @@ import Testing
 /// Keyboard shortcuts, read from the source so a new binding cannot quietly clash.
 @Suite struct ShortcutTests {
     /// Standard macOS shortcuts from the HIG "Keyboards" table that apps should not repurpose.
+    /// Deliberately absent: ⌘G / ⇧⌘G (Group / Ungroup follow the drawing-app convention; Kerf has no Find).
     static let reserved: Set<String> = ["⌥⌘T", "⌘I", "⌘[", "⌘]", "⌥⌘F", "⌘J"]
-    /// Deliberate exceptions: Group / Ungroup use the drawing-app convention, and Kerf has no Find.
-    static let allowedExceptions: Set<String> = ["⌘G", "⇧⌘G"]
 
     static var sourceRoot: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -35,15 +34,10 @@ import Testing
         return found
     }
 
-    @Test func scannerFindsTheMenuShortcuts() throws {
-        let names = try Self.bindings().map(\.name)
-        #expect(names.count >= 20)
-        #expect(names.contains("⌘P"))
-        #expect(names.contains("⇧⌘J"))
-    }
-
     @Test func noShortcutIsUsedTwice() throws {
         let names = try Self.bindings().map(\.name)
+        // The scanner must find the menu before its verdicts mean anything.
+        #expect(names.count >= 20 && names.contains("⌘P"), "shortcut scanner found \(names.count) bindings")
         let duplicates = Dictionary(grouping: names, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
         #expect(duplicates.isEmpty, "Used more than once: \(duplicates)")
     }
@@ -51,8 +45,6 @@ import Testing
     @Test func noShortcutRepurposesAStandardOne() throws {
         let clashes = try Self.bindings().map(\.name).filter { Self.reserved.contains($0) }
         #expect(clashes.isEmpty, "Standard macOS shortcuts reused: \(clashes)")
-        // The exceptions stay deliberate: if Group moves, this list should shrink too.
-        #expect(Self.allowedExceptions.isDisjoint(with: Self.reserved))
     }
 
     @Test func helpListsTheCurrentBindings() throws {
