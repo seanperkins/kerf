@@ -43,11 +43,24 @@ struct ModelPlacementSheet: View {
                         Text("Lower-left corner at X \(label(o.x)), Y \(label(o.y))").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Section("Depth") {
+                Section("Position in material (Z)") {
                     LengthField("Model depth (Z)", value: $form.zHeight, units: units,
                                 help: "Height of the model from its lowest to its highest point")
-                    LengthField("Z offset", value: $form.zOffset, units: units,
-                                help: "How far the model's top sits below the material top")
+                    HStack {
+                        Text("Place at")
+                        Spacer()
+                        ForEach(ModelPlacementForm.ZAnchor.allCases) { a in
+                            Button(a.title) { form.anchor(a) }
+                        }
+                    }
+                    LengthField("Gap above", value: $form.gapAbove, units: units,
+                                help: "Material left above the model's highest point (Z offset below the top)")
+                    LengthField("Gap below", value: $form.gapBelow, units: units,
+                                help: "Material left under the model's lowest point")
+                    Button("Fit Depth Between Gaps") { form.fillBetweenGaps(above: form.gapAbove, below: max(form.gapBelow, 0)) }
+                        .help("Stretch the model's Z height so it fills the material between the two gaps")
+                    ModelGapDiagram(thickness: form.job.thickness, gapAbove: form.gapAbove, height: form.zHeight)
+                        .frame(height: 54)
                     Text("Deepest cut: \(label(form.zOffset + form.zHeight)) \(units.abbreviation) of \(label(form.job.thickness)) \(units.abbreviation) material")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -82,5 +95,28 @@ struct ModelPlacementSheet: View {
             .padding(20)
         }
         .frame(width: 520, height: 680)
+    }
+}
+
+/// Side view of the material with the model's Z band and the gaps above/below it.
+struct ModelGapDiagram: View {
+    var thickness: Double
+    var gapAbove: Double
+    var height: Double
+
+    var body: some View {
+        Canvas { ctx, size in
+            let t = max(thickness, 1e-9)
+            let stock = CGRect(x: 0, y: 0, width: size.width, height: size.height)
+            ctx.fill(SwiftUI.Path(stock), with: .color(Color(red: 0.93, green: 0.86, blue: 0.72)))
+            let top = CGFloat(min(max(gapAbove / t, 0), 1)) * size.height
+            let h = CGFloat(min(max(height / t, 0), 2)) * size.height
+            let band = CGRect(x: size.width * 0.1, y: top, width: size.width * 0.8, height: h)
+            let over = band.maxY > size.height + 0.5
+            ctx.fill(SwiftUI.Path(band), with: .color((over ? Color.red : Color.accentColor).opacity(0.45)))
+            ctx.stroke(SwiftUI.Path(stock), with: .color(.secondary), lineWidth: 1)
+        }
+        .clipped()
+        .help("Side view: material (tan) and the model's depth band")
     }
 }
