@@ -10,8 +10,11 @@ public struct KeepOutZone: Codable, Hashable, Identifiable, Sendable {
     public var outline: [Vec2]
     /// Top of the obstacle above the material top (0 = flush with the top).
     public var height: Double
+    /// When true, toolpaths are re-routed to lift over the zone (material under it is left
+    /// uncut); nil/false = only checked on export (toolpaths-2d round 2 addition).
+    public var liftOver: Bool?
 
-    public init(id: UUID = UUID(), name: String, outline: [Vec2], height: Double) {
-        self.id = id; self.name = name; self.outline = outline; self.height = height
+    public init(id: UUID = UUID(), name: String, outline: [Vec2], height: Double, liftOver: Bool? = nil) {
+        self.id = id; self.name = name; self.outline = outline; self.height = height; self.liftOver = liftOver
     }
 }

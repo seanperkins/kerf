@@ -55,12 +55,17 @@ struct KeepOutZonesSheet: View {
                             TextField("Name", text: binding(z.id, \.name)).frame(minWidth: 140)
                             LengthField("Height", value: binding(z.id, \.height), units: units,
                                         help: "Top of the clamp above the material top")
+                            Toggle("Lift over", isOn: Binding(get: { zones.first { $0.id == z.id }?.liftOver ?? false },
+                                                              set: { v in update { list in
+                                                                  if let i = list.firstIndex(where: { $0.id == z.id }) { list[i].liftOver = v ? true : nil }
+                                                              } }))
+                                .help("Re-route toolpaths up and over this zone; the material under it is left uncut")
                             Button { update { $0.removeAll { $0.id == z.id } } } label: { Image(systemName: "trash") }
                                 .buttonStyle(.borderless).help("Delete zone")
                         }
                     }
                 } footer: {
-                    Text("Export and Check Toolpaths report an error when a toolpath or rapid comes within the tool radius (+ \(units == .inch ? "0.05 in" : "1 mm")) of a zone while lower than its top (+ the same clearance). Zones are drawn hatched in red on the canvas and are never cut.")
+                    Text("Export and Check Toolpaths report an error when a toolpath or rapid comes within the tool radius (+ \(units == .inch ? "0.05 in" : "1 mm")) of a zone while lower than its top (+ the same clearance). Zones are drawn hatched in red on the canvas and are never cut. With \"Lift over\" on, toolpaths retract over the zone instead (up to its top + twice the clearance, across, then plunge back at the plunge rate), so recalculate and check the part: anything under the zone is not cut.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
