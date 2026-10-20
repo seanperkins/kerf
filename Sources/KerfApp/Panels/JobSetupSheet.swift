@@ -152,6 +152,8 @@ struct OriginPicker: View {
         }
         .buttonStyle(.icon)
         .help(o.displayName)
+        .accessibilityLabel(AccessibilityNames.origin(o))
+        .accessibilityAddTraits(origin == o ? .isSelected : [])
     }
 }
 

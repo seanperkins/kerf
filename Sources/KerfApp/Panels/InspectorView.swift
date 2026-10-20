@@ -158,7 +158,9 @@ struct ShapeInspector: View {
             MoveScaleFields(document: document)
             HStack {
                 Button("Mirror ↔") { document.perform("Mirror") { TransformCommands.mirror(ids, horizontally: true, in: &$0) } }
+                    .accessibilityLabel(AccessibilityNames.directional("Mirror", horizontally: true))
                 Button("Mirror ↕") { document.perform("Mirror") { TransformCommands.mirror(ids, horizontally: false, in: &$0) } }
+                    .accessibilityLabel(AccessibilityNames.directional("Mirror", horizontally: false))
             }
         }
         Divider()
@@ -224,14 +226,18 @@ struct AlignButtons: View {
         HStack {
             Button("Distribute ↔") { document.perform("Distribute") { DesignCommands.distribute(ids, horizontally: true, in: &$0) } }
                 .disabled(ids.count < 3)
+                .accessibilityLabel(AccessibilityNames.directional("Distribute", horizontally: true))
             Button("Distribute ↕") { document.perform("Distribute") { DesignCommands.distribute(ids, horizontally: false, in: &$0) } }
                 .disabled(ids.count < 3)
+                .accessibilityLabel(AccessibilityNames.directional("Distribute", horizontally: false))
         }
         HStack {
             Button("Space ↔") { document.perform("Distribute") { DesignCommands.distributeSpacing(ids, horizontally: true, in: &$0) } }
                 .disabled(ids.count < 3).help("Equal gaps between shapes, horizontally")
+                .accessibilityLabel(AccessibilityNames.directional("Space", horizontally: true))
             Button("Space ↕") { document.perform("Distribute") { DesignCommands.distributeSpacing(ids, horizontally: false, in: &$0) } }
                 .disabled(ids.count < 3).help("Equal gaps between shapes, vertically")
+                .accessibilityLabel(AccessibilityNames.directional("Space", horizontally: false))
         }
     }
 
@@ -241,6 +247,7 @@ struct AlignButtons: View {
             Image(systemName: icon).frame(width: 24)
         }
         .help(mode.title)
+        .accessibilityLabel(mode.title)
         .disabled(ids.count < 2)
     }
 }
