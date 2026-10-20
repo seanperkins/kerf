@@ -99,6 +99,7 @@ struct ContentView: View {
                 .help("Export G-code")
                 .disabled(document.project.operations.isEmpty)
             Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.right") }
+                .help("Show or hide the inspector")
         }
     }
 }

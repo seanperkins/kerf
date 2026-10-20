@@ -291,7 +291,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             - **Canvas tools**: V select · N nodes · R rectangle · C circle · E ellipse · L polyline · P pen · T text
             - **View**: ⌘0 zoom to material · ⌘2 zoom to selection · ⌘= / ⌘- zoom · ⌥⌘1 2D · ⌥⌘2 2D and 3D · ⌥⌘3 3D · ⌥⌘T toolpaths
             - **Design**: ⇧⌘J Job Setup · ⌘D duplicate · ⌘G / ⇧⌘G group / ungroup · ⌘[ / ⌘] rotate 90° · ⌘' snap to grid · ⇧⌘' snap to objects
-            - **Canvas keyboard**: Tab / ⇧Tab select the next / previous shape · arrow keys nudge (⇧ for ×10) · Delete removes · Esc clears
+            - **Canvas keyboard**: Tab / ⇧Tab select the next / previous shape (⌃Tab leaves the canvas) · arrow keys nudge (⇧ for ×10) · Delete removes · Esc clears
             - **Toolpaths**: ⌘R calculate all · ⇧⌘K check · ⇧⌘E export · ⌥⌘S save all · ⇧⌘T tool database
             - **Help**: ⌘? Kerf Help
             """

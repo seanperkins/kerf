@@ -238,6 +238,8 @@ extension CanvasNSView {
             if nodeMode { doc.moveSelectedNodes(by: d) } else { doc.translateSelection(by: d, actionName: "Nudge") }
         }
         switch event.keyCode {
+        case 48: // tab: keyboard selection of vectors (Control-Tab leaves the canvas)
+            if !handleTabKey(event) { return super.keyDown(with: event) }
         case 49: // space
             spaceHeld = true; NSCursor.openHand.set()
         case 51, 117: // delete, forward delete

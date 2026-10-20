@@ -46,6 +46,7 @@ struct OperationEditor: View {
             Spacer()
             Button(role: .destructive) { document.deleteOperation(draft.id) } label: { Image(systemName: "trash") }
                 .help("Delete toolpath")
+                .accessibilityLabel("Delete toolpath")
         }
         .onChange(of: draft) { _, _ in save() }
         .onChange(of: original) { _, new in if new != draft { draft = new } }
@@ -186,7 +187,7 @@ struct ToolPicker: View {
                 ForEach(sorted) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
             Button { openWindow(id: ToolDatabaseView.windowID) } label: { Image(systemName: "wrench.and.screwdriver") }
-                .buttonStyle(.borderless).help("Tool Database")
+                .buttonStyle(.borderless).help("Tool Database").accessibilityLabel("Open Tool Database")
         }
         if let t = library.tool(id: toolID) {
             Text(toolSummary(t)).font(.caption).foregroundStyle(.secondary)

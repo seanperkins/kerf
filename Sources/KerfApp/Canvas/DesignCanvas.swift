@@ -40,6 +40,8 @@ struct ToolPalette: View {
                 }
                 .buttonStyle(.plain)
                 .help(tool.shortcut.map { "\(tool.title) (\(String($0).uppercased()))" } ?? tool.title)
+                .accessibilityLabel(tool.title)
+                .accessibilityAddTraits(document.activeTool == tool ? .isSelected : [])
                 if tool == .nodeEdit { Divider().frame(width: 24) }
             }
         }
