@@ -59,6 +59,21 @@ public struct LeadSettings: Codable, Hashable, Sendable {
     }
 }
 
+/// Separate finishing (last) pass for profiles: the roughing passes leave `allowance` on the
+/// wall, then one more lap removes it (toolpaths-2d addition).
+public struct ProfileLastPass: Codable, Hashable, Sendable {
+    /// Side allowance the roughing passes leave for the last pass (> 0).
+    public var allowance: Double
+    /// Cut the last pass in the opposite direction (climb ↔ conventional).
+    public var reverseDirection: Bool
+    /// Cut the last pass at full depth in one go (otherwise it repeats the depth passes).
+    public var fullDepth: Bool
+
+    public init(allowance: Double = 0.01, reverseDirection: Bool = false, fullDepth: Bool = true) {
+        self.allowance = allowance; self.reverseDirection = reverseDirection; self.fullDepth = fullDepth
+    }
+}
+
 public struct ProfileParameters: Codable, Hashable, Sendable {
     public var depth: DepthSettings
     public var side: ProfileSide
@@ -70,12 +85,25 @@ public struct ProfileParameters: Codable, Hashable, Sendable {
     public var lead: LeadSettings
     /// Use G2/G3 where the offset contains true arcs (otherwise everything is linear).
     public var preferArcs: Bool
+    /// Optional separate last pass (nil = off; optional so older files decode unchanged).
+    public var lastPass: ProfileLastPass?
+    /// Side for open vectors (nil = on the line, as before; toolpaths-2d addition).
+    public var openVectorSide: OpenVectorSide?
+    /// Where closed loops start (nil = nearest; toolpaths-2d addition).
+    public var startPoint: ProfileStartPoint?
+    /// Part cutting order (nil = nearest; toolpaths-2d addition).
+    public var order: ProfileOrder?
+    /// Keep the toolpath square at the part's external corners instead of rolling round them
+    /// (nil/false = round; toolpaths-2d addition).
+    public var sharpCorners: Bool?
 
     public init(depth: DepthSettings = DepthSettings(cutDepth: 0.75), side: ProfileSide = .outside,
                 direction: CutDirection = .climb, allowance: Double = 0, tabs: TabSettings = TabSettings(),
-                ramp: RampSettings = RampSettings(), lead: LeadSettings = LeadSettings(), preferArcs: Bool = true) {
+                ramp: RampSettings = RampSettings(), lead: LeadSettings = LeadSettings(), preferArcs: Bool = true,
+                lastPass: ProfileLastPass? = nil) {
         self.depth = depth; self.side = side; self.direction = direction; self.allowance = allowance
         self.tabs = tabs; self.ramp = ramp; self.lead = lead; self.preferArcs = preferArcs
+        self.lastPass = lastPass
     }
 }
 
@@ -94,13 +122,22 @@ public struct PocketParameters: Codable, Hashable, Sendable {
     /// Optional larger tool used first to clear the bulk; primary tool then cleans up.
     public var clearanceToolID: UUID?
     public var ramp: RampSettings
+    /// Several clearance tools, cut in list order (largest first); each one only machines what the
+    /// previous tools could not reach. When non-nil it replaces `clearanceToolID` (toolpaths-2d).
+    public var clearanceToolIDs: [UUID]?
+    /// Raster with a profile pass: cut the wall pass before the raster instead of after it
+    /// (nil/false = after; toolpaths-2d addition).
+    public var profilePassFirst: Bool?
 
     public init(depth: DepthSettings = DepthSettings(cutDepth: 0.25), strategy: PocketStrategy = .offset,
                 direction: CutDirection = .climb, allowance: Double = 0, clearanceToolID: UUID? = nil,
-                ramp: RampSettings = RampSettings()) {
+                ramp: RampSettings = RampSettings(), clearanceToolIDs: [UUID]? = nil) {
         self.depth = depth; self.strategy = strategy; self.direction = direction; self.allowance = allowance
-        self.clearanceToolID = clearanceToolID; self.ramp = ramp
+        self.clearanceToolID = clearanceToolID; self.ramp = ramp; self.clearanceToolIDs = clearanceToolIDs
     }
+
+    /// The clearance tools in cutting order (the list, or the single legacy tool).
+    public var clearanceTools: [UUID] { clearanceToolIDs ?? clearanceToolID.map { [$0] } ?? [] }
 }
 
 public struct DrillParameters: Codable, Hashable, Sendable {

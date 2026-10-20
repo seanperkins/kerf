@@ -142,17 +142,19 @@ public struct PocketPlanner: Sendable {
         return false
     }
 
-    /// Zig-zag raster at `angle` degrees, optionally followed by the wall contour.
-    public func rasterClearing(angle: Double, profilePass: Bool, from start: Vec2) -> [[Chain2D]] {
+    /// Zig-zag raster at `angle` degrees, optionally followed (or preceded, `profileFirst`) by the
+    /// wall contour.
+    public func rasterClearing(angle: Double, profilePass: Bool, profileFirst: Bool = false,
+                               from start: Vec2) -> [[Chain2D]] {
         let boundary = centerRegion
         let outers = boundary.filter { Polygon2D.signedArea($0) > 0 }
         guard !outers.isEmpty else { return [] }
         var items: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
         for seg in rasterLines(in: boundary, angle: angle) {
-            items.append((Chain2D(points: seg, isClosed: false), 0, seg[seg.count / 2]))
+            items.append((Chain2D(points: seg, isClosed: false), profileFirst ? 1 : 0, seg[seg.count / 2]))
         }
         if profilePass {
-            for loop in boundary { items.append((chain(loop), 1, loop[0])) }
+            for loop in boundary { items.append((chain(loop), profileFirst ? 0 : 1, loop[0])) }
         }
         return order(items, outers: outers, from: start)
     }
@@ -176,8 +178,9 @@ public struct PocketPlanner: Sendable {
     }
 
     /// Rest machining after a larger clearance tool of radius `clearanceRadius`: the walls
-    /// (level 0) plus ring fragments that reach material the big tool could not.
-    public func restClearing(clearanceRadius: Double, from start: Vec2) -> [[Chain2D]] {
+    /// (level 0) plus ring fragments that reach material the big tool could not. With
+    /// `fullWalls` off (an intermediate clearance tool) the walls are only cut near rest material.
+    public func restClearing(clearanceRadius: Double, from start: Vec2, fullWalls: Bool = true) -> [[Chain2D]] {
         let levels = offsetLevels()
         guard let outers0 = levels.first?.filter({ Polygon2D.signedArea($0) > 0 }), !outers0.isEmpty else { return [] }
         let stock = inset(allowance)
@@ -189,10 +192,12 @@ public struct PocketPlanner: Sendable {
         let eps = max(tolerance * 4, 1e-5)
         rest = GeomKernel.offset(GeomKernel.offset(rest, by: -eps, arcTolerance: tolerance), by: eps, arcTolerance: tolerance)
         var items: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
-        for loop in levels[0] { items.append((chain(loop), 1_000_000, loop[0])) }
+        if fullWalls {
+            for loop in levels[0] { items.append((chain(loop), 1_000_000, loop[0])) }
+        }
         if !rest.isEmpty {
             let zone = GeomKernel.offset(rest, by: toolRadius + stepover * 0.5, join: .round, arcTolerance: tolerance)
-            for (k, lv) in levels.enumerated() where k > 0 {
+            for (k, lv) in levels.enumerated() where k > 0 || !fullWalls {
                 let open = lv.map { chain($0).walk }
                 let frags = GeomKernel.boolean(.intersection, subject: open, clip: zone, fillRule: .nonZero, subjectsOpen: true)
                 for f in frags where f.count > 1 && Polygon2D.length(f, closed: false) > tolerance * 4 {

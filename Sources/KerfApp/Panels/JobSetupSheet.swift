@@ -28,6 +28,8 @@ struct JobSetupSheet: View {
                     LengthField("Width (X)", value: $form.job.width, units: u)
                     LengthField("Height (Y)", value: $form.job.height, units: u)
                     LengthField("Thickness (Z)", value: $form.job.thickness, units: u)
+                    MaterialNameField(material: $form.job.material,
+                                      known: ToolGrouping.materialNames(document.mergedLibrary.tools))
                 }
                 Section("Z zero") {
                     Picker("Z zero", selection: $form.job.zZero) {

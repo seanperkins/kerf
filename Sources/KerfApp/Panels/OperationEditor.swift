@@ -27,9 +27,14 @@ struct OperationEditor: View {
         InspectorSection(title: draft.kind.displayName + " Toolpath") {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
-            ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID), library: library,
-                       preferred: OperationFactory.preferredToolKinds(for: draft.kind))
-            if draft.kind != .relief3D && draft.kind != .photoVCarve {
+            if draft.kind != .merge {
+                ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID),
+                           library: library, preferred: OperationFactory.preferredToolKinds(for: draft.kind))
+                ToolOverrideSection(override: setupBinding(\.toolOverride),
+                                    tool: library.tool(id: draft.setup.toolID)?.forMaterial(document.document.job.material)
+                                        .converted(to: units), units: units)
+            }
+            if draft.kind != .relief3D && draft.kind != .photoVCarve && draft.kind != .merge {
                 vectorsRow
                 if !document.document.models.isEmpty || draft.setup.projectOntoModelID != nil {
                     Picker("Project onto 3D", selection: setupBinding(\.projectOntoModelID)) {
@@ -42,6 +47,10 @@ struct OperationEditor: View {
         }
         Divider()
         parameterForm
+        Divider()
+        InspectorSection(title: "Array Copies") {
+            ArrayCopyForm(array: setupBinding(\.arrayCopy), units: units)
+        }
         Divider()
         resultView
         HStack {
@@ -81,10 +90,11 @@ struct OperationEditor: View {
         switch draft {
         case .profile(let o):
             ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units,
-                        shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding)
+                        shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding,
+                        toolStepdown: primaryStepdown)
         case .pocket(let o):
             PocketForm(params: paramsBinding(o.params) { .pocket(PocketOperation(setup: draft.setup, params: $0)) },
-                       units: units, library: library, finishToolID: draft.setup.toolID)
+                       units: units, library: library, finishToolID: draft.setup.toolID, toolStepdown: primaryStepdown)
         case .drill(let o):
             DrillForm(params: paramsBinding(o.params) { .drill(DrillOperation(setup: draft.setup, params: $0)) }, units: units)
         case .vcarve(let o):
@@ -100,6 +110,26 @@ struct OperationEditor: View {
         case .photoVCarve(let o):
             PhotoVCarveForm(params: paramsBinding(o.params) { .photoVCarve(PhotoVCarveOperation(setup: draft.setup, params: $0)) },
                             units: units, job: document.document.job)
+        case .engrave(let o):
+            EngraveForm(params: paramsBinding(o.params) { .engrave(EngraveOperation(setup: draft.setup, params: $0)) },
+                        units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+        case .chamfer(let o):
+            ChamferForm(params: paramsBinding(o.params) { .chamfer(ChamferOperation(setup: draft.setup, params: $0)) },
+                        units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+        case .holeMill(let o):
+            HoleMillForm(params: paramsBinding(o.params) { .holeMill(HoleMillOperation(setup: draft.setup, params: $0)) },
+                         units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+        case .prism(let o):
+            PrismForm(params: paramsBinding(o.params) { .prism(PrismOperation(setup: draft.setup, params: $0)) },
+                      units: units)
+        case .straightInlay(let o):
+            StraightInlayForm(params: paramsBinding(o.params) { .straightInlay(StraightInlayOperation(setup: draft.setup, params: $0)) },
+                              units: units)
+        case .moulding(let o):
+            MouldingForm(params: paramsBinding(o.params) { .moulding(MouldingOperation(setup: draft.setup, params: $0)) },
+                         units: units, document: document.document, selection: document.selectedShapes.map(\.id))
+        case .merge(let o):
+            MergeForm(operation: o, onSplit: { document.splitMergedOperation(o.setup.id) })
         case .relief3D(let o):
             Relief3DForm(params: paramsBinding(o.params) { .relief3D(Relief3DOperation(setup: draft.setup, params: $0)) },
                          units: units, library: library, models: document.document.models,
@@ -143,6 +173,9 @@ struct OperationEditor: View {
             }
         }
     }
+
+    /// The primary tool's stepdown in document units.
+    private var primaryStepdown: Double? { library.tool(id: draft.setup.toolID)?.converted(to: units).stepdown }
 
     // MARK: Bindings
 

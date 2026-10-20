@@ -3,6 +3,8 @@ import Foundation
 
 public enum OperationKind: String, Codable, CaseIterable, Sendable {
     case profile, pocket, drill, vcarve, inlay, fluting, texture, relief3D, photoVCarve
+    // toolpaths-2d additions
+    case engrave, chamfer, holeMill, prism, merge, straightInlay, moulding
 
     public var displayName: String {
         switch self {
@@ -15,6 +17,13 @@ public enum OperationKind: String, Codable, CaseIterable, Sendable {
         case .texture: return "Texture"
         case .relief3D: return "3D Relief"
         case .photoVCarve: return "Photo V-Carve"
+        case .engrave: return "Quick Engrave"
+        case .chamfer: return "Chamfer"
+        case .holeMill: return "Hole Milling"
+        case .prism: return "Prism Carve"
+        case .merge: return "Merged"
+        case .straightInlay: return "Straight Inlay"
+        case .moulding: return "Moulding"
         }
     }
 }
@@ -41,6 +50,10 @@ public struct OperationSetup: Codable, Hashable, Identifiable, Sendable {
     /// When set, the generated 2D toolpaths are dropped onto this 3D model's surface: depths
     /// become depths below the surface (see `ReliefProjection`). nil = cut from the material top.
     public var projectOntoModelID: UUID?
+    /// This toolpath's changes to the primary tool's cutting data (toolpaths-2d addition).
+    public var toolOverride: ToolOverride?
+    /// Repeat the generated toolpath on a grid (toolpaths-2d addition; nil = once).
+    public var arrayCopy: ArrayCopySettings?
 
     public init(id: UUID = UUID(), name: String, isEnabled: Bool = true, toolID: UUID, shapeIDs: [UUID] = []) {
         self.id = id; self.name = name; self.isEnabled = isEnabled; self.toolID = toolID; self.shapeIDs = shapeIDs
@@ -63,10 +76,17 @@ public struct CAMContext: Sendable {
     public var coords: MachineCoordinates { MachineCoordinates(job: document.job) }
     public var units: LengthUnit { document.units }
 
-    /// Library tool converted to document units.
+    /// Per-toolpath changes to a tool's cutting data, by tool id (set by `AnyOperation.generate`
+    /// from the operation's `toolOverride`; toolpaths-2d addition).
+    public var toolOverrides: [UUID: ToolOverride] = [:]
+
+    /// Library tool converted to document units, with the job material's cutting data and any
+    /// per-toolpath override applied.
     public func tool(_ id: UUID) throws -> Tool {
         guard let t = tools.tool(id: id) else { throw CAMError.missingTool(id) }
-        return t.converted(to: document.units)
+        var out = t.forMaterial(document.job.material).converted(to: document.units)
+        if let o = toolOverrides[id] { out = o.applied(to: out) }
+        return out
     }
 
     public func shapes(for setup: OperationSetup) -> [Shape] { document.shapes(ids: setup.shapeIDs) }

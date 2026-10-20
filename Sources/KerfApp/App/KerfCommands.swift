@@ -127,6 +127,20 @@ struct KerfCommands: Commands {
             Button("Save All Toolpaths…") { document?.sheet = .saveAllToolpaths }
                 .keyboardShortcut("s", modifiers: [.command, .option])
                 .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Save Toolpath Template…") { document?.runSaveTemplatePanel() }
+                .disabled(document?.project.operations.isEmpty ?? true)
+            Button("Apply Toolpath Template…") { document?.runApplyTemplatePanel() }
+                .disabled(document == nil)
+            Button("Keep-Out Zones…") { document?.sheet = .keepOutZones }
+                .disabled(document == nil)
+            Button("Merge With Next Toolpath") {
+                if let doc = document, let id = doc.selectedOperationID { doc.mergeOperationWithNext(id) }
+            }
+            .disabled(document.flatMap { d in d.selectedOperationID.map { d.project.mergeWithNextProblem($0) == nil } } != true)
+            Button("Split Merged Toolpath") {
+                if let doc = document, let id = doc.selectedOperationID { doc.splitMergedOperation(id) }
+            }
+            .disabled(document.flatMap { $0.operation($0.selectedOperationID)?.kind } != .merge)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("t", modifiers: [.command, .option])

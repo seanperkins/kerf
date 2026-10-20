@@ -41,6 +41,7 @@ struct ContentView: View {
             case .placeModel(let form): ModelPlacementSheet(document: document, form: form)
             case .saveAllToolpaths: SaveAllToolpathsSheet(document: document)
             case .validation: ValidationSheet(document: document)
+            case .keepOutZones: KeepOutZonesSheet(document: document)
             }
         }
         .alert(item: $document.alert) { a in

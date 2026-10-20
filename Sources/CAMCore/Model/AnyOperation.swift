@@ -12,6 +12,13 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     case texture(TextureOperation)
     case relief3D(Relief3DOperation)
     case photoVCarve(PhotoVCarveOperation)
+    case engrave(EngraveOperation)
+    case chamfer(ChamferOperation)
+    case holeMill(HoleMillOperation)
+    case prism(PrismOperation)
+    case merge(MergeOperation)
+    case straightInlay(StraightInlayOperation)
+    case moulding(MouldingOperation)
 
     public var operation: any ToolpathOperation {
         switch self {
@@ -24,6 +31,13 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .texture(let o): return o
         case .relief3D(let o): return o
         case .photoVCarve(let o): return o
+        case .engrave(let o): return o
+        case .chamfer(let o): return o
+        case .holeMill(let o): return o
+        case .prism(let o): return o
+        case .merge(let o): return o
+        case .straightInlay(let o): return o
+        case .moulding(let o): return o
         }
     }
 
@@ -32,8 +46,14 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID { setup.id }
 
     public func generate(in context: CAMContext) throws -> [Toolpath] {
-        let toolpaths = try operation.generate(in: context)
-        guard let modelID = setup.projectOntoModelID, kind != .relief3D else { return toolpaths }
-        return try ReliefProjection.project(toolpaths, ontoModel: modelID, in: context)
+        var ctx = context
+        if let o = setup.toolOverride, !o.isEmpty { ctx.toolOverrides[setup.toolID] = o }
+        var tps = try operation.generate(in: ctx)
+        // Array copies first, so each copy is projected onto the model where it actually lands.
+        if let array = setup.arrayCopy {
+            tps = ToolpathArray.apply(array, to: tps, coords: ctx.coords, tolerance: ctx.tolerance)
+        }
+        guard let modelID = setup.projectOntoModelID, kind != .relief3D else { return tps }
+        return try ReliefProjection.project(tps, ontoModel: modelID, in: ctx)
     }
 }

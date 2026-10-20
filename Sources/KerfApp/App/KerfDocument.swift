@@ -29,6 +29,7 @@ enum DocumentSheet: Identifiable, Equatable {
     case placeModel(ModelPlacementForm)
     case saveAllToolpaths
     case validation
+    case keepOutZones
 
     var id: String {
         switch self {
@@ -39,6 +40,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .placeModel(let f): return "place-\(f.modelID)"
         case .saveAllToolpaths: return "saveAll"
         case .validation: return "validation"
+        case .keepOutZones: return "keepOut"
         }
     }
 }
@@ -341,6 +343,7 @@ final class KerfDocument: ReferenceFileDocument {
 
     func addOperation(_ kind: OperationKind) {
         if kind == .inlay { sheet = .inlayWizard; return }
+        if kind == .straightInlay { addStraightInlayPair(); return }
         guard let op = OperationFactory.make(kind: kind, project: project, library: mergedLibrary,
                                              shapeIDs: selectionOrder) else {
             alert = AlertMessage(title: "No 3D model",

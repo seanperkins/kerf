@@ -8,15 +8,13 @@ struct DepthForm: View {
     @Binding var depth: DepthSettings
     var units: LengthUnit
     var showFinalPass = true
+    /// The tool's stepdown in document units (for the pass list; nil = unknown).
+    var toolStepdown: Double? = nil
 
     var body: some View {
         LengthField("Start depth", value: $depth.startDepth, units: units, help: "Depth below the material top where cutting starts")
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
-        OptionalLengthField(label: "Pass depth", value: $depth.passDepth, units: units,
-                            defaultValue: units == .inch ? 0.125 : 3)
-        if showFinalPass {
-            LengthField("Final pass", value: $depth.finalPassDepth, units: units, help: "Thin last pass (0 = none)")
-        }
+        PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: toolStepdown)
         if depth.cutDepth <= depth.startDepth {
             Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(.orange)
         }
@@ -54,6 +52,8 @@ struct DirectionPicker: View {
 
 struct PocketStrategyForm: View {
     @Binding var strategy: PocketStrategy
+    /// When given, the raster profile pass is a None / First / Last choice (Pocket only).
+    var profileFirst: Binding<Bool?>? = nil
 
     private var isRaster: Binding<Bool> {
         Binding(get: { if case .raster = strategy { return true } else { return false } },
@@ -76,7 +76,22 @@ struct PocketStrategyForm: View {
         .pickerStyle(.segmented)
         if isRaster.wrappedValue {
             NumberField("Raster angle", value: angle, unit: "°")
-            Toggle("Final profile pass", isOn: profilePass)
+            if let profileFirst {
+                Picker("Profile pass", selection: Binding(get: {
+                    !profilePass.wrappedValue ? 0 : (profileFirst.wrappedValue == true ? 1 : 2)
+                }, set: { v in
+                    profilePass.wrappedValue = v != 0
+                    profileFirst.wrappedValue = v == 1 ? true : nil
+                })) {
+                    Text("None").tag(0)
+                    Text("First").tag(1)
+                    Text("Last").tag(2)
+                }
+                .pickerStyle(.segmented)
+                .help("Wall clean-up pass before or after the raster")
+            } else {
+                Toggle("Final profile pass", isOn: profilePass)
+            }
         }
     }
 }
@@ -87,6 +102,7 @@ struct ProfileForm: View {
     /// The operation's vectors (to seed manual tabs).
     var shapes: [Shape] = []
     var isEditingTabs: Binding<Bool> = .constant(false)
+    var toolStepdown: Double? = nil
 
     private var manualBinding: Binding<Bool> {
         Binding(get: { params.tabs.isManual }, set: { manual in
@@ -96,7 +112,7 @@ struct ProfileForm: View {
     }
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units) }
+        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown) }
         Divider()
         InspectorSection(title: "Machine Vectors") {
             Picker("Side", selection: $params.side) {
@@ -105,10 +121,41 @@ struct ProfileForm: View {
                 Text("On").tag(ProfileSide.on)
             }
             .pickerStyle(.segmented)
+            Picker("Open vectors", selection: Binding(get: { params.openVectorSide ?? .on },
+                                                      set: { params.openVectorSide = $0 == .on ? nil : $0 })) {
+                Text("On").tag(OpenVectorSide.on)
+                Text("Left").tag(OpenVectorSide.left)
+                Text("Right").tag(OpenVectorSide.right)
+            }
+            .help("Open vectors: cut on the line, or keep the tool to the left or right of the vector's direction")
+            Picker("Start point", selection: Binding(get: { params.startPoint ?? .nearest },
+                                                     set: { params.startPoint = $0 == .nearest ? nil : $0 })) {
+                Text("Nearest (optimised)").tag(ProfileStartPoint.nearest)
+                Text("Vector start node").tag(ProfileStartPoint.vectorStart)
+                Text("Left side").tag(ProfileStartPoint.left)
+                Text("Right side").tag(ProfileStartPoint.right)
+                Text("Bottom side").tag(ProfileStartPoint.bottom)
+                Text("Top side").tag(ProfileStartPoint.top)
+            }
+            .help("Where each closed loop starts cutting")
+            Picker("Cut order", selection: Binding(get: { params.order ?? .nearest },
+                                                   set: { params.order = $0 == .nearest ? nil : $0 })) {
+                Text("Shortest rapids").tag(ProfileOrder.nearest)
+                Text("Selection order").tag(ProfileOrder.selection)
+                Text("Left to right").tag(ProfileOrder.leftToRight)
+                Text("Bottom to top").tag(ProfileOrder.bottomToTop)
+                Text("Grid (rows from bottom)").tag(ProfileOrder.grid)
+            }
+            .help("Order the parts are cut in. Holes are always cut before the part around them.")
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
+            Toggle("Sharp external corners", isOn: Binding(get: { params.sharpCorners == true },
+                                                           set: { params.sharpCorners = $0 ? true : nil }))
+                .help("Run straight out to a square corner instead of rolling round the part's corners")
         }
+        Divider()
+        InspectorSection(title: "Last Pass") { ProfileLastPassForm(lastPass: $params.lastPass, side: params.side, units: units) }
         Divider()
         InspectorSection(title: "Tabs") {
             Toggle("Add tabs", isOn: $params.tabs.isEnabled)
@@ -157,28 +204,19 @@ struct PocketForm: View {
     var units: LengthUnit
     var library: ToolLibrary
     var finishToolID: UUID?
+    var toolStepdown: Double? = nil
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units) }
+        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown) }
         Divider()
         InspectorSection(title: "Clearing") {
-            PocketStrategyForm(strategy: $params.strategy)
+            PocketStrategyForm(strategy: $params.strategy, profileFirst: $params.profilePassFirst)
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units)
         }
         Divider()
         InspectorSection(title: "Tools") {
-            OptionalToolPicker(title: "Clearance tool", toolID: $params.clearanceToolID, library: library,
-                               kinds: [.endMill, .ballNose])
-            if let problem = OperationHints.pocketClearanceProblem(finish: finishToolID.flatMap { library.tool(id: $0) },
-                                                                   clearance: params.clearanceToolID.flatMap { library.tool(id: $0) }) {
-                Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(params.clearanceToolID == nil
-                     ? "The finish tool clears the whole pocket."
-                     : "The larger clearance tool removes the bulk first; the finish tool then cleans up the walls and corners it could not reach.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
+            ClearanceToolsEditor(params: $params, library: library, finishToolID: finishToolID)
         }
         Divider()
         InspectorSection(title: "Ramps") { RampForm(ramp: $params.ramp, units: units) }
@@ -506,5 +544,93 @@ struct Relief3DForm: View {
                 }
             }
         }
+    }
+}
+
+/// Separate last pass (finishing lap that removes a side allowance).
+struct ProfileLastPassForm: View {
+    @Binding var lastPass: ProfileLastPass?
+    var side: ProfileSide
+    var units: LengthUnit
+
+    private var enabled: Binding<Bool> {
+        Binding(get: { lastPass != nil }, set: { on in
+            lastPass = on ? ProfileLastPass(allowance: units == .inch ? 0.01 : 0.25) : nil
+        })
+    }
+
+    private func field<T>(_ kp: WritableKeyPath<ProfileLastPass, T>, _ fallback: T) -> Binding<T> {
+        Binding(get: { lastPass?[keyPath: kp] ?? fallback }, set: { v in lastPass?[keyPath: kp] = v })
+    }
+
+    var body: some View {
+        Toggle("Separate last pass", isOn: enabled)
+        if lastPass != nil {
+            LengthField("Last pass allowance", value: field(\.allowance, 0), units: units,
+                        help: "Material the roughing passes leave on the wall for the last pass")
+            Toggle("Reverse direction", isOn: field(\.reverseDirection, false))
+            Toggle("Last pass at full depth", isOn: field(\.fullDepth, true))
+            Text(side == .on
+                 ? "Not used when cutting on the line."
+                 : "Roughing passes stay the allowance away from the wall; one more lap then cuts the wall to size.")
+                .font(.caption).foregroundStyle(side == .on ? .orange : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Ordered list of pocket clearance tools (largest first). Writes `clearanceToolIDs` and keeps
+/// the legacy `clearanceToolID` equal to the first entry.
+struct ClearanceToolsEditor: View {
+    @Binding var params: PocketParameters
+    var library: ToolLibrary
+    var finishToolID: UUID?
+
+    private var ids: [UUID] { params.clearanceTools }
+
+    private func set(_ new: [UUID]) {
+        params.clearanceToolIDs = new
+        params.clearanceToolID = new.first
+    }
+
+    private func row(_ i: Int) -> Binding<UUID> {
+        Binding(get: { ids[i] }, set: { v in var n = ids; n[i] = v; set(n) })
+    }
+
+    private var candidates: [Tool] {
+        library.tools.filter { $0.kind == .endMill || $0.kind == .ballNose }
+    }
+
+    var body: some View {
+        let problems = OperationHints.pocketClearanceProblems(finish: finishToolID.flatMap { library.tool(id: $0) },
+                                                              clearance: ids.map { library.tool(id: $0) })
+        ForEach(Array(ids.enumerated()), id: \.offset) { i, _ in
+            HStack {
+                Picker("Clearance \(i + 1)", selection: row(i)) {
+                    if library.tool(id: ids[i]) == nil { Text("Missing tool").tag(ids[i]) }
+                    ForEach(candidates) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
+                }
+                Button { var n = ids; n.remove(at: i); set(n) } label: { Image(systemName: "minus.circle") }
+                    .buttonStyle(.borderless).help("Remove this clearance tool")
+            }
+            if let problem = problems[i] {
+                Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        Button { if let t = nextSuggestion { set(ids + [t.id]) } } label: { Label("Add Clearance Tool", systemImage: "plus") }
+            .disabled(nextSuggestion == nil)
+        Text(ids.isEmpty
+             ? "The finish tool clears the whole pocket."
+             : "Clearance tools cut largest first; each one only machines what the tools before it could not reach. The finish tool then cleans up the walls and corners.")
+            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Largest unused tool that is smaller than the last clearance tool and larger than the finish tool.
+    private var nextSuggestion: Tool? {
+        func inch(_ t: Tool) -> Double { t.diameter * t.units.factor(to: .inch) }
+        let finish = finishToolID.flatMap { library.tool(id: $0) }.map(inch) ?? 0
+        let limit = ids.last.flatMap { library.tool(id: $0) }.map(inch) ?? .infinity
+        let fits = candidates.filter { !ids.contains($0.id) && $0.id != finishToolID && inch($0) > finish + 1e-9 && inch($0) < limit - 1e-9 }
+        return fits.max { inch($0) < inch($1) } ?? candidates.first { !ids.contains($0.id) && $0.id != finishToolID }
     }
 }

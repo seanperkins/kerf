@@ -10,6 +10,7 @@ extension DepthSettings {
     func scaled(by f: Double) -> DepthSettings {
         var d = self
         d.startDepth *= f; d.cutDepth *= f; d.passDepth = passDepth.map { $0 * f }; d.finalPassDepth *= f
+        d.customPasses = customPasses.map { $0.map { $0 * f } }
         return d
     }
 }
@@ -33,6 +34,7 @@ extension ProfileParameters {
         var p = self
         p.depth = depth.scaled(by: f); p.allowance *= f; p.tabs = tabs.scaled(by: f)
         p.ramp = ramp.scaled(by: f); p.lead = lead.scaled(by: f)
+        p.lastPass?.allowance *= f
         return p
     }
 }
@@ -113,8 +115,73 @@ extension Relief3DParameters {
     }
 }
 
+extension EngraveParameters {
+    func scaled(by f: Double) -> EngraveParameters { var p = self; p.depth = depth.scaled(by: f); return p }
+}
+
+extension ChamferParameters {
+    func scaled(by f: Double) -> ChamferParameters {
+        var p = self
+        p.width *= f; p.depth = depth.map { $0 * f }; p.tipClearance *= f; p.startDepth *= f
+        p.passDepth = passDepth.map { $0 * f }
+        return p
+    }
+}
+
+extension HoleMillParameters {
+    func scaled(by f: Double) -> HoleMillParameters {
+        var p = self
+        p.startDepth *= f; p.cutDepth *= f; p.holeDiameter = holeDiameter.map { $0 * f }
+        p.helixPitch = helixPitch.map { $0 * f }; p.threadPitch *= f
+        return p
+    }
+}
+
+extension PrismParameters {
+    func scaled(by f: Double) -> PrismParameters {
+        var p = self
+        p.maxDepth = maxDepth.map { $0 * f }; p.passDepth = passDepth.map { $0 * f }
+        return p
+    }
+}
+
+extension ToolOverride {
+    func scaled(by f: Double) -> ToolOverride {
+        var o = self
+        o.feedRate = feedRate.map { $0 * f }; o.plungeRate = plungeRate.map { $0 * f }
+        o.stepdown = stepdown.map { $0 * f }; o.stepover = stepover.map { $0 * f }
+        return o
+    }
+}
+
+extension StraightInlayParameters {
+    func scaled(by f: Double) -> StraightInlayParameters {
+        var p = self
+        p.pocketDepth *= f; p.plugDepth *= f; p.clearance *= f; p.passDepth = passDepth.map { $0 * f }
+        return p
+    }
+}
+
+extension MouldingParameters {
+    func scaled(by f: Double) -> MouldingParameters {
+        var p = self
+        p.startDepth *= f; p.stepover = stepover.map { $0 * f }
+        return p
+    }
+}
+
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
+        let op = scaledParameters(by: f)
+        guard setup.toolOverride != nil || setup.arrayCopy != nil else { return op }
+        var s = op.setup
+        s.toolOverride = setup.toolOverride?.scaled(by: f)
+        s.arrayCopy?.spacingX *= f
+        s.arrayCopy?.spacingY *= f
+        return op.with(setup: s)
+    }
+
+    private func scaledParameters(by f: Double) -> AnyOperation {
         switch self {
         case .profile(var o): o.params = o.params.scaled(by: f); return .profile(o)
         case .pocket(var o): o.params = o.params.scaled(by: f); return .pocket(o)
@@ -125,6 +192,13 @@ extension AnyOperation {
         case .texture(var o): o.params = o.params.scaled(by: f); return .texture(o)
         case .relief3D(var o): o.params = o.params.scaled(by: f); return .relief3D(o)
         case .photoVCarve(var o): o.params = o.params.scaled(by: f); return .photoVCarve(o)
+        case .engrave(var o): o.params = o.params.scaled(by: f); return .engrave(o)
+        case .chamfer(var o): o.params = o.params.scaled(by: f); return .chamfer(o)
+        case .holeMill(var o): o.params = o.params.scaled(by: f); return .holeMill(o)
+        case .prism(var o): o.params = o.params.scaled(by: f); return .prism(o)
+        case .merge(var o): o.params.children = o.params.children.map { $0.scaled(by: f) }; return .merge(o)
+        case .straightInlay(var o): o.params = o.params.scaled(by: f); return .straightInlay(o)
+        case .moulding(var o): o.params = o.params.scaled(by: f); return .moulding(o)
         }
     }
 }
@@ -149,6 +223,11 @@ extension Document {
         d.gridSpacing = gridSpacing * f
         d.shapes = shapes.map { $0.transformed(.scale(f, f)) }
         d.models = models.map { $0.scaled(by: f) }
+        d.keepOutZones = keepOutZones?.map { z in
+            var s = z
+            s.outline = z.outline.map { $0 * f }; s.height *= f
+            return s
+        }
         return d
     }
 }

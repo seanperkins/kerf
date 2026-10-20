@@ -17,6 +17,13 @@ extension AnyOperation {
             case .texture(var o): o.setup = newValue; self = .texture(o)
             case .relief3D(var o): o.setup = newValue; self = .relief3D(o)
             case .photoVCarve(var o): o.setup = newValue; self = .photoVCarve(o)
+            case .engrave(var o): o.setup = newValue; self = .engrave(o)
+            case .chamfer(var o): o.setup = newValue; self = .chamfer(o)
+            case .holeMill(var o): o.setup = newValue; self = .holeMill(o)
+            case .prism(var o): o.setup = newValue; self = .prism(o)
+            case .merge(var o): o.setup = newValue; self = .merge(o)
+            case .straightInlay(var o): o.setup = newValue; self = .straightInlay(o)
+            case .moulding(var o): o.setup = newValue; self = .moulding(o)
             }
         }
     }
@@ -25,12 +32,13 @@ extension AnyOperation {
     var referencedToolIDs: [UUID] {
         var ids = [setup.toolID]
         switch self {
-        case .pocket(let o): if let c = o.params.clearanceToolID { ids.append(c) }
+        case .pocket(let o): ids += o.params.clearanceTools
         case .vcarve(let o): ids += o.params.clearanceTools.map(\.toolID)
         case .inlay(let o): ids += o.params.clearanceToolIDs
         case .relief3D(let o):
             if let c = o.params.roughing.toolID { ids.append(c) }
             if let r = o.params.finishing.restToolID { ids.append(r) }
+        case .merge: return toolIDs
         default: break
         }
         return ids
@@ -41,19 +49,22 @@ extension AnyOperation {
 /// in inches; millimetre documents get them scaled by 25.4).
 enum OperationFactory {
     /// Kinds offered in the "New toolpath" menu, in VCarve-like order.
-    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .vcarve, .inlay, .photoVCarve, .fluting, .texture,
-                                              .relief3D]
+    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .straightInlay, .photoVCarve, .fluting, .moulding, .texture, .relief3D]
 
     /// Title in the "New toolpath" menus (Inlay opens the pocket + plug wizard).
     static func menuTitle(_ kind: OperationKind) -> String {
-        kind == .inlay ? "Inlay (Pocket + Plug)…" : kind.displayName
+        switch kind {
+        case .inlay: return "Inlay (Pocket + Plug)…"
+        case .straightInlay: return "Straight-Wall Inlay (Pocket + Plug)"
+        default: return kind.displayName
+        }
     }
 
     /// Label of the primary tool picker for an operation kind.
     static func primaryToolTitle(_ kind: OperationKind) -> String {
         switch kind {
         case .pocket: return "Finish tool"
-        case .vcarve, .inlay, .photoVCarve: return "V-bit"
+        case .vcarve, .inlay, .photoVCarve, .chamfer, .prism: return "V-bit"
         case .drill: return "Drill"
         case .relief3D: return "Finishing tool"
         default: return "Tool"
@@ -63,9 +74,12 @@ enum OperationFactory {
     /// Preferred tool kinds for an operation (first match in the library wins).
     static func preferredToolKinds(for kind: OperationKind) -> [ToolKind] {
         switch kind {
-        case .profile, .pocket: return [.endMill, .ballNose]
+        case .profile, .pocket, .holeMill, .merge: return [.endMill, .ballNose]
+        case .straightInlay: return [.endMill]
+        case .moulding: return [.ballNose, .endMill, .vBit]
         case .drill: return [.drill, .endMill]
-        case .vcarve, .inlay, .photoVCarve: return [.vBit, .engraving]
+        case .vcarve, .inlay, .photoVCarve, .chamfer, .prism: return [.vBit, .engraving]
+        case .engrave: return [.engraving, .vBit, .ballNose, .endMill]
         case .fluting: return [.ballNose, .vBit, .endMill]
         case .texture: return [.ballNose, .vBit]
         case .relief3D: return [.ballNose, .endMill]
@@ -122,6 +136,31 @@ enum OperationFactory {
             s.shapeIDs = []
             return .photoVCarve(PhotoVCarveOperation(setup: s, params: PhotoVCarveParameters().scaled(by: f)
                 .fitted(in: doc.job)))
+        case .engrave:
+            return .engrave(EngraveOperation(setup: setup, params: EngraveParameters().scaled(by: f)))
+        case .chamfer:
+            return .chamfer(ChamferOperation(setup: setup, params: ChamferParameters().scaled(by: f)))
+        case .merge:
+            return nil
+        case .moulding:
+            // With two or more vectors selected, the last one selected is the cross-section.
+            var s = setup
+            var p = MouldingParameters()
+            if shapeIDs.count > 1, let last = shapeIDs.last {
+                p.sectionShapeID = last
+                s.shapeIDs = Array(shapeIDs.dropLast())
+            }
+            return .moulding(MouldingOperation(setup: s, params: p.scaled(by: f)))
+        case .straightInlay:
+            var p = StraightInlayParameters().scaled(by: f)
+            p.plugDepth = min(p.plugDepth, thickness)
+            return .straightInlay(StraightInlayOperation(setup: setup, params: p))
+        case .prism:
+            return .prism(PrismOperation(setup: setup, params: PrismParameters().scaled(by: f)))
+        case .holeMill:
+            var p = HoleMillParameters().scaled(by: f)
+            p.cutDepth = min(p.cutDepth, thickness)
+            return .holeMill(HoleMillOperation(setup: setup, params: p))
         case .relief3D:
             guard let model = doc.models.first else { return nil }
             var s = setup

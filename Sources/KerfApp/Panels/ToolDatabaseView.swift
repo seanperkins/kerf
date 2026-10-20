@@ -1,4 +1,5 @@
 import CADCore
+import CAMCore
 import SwiftUI
 
 /// Tool Database window: list of tools + editor. Changes save to tools.json immediately.
@@ -10,10 +11,10 @@ struct ToolDatabaseView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selectedID) {
-                ForEach(ToolKind.allCases, id: \.self) { kind in
-                    let tools = library.tools.filter { $0.kind == kind }.sorted { $0.number < $1.number }
+                ForEach(ToolGrouping.sections(library.tools), id: \.title) { section in
+                    let tools = section.tools
                     if !tools.isEmpty {
-                        Section(kind.displayName) {
+                        Section(section.title) {
                             ForEach(tools) { t in
                                 HStack {
                                     Text("T\(t.number)").monospacedDigit().foregroundStyle(.secondary).frame(width: 30, alignment: .leading)
@@ -119,6 +120,9 @@ struct ToolEditor: View {
                     Text("The Avid 2.2 kW spindle runs 6000–24000 RPM.").font(.caption).foregroundStyle(.orange)
                 }
             }
+            FeedsCalculatorSection(tool: $tool)
+            MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools))
+            ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted())
             Section("Notes") {
                 TextEditor(text: $tool.notes).frame(minHeight: 60)
             }
