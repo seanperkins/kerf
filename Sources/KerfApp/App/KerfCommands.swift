@@ -40,6 +40,7 @@ struct KerfCommands: Commands {
             Button("Duplicate") { document?.duplicateSelection() }
                 .keyboardShortcut("d", modifiers: .command)
                 .disabled(document?.selection.isEmpty ?? true)
+            SelectMenu(document: document)
         }
         CommandGroup(after: .toolbar) {
             Button("Zoom to Material") { document?.requestCanvas(.fit) }.keyboardShortcut("0", modifiers: .command)

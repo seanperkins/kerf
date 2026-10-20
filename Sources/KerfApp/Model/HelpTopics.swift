@@ -204,6 +204,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Layers live in the Design sidebar. Hide a layer to keep its vectors out of the way, lock it to stop accidental edits, and give it a colour. New shapes go to the layer of the current selection.
 
             **Group** (⌘G) keeps shapes together when selecting; **Ungroup** (⇧⌘G) splits them again. **Combine Vectors** merges shapes into one; **Break Apart** splits a multi-path shape.
+
+            **Edit ▸ Select** picks vectors by property: open vectors, duplicate copies lying on top of another vector, vectors similar in size and outline to the selection, everything on a layer, or the inverse of the selection. Locked and hidden layers are skipped.
             """
         case .transforms:
             return """
