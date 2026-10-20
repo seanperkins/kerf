@@ -30,6 +30,13 @@ public struct JobSetup: Codable, Hashable, Sendable {
     public var home: Vec2
     /// Double-sided machining (nil = single-sided). See `TwoSided.swift`.
     public var twoSided: TwoSidedSetup?
+    /// Plunge gap ("Z2"): height above the material (or above already-cleared material) down to
+    /// which the tool rapids before feeding at the plunge rate. nil = generator default
+    /// (0.05 in / 1 mm for 2D, 0.04 in / 1 mm for 3D, V-carve plunges from safe Z).
+    public var plungeGap: Double?
+    /// Offset of the machine XY datum from the chosen corner/centre (material frame, document
+    /// units). nil = no offset.
+    public var datumOffset: Vec2?
 
     public init(width: Double = 24, height: Double = 18, thickness: Double = 0.75,
                 xyOrigin: XYOrigin = .lowerLeft, zZero: ZZeroMode = .materialTop,
@@ -52,19 +59,28 @@ public struct JobSetup: Codable, Hashable, Sendable {
 
     /// Position of the machine XY origin in the document/material frame.
     public var originInMaterialFrame: Vec2 {
+        let corner: Vec2
         switch xyOrigin {
-        case .lowerLeft: return Vec2(0, 0)
-        case .lowerRight: return Vec2(width, 0)
-        case .upperLeft: return Vec2(0, height)
-        case .upperRight: return Vec2(width, height)
-        case .center: return Vec2(width / 2, height / 2)
+        case .lowerLeft: corner = Vec2(0, 0)
+        case .lowerRight: corner = Vec2(width, 0)
+        case .upperLeft: corner = Vec2(0, height)
+        case .upperRight: corner = Vec2(width, height)
+        case .center: corner = Vec2(width / 2, height / 2)
         }
+        return corner + (datumOffset ?? .zero)
+    }
+
+    /// Plunge gap to use: the job's value (capped at safe Z) or `defaultGap`.
+    public func effectivePlungeGap(default defaultGap: Double) -> Double {
+        min(safeZ, max(plungeGap ?? defaultGap, 0))
     }
 
     /// Scale every length by `factor` (used when switching document units).
     public func scaled(by f: Double) -> JobSetup {
         var j = self
         j.width *= f; j.height *= f; j.thickness *= f; j.safeZ *= f; j.homeZ *= f; j.home = j.home * f
+        j.plungeGap = plungeGap.map { $0 * f }
+        j.datumOffset = datumOffset.map { $0 * f }
         return j
     }
 }

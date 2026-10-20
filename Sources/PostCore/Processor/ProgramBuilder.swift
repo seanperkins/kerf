@@ -97,6 +97,7 @@ struct ProgramBuilder {
         case .spoilboard: w.comment("Z zero: spoilboard surface [top at Z\(fmt(coords.materialTopZ))]")
         }
         w.comment("XY origin: \(Self.originName(setup.xyOrigin))")
+        if let o = setup.datumOffset, o != .zero { w.comment("XY datum offset: X\(fmt(o.x)) Y\(fmt(o.y))") }
         w.comment("Safe Z: \(fmt(coords.safeZ))  Home: X\(fmt(setup.home.x)) Y\(fmt(setup.home.y)) Z\(fmt(coords.homeZ))")
         w.comment("Tools:")
         var seen = Set<UUID>()

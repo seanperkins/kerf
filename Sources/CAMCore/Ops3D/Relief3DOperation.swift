@@ -47,7 +47,7 @@ public struct Relief3DOperation: ToolpathOperation {
         if map.maxDepth > context.document.job.thickness + 1e-9 {
             metadata["warning"] = "Model is deeper than the material thickness"
         }
-        let clearance = context.units == .inch ? 0.04 : 1.0
+        let clearance = context.coords.job.effectivePlungeGap(default: context.units == .inch ? 0.04 : 1.0)
         let coords = context.coords
         var result: [Toolpath] = []
 

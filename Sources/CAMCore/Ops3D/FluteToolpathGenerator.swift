@@ -23,7 +23,7 @@ public enum FluteToolpathGenerator {
             throw CAMError.invalidParameter("Flute depth must be deeper than the start depth")
         }
         let passes = params.depth.passDepths(toolStepdown: tool.stepdown)
-        let clearance = context.units == .inch ? 0.04 : 1.0
+        let clearance = context.coords.job.effectivePlungeGap(default: context.units == .inch ? 0.04 : 1.0)
         var writer = PathWriter3D(coords: context.coords, feedRate: tool.feedRate, plungeRate: tool.plungeRate,
                                   clearance: clearance)
         for line in polylines {

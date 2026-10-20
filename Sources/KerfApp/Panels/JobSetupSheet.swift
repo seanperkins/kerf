@@ -45,10 +45,22 @@ struct JobSetupSheet: View {
                         Text("Machine X0 Y0 is at the \(form.job.xyOrigin.displayName.lowercased()) of the material.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    Toggle("Offset the datum", isOn: Binding(get: { form.job.datumOffset != nil },
+                                                             set: { form.job.datumOffset = $0 ? (form.job.datumOffset ?? .zero) : nil }))
+                    if form.job.datumOffset != nil {
+                        LengthField("Offset X", value: Binding(get: { form.job.datumOffset?.x ?? 0 },
+                                                               set: { form.job.datumOffset?.x = $0 }), units: u,
+                                    help: "Distance from the chosen corner/centre to machine X0 (right is positive)")
+                        LengthField("Offset Y", value: Binding(get: { form.job.datumOffset?.y ?? 0 },
+                                                               set: { form.job.datumOffset?.y = $0 }), units: u,
+                                    help: "Distance from the chosen corner/centre to machine Y0 (up is positive)")
+                    }
                 }
                 TwoSidedSection(job: $form.job)
                 Section("Rapid heights (above material top)") {
                     LengthField("Safe Z", value: $form.job.safeZ, units: u)
+                    OptionalLengthField(label: "Plunge Z (rapid down to)", value: $form.job.plungeGap, units: u,
+                                        defaultValue: u == .inch ? 0.1 : 2.5)
                     LengthField("Home Z", value: $form.job.homeZ, units: u)
                     LengthField("Home X", value: $form.job.home.x, units: u, help: "Machine coordinates")
                     LengthField("Home Y", value: $form.job.home.y, units: u, help: "Machine coordinates")

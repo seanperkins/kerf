@@ -25,7 +25,7 @@ public struct ToolpathBuilder {
         plungeRate = tool.plungeRate
         self.tolerance = tolerance
         self.fitArcs = fitArcs
-        approachGap = min(coords.job.safeZ, units == .inch ? 0.05 : 1.0)
+        approachGap = coords.job.effectivePlungeGap(default: units == .inch ? 0.05 : 1.0)
     }
 
     /// Depth of the safe-Z plane (negative = above the top).
