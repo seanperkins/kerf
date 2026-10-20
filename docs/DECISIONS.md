@@ -295,3 +295,8 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## drawing-r1 (VCarve drawing parity, round 1)
+
+- **drawing-r1** — New drawing dialogs share one `DocumentSheet.drawing(DrawingSheet)` case and live in `Panels/DrawingSheets.swift`; their commands are in a separate "Vectors" menu (`App/VectorMenuCommands.swift`) and `Model/VectorCommands.swift`, so shared files (KerfCommands, ContentView, KerfDocument) only get one-line additions.
+- **drawing-r1** — **Dog-bones** (`CADCore/Editing/Dogbone.swift`) modify the selected vectors in place (provenance becomes `derived`). "Parts" relieve corners that are concave for the shape's region (holes read even-odd, so a part's holes are relieved too); "Openings" relieve the convex corners of slots/pockets. The relief is a cutter-radius circle through the corner point: dog-bone = centre on the bisector, T-bone = centre on the longer/shorter adjacent edge. Only line–line corners up to a max angle (default 135°) are relieved; a relief that would run past the end of its edge is dropped.

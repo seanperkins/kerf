@@ -29,6 +29,8 @@ enum DocumentSheet: Identifiable, Equatable {
     case placeModel(ModelPlacementForm)
     case saveAllToolpaths
     case validation
+    /// Drawing-tool dialogs (dog-bones, arrays, validator, …).
+    case drawing(DrawingSheet)
 
     var id: String {
         switch self {
@@ -39,6 +41,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .placeModel(let f): return "place-\(f.modelID)"
         case .saveAllToolpaths: return "saveAll"
         case .validation: return "validation"
+        case .drawing(let d): return "drawing-\(d.rawValue)"
         }
     }
 }
