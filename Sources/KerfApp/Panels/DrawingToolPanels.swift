@@ -26,6 +26,19 @@ struct QuickEntryHelp: View {
     }
 }
 
+/// Trim tool help and the trim-to-boundary command.
+struct TrimToolOptions: View {
+    @ObservedObject var document: KerfDocument
+
+    var body: some View {
+        Text("Click part of a vector to delete it up to the nearest crossings with other vectors. A vector that crosses nothing is deleted whole. Each click can be undone.")
+            .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        Button("Trim to Boundary…") { document.sheet = .drawing(.trimBoundary) }
+            .disabled(document.selection.isEmpty)
+            .help("Select a closed boundary first (and optionally the vectors to trim)")
+    }
+}
+
 /// Arc tool options: click mode plus exact centre/radius/angle entry.
 struct ArcToolOptions: View {
     @ObservedObject var document: KerfDocument

@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror
+    case dogbone, arrayLinear, validator, mirror, trimBoundary
     var id: String { rawValue }
 }
 
@@ -96,6 +96,61 @@ enum VectorCommands {
         project.deleteShapes(editable.subtracting(kept))
         for s in fixed { project.document.replace(s) }
         return used.count
+    }
+
+    // MARK: Trim
+
+    /// Replaces one path of a shape with `pieces`; the shape is deleted when nothing is left.
+    static func replacePath(_ id: UUID, index: Int, with pieces: [Path], operation: String, in project: inout KerfProject) {
+        guard let s = project.document.shape(id: id), s.paths.indices.contains(index) else { return }
+        var paths = s.paths
+        paths.remove(at: index)
+        paths.insert(contentsOf: pieces, at: index)
+        if paths.isEmpty { project.deleteShapes([id]) } else { replacePaths(id, with: paths, operation: operation, in: &project) }
+    }
+
+    /// Interactive trim: deletes the span of the vector under `point` between its neighbouring
+    /// intersections with every other visible vector. Returns false when nothing was hit.
+    @discardableResult
+    static func trim(at point: Vec2, pickTolerance: Double, in project: inout KerfProject) -> Bool {
+        let tol = tolerance(project.document.units)
+        let candidates = project.document.shapes.filter(project.isEditable)
+        var best: (id: UUID, path: Int, d: Double)?
+        for s in candidates where s.bounds().insetBy(-pickTolerance).contains(point) {
+            for (i, p) in s.paths.enumerated() {
+                let d = PathSplitting.nearestParameter(PathSplitting.sample(p, tolerance: tol), to: point).distance
+                if d <= pickTolerance, d < (best?.d ?? .infinity) { best = (s.id, i, d) }
+            }
+        }
+        guard let hit = best, let shape = project.document.shape(id: hit.id) else { return false }
+        let target = shape.paths[hit.path]
+        let box = target.bounds().insetBy(-tol)
+        var cutters: [Path] = []
+        for s in project.document.shapes where project.isVisible(s) && s.bounds().intersects(box) {
+            for (i, p) in s.paths.enumerated() where !(s.id == hit.id && i == hit.path) { cutters.append(p) }
+        }
+        let pieces = Trim.trimSpan(target, cutters: cutters, at: point, tolerance: tol)
+        replacePath(hit.id, index: hit.path, with: pieces, operation: "trim", in: &project)
+        return true
+    }
+
+    /// Trims the targets to the first selected closed shape. Targets are the other selected
+    /// shapes, or every editable shape when only the boundary is selected.
+    @discardableResult
+    static func trimToBoundary(_ ids: [UUID], keepInside: Bool, in project: inout KerfProject) -> Int {
+        guard let boundary = project.document.shapes(ids: ids).first(where: { $0.paths.contains(where: \.isClosed) }) else { return 0 }
+        let tol = tolerance(project.document.units)
+        let others = ids.filter { $0 != boundary.id }
+        let targets = (others.isEmpty ? project.document.shapes.map(\.id).filter { $0 != boundary.id } : others)
+            .compactMap { project.document.shape(id: $0) }.filter(project.isEditable)
+        var changed = 0
+        for s in targets {
+            let paths = s.paths.flatMap { Trim.toBoundary($0, boundary: boundary.paths, keepInside: keepInside, tolerance: tol) }
+            guard paths != s.paths else { continue }
+            changed += 1
+            if paths.isEmpty { project.deleteShapes([s.id]) } else { replacePaths(s.id, with: paths, operation: "trim", in: &project) }
+        }
+        return changed
     }
 
     // MARK: Mirror

@@ -61,6 +61,21 @@ import Testing
         #expect(abs(c.min.y - 2) < 1e-9 && abs(c.max.y - 3) < 1e-9)
     }
 
+    @Test func trimClickAndTrimToBoundary() {
+        var p = AppTestSupport.project()  // rectangles x 1...3 and 5...7, y 1...2
+        let line = Shape(layerID: p.document.defaultLayerID, paths: [Path(points: [Vec2(0, 1.5), Vec2(8, 1.5)], closed: false)])
+        p.document.add(line)
+        #expect(VectorCommands.trim(at: Vec2(4, 1.5), pickTolerance: 0.05, in: &p))
+        #expect(p.document.shape(id: line.id)!.paths.count == 2)
+        #expect(!VectorCommands.trim(at: Vec2(40, 40), pickTolerance: 0.05, in: &p))
+        // Trim the remaining line pieces to the first rectangle: only the part inside it stays.
+        let rect = p.document.shapes[0].id
+        #expect(VectorCommands.trimToBoundary([rect, line.id], keepInside: true, in: &p) == 1)
+        let left = p.document.shape(id: line.id)!
+        #expect(left.paths.count == 1)
+        #expect(abs(left.bounds().min.x - 1) < 1e-6 && abs(left.bounds().max.x - 3) < 1e-6)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]

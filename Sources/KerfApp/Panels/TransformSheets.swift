@@ -2,6 +2,30 @@ import CADCore
 import CAMCore
 import SwiftUI
 
+struct TrimBoundarySheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var keepInside = true
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let boundary = document.selectedShapes.first { $0.paths.contains(where: \.isClosed) }
+        DrawingDialog(title: "Trim to Boundary", action: "Trim", disabled: boundary == nil,
+                      note: boundary == nil ? "Select a closed boundary vector first."
+                          : "Boundary: \(boundary!.name.isEmpty ? "first selected closed vector" : boundary!.name). "
+                          + (ids.count > 1 ? "The other selected vectors are trimmed." : "Every editable vector is trimmed."),
+                      perform: {
+                          let k = keepInside
+                          document.perform("Trim to Boundary") { VectorCommands.trimToBoundary(ids, keepInside: k, in: &$0) }
+                      }) {
+            Picker("Keep", selection: $keepInside) {
+                Text("Inside").tag(true)
+                Text("Outside").tag(false)
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+}
+
 struct MirrorSheet: View {
     @ObservedObject var document: KerfDocument
     @State private var horizontally = true

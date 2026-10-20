@@ -64,6 +64,8 @@ struct DrawingOptionsView: View {
                     .font(.callout).foregroundStyle(.secondary)
             case .arc:
                 ArcToolOptions(document: document)
+            case .trim:
+                TrimToolOptions(document: document)
             case .text:
                 TextField("Text", text: $document.drawingOptions.text, axis: .vertical).lineLimit(1...6)
                 Picker("Font", selection: $document.drawingOptions.fontName) {

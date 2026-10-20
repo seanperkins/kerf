@@ -8,8 +8,16 @@ struct CanvasDrawingState {
     var quickEntry = ""
 }
 
-/// Typed entry ("quick keys") while drawing.
+/// Trim tool, typed entry ("quick keys") while drawing.
 extension CanvasNSView {
+    /// Trim tool click: deletes the clicked span between intersections.
+    func trimClick(_ p: Vec2, _ doc: KerfDocument) {
+        let tol = pickTolerance
+        var hit = false
+        doc.perform("Trim") { hit = VectorCommands.trim(at: p, pickTolerance: tol, in: &$0) }
+        if !hit { NSSound.beep() }
+    }
+
     /// True when the drawing extras consumed the key.
     func handleDrawingToolKey(_ event: NSEvent, _ doc: KerfDocument) -> Bool {
         let tool = doc.activeTool

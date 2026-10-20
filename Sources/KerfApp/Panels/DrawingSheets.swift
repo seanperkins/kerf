@@ -13,6 +13,7 @@ struct DrawingSheetHost: View {
         case .arrayLinear: RectangularArraySheet(document: document)
         case .validator: VectorValidatorSheet(document: document)
         case .mirror: MirrorSheet(document: document)
+        case .trimBoundary: TrimBoundarySheet(document: document)
         }
     }
 }

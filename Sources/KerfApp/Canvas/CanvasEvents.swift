@@ -55,6 +55,8 @@ extension CanvasNSView {
                 clickPoints.append(first); finishClickShape(); return
             }
             clickPoints.append(p)
+        case .trim:
+            trimClick(docPoint(event, snapped: false), doc)
         case .arc:
             clickPoints.append(docPoint(event))
             if clickPoints.count >= 3 { finishClickShape() }
