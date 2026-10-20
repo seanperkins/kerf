@@ -6,6 +6,7 @@ import Foundation
 enum HelpTopic: String, CaseIterable, Identifiable {
     case gettingStarted, jobSetup, machines, drawing, nodeEditing, layers, transforms
     case toolpathsOverview, profile, pocket, drilling, vcarve, inlay, fluting, texture, relief3D, tabs
+    case engrave, chamfer, holeMill, prism, mergeToolpaths, straightInlay, moulding, photoVCarve
     case toolDatabase, preview, checkToolpaths, exportGCode, saveAllToolpaths, airCut
     case preferences, recovery, shortcuts
 
@@ -29,6 +30,14 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .fluting: return "Fluting Toolpath"
         case .texture: return "Texture Toolpath"
         case .relief3D: return "3D Relief Toolpaths"
+        case .engrave: return "Quick Engrave Toolpath"
+        case .chamfer: return "Chamfer Toolpath"
+        case .holeMill: return "Hole Milling Toolpath"
+        case .prism: return "Prism Carve Toolpath"
+        case .mergeToolpaths: return "Merged Toolpaths"
+        case .straightInlay: return "Straight Inlay Toolpaths"
+        case .moulding: return "Moulding Toolpath"
+        case .photoVCarve: return "Photo V-Carve Toolpath"
         case .tabs: return "Tabs, Ramps and Leads"
         case .toolDatabase: return "Tool Database"
         case .preview: return "2D and 3D Preview"
@@ -60,6 +69,14 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .fluting: return "line.diagonal"
         case .texture: return "water.waves"
         case .relief3D: return "mountain.2"
+        case .engrave: return "pencil.tip"
+        case .chamfer: return "triangle"
+        case .holeMill: return "circle.dashed"
+        case .prism: return "diamond"
+        case .mergeToolpaths: return "arrow.triangle.merge"
+        case .straightInlay: return "square.inset.filled"
+        case .moulding: return "waveform.path"
+        case .photoVCarve: return "photo"
         case .tabs: return "pin"
         case .toolDatabase: return "wrench.and.screwdriver"
         case .preview: return "cube.transparent"
@@ -84,11 +101,14 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .fluting: return .fluting
         case .texture: return .texture
         case .relief3D: return .relief3D
-        // Kinds added after the help text was written share the closest existing topic.
-        case .engrave, .chamfer, .prism, .photoVCarve: return .vcarve
-        case .holeMill: return .drilling
-        case .straightInlay: return .inlay
-        case .merge, .moulding: return .toolpathsOverview
+        case .engrave: return .engrave
+        case .chamfer: return .chamfer
+        case .holeMill: return .holeMill
+        case .prism: return .prism
+        case .merge: return .mergeToolpaths
+        case .straightInlay: return .straightInlay
+        case .moulding: return .moulding
+        case .photoVCarve: return .photoVCarve
         }
     }
 
@@ -105,6 +125,12 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .vcarve: return [.inlay, .toolDatabase]
         case .inlay: return [.vcarve]
         case .relief3D: return [.preview, .toolDatabase]
+        case .engrave, .chamfer, .prism: return [.vcarve, .toolDatabase]
+        case .holeMill: return [.drilling, .toolDatabase]
+        case .mergeToolpaths: return [.toolpathsOverview]
+        case .straightInlay: return [.inlay, .pocket]
+        case .moulding: return [.fluting, .preview]
+        case .photoVCarve: return [.vcarve, .preview]
         case .tabs: return [.profile]
         case .toolDatabase: return [.toolpathsOverview]
         case .preview: return [.checkToolpaths]
@@ -223,6 +249,60 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             An inlay is a V-carved **pocket** in one board and a matching **plug** cut from another board, glued in and planed flush.
 
             New Toolpath ▸ Inlay opens a wizard that creates both toolpaths. The plug is created disabled because it must be cut from its own board: export it as a separate file. **Glue gap** sets the space left at the bottom for glue.
+            """
+        case .engrave:
+            return """
+            Quick Engrave runs the tool straight along the selected vectors at one depth, with no offset to either side. Use it for single-line text, score lines and layout marks.
+
+            Set the **depth** and the cut direction. Deep engraves are split into passes by the tool's stepdown.
+            """
+        case .chamfer:
+            return """
+            Chamfer runs a V-bit along the edges of a part so the side of the cone cuts a bevel.
+
+            - **Side** says which side of a closed vector is the part; the bevel is cut into the part edge.
+            - Give the **width** of the bevel on the top face, or a **depth**; the other follows from the bit angle.
+            - **Tip clearance** keeps the bit's point off the wall by running it slightly into the waste.
+            """
+        case .holeMill:
+            return """
+            Hole Milling cuts round holes with an end mill smaller than the hole, centred on each selected circle.
+
+            - **Helical bore** spirals down at the hole radius, then makes one flat lap at the bottom. **Helix pitch** is the depth per turn.
+            - **Thread milling** cuts an internal thread with a thread mill in a pilot hole. Set the thread pitch and hand.
+            - Leave the diameter empty to use each circle's own size.
+            """
+        case .prism:
+            return """
+            Prism Carve runs a V-bit round each shape deep enough that the two sloping walls meet in a sharp ridge down the middle, so letters and shapes stand out as bevelled prisms.
+
+            Set a **max depth** to stop wide shapes going too deep; they then keep a flat top.
+            """
+        case .mergeToolpaths:
+            return """
+            Merging combines several toolpaths into one entry that is cut in the listed order. It keeps the sidebar short and keeps related cuts together in the G-code.
+
+            Choose **Split Into Separate Toolpaths** in the inspector to get the original toolpaths back.
+            """
+        case .straightInlay:
+            return """
+            A straight inlay cuts a pocket in one board and a matching plug in another, both with an end mill. Corners are rounded to what the tool can cut, so the plug fits the pocket.
+
+            - **Clearance** is the gap all round between plug and pocket wall.
+            - Make the **plug depth** a little more than the pocket depth.
+            - Turn on **Mirror plug** when the plug is glued in face down.
+            """
+        case .moulding:
+            return """
+            Moulding sweeps a cross-section shape along one or more rail vectors to carve a profile, such as a picture-frame edge.
+
+            Select the rails, then the cross-section last. The section's left edge sits on the rail and its top is the material surface. **Rough in levels first** removes material in flat levels before the finishing passes. Curved rails are carved approximately.
+            """
+        case .photoVCarve:
+            return """
+            Photo V-Carve engraves a picture as rows of parallel V-grooves. Darker parts of the image get wider, deeper grooves; black areas are carved as wide as the line spacing.
+
+            Choose the image, set its width and position (or **Fit to Material**), the groove **angle** and **line spacing**. **Invert** carves the light areas instead, for a light fill in dark wood.
             """
         case .fluting:
             return """
