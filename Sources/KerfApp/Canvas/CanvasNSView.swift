@@ -6,10 +6,20 @@ import CAMCore
 /// tools. Unflipped (Y up) so document and view axes agree.
 final class CanvasNSView: NSView, NSUserInterfaceValidations {
     weak var document: KerfDocument? {
-        didSet { if document !== oldValue { didInitialFit = false; flatCache.removeAll(); pathCache.removeAll() } }
+        didSet {
+            if document !== oldValue {
+                didInitialFit = false; userAdjustedView = false
+                flatCache.removeAll(); pathCache.removeAll()
+            }
+        }
     }
 
-    var viewport = CanvasViewport()
+    var viewport = CanvasViewport() {
+        didSet { if !isAutoFitting { userAdjustedView = true } }
+    }
+    /// Until the user pans/zooms, the view keeps the material fitted as the window resizes.
+    private var userAdjustedView = false
+    private var isAutoFitting = false
     static let rulerSize: CGFloat = 20
 
     // Interaction state.
@@ -48,11 +58,18 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
         trackingArea = t
     }
 
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsLayout = true
+    }
+
     override func layout() {
         super.layout()
-        if !didInitialFit, bounds.width > 100, bounds.height > 100 {
+        if (!didInitialFit || !userAdjustedView), bounds.width > 100, bounds.height > 100 {
             didInitialFit = true
+            isAutoFitting = true
             fitMaterial()
+            isAutoFitting = false
         }
     }
 
@@ -62,7 +79,11 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
         guard request.serial != lastRequestSerial else { return }
         lastRequestSerial = request.serial
         switch request.kind {
-        case .fit: fitMaterial()
+        case .fit:
+            isAutoFitting = true
+            fitMaterial()
+            isAutoFitting = false
+            userAdjustedView = false
         case .fitSelection:
             if let doc = document, !doc.selection.isEmpty { fit(doc.project.bounds(of: doc.selection)) } else { fitMaterial() }
         case .zoomIn: zoom(by: 1.25, aboutView: center)
