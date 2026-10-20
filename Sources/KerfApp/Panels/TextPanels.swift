@@ -152,6 +152,7 @@ struct TextEditSection: View {
         .onAppear {
             fonts = TextOutliner.availableFontNames()
             if fonts.isEmpty { fonts = NSFontManager.shared.availableFontFamilies }
+            fonts.insert(StrokeFont.name, at: 0)
             load()
         }
         .onChange(of: shape.text) { _, _ in load() }

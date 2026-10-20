@@ -13,6 +13,7 @@ extension TextOutliner {
     /// Per-character outlines of a single line (newlines become spaces), baseline at y = 0.
     public func glyphs(for text: String, fontName: String, size: Double, letterSpacing: Double = 0) throws -> [TextGlyph] {
         guard size > 0 else { return [] }
+        if StrokeFont.isStrokeFont(fontName) { return StrokeFont.glyphs(for: text, size: size, letterSpacing: letterSpacing) }
         let font = try Self.font(named: fontName, capHeight: size)
         var attrs: [NSAttributedString.Key: Any] = [NSAttributedString.Key(kCTFontAttributeName as String): font]
         if letterSpacing != 0 { attrs[NSAttributedString.Key(kCTKernAttributeName as String)] = letterSpacing }

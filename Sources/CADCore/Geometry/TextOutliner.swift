@@ -49,7 +49,12 @@ public struct TextOutliner: Sendable {
 
     /// Outlines of live text, in document coordinates.
     public func outlines(for spec: TextSpec) throws -> [Path] {
-        try outlines(for: spec.string, fontName: spec.fontName, size: spec.size, origin: .zero, alignment: spec.alignment,
+        if StrokeFont.isStrokeFont(spec.fontName) {
+            return StrokeFont.outlines(for: spec.string, size: spec.size, origin: .zero, alignment: spec.alignment,
+                                       lineSpacing: spec.lineSpacing, letterSpacing: spec.letterSpacing)
+                .map { $0.transformed(spec.transform) }
+        }
+        return try outlines(for: spec.string, fontName: spec.fontName, size: spec.size, origin: .zero, alignment: spec.alignment,
                      lineSpacing: spec.lineSpacing, letterSpacing: spec.letterSpacing)
             .map { $0.transformed(spec.transform) }
     }

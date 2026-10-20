@@ -89,7 +89,7 @@ struct DrawingOptionsView: View {
         }
         .onAppear {
             let fromCore = TextOutliner.availableFontNames()
-            fonts = fromCore.isEmpty ? NSFontManager.shared.availableFontFamilies : fromCore
+            fonts = [StrokeFont.name] + (fromCore.isEmpty ? NSFontManager.shared.availableFontFamilies : fromCore)
             if !fonts.contains(document.drawingOptions.fontName), let f = fonts.first { document.drawingOptions.fontName = f }
         }
         if document.activeTool.isDragShape {
