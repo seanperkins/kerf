@@ -89,7 +89,7 @@ public enum GCodeReader {
             }
             if let s = b.value("S") { rpm = s; segments[segments.count - 1].spindleRPM = max(segments[segments.count - 1].spindleRPM, s) }
             if let fw = b.value("F") { feed = fw * f }
-            if let t = b.value("T") { pendingTool = Int(t) }
+            if let t = b.value("T") { pendingTool = Int(exactly: t.rounded()) }
             if b.has("M", 6) {
                 let t = pendingTool
                 segments.append(Segment(toolNumber: t, toolComment: comments[b.line], spindleRPM: rpm, moves: []))
@@ -121,6 +121,8 @@ public enum GCodeReader {
                 emit(.rapid(to: Vec3(x, y, top)))
                 emit(.rapid(to: Vec3(x, y, rz)))
                 if m == 83, let q = cycleQ, q > 0 {
+                    // At most 10 000 pecks per hole: a bad Q must not hang the preview.
+                    let q = max(q, (rz - dz) / 10_000)
                     var depth = rz
                     while depth > dz + 1e-9 {
                         depth = max(dz, depth - q)

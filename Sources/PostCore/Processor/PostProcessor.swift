@@ -6,6 +6,8 @@ public enum PostError: Error, Equatable, Sendable {
     case notImplemented(String)
     case noToolpaths
     case spindleSpeedOutOfRange(Double)
+    /// A move in the named toolpath has a NaN or infinite coordinate, centre or feed.
+    case nonFiniteMove(toolpath: String)
 }
 
 /// Everything needed to write one G-code file.
