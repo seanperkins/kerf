@@ -3,7 +3,7 @@ import Foundation
 
 /// Canvas interaction modes.
 enum CanvasTool: String, CaseIterable, Identifiable {
-    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, text
+    case select, nodeEdit, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, pen, curve, arc, text
 
     var id: String { rawValue }
 
@@ -20,6 +20,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .polyline: return "Line / Polyline"
         case .pen: return "Bézier Pen"
         case .curve: return "Smooth Curve"
+        case .arc: return "Arc"
         case .text: return "Text"
         }
     }
@@ -37,6 +38,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .polyline: return "point.topleft.down.to.point.bottomright.curvepath"
         case .pen: return "pencil.tip"
         case .curve: return "scribble"
+        case .arc: return "circle.bottomhalf.filled"
         case .text: return "textformat"
         }
     }
@@ -52,6 +54,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
         case .polyline: return "l"
         case .pen: return "p"
         case .text: return "t"
+        case .arc: return "a"
         default: return nil
         }
     }
@@ -59,7 +62,7 @@ enum CanvasTool: String, CaseIterable, Identifiable {
     static func forShortcut(_ c: Character) -> CanvasTool? { allCases.first { $0.shortcut == c } }
 
     /// Tools whose shapes are built from successive clicks.
-    var isClickBuilt: Bool { self == .polyline || self == .curve || self == .pen }
+    var isClickBuilt: Bool { self == .polyline || self == .curve || self == .pen || self == .arc }
 
     /// Tools created by click-dragging a box/radius.
     var isDragShape: Bool {
@@ -82,6 +85,12 @@ struct DrawingOptions: Equatable {
     var textAlignment = CADCore.TextAlignment.left
     var lineSpacing = 1.0
     var letterSpacing = 0.0
+    /// Arc tool: true = centre, start, end; false = start, end, point on the arc.
+    var arcFromCenter = false
+    /// Exact arc entry (inspector).
+    var arcRadius = 2.0
+    var arcStartAngle = 0.0
+    var arcEndAngle = 90.0
     /// Shift-drag style constraint (square/circle) applied by the canvas.
     var constrain = false
     /// Numeric creation (inspector): centre and size in document units. Circles, polygons and
@@ -158,6 +167,15 @@ enum DrawingTools {
         default:
             return nil
         }
+    }
+
+    /// Arc from three clicks: start, end, point on the arc — or, `fromCenter`, centre, start
+    /// (radius) and a point giving the end direction (counter-clockwise).
+    static func arc(points: [Vec2], fromCenter: Bool, layerID: UUID) -> Shape? {
+        guard points.count >= 3 else { return nil }
+        let p = fromCenter ? ArcConstruction.centerStartEnd(center: points[0], start: points[1], endDirection: points[2])
+                           : ArcConstruction.threePoint(start: points[0], end: points[1], through: points[2])
+        return p.map { Shape(name: "Arc", layerID: layerID, paths: [$0]) }
     }
 
     /// Polyline from clicked points; closes when the last point returns to the first.

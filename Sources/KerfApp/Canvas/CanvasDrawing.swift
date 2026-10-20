@@ -232,6 +232,8 @@ extension CanvasNSView {
             let preview: Shape?
             if doc.activeTool == .curve {
                 preview = DrawingTools.smoothCurve(points: pts, closeTolerance: 0, layerID: doc.currentLayerID)
+            } else if doc.activeTool == .arc, pts.count >= 3 {
+                preview = DrawingTools.arc(points: pts, fromCenter: doc.drawingOptions.arcFromCenter, layerID: doc.currentLayerID)
             } else {
                 preview = DrawingTools.polyline(points: pts, closeTolerance: 0, layerID: doc.currentLayerID)
             }

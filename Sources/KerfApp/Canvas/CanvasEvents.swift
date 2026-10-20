@@ -55,6 +55,9 @@ extension CanvasNSView {
                 clickPoints.append(first); finishClickShape(); return
             }
             clickPoints.append(p)
+        case .arc:
+            clickPoints.append(docPoint(event))
+            if clickPoints.count >= 3 { finishClickShape() }
         case .text:
             placeText(at: docPoint(event))
         default:
@@ -291,6 +294,8 @@ extension CanvasNSView {
             shape = pen.path(closed: closed).map { Shape(name: "Curve", layerID: doc.currentLayerID, paths: [$0]) }
         case .curve:
             shape = DrawingTools.smoothCurve(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
+        case .arc:
+            shape = DrawingTools.arc(points: clickPoints, fromCenter: doc.drawingOptions.arcFromCenter, layerID: doc.currentLayerID)
         default:
             shape = DrawingTools.polyline(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
         }

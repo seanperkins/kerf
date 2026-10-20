@@ -62,6 +62,8 @@ struct DrawingOptionsView: View {
             case .pen:
                 Text("Click for a corner node, click-drag for a smooth node. Click the first node to close; double-click or Return to finish; Delete removes the last node.")
                     .font(.callout).foregroundStyle(.secondary)
+            case .arc:
+                ArcToolOptions(document: document)
             case .text:
                 TextField("Text", text: $document.drawingOptions.text, axis: .vertical).lineLimit(1...6)
                 Picker("Font", selection: $document.drawingOptions.fontName) {
