@@ -87,7 +87,7 @@ Round 2 (2026-10-20): every partial and missing item was re-checked against the 
 | `io-post-processors` | io | Post processor selection and custom posts | done | P1 | PostCore/Profiles/BuiltInPosts.swift, PostProfileStore; PostGoldenTests, PostProfileTests |
 | `io-gcode-validator` | io | G-code safety validation | done | P1 | PostCore/Validation/GCodeValidator.swift, ValidationSheet; PostValidatorTests |
 | `io-save-toolpaths` | io | Save toolpaths (single, combined, per tool) | done | P1 | Panels/SaveAllToolpathsSheet.swift, Model/GCodeBatchExport.swift; AdvancedToolpathDocumentTests |
-| `io-file-thumbnails` | io | File thumbnails / Quick Look | partial | P3 | Finder custom icon set on save (no Quick Look extension under SwiftPM) |
+| `io-file-thumbnails` | io | File thumbnails / Quick Look | done | P3 | Quick Look thumbnail extension built by scripts/bundle.sh (Extensions/QuickLookThumbnail) from a PNG embedded in each saved file, plus the Finder custom icon; IOQuickLookThumbnailTests |
 | `tp-profile-basic` | toolpaths-2d | Profile: inside/outside/on, climb/conventional, allowance, multi-pass | done | P1 | CAMCore/Ops2D/ProfileOperation.swift; Ops2DProfileTests; e2e sign |
 | `tp-profile-open-sides` | toolpaths-2d | Profile open vectors left/right | done | P2 | ProfileParameters.openVectorSide, Ops2D/Support/OpenOffset.swift; Ops2DOpenSideTests |
 | `tp-profile-last-pass` | toolpaths-2d | Separate last pass (allowance, reverse direction) | done | P1 | ProfileParameters.lastPass (allowance, reverse, full depth); ProfileOperation; Tests/CAMCoreTests/Ops2DLastPassTests.swift |

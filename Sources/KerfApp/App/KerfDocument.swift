@@ -192,7 +192,7 @@ final class KerfDocument: ReferenceFileDocument {
     }
 
     func fileWrapper(snapshot: KerfProject, configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: try snapshot.encoded())
+        FileWrapper(regularFileWithContents: FileThumbnail.withQuickLookThumbnail(try snapshot.encoded(), for: snapshot.document))
     }
 
     // MARK: Undoable edits
