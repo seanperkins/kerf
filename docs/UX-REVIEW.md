@@ -84,7 +84,7 @@ Date: 2026-10-20. Scope: `Sources/KerfApp` and the running app (window shell, si
 | Show Bottom Side (`:68`) | ⌥⌘F | Jump to the search field |
 | Group (`:91`) | ⌘G | Find next (conventional in drawing apps and Kerf has no Find, so low risk) |
 
-- **Problem:** ⌥⌘T likely collides with the Hide Toolbar item SwiftUI adds to the View menu, so one of the two is shadowed *(inferred)*.
+- **Problem:** The shortcuts clash with the system convention. I first guessed that ⌥⌘T would also collide with a Hide Toolbar item in the View menu, but I checked the running app and its View menu has no such item, so there is no duplicate menu item.
 - **Fix:** Rebind the first four to unused keys (for example ⇧⌘I for Import).
 - **Scope:** one file.
 
