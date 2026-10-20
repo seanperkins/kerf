@@ -539,3 +539,7 @@
 - **Arc-centre mode**: the Avid Mach4 preambles state `G91.1` (incremental I/J), since Mach4 keeps the IJ mode as a controller setting. GRBL's profile is unchanged (incremental is its only mode). When a profile uses absolute I/J and its preamble does not already say `G90.1`, ProgramBuilder writes `G90.1` after the preamble.
 - **Nest Parts**: Cancel (or closing the sheet) cancels the running nest and its result is discarded. The nester itself has no cancellation points, so the background work runs to completion but is never applied.
 - **Trace Bitmap**: tracing, and re-decoding after a resolution change, run off the main thread about 100 ms after the last option change; only the newest run publishes its result. "Create Vectors" is disabled while a trace is pending so the created vectors always match the shown options.
+
+## cam-3d (round 2)
+
+- **cam-3d** — 3d-rotary reviewed again and still not implemented, on purpose. The round-1 reasons still hold: the Avid PRO6096 has no A axis and the Mach4 post has no rotary output. A wrapped-toolpath preview with nothing to run it on would be dead UI. Revisit this only if the machine gets a rotary axis. Then it needs a rotary job setup (cylinder diameter and length, axis along X or Y), wrapping that maps one flat axis to A degrees (360 / (π·D) per unit), A-axis words in the post profile and a check on the real machine.
