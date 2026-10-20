@@ -2,10 +2,21 @@ import AppKit
 import CADCore
 import CAMCore
 
-/// Mouse, keyboard and responder-chain (Edit menu) handling for the canvas.
+/// Mouse and keyboard handling for the canvas. Node-tool and pen-tool details live in
+/// CanvasNodeEvents.swift; Edit-menu actions in CanvasEditMenu.swift.
 extension CanvasNSView {
-    private var dragThreshold: Double { 3 }
-    private var pickTolerance: Double { viewport.documentLength(5) }
+    var dragThreshold: Double { 3 }
+    var pickTolerance: Double { viewport.documentLength(5) }
+    var handleTolerance: Double { viewport.documentLength(6) }
+    var rotateHandleOffset: Double { viewport.documentLength(24) }
+
+    /// Selection box used for transform handles (nil when nothing editable is selected).
+    var transformBox: Rect2? {
+        guard let doc = document, !doc.selection.isEmpty,
+              doc.selectedShapes.contains(where: { doc.project.isEditable($0) }) else { return nil }
+        let b = doc.project.bounds(of: doc.selection)
+        return b.isEmpty ? nil : b
+    }
 
     // MARK: Mouse
 
@@ -19,8 +30,17 @@ extension CanvasNSView {
         switch doc.activeTool {
         case .select:
             let p = docPoint(event, snapped: false)
+            if let box = transformBox,
+               let h = TransformHandles.hit(p, box: box, rotateOffset: rotateHandleOffset, tolerance: handleTolerance) {
+                drag = .handle(h, box: box, startDoc: p, currentDoc: p)
+                return
+            }
             let hit = HitTesting.pick(at: p, in: pickableShapes, tolerance: pickTolerance)
             drag = .pending(startView: v, hitID: hit, extend: event.modifierFlags.contains(.shift))
+        case .nodeEdit:
+            nodeMouseDown(event)
+        case .pen:
+            penMouseDown(event)
         case .polyline, .curve:
             let p = docPoint(event)
             if event.clickCount >= 2 { finishClickShape(); return }
@@ -61,6 +81,13 @@ extension CanvasNSView {
             drag = .marquee(startView: s, currentView: v, extend: extend)
         case .draw(let s, _):
             drag = .draw(startDoc: s, currentDoc: docPoint(event))
+        case .handle(let h, let box, let s, _):
+            let raw = viewport.toDocument(v)
+            // Scale handles snap the grabbed point; rotation uses the raw angle.
+            let cur = h == .rotate || event.modifierFlags.contains(.command) ? raw : snap(raw, excluding: doc.selection)
+            drag = .handle(h, box: box, startDoc: s, currentDoc: cur)
+        case .nodes, .bezierHandle, .nodeMarquee, .penDrag:
+            nodeMouseDragged(event)
         case .none:
             break
         }
@@ -77,13 +104,18 @@ extension CanvasNSView {
         case .marquee(let a, let b, let extend):
             let rect = Rect2(points: [viewport.toDocument(a), viewport.toDocument(b)])
             let ids = HitTesting.select(in: rect, candidates: pickableShapes, crossing: b.x < a.x)
-            if extend { doc.addToSelection(ids) } else { doc.setSelection(ids) }
+            if extend { doc.addToSelection(ids) } else { doc.setSelection(doc.document.expandToGroups(ids)) }
         case .draw(let a, let b):
             var opts = doc.drawingOptions
             opts.constrain = event.modifierFlags.contains(.shift)
             if let s = DrawingTools.shape(for: doc.activeTool, from: a, to: b, options: opts, layerID: doc.currentLayerID) {
                 doc.addShape(s, actionName: "Draw \(doc.activeTool.title)")
             }
+        case .handle(let h, let box, let s, let c):
+            let t = handleTransform(h, box: box, from: s, to: c, flags: event.modifierFlags)
+            if t != .identity { doc.transformSelection(by: t, actionName: h == .rotate ? "Rotate" : "Scale") }
+        case .nodes, .bezierHandle, .nodeMarquee, .penDrag:
+            nodeMouseUp(event)
         case .pan:
             NSCursor.arrow.set()
         case .none:
@@ -93,10 +125,19 @@ extension CanvasNSView {
         needsDisplay = true
     }
 
+    /// Transform for a handle drag: Shift keeps proportions (or snaps rotation to 15°),
+    /// Option scales about the centre.
+    func handleTransform(_ h: TransformHandle, box: Rect2, from s: Vec2, to c: Vec2, flags: NSEvent.ModifierFlags) -> Transform2D {
+        TransformHandles.transform(dragging: h, box: box, from: s, to: c, keepAspect: flags.contains(.shift),
+                                   fromCenter: flags.contains(.option), angleSnap: flags.contains(.shift) ? 15 : 0)
+    }
+
     override func rightMouseDown(with event: NSEvent) {
         guard let doc = document else { return }
         let p = docPoint(event, snapped: false)
-        if let hit = HitTesting.pick(at: p, in: pickableShapes, tolerance: pickTolerance), !doc.selection.contains(hit) {
+        if doc.activeTool == .nodeEdit, let r = nodeHit(at: p) {
+            if !doc.nodeSelection.contains(r) { doc.nodeSelection = [r] }
+        } else if let hit = HitTesting.pick(at: p, in: pickableShapes, tolerance: pickTolerance), !doc.selection.contains(hit) {
             doc.select(hit, extending: false)
         }
         NSMenu.popUpContextMenu(contextMenu(doc), with: event, for: self)
@@ -113,12 +154,16 @@ extension CanvasNSView {
 
     override func mouseExited(with event: NSEvent) {
         hoverDoc = nil
+        lastSnap = nil
         document?.cursorPosition = nil
         needsDisplay = true
     }
 
-    private func updateHover(_ event: NSEvent) {
-        let p = docPoint(event, snapped: !clickPoints.isEmpty || document?.activeTool != .select)
+    func updateHover(_ event: NSEvent) {
+        let drawing = document?.activeTool.isClickBuilt == true || (document?.activeTool.isDragShape ?? false)
+            || document?.activeTool == .text
+        let p = docPoint(event, snapped: drawing)
+        if !drawing { lastSnap = nil }
         hoverDoc = p
         document?.cursorPosition = p
     }
@@ -143,28 +188,46 @@ extension CanvasNSView {
     override func keyDown(with event: NSEvent) {
         guard let doc = document else { return super.keyDown(with: event) }
         let step = doc.document.gridSpacing * (event.modifierFlags.contains(.shift) ? 10 : 1)
+        let nodeMode = doc.activeTool == .nodeEdit && !doc.nodeSelection.isEmpty
+        func nudge(_ d: Vec2) {
+            if nodeMode { doc.moveSelectedNodes(by: d) } else { doc.translateSelection(by: d, actionName: "Nudge") }
+        }
         switch event.keyCode {
         case 49: // space
             spaceHeld = true; NSCursor.openHand.set()
         case 51, 117: // delete, forward delete
-            doc.deleteSelection()
+            if doc.activeTool == .pen, !pen.isEmpty { pen.removeLast() }
+            else if doc.activeTool.isClickBuilt, !clickPoints.isEmpty { clickPoints.removeLast() }
+            else if nodeMode { doc.deleteSelectedNodes() }
+            else { doc.deleteSelection() }
         case 53: // escape
-            if !clickPoints.isEmpty { clickPoints = [] } else if doc.activeTool != .select { doc.activeTool = .select } else { doc.clearSelection() }
+            cancelOrStepBack(doc)
         case 36, 76: // return, enter
             finishClickShape()
-        case 123: doc.translateSelection(by: Vec2(-step, 0), actionName: "Nudge")
-        case 124: doc.translateSelection(by: Vec2(step, 0), actionName: "Nudge")
-        case 125: doc.translateSelection(by: Vec2(0, -step), actionName: "Nudge")
-        case 126: doc.translateSelection(by: Vec2(0, step), actionName: "Nudge")
+        case 123: nudge(Vec2(-step, 0))
+        case 124: nudge(Vec2(step, 0))
+        case 125: nudge(Vec2(0, -step))
+        case 126: nudge(Vec2(0, step))
         default:
-            switch event.charactersIgnoringModifiers {
-            case "f" where event.modifierFlags.intersection([.command, .control, .option]).isEmpty:
-                fitMaterial()
-            default:
+            let plain = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+            guard plain, let ch = event.charactersIgnoringModifiers?.lowercased().first else { return super.keyDown(with: event) }
+            if ch == "f" { fitMaterial() } else if let tool = CanvasTool.forShortcut(ch) { doc.activeTool = tool } else {
                 super.keyDown(with: event)
             }
         }
         needsDisplay = true
+    }
+
+    private func cancelOrStepBack(_ doc: KerfDocument) {
+        if !clickPoints.isEmpty || !pen.isEmpty {
+            clickPoints = []; pen = PenPath()
+        } else if doc.activeTool == .nodeEdit, !doc.nodeSelection.isEmpty {
+            doc.nodeSelection = []
+        } else if doc.activeTool != .select {
+            doc.activeTool = .select
+        } else {
+            doc.clearSelection()
+        }
     }
 
     override func keyUp(with event: NSEvent) {
@@ -173,13 +236,19 @@ extension CanvasNSView {
 
     // MARK: Click-built shapes
 
-    func finishClickShape() {
+    func finishClickShape(closed: Bool = false) {
         guard let doc = document else { return }
-        defer { clickPoints = []; needsDisplay = true }
+        defer { clickPoints = []; pen = PenPath(); needsDisplay = true }
         let tol = viewport.documentLength(8)
-        let shape = doc.activeTool == .curve
-            ? DrawingTools.smoothCurve(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
-            : DrawingTools.polyline(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
+        let shape: Shape?
+        switch doc.activeTool {
+        case .pen:
+            shape = pen.path(closed: closed).map { Shape(name: "Curve", layerID: doc.currentLayerID, paths: [$0]) }
+        case .curve:
+            shape = DrawingTools.smoothCurve(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
+        default:
+            shape = DrawingTools.polyline(points: clickPoints, closeTolerance: tol, layerID: doc.currentLayerID)
+        }
         if let s = shape { doc.addShape(s, actionName: "Draw \(doc.activeTool.title)") }
     }
 
@@ -194,81 +263,6 @@ extension CanvasNSView {
                                origin: .text(o.text, fontName: o.fontName, size: o.fontSize)), actionName: "Add Text")
         } catch {
             doc.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
-        }
-    }
-
-    // MARK: Context menu
-
-    private func contextMenu(_ doc: KerfDocument) -> NSMenu {
-        let m = NSMenu()
-        func item(_ title: String, _ action: Selector, enabled: Bool = true) {
-            let i = NSMenuItem(title: title, action: enabled ? action : nil, keyEquivalent: "")
-            i.target = self
-            m.addItem(i)
-        }
-        let has = !doc.selection.isEmpty
-        item("Cut", #selector(cut(_:)), enabled: has)
-        item("Copy", #selector(copy(_:)), enabled: has)
-        item("Paste", #selector(paste(_:)))
-        item("Duplicate", #selector(duplicateShapes(_:)), enabled: has)
-        item("Delete", #selector(delete(_:)), enabled: has)
-        m.addItem(.separator())
-        item("Zoom to Selection", #selector(zoomToSelection(_:)), enabled: has)
-        item("Zoom to Material", #selector(zoomToMaterial(_:)))
-        return m
-    }
-
-    @objc func duplicateShapes(_ sender: Any?) { document?.duplicateSelection() }
-    @objc func zoomToSelection(_ sender: Any?) { document?.requestCanvas(.fitSelection) }
-    @objc func zoomToMaterial(_ sender: Any?) { fitMaterial() }
-
-    // MARK: Edit menu (responder chain)
-
-    static let shapesPasteboardType = NSPasteboard.PasteboardType("com.seanperkins.kerf.shapes")
-
-    override func selectAll(_ sender: Any?) { document?.selectAll(); needsDisplay = true }
-    @objc func delete(_ sender: Any?) { document?.deleteSelection() }
-
-    @objc func copy(_ sender: Any?) {
-        guard let doc = document, !doc.selection.isEmpty,
-              let data = try? JSONEncoder().encode(doc.selectedShapes) else { return }
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setData(data, forType: Self.shapesPasteboardType)
-    }
-
-    @objc func cut(_ sender: Any?) {
-        copy(sender)
-        document?.deleteSelection()
-    }
-
-    @objc func paste(_ sender: Any?) {
-        guard let doc = document, let data = NSPasteboard.general.data(forType: Self.shapesPasteboardType),
-              let shapes = try? JSONDecoder().decode([Shape].self, from: data), !shapes.isEmpty else { return }
-        let g = doc.document.gridSpacing
-        let existing = Set(doc.document.shapes.map(\.id))
-        let layer = doc.currentLayerID
-        let pasted: [Shape] = shapes.map { s in
-            var c = existingOffset(s, existing.contains(s.id) ? Vec2(g, -g) : .zero)
-            c.id = UUID()
-            if doc.document.layer(id: c.layerID) == nil { c.layerID = layer }
-            return c
-        }
-        doc.perform("Paste") { p in pasted.forEach { p.document.add($0) } }
-        doc.setSelection(pasted.map(\.id))
-    }
-
-    private func existingOffset(_ s: Shape, _ d: Vec2) -> Shape { d == .zero ? s : s.transformed(.translation(d)) }
-
-    func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
-        guard let doc = document else { return false }
-        switch item.action {
-        case #selector(copy(_:)), #selector(cut(_:)), #selector(delete(_:)), #selector(duplicateShapes(_:)):
-            return !doc.selection.isEmpty
-        case #selector(paste(_:)):
-            return NSPasteboard.general.data(forType: Self.shapesPasteboardType) != nil
-        default:
-            return true
         }
     }
 }

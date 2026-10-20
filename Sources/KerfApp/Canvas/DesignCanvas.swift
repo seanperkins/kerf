@@ -1,4 +1,5 @@
 import AppKit
+import CADCore
 import SwiftUI
 
 /// SwiftUI wrapper for the AppKit canvas.
@@ -14,6 +15,7 @@ struct DesignCanvas: NSViewRepresentable {
     func updateNSView(_ v: CanvasNSView, context: Context) {
         v.document = document
         if document.activeTool != .polyline && document.activeTool != .curve { v.clickPoints = [] }
+        if document.activeTool != .pen { v.pen = PenPath() }
         v.handle(document.canvasRequest)
         v.needsDisplay = true
     }
@@ -35,8 +37,8 @@ struct ToolPalette: View {
                                     in: RoundedRectangle(cornerRadius: 5))
                 }
                 .buttonStyle(.plain)
-                .help(tool.title)
-                if tool == .select { Divider().frame(width: 24) }
+                .help(tool.shortcut.map { "\(tool.title) (\(String($0).uppercased()))" } ?? tool.title)
+                if tool == .nodeEdit { Divider().frame(width: 24) }
             }
         }
         .padding(4)

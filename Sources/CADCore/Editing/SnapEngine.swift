@@ -7,11 +7,13 @@ public struct SnapEngine: Sendable {
     public struct Result: Equatable, Sendable {
         public var point: Vec2
         public var kind: Kind
+        public init(point: Vec2, kind: Kind) { self.point = point; self.kind = kind }
     }
 
     public struct Target: Equatable, Sendable {
         public var point: Vec2
         public var kind: Kind
+        public init(point: Vec2, kind: Kind) { self.point = point; self.kind = kind }
     }
 
     public var targets: [Target]

@@ -17,6 +17,7 @@ extension KerfProject {
     /// Removes shapes and drops their IDs from every operation's selection.
     mutating func deleteShapes(_ ids: Set<UUID>) {
         document.removeShapes(ids: ids)
+        document.pruneSingletonGroups()
         for i in operations.indices {
             var s = operations[i].editableSetup
             s.shapeIDs.removeAll { ids.contains($0) }

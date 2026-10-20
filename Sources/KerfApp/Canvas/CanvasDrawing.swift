@@ -25,6 +25,7 @@ extension CanvasNSView {
         if doc.showToolpaths { drawToolpaths(ctx, doc, vt) }
         drawOrigin(ctx, doc)
         drawInteraction(ctx, doc, vt)
+        drawEditingOverlay(ctx, doc, vt)
         drawRulers(ctx, doc)
         drawCursorReadout(doc)
     }
@@ -34,12 +35,12 @@ extension CanvasNSView {
         CGAffineTransform(a: viewport.scale, b: 0, c: 0, d: viewport.scale, tx: viewport.offset.x, ty: viewport.offset.y)
     }
 
-    private func viewRect(_ r: Rect2) -> CGRect {
+    func viewRect(_ r: Rect2) -> CGRect {
         let a = viewport.toView(r.min), b = viewport.toView(r.max)
         return CGRect(x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y)
     }
 
-    private func stroke(_ ctx: CGContext, _ path: CGPath, _ t: CGAffineTransform, color: NSColor, width: CGFloat,
+    func stroke(_ ctx: CGContext, _ path: CGPath, _ t: CGAffineTransform, color: NSColor, width: CGFloat,
                         dash: [CGFloat] = []) {
         var tt = t
         guard let p = path.copy(using: &tt) else { return }
@@ -120,10 +121,9 @@ extension CanvasNSView {
 
     private func drawShapes(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform) {
         let project = doc.project
-        var moveDelta: Vec2?
-        if case .move(let s, let c) = drag { moveDelta = snappedDelta(c - s) }
+        let preview = selectionPreviewTransform
+        let nodePreview = nodeDragPreview
         let selected = doc.selection
-        var selBounds = Rect2.empty
         for s in project.document.shapes where project.isVisible(s) {
             let layer = project.document.layer(id: s.layerID)
             let base = NSColor(hex: layer?.colorHex ?? "#000000") ?? .black
@@ -132,29 +132,14 @@ extension CanvasNSView {
             let locked = !project.isEditable(s)
             stroke(ctx, path, vt, color: locked ? base.withAlphaComponent(0.45) : base, width: isSel ? 1 : 1.25)
             if isSel {
-                stroke(ctx, path, vt, color: .systemBlue, width: 2, dash: [6, 4])
-                selBounds = selBounds.union(flatShapes([s])[0].bounds)
-                if let d = moveDelta {
-                    stroke(ctx, path, vt.translatedBy(x: d.x, y: d.y), color: .systemBlue.withAlphaComponent(0.6), width: 1.5)
+                stroke(ctx, path, vt, color: .systemBlue, width: 2, dash: doc.activeTool == .nodeEdit ? [] : [6, 4])
+                if let t = preview, project.isEditable(s) {
+                    stroke(ctx, path, t.cg.concatenating(vt), color: .systemBlue.withAlphaComponent(0.6), width: 1.5)
                 }
             }
-        }
-        // Selection bounding box with corner handles.
-        if !selBounds.isEmpty {
-            let r = viewRect(selBounds).insetBy(dx: -4, dy: -4)
-            ctx.saveGState()
-            ctx.setStrokeColor(NSColor.systemBlue.withAlphaComponent(0.7).cgColor)
-            ctx.setLineWidth(1)
-            ctx.setLineDash(phase: 0, lengths: [3, 3])
-            ctx.stroke(r)
-            ctx.setLineDash(phase: 0, lengths: [])
-            for p in [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.minX, y: r.maxY),
-                      CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.midX, y: r.midY)] {
-                let h = CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)
-                ctx.setFillColor(NSColor.white.cgColor); ctx.fill(h)
-                ctx.setStrokeColor(NSColor.systemBlue.cgColor); ctx.stroke(h)
+            if let ps = nodePreview[s.id] {
+                stroke(ctx, CanvasPaths.cgPath(for: ps), vt, color: .systemBlue.withAlphaComponent(0.7), width: 1.5)
             }
-            ctx.restoreGState()
         }
     }
 
