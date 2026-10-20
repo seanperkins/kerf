@@ -63,6 +63,9 @@ public struct FinishingSettings: Codable, Hashable, Sendable {
     public var angle: Double
     /// Pass pattern; nil = raster (files from before strategies existed).
     public var strategy: FinishingStrategy?
+    /// Rest machining: the larger tool that already finished this surface. When set, only the
+    /// areas that tool could not reach are machined. nil = the whole area.
+    public var restToolID: UUID?
 
     public init(isEnabled: Bool = true, stepover: Double? = nil, angle: Double = 0,
                 strategy: FinishingStrategy? = nil) {

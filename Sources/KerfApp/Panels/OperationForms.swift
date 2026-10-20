@@ -372,6 +372,12 @@ struct Relief3DForm: View {
                 if (params.finishing.strategy ?? .raster) == .raster {
                     NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
                 }
+                OptionalToolPicker(title: "Rest after", toolID: $params.finishing.restToolID, library: library,
+                                   kinds: [.ballNose, .endMill, .vBit, .engraving])
+                if params.finishing.restToolID != nil {
+                    Text("Only the areas the larger tool could not reach are machined (run after its finishing toolpath).")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }

@@ -322,3 +322,13 @@
   splits into several rings those levels are cut as offset rings. Every point is dropped with the
   drop-cutter, so no pattern can gouge the model; on very non-convex boundaries a blended spiral
   point may stray slightly outside the boundary between two rings.
+- **cam-3d** — **3D rest machining (3d-rest-machining).** `FinishingSettings.restToolID` names the
+  larger tool that already finished the surface ("Rest after" in the inspector). On the heightmap
+  grid (drop-cutter rule: each cell square reached at its point nearest the tool axis) Kerf drops
+  the larger tool at every cell, takes the upper envelope of its tip shape as the surface it left,
+  then drops the finishing tool onto that surface and onto the model. Cells where the finishing
+  tool sits deeper on the model by more than max(0.002 in / 0.05 mm, cell/2) form the rest mask
+  (the cell term absorbs the conservative heightmap's slope noise). The mask is grown by
+  max(stepover, tool radius / 2), contoured and clipped to the boundary, and the chosen finishing
+  pattern runs only there. It assumes the larger tool covered the whole area including its reach.
+  If nothing is left and the operation has no roughing toolpath, it fails with a clear message.

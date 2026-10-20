@@ -43,7 +43,8 @@ public struct Relief3DOperation: ToolpathOperation {
         let regionBounds = Rect2(points: region.flatMap { $0 })
         guard !regionBounds.isEmpty, regionBounds.width > 0 || regionBounds.height > 0 else { throw CAMError.noGeometry }
 
-        let reach = max(finishTool.radius, roughTool.radius + max(0, params.roughing.allowance))
+        let restTool: Tool? = try params.finishing.isEnabled ? params.finishing.restToolID.map { try context.tool($0) } : nil
+        let reach = max(finishTool.radius, roughTool.radius + max(0, params.roughing.allowance), restTool?.radius ?? 0)
         let area = regionBounds.insetBy(-(reach + 2 * params.resolution))
         var metadata: [String: String] = [:]
         if extras.count < extraIDs.count {
@@ -75,6 +76,18 @@ public struct Relief3DOperation: ToolpathOperation {
         }
         if params.finishing.isEnabled {
             let stepover = max(params.finishing.stepover ?? finishTool.stepover, 1e-4)
+            var region = region
+            if let previous = restTool {
+                // Rest machining: only where the previous (larger) tool could not reach.
+                region = ReliefRest.region(map: map, boundary: region, tool: finishTool, previousTool: previous,
+                                           margin: max(stepover, finishTool.radius / 2),
+                                           // Above the heightmap's own noise (~slope x cell size).
+                                           threshold: max(context.units == .inch ? 0.002 : 0.05, map.cellSize / 2),
+                                           tolerance: context.tolerance)
+                if region.isEmpty, result.isEmpty {
+                    throw CAMError.invalidParameter("Nothing left for rest machining: \(previous.name) reaches the whole surface")
+                }
+            }
             let moves: [Move]
             switch params.finishing.strategy ?? .raster {
             case .raster:
