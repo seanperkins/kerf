@@ -607,14 +607,8 @@ final class KerfDocument: ReferenceFileDocument {
         let ext = url.pathExtension.lowercased()
         let shapes = selectionOnly && !selection.isEmpty ? selectedShapes : project.document.shapes
         do {
-            let data: Data
-            switch ext {
-            case SVGExporter.fileExtension:
-                data = try SVGExporter().export(shapes: shapes, layers: project.document.layers, units: units)
-            case DXFExporter.fileExtension:
-                data = try DXFExporter().export(shapes: shapes, layers: project.document.layers, units: units)
-            default: throw KerfIOError.unsupportedFormat(ext)
-            }
+            guard let exporter = FileFormats.exporter(forExtension: ext) else { throw KerfIOError.unsupportedFormat(ext) }
+            let data = try exporter.export(shapes: shapes, layers: project.document.layers, units: units)
             try data.write(to: url, options: .atomic)
         } catch {
             alert = AlertMessage(title: "Export failed", message: ImportService.describe(error))

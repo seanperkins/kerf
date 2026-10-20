@@ -170,9 +170,10 @@ struct KerfCommands: Commands {
     private func runExportVectorsPanel() {
         guard let doc = document else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = ["svg", "dxf"].compactMap { UTType(filenameExtension: $0) }
+        panel.allowedContentTypes = ["svg", "dxf", "pdf", "eps", "ai"].compactMap { UTType(filenameExtension: $0) }
         panel.nameFieldStringValue = doc.document.name + ".svg"
-        panel.message = doc.selection.isEmpty ? "Export all vectors (SVG or DXF)" : "Export the selected vectors (SVG or DXF)"
+        panel.message = (doc.selection.isEmpty ? "Export all vectors" : "Export the selected vectors")
+            + " (SVG, DXF, PDF, EPS or AI — choose by file extension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         doc.exportVectors(to: url, selectionOnly: !doc.selection.isEmpty)
     }
