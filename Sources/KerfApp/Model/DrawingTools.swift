@@ -1,0 +1,149 @@
+import CADCore
+import Foundation
+
+/// Canvas interaction modes.
+enum CanvasTool: String, CaseIterable, Identifiable {
+    case select, rectangle, roundedRectangle, circle, ellipse, polygon, star, polyline, curve, text
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .select: return "Select"
+        case .rectangle: return "Rectangle"
+        case .roundedRectangle: return "Rounded Rectangle"
+        case .circle: return "Circle"
+        case .ellipse: return "Ellipse"
+        case .polygon: return "Polygon"
+        case .star: return "Star"
+        case .polyline: return "Polyline"
+        case .curve: return "Bézier Curve"
+        case .text: return "Text"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .select: return "cursorarrow"
+        case .rectangle: return "rectangle"
+        case .roundedRectangle: return "app"
+        case .circle: return "circle"
+        case .ellipse: return "oval"
+        case .polygon: return "hexagon"
+        case .star: return "star"
+        case .polyline: return "point.topleft.down.to.point.bottomright.curvepath"
+        case .curve: return "scribble"
+        case .text: return "textformat"
+        }
+    }
+
+    /// Tools created by click-dragging a box/radius.
+    var isDragShape: Bool {
+        switch self {
+        case .rectangle, .roundedRectangle, .circle, .ellipse, .polygon, .star: return true
+        default: return false
+        }
+    }
+}
+
+/// User-adjustable options for the drawing tools (shown in the inspector while a tool is active).
+struct DrawingOptions: Equatable {
+    var cornerRadius: Double = 0.25
+    var polygonSides = 6
+    var starPoints = 5
+    var starInnerRatio = 0.5
+    var text = "Kerf"
+    var fontName = "Helvetica"
+    var fontSize = 1.0
+    /// Shift-drag style constraint (square/circle) applied by the canvas.
+    var constrain = false
+}
+
+/// Builds shapes from canvas gestures (document coordinates). Pure, unit-agnostic.
+enum DrawingTools {
+    /// Shape for a drag from `a` to `b`. Box tools use the drag as a corner-to-corner box;
+    /// radial tools (circle/polygon/star) use `a` as the centre.
+    static func shape(for tool: CanvasTool, from a: Vec2, to b: Vec2, options: DrawingOptions,
+                      layerID: UUID) -> Shape? {
+        var box = Rect2(points: [a, b])
+        if options.constrain {
+            let s = max(box.width, box.height)
+            box = Rect2(min: Vec2(b.x >= a.x ? a.x : a.x - s, b.y >= a.y ? a.y : a.y - s), max: .zero)
+            box.max = box.min + Vec2(s, s)
+        }
+        let radius = a.distance(to: b)
+        switch tool {
+        case .rectangle:
+            guard box.width > 0, box.height > 0 else { return nil }
+            return Shape(name: "Rectangle", layerID: layerID, paths: [ShapeFactory.rectangle(box)],
+                         origin: .rectangle(width: box.width, height: box.height, cornerRadius: 0))
+        case .roundedRectangle:
+            guard box.width > 0, box.height > 0 else { return nil }
+            let r = min(options.cornerRadius, min(box.width, box.height) / 2)
+            return Shape(name: "Rounded Rectangle", layerID: layerID,
+                         paths: [ShapeFactory.rectangle(box, cornerRadius: r)],
+                         origin: .rectangle(width: box.width, height: box.height, cornerRadius: r))
+        case .circle:
+            guard radius > 0 else { return nil }
+            return Shape(name: "Circle", layerID: layerID, paths: [ShapeFactory.circle(center: a, radius: radius)],
+                         origin: .circle(radius: radius))
+        case .ellipse:
+            guard box.width > 0, box.height > 0 else { return nil }
+            let rx = box.width / 2, ry = box.height / 2
+            return Shape(name: "Ellipse", layerID: layerID,
+                         paths: [ShapeFactory.ellipse(center: box.center, rx: rx, ry: ry)], origin: .ellipse(rx: rx, ry: ry))
+        case .polygon:
+            guard radius > 0 else { return nil }
+            let rot = (b - a).angle
+            return Shape(name: "Polygon", layerID: layerID,
+                         paths: [ShapeFactory.polygon(center: a, radius: radius, sides: options.polygonSides, rotation: rot)],
+                         origin: .polygon(sides: max(3, options.polygonSides), radius: radius))
+        case .star:
+            guard radius > 0 else { return nil }
+            let inner = radius * min(max(options.starInnerRatio, 0.05), 0.95)
+            return Shape(name: "Star", layerID: layerID,
+                         paths: [ShapeFactory.star(center: a, points: options.starPoints, outerRadius: radius,
+                                                   innerRadius: inner, rotation: (b - a).angle)],
+                         origin: .star(points: max(2, options.starPoints), outerRadius: radius, innerRadius: inner))
+        default:
+            return nil
+        }
+    }
+
+    /// Polyline from clicked points; closes when the last point returns to the first.
+    static func polyline(points: [Vec2], closeTolerance: Double, layerID: UUID) -> Shape? {
+        var pts = points
+        // Drop consecutive duplicates (double-click adds the same point twice).
+        pts = pts.enumerated().filter { $0.offset == 0 || !$0.element.isApproximatelyEqual(to: pts[$0.offset - 1], tolerance: 1e-9) }.map(\.element)
+        guard pts.count >= 2 else { return nil }
+        var closed = false
+        if pts.count >= 3, pts.last!.distance(to: pts[0]) <= closeTolerance {
+            pts.removeLast(); closed = true
+        }
+        guard pts.count >= 2 else { return nil }
+        return Shape(name: closed ? "Polygon" : "Polyline", layerID: layerID,
+                     paths: [Path(points: pts, closed: closed && pts.count >= 3)])
+    }
+
+    /// Smooth open/closed curve through clicked points (Catmull-Rom converted to cubic Béziers).
+    static func smoothCurve(points: [Vec2], closeTolerance: Double, layerID: UUID) -> Shape? {
+        var pts = points
+        guard pts.count >= 2 else { return nil }
+        var closed = false
+        if pts.count >= 4, pts.last!.distance(to: pts[0]) <= closeTolerance { pts.removeLast(); closed = true }
+        let n = pts.count
+        func p(_ i: Int) -> Vec2 {
+            if closed { return pts[((i % n) + n) % n] }
+            return pts[min(max(i, 0), n - 1)]
+        }
+        var segs: [PathSegment] = []
+        let count = closed ? n : n - 1
+        for i in 0..<count {
+            let p0 = p(i - 1), p1 = p(i), p2 = p(i + 1), p3 = p(i + 2)
+            let c1 = p1 + (p2 - p0) / 6
+            let c2 = p2 - (p3 - p1) / 6
+            segs.append(.cubic(to: p2, control1: c1, control2: c2))
+        }
+        return Shape(name: "Curve", layerID: layerID, paths: [Path(start: pts[0], segments: segs, isClosed: closed)])
+    }
+}

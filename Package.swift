@@ -44,6 +44,8 @@ let package = Package(
         .testTarget(name: "CADCoreTests", dependencies: ["CADCore"], swiftSettings: swift5),
         .testTarget(name: "CAMCoreTests", dependencies: ["CAMCore", "CADCore"], swiftSettings: swift5),
         .testTarget(name: "PostCoreTests", dependencies: ["PostCore", "CAMCore", "CADCore"], swiftSettings: swift5),
+        .testTarget(name: "KerfAppTests", dependencies: ["KerfApp", "PostCore", "CAMCore", "CADCore"],
+                    swiftSettings: swift5),
     ],
     cxxLanguageStandard: .cxx17
 )

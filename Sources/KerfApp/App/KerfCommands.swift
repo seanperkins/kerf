@@ -1,0 +1,147 @@
+import AppKit
+import CADCore
+import CAMCore
+import PostCore
+import SwiftUI
+import UniformTypeIdentifiers
+
+/// Menu bar commands. They act on the focused document window via `@FocusedObject`.
+struct KerfCommands: Commands {
+    @FocusedObject private var document: KerfDocument?
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(after: .importExport) {
+            Button("Import…") { runImportPanel() }
+                .keyboardShortcut("i", modifiers: .command)
+                .disabled(document == nil)
+            Button("Export Vectors…") { runExportVectorsPanel() }
+                .disabled(document == nil)
+            Button("Export G-code…") { document?.sheet = .exportGCode(.all) }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(document?.project.operations.isEmpty ?? true)
+        }
+        CommandGroup(after: .pasteboard) {
+            Button("Duplicate") { document?.duplicateSelection() }
+                .keyboardShortcut("d", modifiers: .command)
+                .disabled(document?.selection.isEmpty ?? true)
+        }
+        CommandGroup(after: .toolbar) {
+            Button("Zoom to Material") { document?.requestCanvas(.fit) }.keyboardShortcut("0", modifiers: .command)
+            Button("Zoom to Selection") { document?.requestCanvas(.fitSelection) }.keyboardShortcut("2", modifiers: .command)
+            Button("Zoom In") { document?.requestCanvas(.zoomIn) }.keyboardShortcut("=", modifiers: .command)
+            Button("Zoom Out") { document?.requestCanvas(.zoomOut) }.keyboardShortcut("-", modifiers: .command)
+            Divider()
+            Button("Show 2D Design") { document?.centerMode = .design2D }.keyboardShortcut("1", modifiers: [.command, .option])
+            Button("Show 3D Preview") { document?.centerMode = .preview3D }.keyboardShortcut("3", modifiers: [.command, .option])
+            Divider()
+        }
+        CommandMenu("Design") {
+            Button("Job Setup…") { document?.sheet = .jobSetup }
+                .keyboardShortcut("j", modifiers: [.command, .shift])
+            Divider()
+            Menu("Draw") {
+                ForEach(CanvasTool.allCases) { tool in
+                    Button(tool.title) { document?.activeTool = tool }
+                }
+            }
+            Divider()
+            Menu("Align") {
+                ForEach(AlignMode.allCases) { mode in
+                    Button(mode.title) { withSelection("Align") { ids, p in DesignCommands.align(ids, mode: mode, in: &p) } }
+                }
+                Divider()
+                Button("Distribute Horizontally") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: true, in: &p) } }
+                Button("Distribute Vertically") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: false, in: &p) } }
+            }
+            Menu("Boolean") {
+                ForEach(BooleanMode.allCases) { mode in
+                    Button(mode.title) {
+                        guard let doc = document else { return }
+                        let order = doc.selectedShapes.map(\.id)
+                        var newID: UUID?
+                        doc.perform(mode.title) { newID = DesignCommands.boolean(mode, ids: order, in: &$0) }
+                        if let id = newID { doc.setSelection([id]) }
+                    }
+                }
+            }
+            Button("Offset…") { document?.sheet = .offset }.disabled(document?.selection.isEmpty ?? true)
+            Button("Mirror Horizontally") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: true, in: &p) } }
+            Button("Mirror Vertically") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: false, in: &p) } }
+            Button("Rotate 90° Left") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: 90, in: &p) } }
+                .keyboardShortcut("[", modifiers: .command)
+            Button("Rotate 90° Right") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: -90, in: &p) } }
+                .keyboardShortcut("]", modifiers: .command)
+            Button("Close Open Vectors") { withSelection("Close Vectors") { ids, p in DesignCommands.close(ids, in: &p) } }
+            Divider()
+            Toggle("Snap to Grid", isOn: Binding(get: { document?.snapToGrid ?? true }, set: { document?.snapToGrid = $0 }))
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+        }
+        CommandMenu("Toolpaths") {
+            Menu("New Toolpath") {
+                ForEach(OperationFactory.menuKinds, id: \.self) { kind in
+                    Button(kind.displayName) { document?.addOperation(kind) }
+                }
+            }
+            .disabled(document == nil)
+            Button("Calculate All") { document?.calculateAll() }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(document?.project.operations.isEmpty ?? true)
+            Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
+                .keyboardShortcut("t", modifiers: [.command, .option])
+            Divider()
+            Button("Tool Database…") { openWindow(id: ToolDatabaseView.windowID) }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("Reload Post Profiles") { PostProfileCatalog.shared.reload() }
+            Button("Open Post Profiles Folder") { openPostFolder() }
+        }
+    }
+
+    private func withSelection(_ name: String, _ change: @escaping (Set<UUID>, inout KerfProject) -> Void) {
+        guard let doc = document, !doc.selection.isEmpty else { return }
+        let ids = doc.selection
+        doc.perform(name) { change(ids, &$0) }
+    }
+
+    private func runImportPanel() {
+        guard let doc = document else { return }
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = ImportService.allowedContentTypes
+        panel.message = "Import SVG, DXF, EPS vectors or an STL model"
+        guard panel.runModal() == .OK else { return }
+        doc.importFiles(panel.urls)
+    }
+
+    private func runExportVectorsPanel() {
+        guard let doc = document else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = ["svg", "dxf"].compactMap { UTType(filenameExtension: $0) }
+        panel.nameFieldStringValue = doc.document.name + ".svg"
+        panel.message = doc.selection.isEmpty ? "Export all vectors (SVG or DXF)" : "Export the selected vectors (SVG or DXF)"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        doc.exportVectors(to: url, selectionOnly: !doc.selection.isEmpty)
+    }
+
+    private func openPostFolder() {
+        let dir = PostProfileCatalog.shared.store.directory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // Seed a sample the user can copy/edit.
+        let sample = dir.appendingPathComponent("example-avid-inch.json.sample")
+        if !FileManager.default.fileExists(atPath: sample.path), let data = try? PostCoreSample.data() {
+            try? data.write(to: sample)
+        }
+        NSWorkspace.shared.open(dir)
+    }
+}
+
+/// Sample profile JSON written next to user profiles as a starting point.
+enum PostCoreSample {
+    static func data() throws -> Data {
+        var p = BuiltInPosts.avidMach4Inch
+        p.id = "my-custom-post"
+        p.name = "My Custom Post"
+        return try p.toJSON()
+    }
+}

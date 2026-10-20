@@ -35,6 +35,21 @@ cat > $APP/Contents/Info.plist <<PLIST
       <key>CFBundleTypeName</key><string>Kerf Project</string>
       <key>CFBundleTypeExtensions</key><array><string>kerf</string></array>
       <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Owner</string>
+      <key>LSItemContentTypes</key><array><string>com.seanperkins.kerf.project</string></array>
+    </dict>
+  </array>
+  <key>UTExportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key><string>com.seanperkins.kerf.project</string>
+      <key>UTTypeDescription</key><string>Kerf Project</string>
+      <key>UTTypeConformsTo</key><array><string>public.json</string><string>public.data</string></array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key><array><string>kerf</string></array>
+        <key>public.mime-type</key><string>application/x-kerf+json</string>
+      </dict>
     </dict>
   </array>
 </dict>
