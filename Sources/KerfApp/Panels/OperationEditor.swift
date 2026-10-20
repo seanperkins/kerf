@@ -29,6 +29,9 @@ struct OperationEditor: View {
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
             ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID), library: library,
                        preferred: OperationFactory.preferredToolKinds(for: draft.kind))
+            ToolOverrideSection(override: setupBinding(\.toolOverride),
+                                tool: library.tool(id: draft.setup.toolID)?.forMaterial(document.document.job.material)
+                                    .converted(to: units), units: units)
             if draft.kind != .relief3D {
                 vectorsRow
             }

@@ -43,6 +43,8 @@ public struct OperationSetup: Codable, Hashable, Identifiable, Sendable {
     public var toolID: UUID
     /// Selected vectors.
     public var shapeIDs: [UUID]
+    /// This toolpath's changes to the primary tool's cutting data (toolpaths-2d addition).
+    public var toolOverride: ToolOverride?
 
     public init(id: UUID = UUID(), name: String, isEnabled: Bool = true, toolID: UUID, shapeIDs: [UUID] = []) {
         self.id = id; self.name = name; self.isEnabled = isEnabled; self.toolID = toolID; self.shapeIDs = shapeIDs
@@ -65,10 +67,17 @@ public struct CAMContext: Sendable {
     public var coords: MachineCoordinates { MachineCoordinates(job: document.job) }
     public var units: LengthUnit { document.units }
 
-    /// Library tool converted to document units.
+    /// Per-toolpath changes to a tool's cutting data, by tool id (set by `AnyOperation.generate`
+    /// from the operation's `toolOverride`; toolpaths-2d addition).
+    public var toolOverrides: [UUID: ToolOverride] = [:]
+
+    /// Library tool converted to document units, with the job material's cutting data and any
+    /// per-toolpath override applied.
     public func tool(_ id: UUID) throws -> Tool {
         guard let t = tools.tool(id: id) else { throw CAMError.missingTool(id) }
-        return t.converted(to: document.units)
+        var out = t.forMaterial(document.job.material).converted(to: document.units)
+        if let o = toolOverrides[id] { out = o.applied(to: out) }
+        return out
     }
 
     public func shapes(for setup: OperationSetup) -> [Shape] { document.shapes(ids: setup.shapeIDs) }

@@ -124,8 +124,25 @@ extension PrismParameters {
     }
 }
 
+extension ToolOverride {
+    func scaled(by f: Double) -> ToolOverride {
+        var o = self
+        o.feedRate = feedRate.map { $0 * f }; o.plungeRate = plungeRate.map { $0 * f }
+        o.stepdown = stepdown.map { $0 * f }; o.stepover = stepover.map { $0 * f }
+        return o
+    }
+}
+
 extension AnyOperation {
     func scaled(by f: Double) -> AnyOperation {
+        let op = scaledParameters(by: f)
+        guard let o = setup.toolOverride else { return op }
+        var s = op.setup
+        s.toolOverride = o.scaled(by: f)
+        return op.with(setup: s)
+    }
+
+    private func scaledParameters(by f: Double) -> AnyOperation {
         switch self {
         case .profile(var o): o.params = o.params.scaled(by: f); return .profile(o)
         case .pocket(var o): o.params = o.params.scaled(by: f); return .pocket(o)

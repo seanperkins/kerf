@@ -107,3 +107,34 @@ public struct PrismParameters: Codable, Hashable, Sendable {
         self.maxDepth = maxDepth; self.passDepth = passDepth; self.direction = direction
     }
 }
+
+/// Per-toolpath changes to the primary tool's cutting data, in document units. nil fields keep
+/// the tool database value (toolpaths-2d addition).
+public struct ToolOverride: Codable, Hashable, Sendable {
+    public var spindleRPM: Double?
+    public var feedRate: Double?
+    public var plungeRate: Double?
+    public var stepdown: Double?
+    public var stepover: Double?
+
+    public init(spindleRPM: Double? = nil, feedRate: Double? = nil, plungeRate: Double? = nil,
+                stepdown: Double? = nil, stepover: Double? = nil) {
+        self.spindleRPM = spindleRPM; self.feedRate = feedRate; self.plungeRate = plungeRate
+        self.stepdown = stepdown; self.stepover = stepover
+    }
+
+    public var isEmpty: Bool {
+        spindleRPM == nil && feedRate == nil && plungeRate == nil && stepdown == nil && stepover == nil
+    }
+
+    /// `tool` (already in document units) with the set fields replaced.
+    public func applied(to tool: Tool) -> Tool {
+        var t = tool
+        if let v = spindleRPM, v > 0 { t.spindleRPM = v }
+        if let v = feedRate, v > 0 { t.feedRate = v }
+        if let v = plungeRate, v > 0 { t.plungeRate = v }
+        if let v = stepdown, v > 0 { t.stepdown = v }
+        if let v = stepover, v > 0 { t.stepover = v }
+        return t
+    }
+}

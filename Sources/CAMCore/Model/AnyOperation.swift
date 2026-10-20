@@ -38,6 +38,9 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID { setup.id }
 
     public func generate(in context: CAMContext) throws -> [Toolpath] {
-        try operation.generate(in: context)
+        guard let o = setup.toolOverride, !o.isEmpty else { return try operation.generate(in: context) }
+        var ctx = context
+        ctx.toolOverrides[setup.toolID] = o
+        return try operation.generate(in: ctx)
     }
 }
