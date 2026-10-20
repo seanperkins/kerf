@@ -9,9 +9,31 @@ import SwiftUI
 /// SCNView wrapper with built-in orbit (drag), zoom (scroll/pinch) and pan (option-drag).
 struct StockSceneView: NSViewRepresentable {
     let stockScene: StockScene
+    /// When set, a click on the stock reports its material-frame point (z = -depth).
+    var onPick: ((Vec3) -> Void)? = nil
+
+    final class Coordinator: NSObject {
+        var parent: StockSceneView
+        weak var view: SCNView?
+        init(_ parent: StockSceneView) { self.parent = parent }
+
+        @MainActor @objc func clicked(_ g: NSClickGestureRecognizer) {
+            guard let view, let onPick = parent.onPick else { return }
+            let loc = g.location(in: view)
+            let hits = view.hitTest(loc, options: [.searchMode: SCNHitTestSearchMode.all.rawValue,
+                                                   .ignoreHiddenNodes: true])
+            guard let hit = hits.first(where: { parent.stockScene.isStock($0.node) }) else { return }
+            onPick(parent.stockScene.materialPoint(fromWorld: hit.worldCoordinates))
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> SCNView {
         let v = SCNView()
+        context.coordinator.view = v
+        let click = NSClickGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.clicked(_:)))
+        v.addGestureRecognizer(click)
         v.scene = stockScene.scene
         v.pointOfView = stockScene.cameraNode
         v.allowsCameraControl = true
@@ -24,6 +46,7 @@ struct StockSceneView: NSViewRepresentable {
     }
 
     func updateNSView(_ v: SCNView, context: Context) {
+        context.coordinator.parent = self
         if v.scene !== stockScene.scene { v.scene = stockScene.scene }
         v.defaultCameraController.target = stockScene.center
         v.defaultCameraController.worldUp = SCNVector3(0, 1, 0)
@@ -50,8 +73,12 @@ struct SimulationPreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .topLeading) {
-                StockSceneView(stockScene: model.stockScene)
+                StockSceneView(stockScene: model.stockScene, onPick: pickHandler)
                 infoBadge.padding(8)
+                if model.isMeasuring {
+                    measureBadge.padding(8)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
             }
             Divider()
             controls.padding(.horizontal, 12).padding(.vertical, 8)
@@ -62,6 +89,12 @@ struct SimulationPreviewView: View {
         .onChange(of: rapidRate) { _, _ in configure() }
         .onChange(of: timeStore.settings) { _, _ in configure() }
         .onChange(of: appearanceStore.settings) { _, s in model.setAppearance(s.appearance) }
+    }
+
+    private var pickHandler: ((Vec3) -> Void)? {
+        guard model.isMeasuring else { return nil }
+        let m = model
+        return { p in m.pick(p) }
     }
 
     private func configure() {
@@ -84,6 +117,21 @@ struct SimulationPreviewView: View {
         .foregroundStyle(.white)
         .padding(6)
         .background(.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var measureBadge: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(model.measurement.lines(units: units, thickness: job.thickness), id: \.self) { Text($0) }
+            }
+            .font(.caption.monospacedDigit())
+            if !model.measurement.isEmpty {
+                Button("Clear") { model.clearMeasurement() }.controlSize(.small)
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(6)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private var controls: some View {
@@ -123,6 +171,9 @@ struct SimulationPreviewView: View {
             .labelsHidden()
             .frame(width: 100)
             Toggle("Tool", isOn: $model.showTool).toggleStyle(.checkbox)
+            Toggle(isOn: $model.isMeasuring) { Image(systemName: "ruler") }
+                .toggleStyle(.button)
+                .help("Measure: click the stock for a depth, click again for a distance")
             Button { showAppearance.toggle() } label: { Image(systemName: "paintpalette") }
                 .help("Material appearance")
                 .popover(isPresented: $showAppearance) { PreviewAppearancePopover(store: appearanceStore) }

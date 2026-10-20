@@ -33,6 +33,9 @@ actor SimulationEngine {
 
     func setAppearance(_ a: StockAppearance) { appearance = a }
 
+    /// `p` with its depth read from the current simulated stock.
+    func refine(_ p: Vec3) -> Vec3 { PreviewMeasurement.refined(p, heightfield: player.heightfield) }
+
     func frame(at time: TimeInterval) -> SimulationFrame {
         player.seek(to: time)
         let mesh = HeightfieldMesh(heightfield: player.heightfield, thickness: thickness,
@@ -92,6 +95,24 @@ final class SimulationPreviewModel: ObservableObject {
     private var lastFrame: SimulationFrame?
     private var configuredKey: Int?
     private(set) var appearance = StockAppearance.default
+    @Published var isMeasuring = false { didSet { if !isMeasuring { clearMeasurement() } } }
+    @Published private(set) var measurement = PreviewMeasurement()
+
+    /// A click on the stock while measuring (material frame, z = -depth).
+    func pick(_ p: Vec3) {
+        guard isMeasuring, let engine else { return }
+        Task { [weak self] in
+            let refined = await engine.refine(p)
+            guard let self, self.isMeasuring else { return }
+            self.measurement.add(refined)
+            self.stockScene.showMeasurement(self.measurement.points)
+        }
+    }
+
+    func clearMeasurement() {
+        measurement.clear()
+        stockScene.showMeasurement([])
+    }
 
     /// Recolours the stock without re-simulating.
     func setAppearance(_ a: StockAppearance) {
@@ -116,6 +137,7 @@ final class SimulationPreviewModel: ObservableObject {
         guard key != configuredKey else { return }
         configuredKey = key
         pause()
+        clearMeasurement()
         self.toolpaths = toolpaths
         shapes = toolpaths.map { ToolShape(tool: $0.tool) }
         let minCell = units == .inch ? 0.004 : 0.1

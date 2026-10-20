@@ -14,6 +14,7 @@ final class StockScene {
     private let content = SCNNode()
     private let stockNode = SCNNode()
     private let toolNode = SCNNode()
+    private let measureNode = SCNNode()
     private(set) var job = JobSetup()
     /// Specular strength of the stock (0...1), from the material appearance.
     var shininess = 0.15
@@ -24,6 +25,7 @@ final class StockScene {
         scene.rootNode.addChildNode(content)
         content.addChildNode(stockNode)
         content.addChildNode(toolNode)
+        content.addChildNode(measureNode)
 
         let camera = SCNCamera()
         camera.zNear = 0.01
@@ -89,6 +91,47 @@ final class StockScene {
     }
 
     private static func key(_ s: ToolShape) -> String { "\(s)" }
+
+    // MARK: Measuring
+
+    /// True for hits on the stock mesh (not the cutter or markers).
+    func isStock(_ node: SCNNode) -> Bool { node === stockNode }
+
+    /// Material-frame point (z = -depth) for a scene (world) position.
+    func materialPoint(fromWorld p: SCNVector3) -> Vec3 {
+        let l = content.convertPosition(p, from: nil)
+        return Vec3(Double(l.x), Double(l.y), Double(l.z))
+    }
+
+    /// Marker spheres at material-frame `points` and a line between the first two.
+    func showMeasurement(_ points: [Vec3]) {
+        measureNode.childNodes.forEach { $0.removeFromParentNode() }
+        guard !points.isEmpty else { return }
+        let size = CGFloat(max(job.width, job.height, 1e-3)) * 0.004
+        let mat = SCNMaterial()
+        mat.diffuse.contents = NSColor.systemYellow
+        mat.emission.contents = NSColor.systemYellow.withAlphaComponent(0.6)
+        mat.lightingModel = .constant
+        mat.readsFromDepthBuffer = false
+        for p in points {
+            let s = SCNSphere(radius: size)
+            s.materials = [mat]
+            let n = SCNNode(geometry: s)
+            n.position = SCNVector3(p.x, p.y, p.z)
+            n.renderingOrder = 10
+            measureNode.addChildNode(n)
+        }
+        if points.count == 2 {
+            let a = points[0], b = points[1]
+            let src = SCNGeometrySource(vertices: [SCNVector3(a.x, a.y, a.z), SCNVector3(b.x, b.y, b.z)])
+            let el = SCNGeometryElement(indices: [UInt32(0), UInt32(1)], primitiveType: .line)
+            let g = SCNGeometry(sources: [src], elements: [el])
+            g.materials = [mat]
+            let n = SCNNode(geometry: g)
+            n.renderingOrder = 10
+            measureNode.addChildNode(n)
+        }
+    }
 
     private static func cutterNode(_ shape: ToolShape, units job: JobSetup) -> SCNNode {
         let r = CGFloat(shape.radius)
