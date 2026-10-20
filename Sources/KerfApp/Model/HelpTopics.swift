@@ -195,7 +195,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .nodeEditing:
             return """
-            Press **N** (or Design ▸ Edit Nodes) to edit the points of a vector. Drag nodes or curve handles; Shift-click to select several. The inspector can make nodes smooth or corners, convert segments between lines and curves, insert nodes and break a path.
+            Press **N** (or Arrange ▸ Edit Nodes) to edit the points of a vector. Drag nodes or curve handles; Shift-click to select several. The inspector can make nodes smooth or corners, convert segments between lines and curves, insert nodes and break a path.
 
             The first node edit turns arcs into curves and the shape becomes a plain drawn vector (it loses its rectangle/circle settings).
 
@@ -211,7 +211,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .transforms:
             return """
-            The Design menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors, closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
+            The Arrange menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors, closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
 
             Drag the selection box handles to scale (Shift keeps proportions, Option scales about the centre). The round handle above the box rotates (Shift snaps to 15°).
 
@@ -394,7 +394,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             - **File**: ⇧⌘I import · ⌘P print
             - **Canvas tools**: V select · N nodes · R rectangle · C circle · E ellipse · L polyline · P pen · T text
             - **View**: ⌘0 zoom to material · ⌘2 zoom to selection · ⌘= / ⌘- zoom · ⌥⌘1 2D · ⌥⌘2 2D and 3D · ⌥⌘3 3D · ⌥⌘P toolpaths
-            - **Design**: ⇧⌘J Job Setup · ⌘D duplicate · ⌘G / ⇧⌘G group / ungroup · ⌥⌘[ / ⌥⌘] rotate 90° · ⇧⌘B top / bottom side (two-sided jobs) · ⌘' snap to grid · ⇧⌘' snap to objects
+            - **Design**: ⇧⌘J Job Setup · ⇧⌘B top / bottom side (two-sided jobs) · ⌘' snap to grid · ⇧⌘' snap to objects
+            - **Selection** (Edit and Arrange menus): ⌘D duplicate · ⌘G / ⇧⌘G group / ungroup · ⌥⌘[ / ⌥⌘] rotate 90°
             - **Canvas keyboard**: Tab / ⇧Tab select the next / previous shape (⌃Tab leaves the canvas) · arrow keys nudge (⇧ for ×10) · Delete removes · Esc clears
             - **Toolpaths**: ⌘R calculate all · ⇧⌘K check · ⇧⌘E export · ⌥⌘S save all · ⇧⌘T tool database
             - **Help**: ⌘? Kerf Help
