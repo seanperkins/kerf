@@ -16,6 +16,7 @@ struct VectorMenuCommands: Commands {
             Button("Trim Tool") { document?.activeTool = .trim }.disabled(document == nil)
             sheetButton("Trim to Boundary…", .trimBoundary)
             Divider()
+            sheetButton("Fillet / Chamfer Corners…", .filletChamfer)
             sheetButton("Dog-bone Fillets…", .dogbone)
             Divider()
             sheetButton("Validate Vectors…", .validator, needsSelection: false)

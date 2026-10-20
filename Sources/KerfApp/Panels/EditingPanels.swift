@@ -48,6 +48,10 @@ struct NodeInspector: View {
                     Button("Set Start") { document.setStartAtSelectedNode() }.disabled(single == nil)
                         .help("Make this node the start point of its closed vector (green marker)")
                 }
+                GridRow {
+                    Button("Fillet…") { document.sheet = .drawing(.filletChamfer) }
+                        .help("Round or bevel the selected corner nodes")
+                }
             }
             .disabled(nodes.isEmpty)
             Text("Drag nodes or handles (Option breaks a smooth node). Shift-click adds nodes; drag on empty space to box-select. Double-click a segment to insert a node. Delete removes nodes; arrows nudge.")

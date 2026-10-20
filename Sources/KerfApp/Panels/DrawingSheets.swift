@@ -14,6 +14,7 @@ struct DrawingSheetHost: View {
         case .validator: VectorValidatorSheet(document: document)
         case .mirror: MirrorSheet(document: document)
         case .trimBoundary: TrimBoundarySheet(document: document)
+        case .filletChamfer: FilletChamferSheet(document: document)
         }
     }
 }
@@ -45,6 +46,42 @@ struct DrawingDialog<Content: View>: View {
         }
         .padding(20)
         .frame(width: 380)
+    }
+}
+
+// MARK: Fillet / chamfer
+
+struct FilletChamferSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var chamfer = false
+    @State private var size: Double
+
+    init(document: KerfDocument) {
+        self.document = document
+        _size = State(initialValue: document.units == .inch ? 0.25 : 6)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let nodes = document.activeTool == .nodeEdit ? document.nodeSelection : []
+        DrawingDialog(title: "Fillet / Chamfer", action: chamfer ? "Chamfer" : "Fillet", disabled: size <= 0 || (ids.isEmpty && nodes.isEmpty),
+                      note: (nodes.isEmpty ? "Every corner between two straight segments of the selected vectors is changed."
+                             : "The \(nodes.count) selected node\(nodes.count == 1 ? "" : "s") are changed.")
+                          + " Corners whose edges are too short are skipped.",
+                      perform: {
+                          let kind: CornerOps.Kind = chamfer ? .chamfer(distance: size) : .fillet(radius: size)
+                          document.perform(chamfer ? "Chamfer" : "Fillet") {
+                              VectorCommands.treatCorners(kind, shapes: ids, nodes: nodes, in: &$0)
+                          }
+                          document.nodeSelection = []
+                      }) {
+            Picker("Corner", selection: $chamfer) {
+                Text("Fillet (round)").tag(false)
+                Text("Chamfer (bevel)").tag(true)
+            }
+            .pickerStyle(.segmented)
+            LengthField(chamfer ? "Distance" : "Radius", value: $size, units: document.units)
+        }
     }
 }
 

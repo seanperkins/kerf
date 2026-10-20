@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer
     var id: String { rawValue }
 }
 
@@ -96,6 +96,34 @@ enum VectorCommands {
         project.deleteShapes(editable.subtracting(kept))
         for s in fixed { project.document.replace(s) }
         return used.count
+    }
+
+    // MARK: Fillet / chamfer
+
+    /// Rounds or bevels corners: the selected nodes when `nodes` is not empty (node-edit form),
+    /// otherwise every line–line corner of the selected shapes. Returns the shapes changed.
+    @discardableResult
+    static func treatCorners(_ kind: CornerOps.Kind, shapes ids: [UUID], nodes: Set<NodeRef>,
+                             in project: inout KerfProject) -> Int {
+        var changed = 0
+        if !nodes.isEmpty {
+            for id in Set(nodes.map(\.shapeID)) {
+                guard let s = project.document.shape(id: id), project.isEditable(s) else { continue }
+                let e = ShapeNodes.editable(s)
+                var paths = e.paths
+                for (i, p) in paths.enumerated() {
+                    let corners = Set(nodes.filter { $0.shapeID == id && $0.path == i }.map(\.node))
+                    if !corners.isEmpty { paths[i] = CornerOps.apply(kind, to: p, corners: corners) }
+                }
+                if paths != e.paths { replacePaths(id, with: paths, operation: "corner", in: &project); changed += 1 }
+            }
+            return changed
+        }
+        for s in editableShapes(ids, in: project) {
+            let paths = s.paths.map { CornerOps.apply(kind, to: $0) }
+            if paths != s.paths { replacePaths(s.id, with: paths, operation: "corner", in: &project); changed += 1 }
+        }
+        return changed
     }
 
     // MARK: Trim

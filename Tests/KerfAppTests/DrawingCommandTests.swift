@@ -76,6 +76,15 @@ import Testing
         #expect(abs(left.bounds().min.x - 1) < 1e-6 && abs(left.bounds().max.x - 3) < 1e-6)
     }
 
+    @Test func filletSelectedNodeOrAllCorners() {
+        var p = AppTestSupport.project()
+        let a = p.document.shapes[0].id, b = p.document.shapes[1].id
+        VectorCommands.treatCorners(.chamfer(distance: 0.25), shapes: [], nodes: [NodeRef(shapeID: a, path: 0, node: 0)], in: &p)
+        #expect(p.document.shape(id: a)!.paths[0].segments.count == 5)
+        #expect(VectorCommands.treatCorners(.fillet(radius: 0.25), shapes: [b], nodes: [], in: &p) == 1)
+        #expect(p.document.shape(id: b)!.paths[0].segments.filter { if case .arc = $0 { return true }; return false }.count == 4)
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]
