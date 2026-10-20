@@ -130,7 +130,7 @@ Totals: 163 features. 60 done, 24 partial, 79 missing. P1: 48 done, 7 partial, 8
 | `vc-photo` | vcarve | PhotoVCarve (image to V-groove engraving) | missing | P3 | No bitmap support |
 | `3d-import-place` | cam-3d | 3D model import, size, position and Z offset | done | P1 | Panels/ModelPlacementSheet.swift, CAMCore/Ops3D/ModelPlacement.swift; Relief3DTests |
 | `3d-multiple-models` | cam-3d | Multiple models / composite model | partial | P2 | Document holds many PlacedModels but each Relief3D op machines one model |
-| `3d-roughing` | cam-3d | 3D roughing (Z-level, raster) with allowance | partial | P1 | ReliefRoughing.swift raster only; offset strategy and profile pass ignored (DECISIONS cam-3d) |
+| `3d-roughing` | cam-3d | 3D roughing (Z-level, raster) with allowance | done | P1 | Ops3D/ReliefRoughing.swift + ReliefLevelRegions.swift: offset or raster (+ profile pass) per Z level; ReliefRoughingTests |
 | `3d-finish-raster` | cam-3d | 3D finishing raster | done | P1 | Ops3D/ReliefFinishing.swift, DropCutter.swift; Relief3DTests |
 | `3d-finish-offset` | cam-3d | 3D finishing offset / spiral strategies | missing | P2 | Raster only |
 | `3d-boundary` | cam-3d | Limit 3D machining to boundary vectors | done | P2 | Relief3DParameters.boundaryShapeIDs, OperationForms "Use Selection as Boundary" |

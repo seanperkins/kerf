@@ -52,19 +52,13 @@ public struct Relief3DOperation: ToolpathOperation {
         var result: [Toolpath] = []
 
         if params.roughing.isEnabled {
-            let angle: Double
-            switch params.roughing.strategy {
-            case .raster(let a, _): angle = a
-            case .offset: angle = 0
-            }
             let moves = ReliefRoughing.moves(map: map, region: region, tool: roughTool,
                                              allowance: params.roughing.allowance,
-                                             passDepth: params.roughing.passDepth, angle: angle,
-                                             coords: coords, clearance: clearance)
+                                             passDepth: params.roughing.passDepth, strategy: params.roughing.strategy,
+                                             coords: coords, clearance: clearance, tolerance: context.tolerance)
             if !moves.isEmpty {
                 var meta = metadata
                 meta["pass"] = "roughing"
-                if case .offset = params.roughing.strategy { meta["note"] = "Offset roughing is cut as raster" }
                 result.append(Toolpath(name: "\(setup.name) (Roughing)", operationID: setup.id, kind: .relief3D,
                                        tool: roughTool, moves: moves, metadata: meta))
             }

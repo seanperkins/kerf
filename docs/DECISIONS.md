@@ -295,3 +295,15 @@
 ## parity
 
 - **parity** — `docs/PARITY.md` lists VCarve Pro 12.5 features, taken only from public Vectric pages, with Kerf's status for each. A feature is "done" only when it works end to end, UI included. Rotary, drill banks and tiling are P3 because the Avid PRO6096 has no rotary axis, has a single spindle and has a 60x96 in bed.
+
+## cam-3d parity round 1
+
+- **cam-3d** — **3D roughing offset strategy and profile pass (3d-roughing).** Each Z level's tool-centre
+  region is now contoured (marching squares) from a grid of flat-cutter drop depths computed for
+  the whole heightmap at once (`ReliefHeightmap.eroded`, row-wise sliding minima). The cutter is
+  grown by allowance + 1.5 cells so the contour is safe between grid points; saddle cells are
+  always split; contours are simplified within tolerance/2 and shrunk by the same amount, then
+  clipped to the boundary. The region is cleared with the 2D `PocketPlanner` (radius 0):
+  `.offset` = contour-parallel inside-out rings, `.raster` = zig-zag lines plus the region contour
+  when `profilePass` is on. Links stay inside the level's region (`RegionLinker`), other moves
+  retract. This replaces the earlier per-raster-line sampling, so raster roughing toolpaths changed.
