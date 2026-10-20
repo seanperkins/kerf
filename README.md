@@ -9,7 +9,8 @@ machine.
   Jobs can be two-sided or span several material sheets, start from saved templates, and numeric
   fields accept expressions and document variables (`=thickness/2`, `1/4in`). Drawing tools include shapes,
   polylines, Bézier pen, text in any installed font, node editing, transforms, align/distribute,
-  booleans, offset, layers, snapping and undo/redo.
+  booleans, offset, layers, snapping and undo/redo. **Gadgets** (Gadgets menu) are JavaScript
+  add-ons that draw vectors and set up toolpaths; see Gadgets > Gadget API Reference.
 - **Toolpaths:** Profile (tabs, ramps, leads), Pocket (offset/raster, clearance tool), Drilling (peck),
   V-Carve, Inlay, Fluting, Texture and 3D relief (roughing + finishing).
 - **Layout:** true-shape nesting with overflow onto extra sheets, clamp and fixture keep-out

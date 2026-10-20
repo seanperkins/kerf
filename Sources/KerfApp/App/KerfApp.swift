@@ -34,6 +34,7 @@ struct KerfApp: App {
         .commands {
             KerfCommands()
             VectorMenuCommands()
+            GadgetCommands()
         }
 
         Window("Tool Database", id: ToolDatabaseView.windowID) {
