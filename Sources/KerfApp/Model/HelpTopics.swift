@@ -339,6 +339,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             The **2D** view draws calculated toolpaths over the design: solid lines are cuts, dashed red lines are rapid moves. Toolpaths ▸ Show Toolpaths (⌥⌘T) hides them.
 
             The **3D** view simulates cutting the material. Press Play, scrub the timeline or change the speed. **2D | 3D** shows both side by side.
+
+            **Toolpaths ▸ Preview G-code File…** simulates a saved program (.tap, .nc, …) from another job on this job's material, in its own window. It assumes the program uses this job's XY origin and Z zero. Tools named in a Kerf header are recognised; otherwise set each tool's type and diameter in the window. Nothing is added to the job. To reuse toolpath settings across jobs, use a toolpath template instead.
             """
         case .checkToolpaths:
             return """
