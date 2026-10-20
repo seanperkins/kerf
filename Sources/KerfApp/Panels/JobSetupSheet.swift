@@ -1,19 +1,23 @@
 import CADCore
+import PostCore
 import SwiftUI
 
 /// Job Setup: material size, units, XY origin, Z zero, safe Z and home position.
 struct JobSetupSheet: View {
     @ObservedObject var document: KerfDocument
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var machines = MachineCatalog.shared
+    @ObservedObject private var posts = PostProfileCatalog.shared
     @State private var form: JobSetupForm
 
     init(document: KerfDocument) {
         self.document = document
-        _form = State(initialValue: JobSetupForm(document: document.document))
+        _form = State(initialValue: JobSetupForm(project: document.project, machines: MachineCatalog.shared.machines))
     }
 
     var body: some View {
         let u = form.units
+        let machine = machines.machine(id: form.machineID)
         VStack(alignment: .leading, spacing: 0) {
             HStack { Text("Job Setup").font(.title2.bold()); Spacer(); HelpButton(topic: .jobSetup) }.padding([.horizontal, .top], 20)
             Form {
@@ -24,6 +28,19 @@ struct JobSetupSheet: View {
                         ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                     .pickerStyle(.segmented)
+                }
+                Section("Machine") {
+                    Picker("Machine", selection: Binding(get: { form.machineID ?? "" }, set: { id in
+                        if let m = machines.machine(id: id) { form.selectMachine(m, profiles: posts.profiles) }
+                    })) {
+                        if form.machineID == nil { Text("Custom (post limits)").tag("") }
+                        ForEach(machines.machines) { Text($0.name).tag($0.id) }
+                    }
+                    .help("Machine: bed size, travel limits and the post processors that drive it")
+                    PostProfilePicker(title: "Post processor",
+                                      selection: Binding(get: { form.postID ?? "" }, set: { form.postID = $0 }),
+                                      machine: machine)
+                        .help("Post processor (G-code dialect) for the selected machine")
                 }
                 Section("Material") {
                     LengthField("Width (X)", value: $form.job.width, units: u)
@@ -71,7 +88,7 @@ struct JobSetupSheet: View {
                 Section("Drawing") {
                     LengthField("Grid spacing", value: $form.gridSpacing, units: u)
                 }
-                let fit = MachineResolver.fitProblems(job: form.job, units: form.units, machine: document.machine)
+                let fit = MachineResolver.fitProblems(job: form.job, units: form.units, machine: machine)
                 if !fit.isEmpty {
                     Section("Machine") {
                         ForEach(fit, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }

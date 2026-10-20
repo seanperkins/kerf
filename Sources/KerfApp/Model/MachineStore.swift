@@ -63,10 +63,16 @@ enum MachineResolver {
     static func select(machine: MachineDefinition, in project: inout KerfProject, profiles: [PostProfile]) {
         project.machineID = machine.id
         let current = project.postProfileID ?? PostProfileStore.defaultID(for: project.document.units)
-        if !machine.supports(postID: current),
-           let post = machine.defaultPostID(for: project.document.units, available: profiles) {
-            project.postProfileID = post
-        }
+        let next = post(afterSelecting: machine, current: current, units: project.document.units, profiles: profiles)
+        if next != current { project.postProfileID = next }
+    }
+
+    /// The post to use after choosing `machine`: `current` if the machine lists it, else the
+    /// machine's default post for `units` (or `current` if it has none).
+    static func post(afterSelecting machine: MachineDefinition, current: String, units: LengthUnit,
+                     profiles: [PostProfile]) -> String {
+        if machine.supports(postID: current) { return current }
+        return machine.defaultPostID(for: units, available: profiles) ?? current
     }
 
     /// Posts for a picker: the machine's own posts first, then the rest.

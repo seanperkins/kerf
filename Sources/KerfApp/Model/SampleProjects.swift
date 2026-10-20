@@ -41,7 +41,7 @@ enum SampleProjects {
     /// The quick-start steps shown on the Welcome window.
     static let quickStart: [(title: String, detail: String)] = [
         ("Set up the job", "Material size, thickness, XY origin and Z zero (Design ▸ Job Setup, ⇧⌘J)."),
-        ("Pick the machine", "Choose the machine and post processor in the toolbar."),
+        ("Pick the machine", "Choose the machine and post processor in Job Setup too."),
         ("Draw or import vectors", "Use the tool palette, or File ▸ Import… for SVG, DXF, EPS and STL."),
         ("Add toolpaths", "Select vectors, then Toolpaths ▸ New Toolpath, and set the tool and depths."),
         ("Calculate and preview", "Calculate All (⌘R), then check the 2D overlay and the 3D preview."),

@@ -152,7 +152,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Kerf turns vector drawings into G-code for a CNC router. A typical job:
 
             1. **Job Setup** (⇧⌘J): material width, height and thickness, where X0 Y0 is, and whether Z zero is the material top or the spoilboard.
-            2. **Pick the machine** in the toolbar. It sets the bed size and the post processors you can use.
+            2. **Pick the machine and post processor**, also in Job Setup. The machine sets the bed size and the posts you can use.
             3. **Draw or import** vectors (File ▸ Import… for SVG, DXF, EPS or STL).
             4. **Select vectors and add a toolpath** (Toolpaths ▸ New Toolpath). Choose the tool and depths in the inspector.
             5. **Calculate** (⌘R) and look at the 2D overlay and the 3D preview.
@@ -166,6 +166,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Job Setup describes the stock you clamp to the bed.
 
             - **Units**: changing them converts the design and every toolpath length.
+            - **Machine and post processor**: the router and the G-code dialect it understands (see Machines).
             - **Material**: width (X), height (Y) and thickness (Z). The design area is the material rectangle, with (0, 0) at its lower-left corner.
             - **Z zero**: *Material surface* means you touch off on top of the stock and cuts have negative Z. *Machine bed* means you touch off on the spoilboard and the stock top is Z = thickness.
             - **XY origin**: which corner (or the centre) of the material is machine X0 Y0. Moving the origin never moves the design; it only changes the G-code numbers.
@@ -177,7 +178,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             return """
             A **machine** is the physical router: bed size, Z travel, how far a cut may go into the spoilboard, rapid speed and spindle range. A **post processor** is the G-code dialect the controller understands.
 
-            Pick both in the toolbar. Choosing a machine switches to one of its posts if the current one does not drive it. Validation and time estimates use the machine's limits.
+            Pick both in Job Setup (⇧⌘J). The status bar shows them, and clicking it opens Job Setup. Choosing a machine switches to one of its posts if the current one does not drive it. Validation and time estimates use the machine's limits.
 
             Add your own machines in Preferences ▸ Machines: duplicate a built-in machine and edit it. Custom machines are JSON files in Application Support/Kerf/machines; custom posts go in Application Support/Kerf/posts (Toolpaths ▸ Open Post Profiles Folder).
             """

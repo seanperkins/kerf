@@ -28,7 +28,7 @@ struct ContentView: View {
                     .inspectorColumnWidth(min: 260, ideal: 300, max: 420)
             }
         }
-        .toolbar { toolbarContent }
+        .toolbar(id: "kerf.document") { toolbarContent }
         .navigationTitle(document.document.name)
         .focusedSceneObject(document)
         .onAppear {
@@ -110,12 +110,14 @@ struct ContentView: View {
         }
     }
 
-    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        ToolbarItemGroup(placement: .navigation) {
+    /// Customizable (View ▸ Customize Toolbar…). Calculate and Export are primary actions so they
+    /// stay visible when the window is narrow; the machine and post live in Job Setup.
+    @ToolbarContentBuilder private var toolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "jobSetup", placement: .navigation) {
             Button { document.sheet = .jobSetup } label: { Label("Job Setup", systemImage: "square.dashed") }
-                .help("Job Setup (material, origin, Z zero)")
+                .help("Job Setup (material, machine, post processor, origin, Z zero)")
         }
-        ToolbarItemGroup(placement: .principal) {
+        ToolbarItem(id: "viewMode", placement: .principal) {
             Picker("View", selection: $document.centerMode) {
                 Text("2D").tag(CenterMode.design2D)
                 Text("2D | 3D").tag(CenterMode.split)
@@ -124,20 +126,29 @@ struct ContentView: View {
             .pickerStyle(.segmented)
             .help("Design canvas, both side by side, or 3D preview")
         }
-        ToolbarItemGroup {
+        ToolbarItem(id: "zoomToFit") {
             Button { document.requestCanvas(.fit) } label: { Label("Zoom to Fit", systemImage: "arrow.up.left.and.arrow.down.right") }
                 .help("Zoom to material (F)")
+        }
+        ToolbarItem(id: "snap") {
             Toggle(isOn: $document.snapToGrid) { Label("Snap", systemImage: "grid") }
                 .help("Snap to grid")
-            MachinePostPickers(document: document)
+        }
+        ToolbarItem(id: "tools") {
             Button { openWindow(id: ToolDatabaseView.windowID) } label: { Label("Tools", systemImage: "wrench.and.screwdriver") }
                 .help("Tool Database")
+        }
+        ToolbarItem(id: "calculate", placement: .primaryAction) {
             Button { document.calculateAll() } label: { Label("Calculate", systemImage: "play.fill") }
                 .help("Calculate all toolpaths")
                 .disabled(document.project.operations.isEmpty)
+        }
+        ToolbarItem(id: "export", placement: .primaryAction) {
             Button { document.sheet = .exportGCode(.all) } label: { Label("Export G-code", systemImage: "square.and.arrow.up") }
                 .help("Export G-code")
                 .disabled(document.project.operations.isEmpty)
+        }
+        ToolbarItem(id: "inspector") {
             Button { showInspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.right") }
                 .help("Show or hide the inspector")
         }
@@ -154,7 +165,12 @@ struct StatusBar: View {
             Text("Origin: " + document.document.job.xyOrigin.displayName)
             if document.document.isMultiSheet { Text("Sheet: " + document.document.currentSheetName).bold() }
             if document.isTwoSided { Text("Side: " + document.activeSide.displayName).bold() }
-            Text([document.machine?.name, document.postProfile.name].compactMap { $0 }.joined(separator: " · "))
+            Button { document.sheet = .jobSetup } label: {
+                Text([document.machine?.name, document.postProfile.name].compactMap { $0 }.joined(separator: " · "))
+            }
+            .buttonStyle(.plain)
+            .help("Machine and post processor. Click to change them in Job Setup.")
+            .accessibilityHint("Opens Job Setup")
             Spacer()
             if !document.selection.isEmpty { Text("\(document.selection.count) selected") }
             if let p = document.cursorPosition {
