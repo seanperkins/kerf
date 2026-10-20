@@ -5,7 +5,7 @@ import Foundation
 /// Sheets opened by the drawing tools (one `DocumentSheet.drawing` case keeps the shared enum
 /// change small).
 enum DrawingSheet: String, Identifiable {
-    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset, copyAlong, vectorTexture
+    case dogbone, arrayLinear, validator, mirror, trimBoundary, filletChamfer, arrayCircular, curveFit, textFit, textOnCurve, traceBitmap, distort, offsetOpen, inlayOffset, copyAlong, vectorTexture, boundary
     var id: String { rawValue }
 }
 
@@ -315,6 +315,21 @@ enum VectorCommands {
             newIDs.append(n.id)
         }
         return newIDs
+    }
+
+    // MARK: Boundary
+
+    /// Adds a closed boundary vector around the selection. Returns its ID.
+    static func boundary(_ ids: [UUID], kind: BoundaryVector.Kind, margin: Double, gap: Double,
+                         in project: inout KerfProject) -> UUID? {
+        let shapes = project.document.shapes(ids: project.document.expandToGroups(ids))
+        guard let first = shapes.first else { return nil }
+        let paths = BoundaryVector.make(kind, around: shapes.flatMap(\.paths), margin: margin, gap: gap,
+                                        tolerance: tolerance(project.document.units))
+        guard !paths.isEmpty else { return nil }
+        let s = Shape(name: "Boundary", layerID: first.layerID, paths: paths, origin: .derived(operation: "boundary"))
+        project.document.add(s)
+        return s.id
     }
 
     // MARK: Vector texture

@@ -33,6 +33,7 @@ struct VectorMenuCommands: Commands {
             sheetButton("Circular Array…", .arrayCircular)
             sheetButton("Copy Along Vector…", .copyAlong)
             sheetButton("Vector Texture…", .vectorTexture)
+            sheetButton("Boundary Around Selection…", .boundary)
             Divider()
             Button("Trim Tool") { document?.activeTool = .trim }.disabled(document == nil)
             sheetButton("Trim to Boundary…", .trimBoundary)

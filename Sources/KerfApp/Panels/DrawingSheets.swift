@@ -25,6 +25,7 @@ struct DrawingSheetHost: View {
         case .inlayOffset: StraightInlaySheet(document: document)
         case .copyAlong: CopyAlongSheet(document: document)
         case .vectorTexture: VectorTextureSheet(document: document)
+        case .boundary: BoundarySheet(document: document)
         }
     }
 }

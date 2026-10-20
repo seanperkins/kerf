@@ -127,6 +127,41 @@ struct StraightInlaySheet: View {
     }
 }
 
+struct BoundarySheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var kind = BoundaryVector.Kind.shrinkWrap
+    @State private var margin: Double
+    @State private var gap: Double
+
+    init(document: KerfDocument) {
+        self.document = document
+        _margin = State(initialValue: document.units == .inch ? 0.25 : 6)
+        _gap = State(initialValue: document.units == .inch ? 0.25 : 6)
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        DrawingDialog(title: "Boundary Around Selection", action: "Create Boundary", disabled: ids.isEmpty,
+                      note: "Adds a closed vector around the selected objects — e.g. the outline of a sign or a cut-out border.",
+                      perform: {
+                          let (k, m, g) = (kind, margin, gap)
+                          var id: UUID?
+                          document.perform("Create Boundary") { id = VectorCommands.boundary(ids, kind: k, margin: m, gap: g, in: &$0) }
+                          if let id { document.setSelection([id]) }
+                      }) {
+            Picker("Shape", selection: $kind) {
+                Text("Bounding rectangle").tag(BoundaryVector.Kind.rectangle)
+                Text("Convex hull").tag(BoundaryVector.Kind.convexHull)
+                Text("Shrink-wrap").tag(BoundaryVector.Kind.shrinkWrap)
+            }
+            LengthField("Margin", value: $margin, units: document.units)
+            if kind == .shrinkWrap {
+                LengthField("Bridge gaps up to", value: $gap, units: document.units, help: "Half the width of the gaps the wrap closes over")
+            }
+        }
+    }
+}
+
 struct MirrorSheet: View {
     @ObservedObject var document: KerfDocument
     @State private var horizontally = true

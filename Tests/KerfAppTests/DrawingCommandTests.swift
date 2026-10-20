@@ -194,6 +194,16 @@ import Testing
         #expect(VectorCommands.vectorTexture([], options: o, in: &p) == nil)
     }
 
+    @Test func boundaryAroundSelection() {
+        var p = AppTestSupport.project()
+        let ids = p.document.shapes.map(\.id)
+        let id = VectorCommands.boundary(ids, kind: .rectangle, margin: 0.5, gap: 0, in: &p)!
+        let b = p.document.shape(id: id)!.bounds()
+        #expect(b.min == Vec2(0.5, 0.5) && b.max == Vec2(7.5, 2.5))
+        let wrap = VectorCommands.boundary(ids, kind: .shrinkWrap, margin: 0, gap: 1.5, in: &p)!
+        #expect(p.document.shape(id: wrap)!.paths.count == 1)  // the 2-wide gap is bridged
+    }
+
     @Test func rectangularArrayCopiesWithGap() {
         var p = AppTestSupport.project()
         let first = p.document.shapes[0]
