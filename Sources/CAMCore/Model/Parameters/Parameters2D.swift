@@ -113,13 +113,19 @@ public struct PocketParameters: Codable, Hashable, Sendable {
     /// Optional larger tool used first to clear the bulk; primary tool then cleans up.
     public var clearanceToolID: UUID?
     public var ramp: RampSettings
+    /// Several clearance tools, cut in list order (largest first); each one only machines what the
+    /// previous tools could not reach. When non-nil it replaces `clearanceToolID` (toolpaths-2d).
+    public var clearanceToolIDs: [UUID]?
 
     public init(depth: DepthSettings = DepthSettings(cutDepth: 0.25), strategy: PocketStrategy = .offset,
                 direction: CutDirection = .climb, allowance: Double = 0, clearanceToolID: UUID? = nil,
-                ramp: RampSettings = RampSettings()) {
+                ramp: RampSettings = RampSettings(), clearanceToolIDs: [UUID]? = nil) {
         self.depth = depth; self.strategy = strategy; self.direction = direction; self.allowance = allowance
-        self.clearanceToolID = clearanceToolID; self.ramp = ramp
+        self.clearanceToolID = clearanceToolID; self.ramp = ramp; self.clearanceToolIDs = clearanceToolIDs
     }
+
+    /// The clearance tools in cutting order (the list, or the single legacy tool).
+    public var clearanceTools: [UUID] { clearanceToolIDs ?? clearanceToolID.map { [$0] } ?? [] }
 }
 
 public struct DrillParameters: Codable, Hashable, Sendable {

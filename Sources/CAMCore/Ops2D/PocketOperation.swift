@@ -23,22 +23,19 @@ public struct PocketOperation: ToolpathOperation {
         guard !region.isEmpty else { throw CAMError.invalidGeometry("Selected vectors enclose no area") }
         let start = context.coords.materialXY(fromMachine: context.document.job.home)
 
-        var clearanceTool: Tool?
-        if let cid = params.clearanceToolID, cid != setup.toolID {
-            let t = try context.tool(cid)
-            if t.diameter > tool.diameter + tol { clearanceTool = t }
-        }
+        let (clearanceTools, skipped) = try usableClearanceTools(finish: tool, context: context)
 
         var toolpaths: [Toolpath] = []
         var restAfter: Double?
-        if let big = clearanceTool {
+        for (i, big) in clearanceTools.enumerated() {
             let planner = try makePlanner(region: region, tool: big, tolerance: tol)
-            let groups = clearing(planner, from: start)
-            if !groups.isEmpty {
-                toolpaths.append(try emit(groups, planner: planner, tool: big, context: context,
-                                          name: "\(setup.name) (clearance)"))
-                restAfter = big.radius
-            }
+            // The first tool clears everything; each later one only what the previous could not reach.
+            let groups = restAfter.map { planner.restClearing(clearanceRadius: $0, from: start, fullWalls: false) }
+                ?? clearing(planner, from: start)
+            guard !groups.isEmpty else { continue }
+            let label = clearanceTools.count == 1 ? "clearance" : "clearance \(i + 1)"
+            toolpaths.append(try emit(groups, planner: planner, tool: big, context: context, name: "\(setup.name) (\(label))"))
+            restAfter = big.radius
         }
         let planner = try makePlanner(region: region, tool: tool, tolerance: tol)
         let groups = restAfter.map { planner.restClearing(clearanceRadius: $0, from: start) } ?? clearing(planner, from: start)
@@ -46,10 +43,31 @@ public struct PocketOperation: ToolpathOperation {
             throw CAMError.invalidGeometry("The tool does not fit inside the selected vectors")
         }
         var finish = try emit(groups, planner: planner, tool: tool, context: context, name: setup.name)
+        var warnings: [String] = []
         let missed = planner.unreachableComponents
-        if missed > 0 { finish.metadata["warning"] = "\(missed) region(s) too small for the tool" }
+        if missed > 0 { warnings.append("\(missed) region(s) too small for the tool") }
+        if skipped > 0 { warnings.append("\(skipped) clearance tool(s) ignored (each must be smaller than the one before and larger than the finish tool)") }
+        if !warnings.isEmpty { finish.metadata["warning"] = warnings.joined(separator: "; ") }
         toolpaths.append(finish)
         return toolpaths
+    }
+
+    /// Clearance tools that will cut, in order: each must be smaller than the previous one and
+    /// larger than the finish tool. Returns them plus the number skipped.
+    func usableClearanceTools(finish: Tool, context: CAMContext) throws -> ([Tool], Int) {
+        let tol = context.tolerance
+        var used: [Tool] = []
+        var skipped = 0
+        for id in params.clearanceTools where id != setup.toolID {
+            let t = try context.tool(id)
+            let limit = used.last?.diameter ?? .infinity
+            if t.diameter > finish.diameter + tol && t.diameter < limit - tol {
+                used.append(t)
+            } else {
+                skipped += 1
+            }
+        }
+        return (used, skipped)
     }
 
     private func makePlanner(region: [[Vec2]], tool: Tool, tolerance: Double) throws -> PocketPlanner {

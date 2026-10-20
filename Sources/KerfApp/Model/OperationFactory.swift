@@ -24,7 +24,7 @@ extension AnyOperation {
     var referencedToolIDs: [UUID] {
         var ids = [setup.toolID]
         switch self {
-        case .pocket(let o): if let c = o.params.clearanceToolID { ids.append(c) }
+        case .pocket(let o): ids += o.params.clearanceTools
         case .vcarve(let o): if let c = o.params.flatClearanceToolID { ids.append(c) }
         case .inlay(let o): if let c = o.params.flatClearanceToolID { ids.append(c) }
         case .relief3D(let o): if let c = o.params.roughing.toolID { ids.append(c) }

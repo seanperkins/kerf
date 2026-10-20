@@ -176,8 +176,9 @@ public struct PocketPlanner: Sendable {
     }
 
     /// Rest machining after a larger clearance tool of radius `clearanceRadius`: the walls
-    /// (level 0) plus ring fragments that reach material the big tool could not.
-    public func restClearing(clearanceRadius: Double, from start: Vec2) -> [[Chain2D]] {
+    /// (level 0) plus ring fragments that reach material the big tool could not. With
+    /// `fullWalls` off (an intermediate clearance tool) the walls are only cut near rest material.
+    public func restClearing(clearanceRadius: Double, from start: Vec2, fullWalls: Bool = true) -> [[Chain2D]] {
         let levels = offsetLevels()
         guard let outers0 = levels.first?.filter({ Polygon2D.signedArea($0) > 0 }), !outers0.isEmpty else { return [] }
         let stock = inset(allowance)
@@ -189,10 +190,12 @@ public struct PocketPlanner: Sendable {
         let eps = max(tolerance * 4, 1e-5)
         rest = GeomKernel.offset(GeomKernel.offset(rest, by: -eps, arcTolerance: tolerance), by: eps, arcTolerance: tolerance)
         var items: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
-        for loop in levels[0] { items.append((chain(loop), 1_000_000, loop[0])) }
+        if fullWalls {
+            for loop in levels[0] { items.append((chain(loop), 1_000_000, loop[0])) }
+        }
         if !rest.isEmpty {
             let zone = GeomKernel.offset(rest, by: toolRadius + stepover * 0.5, join: .round, arcTolerance: tolerance)
-            for (k, lv) in levels.enumerated() where k > 0 {
+            for (k, lv) in levels.enumerated() where k > 0 || !fullWalls {
                 let open = lv.map { chain($0).walk }
                 let frags = GeomKernel.boolean(.intersection, subject: open, clip: zone, fillRule: .nonZero, subjectsOpen: true)
                 for f in frags where f.count > 1 && Polygon2D.length(f, closed: false) > tolerance * 4 {

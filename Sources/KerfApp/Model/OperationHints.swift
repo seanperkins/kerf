@@ -13,6 +13,22 @@ enum OperationHints {
         return "\(depths.count) pecks per hole: \(list) \(units.abbreviation)."
     }
 
+    /// One message per clearance tool (nil = it will be used): each must be larger than the finish
+    /// tool and smaller than the clearance tool before it.
+    static func pocketClearanceProblems(finish: Tool?, clearance: [Tool?]) -> [String?] {
+        func inch(_ t: Tool) -> Double { t.diameter * t.units.factor(to: .inch) }
+        var previous: Tool?
+        return clearance.map { c in
+            guard let c else { return "This tool is not in the tool database." }
+            if let p = previous, inch(c) >= inch(p) - 1e-9 {
+                return "Must be smaller than the clearance tool above it; it will be ignored."
+            }
+            if let problem = pocketClearanceProblem(finish: finish, clearance: c) { return problem }
+            previous = c
+            return nil
+        }
+    }
+
     /// Why a pocket's clearance tool would be ignored (nil when it will be used or none is set).
     static func pocketClearanceProblem(finish: Tool?, clearance: Tool?) -> String? {
         guard let c = clearance else { return nil }

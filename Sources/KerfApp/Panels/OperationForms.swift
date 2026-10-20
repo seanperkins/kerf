@@ -170,17 +170,7 @@ struct PocketForm: View {
         }
         Divider()
         InspectorSection(title: "Tools") {
-            OptionalToolPicker(title: "Clearance tool", toolID: $params.clearanceToolID, library: library,
-                               kinds: [.endMill, .ballNose])
-            if let problem = OperationHints.pocketClearanceProblem(finish: finishToolID.flatMap { library.tool(id: $0) },
-                                                                   clearance: params.clearanceToolID.flatMap { library.tool(id: $0) }) {
-                Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text(params.clearanceToolID == nil
-                     ? "The finish tool clears the whole pocket."
-                     : "The larger clearance tool removes the bulk first; the finish tool then cleans up the walls and corners it could not reach.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
+            ClearanceToolsEditor(params: $params, library: library, finishToolID: finishToolID)
         }
         Divider()
         InspectorSection(title: "Ramps") { RampForm(ramp: $params.ramp, units: units) }
@@ -384,5 +374,61 @@ struct ProfileLastPassForm: View {
                 .font(.caption).foregroundStyle(side == .on ? .orange : .secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// Ordered list of pocket clearance tools (largest first). Writes `clearanceToolIDs` and keeps
+/// the legacy `clearanceToolID` equal to the first entry.
+struct ClearanceToolsEditor: View {
+    @Binding var params: PocketParameters
+    var library: ToolLibrary
+    var finishToolID: UUID?
+
+    private var ids: [UUID] { params.clearanceTools }
+
+    private func set(_ new: [UUID]) {
+        params.clearanceToolIDs = new
+        params.clearanceToolID = new.first
+    }
+
+    private func row(_ i: Int) -> Binding<UUID> {
+        Binding(get: { ids[i] }, set: { v in var n = ids; n[i] = v; set(n) })
+    }
+
+    private var candidates: [Tool] {
+        library.tools.filter { $0.kind == .endMill || $0.kind == .ballNose }
+    }
+
+    var body: some View {
+        let problems = OperationHints.pocketClearanceProblems(finish: finishToolID.flatMap { library.tool(id: $0) },
+                                                              clearance: ids.map { library.tool(id: $0) })
+        ForEach(Array(ids.enumerated()), id: \.offset) { i, _ in
+            HStack {
+                Picker("Clearance \(i + 1)", selection: row(i)) {
+                    if library.tool(id: ids[i]) == nil { Text("Missing tool").tag(ids[i]) }
+                    ForEach(candidates) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
+                }
+                Button { var n = ids; n.remove(at: i); set(n) } label: { Image(systemName: "minus.circle") }
+                    .buttonStyle(.borderless).help("Remove this clearance tool")
+            }
+            if let problem = problems[i] {
+                Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        Button { if let t = nextSuggestion { set(ids + [t.id]) } } label: { Label("Add Clearance Tool", systemImage: "plus") }
+            .disabled(nextSuggestion == nil)
+        Text(ids.isEmpty
+             ? "The finish tool clears the whole pocket."
+             : "Clearance tools cut largest first; each one only machines what the tools before it could not reach. The finish tool then cleans up the walls and corners.")
+            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Largest unused tool that is smaller than the last clearance tool and larger than the finish tool.
+    private var nextSuggestion: Tool? {
+        func inch(_ t: Tool) -> Double { t.diameter * t.units.factor(to: .inch) }
+        let finish = finishToolID.flatMap { library.tool(id: $0) }.map(inch) ?? 0
+        let limit = ids.last.flatMap { library.tool(id: $0) }.map(inch) ?? .infinity
+        let fits = candidates.filter { !ids.contains($0.id) && $0.id != finishToolID && inch($0) > finish + 1e-9 && inch($0) < limit - 1e-9 }
+        return fits.max { inch($0) < inch($1) } ?? candidates.first { !ids.contains($0.id) && $0.id != finishToolID }
     }
 }
