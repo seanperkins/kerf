@@ -154,34 +154,3 @@ struct ContentView: View {
         }
     }
 }
-
-struct StatusBar: View {
-    @ObservedObject var document: KerfDocument
-
-    var body: some View {
-        HStack(spacing: 14) {
-            Text(GCodeExporter.materialDescription(document.document))
-            Text("Z0: " + document.outputProject.document.job.zZero.displayName)
-            Text("Origin: " + document.document.job.xyOrigin.displayName)
-            if document.document.isMultiSheet { Text("Sheet: " + document.document.currentSheetName).bold() }
-            if document.isTwoSided { Text("Side: " + document.activeSide.displayName).bold() }
-            Button { document.sheet = .jobSetup } label: {
-                Text([document.machine?.name, document.postProfile.name].compactMap { $0 }.joined(separator: " · "))
-            }
-            .buttonStyle(.plain)
-            .help("Machine and post processor. Click to change them in Job Setup.")
-            .accessibilityHint("Opens Job Setup")
-            Spacer()
-            if !document.selection.isEmpty { Text("\(document.selection.count) selected") }
-            if let p = document.cursorPosition {
-                Text("X \(RulerTicks.label((p.x * 1000).rounded() / 1000))  Y \(RulerTicks.label((p.y * 1000).rounded() / 1000))")
-                    .monospacedDigit()
-            }
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(.bar)
-    }
-}

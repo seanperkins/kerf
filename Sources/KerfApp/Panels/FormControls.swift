@@ -110,6 +110,8 @@ extension XYOrigin {
 
 extension ZZeroMode {
     var displayName: String { self == .materialTop ? "Material surface" : "Machine bed (spoilboard)" }
+    /// For tight spaces such as the status bar.
+    var shortName: String { self == .materialTop ? "Material" : "Bed" }
 }
 
 /// Section header used in inspectors.
