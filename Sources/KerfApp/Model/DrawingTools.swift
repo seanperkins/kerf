@@ -79,6 +79,9 @@ struct DrawingOptions: Equatable {
     var text = "Kerf"
     var fontName = "Helvetica"
     var fontSize = 1.0
+    var textAlignment = CADCore.TextAlignment.left
+    var lineSpacing = 1.0
+    var letterSpacing = 0.0
     /// Shift-drag style constraint (square/circle) applied by the canvas.
     var constrain = false
     /// Numeric creation (inspector): centre and size in document units. Circles, polygons and

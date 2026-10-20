@@ -18,6 +18,24 @@ import Testing
         #expect(VectorCommands.dogbone(ids, toolDiameter: 0.25, style: .dogbone, side: .part, maxAngle: 135, in: &q) == 0)
     }
 
+    @Test func textStaysEditableUntilNodeEdit() throws {
+        var p = AppTestSupport.project()
+        let spec = TextSpec(string: "HI", fontName: "Helvetica", size: 1, alignment: .center, anchor: Vec2(10, 5))
+        let s = try TextOutliner().shape(for: spec, layerID: p.document.defaultLayerID)
+        p.document.add(s)
+        p.transformShapes([s.id], by: .translation(Vec2(1, 0)))
+        var edited = p.document.shape(id: s.id)!.text!
+        edited.string = "HELLO"
+        try VectorCommands.updateText(s.id, spec: edited, in: &p)
+        let after = p.document.shape(id: s.id)!
+        #expect(after.text?.string == "HELLO")
+        #expect(after.name == "HELLO")
+        // Centre-justified: still centred on the moved anchor.
+        #expect(abs(after.bounds().center.x - 11) < 0.1)
+        p.moveNodes([NodeRef(shapeID: s.id, path: 0, node: 0)], by: Vec2(0.01, 0))
+        #expect(p.document.shape(id: s.id)!.text == nil)
+    }
+
     @Test func repairDeletesDuplicatesAndPrunesOperations() {
         var p = AppTestSupport.project()
         let orig = p.document.shapes[0]

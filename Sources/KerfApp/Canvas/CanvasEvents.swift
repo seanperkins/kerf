@@ -302,10 +302,11 @@ extension CanvasNSView {
         let o = doc.drawingOptions
         guard !o.text.isEmpty else { return }
         do {
-            let paths = try TextOutliner().outlines(for: o.text, fontName: o.fontName, size: o.fontSize, origin: p)
-            guard !paths.isEmpty else { return }
-            doc.addShape(Shape(name: o.text, layerID: doc.currentLayerID, paths: paths,
-                               origin: .text(o.text, fontName: o.fontName, size: o.fontSize)), actionName: "Add Text")
+            let spec = TextSpec(string: o.text, fontName: o.fontName, size: o.fontSize, alignment: o.textAlignment,
+                                lineSpacing: o.lineSpacing, letterSpacing: o.letterSpacing, anchor: p)
+            let s = try TextOutliner().shape(for: spec, layerID: doc.currentLayerID)
+            guard !s.paths.isEmpty else { return }
+            doc.addShape(s, actionName: "Add Text")
         } catch {
             doc.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
         }

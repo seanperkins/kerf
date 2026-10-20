@@ -22,7 +22,34 @@ enum VectorCommands {
         guard s.paths != paths else { return }
         s.paths = paths
         s.origin = .derived(operation: operation)
+        s.text = nil
         project.document.shapes[i] = s
+    }
+
+    // MARK: Text
+
+    /// Re-outlines a live text shape from `spec` (same transform → same anchor).
+    static func updateText(_ id: UUID, spec: TextSpec, in project: inout KerfProject) throws {
+        guard let i = project.document.shapes.firstIndex(where: { $0.id == id }),
+              project.isEditable(project.document.shapes[i]) else { return }
+        let rebuilt = try TextOutliner().shape(for: spec, layerID: project.document.shapes[i].layerID)
+        var s = project.document.shapes[i]
+        s.paths = rebuilt.paths
+        s.origin = rebuilt.origin
+        s.text = spec
+        if s.name.isEmpty || s.name == project.document.shapes[i].text?.string.replacingOccurrences(of: "\n", with: " ") {
+            s.name = rebuilt.name
+        }
+        project.document.shapes[i] = s
+    }
+
+    /// Turns live text into plain vectors (no further text editing).
+    static func convertTextToCurves(_ ids: Set<UUID>, in project: inout KerfProject) {
+        for i in project.document.shapes.indices where ids.contains(project.document.shapes[i].id) {
+            guard project.document.shapes[i].text != nil else { continue }
+            project.document.shapes[i].text = nil
+            project.document.shapes[i].origin = .derived(operation: "text to curves")
+        }
     }
 
     /// Editable (unlocked, on an editable layer) shapes among `ids`, in order.

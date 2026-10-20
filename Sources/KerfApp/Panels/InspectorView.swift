@@ -63,12 +63,16 @@ struct DrawingOptionsView: View {
                 Text("Click for a corner node, click-drag for a smooth node. Click the first node to close; double-click or Return to finish; Delete removes the last node.")
                     .font(.callout).foregroundStyle(.secondary)
             case .text:
-                TextField("Text", text: $document.drawingOptions.text)
+                TextField("Text", text: $document.drawingOptions.text, axis: .vertical).lineLimit(1...6)
                 Picker("Font", selection: $document.drawingOptions.fontName) {
                     ForEach(fonts, id: \.self) { Text($0).tag($0) }
                 }
                 LengthField("Height", value: $document.drawingOptions.fontSize, units: units)
-                Text("Click on the canvas to place the text baseline.").font(.callout).foregroundStyle(.secondary)
+                TextLayoutFields(alignment: $document.drawingOptions.textAlignment,
+                                 lineSpacing: $document.drawingOptions.lineSpacing,
+                                 letterSpacing: $document.drawingOptions.letterSpacing, units: units)
+                Text("Click on the canvas to place the text. The click is the start, centre or end of the first baseline, following the justification. Text stays editable until converted to curves.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .select, .nodeEdit:
                 EmptyView()
             }
@@ -119,6 +123,10 @@ struct ShapeInspector: View {
                                                set: { l in document.perform("Move to Layer") { $0.moveShapes(ids, toLayer: l) } })) {
                 ForEach(document.document.layers) { Text($0.name).tag($0.id) }
             }
+        }
+        if shapes.count == 1, let s = shapes.first, s.text != nil {
+            Divider()
+            TextEditSection(document: document, shape: s).id(s.id)
         }
         Divider()
         InspectorSection(title: "Position & Size") {
