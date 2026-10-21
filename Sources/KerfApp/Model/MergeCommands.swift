@@ -11,6 +11,8 @@ extension KerfProject {
         let a = operations[i], b = operations[i + 1]
         if a.kind == .relief3D || b.kind == .relief3D { return "3D toolpaths cannot be merged." }
         if a.setup.toolID != b.setup.toolID { return "The next toolpath uses a different tool." }
+        // A merged operation is one toolpath; a stop in the middle of it has nowhere to go.
+        if a.setup.pauseAfter != nil { return "This toolpath pauses the machine after it. Turn the pause off to merge it with the next one." }
         return nil
     }
 
@@ -24,14 +26,22 @@ extension KerfProject {
         guard var merged = MergeOperation.merging([a, b], name: name) else { return nil }
         if case .merge = a { merged.setup.id = a.id }
         merged.setup.isEnabled = a.setup.isEnabled || b.setup.isEnabled
+        // The pause after the last part is the pause after the whole.
+        merged.setup.pauseAfter = b.setup.pauseAfter
         operations.replaceSubrange(i...(i + 1), with: [.merge(merged)])
         return merged.setup.id
     }
 
-    /// Puts a merged operation's toolpaths back in its place.
+    /// Puts a merged operation's toolpaths back in its place; its pause goes back on the last one.
     mutating func splitMerged(_ id: UUID) {
         guard let i = operationIndex(id), case .merge(let m) = operations[i] else { return }
-        operations.replaceSubrange(i...i, with: m.params.children)
+        var children = m.params.children
+        if let last = children.indices.last {
+            var s = children[last].editableSetup
+            s.pauseAfter = m.setup.pauseAfter
+            children[last].editableSetup = s
+        }
+        operations.replaceSubrange(i...i, with: children)
     }
 }
 

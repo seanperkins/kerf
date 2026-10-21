@@ -34,9 +34,18 @@ enum GCodeExporter {
         case .operation(let id):
             return results[id]?.toolpaths ?? []
         case .all:
-            let tps = operations.filter(\.setup.isEnabled).flatMap { results[$0.id]?.toolpaths ?? [] }
+            let tps = operations.filter(\.setup.isEnabled).flatMap { withPause($0.setup.pauseAfter, results[$0.id]?.toolpaths ?? []) }
             return groupByTool ? ToolpathOrdering.groupedByTool(tps) : tps
         }
+    }
+
+    /// `toolpaths` (one operation's) with the operation's operator pause on the last one that cuts.
+    /// Single-operation exports skip this: that file is a program on its own.
+    static func withPause(_ pause: PauseStep?, _ toolpaths: [Toolpath]) -> [Toolpath] {
+        guard let pause, let last = toolpaths.lastIndex(where: { !$0.moves.isEmpty }) else { return toolpaths }
+        var out = toolpaths
+        out[last].pauseAfter = pause
+        return out
     }
 
     /// Errors for toolpaths that come over a keep-out zone below its top (+ clearance margin).

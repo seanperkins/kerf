@@ -61,6 +61,10 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
      In the inspector, try Offset roughing, the Offset/Spiral finishing patterns, "Rest after" a
      larger ball nose, "Combine with" a second model, and "Two-Sided" (one toolpath per side).
      On a Fluting or Profile toolpath, "Project onto 3D" drops it onto the model's surface.
+   - **Pause.** On a toolpath that is not the last, turn on Pause → "Pause the machine after this
+     toolpath" and type a message. The sidebar row gets a pause mark. Export all toolpaths: between
+     that toolpath and the next the program lifts to safe Z, then `M5`, `(MSG, your message)`, `M0`,
+     and the next toolpath starts with `M3`. File → Export Job Sheet… lists the pause under the step.
    Press Calculate All, then check the 2D overlay and the 3D preview for each one.
 8. **Save All Toolpaths…** (⌥⌘S): try "one file per toolpath" in a scratch folder.
 9. **Tool Database** (⇧⌘T): add or edit a tool. Tools are stored in

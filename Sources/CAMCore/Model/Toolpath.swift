@@ -20,6 +20,9 @@ public struct Toolpath: Codable, Hashable, Identifiable, Sendable {
     public var moves: [Move]
     /// Free-form diagnostics (e.g. "warning": "flat depth limited").
     public var metadata: [String: String]
+    /// The operator stop that follows this toolpath in the program. Set when toolpaths are collected
+    /// for export, from the operation's `pauseAfter`; generators leave it nil.
+    public var pauseAfter: PauseStep?
 
     public init(id: UUID = UUID(), name: String, operationID: UUID? = nil, kind: OperationKind,
                 tool: Tool, spindleRPM: Double? = nil, moves: [Move] = [], metadata: [String: String] = [:]) {
