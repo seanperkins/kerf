@@ -108,6 +108,41 @@ import Testing
         #expect(older.operations[0].setup.pauseAfter == nil)
     }
 
+    @Test func mergingNeverSwallowsAPause() throws {
+        // Two same-tool profiles, then a third; a pause after the first.
+        let (doc, _, ids) = makeDoc()
+        doc.addOperation(.profile)
+        var p = doc.project
+        p.operations[0].editableSetup.pauseAfter = PauseStep(message: "Add the clamp")
+        #expect(p.mergeWithNextProblem(ids[0]) == "This toolpath pauses the machine after it. Turn the pause off to merge it with the next one.")
+        #expect(p.mergeWithNext(ids[0]) == nil)
+        #expect(p.operations.count == 3)
+
+        // A pause after the second one rides on the merged operation, not on a hidden child.
+        p.operations[0].editableSetup.pauseAfter = nil
+        p.operations[1].editableSetup.pauseAfter = PauseStep(message: "Flip")
+        let mergedID = p.mergeWithNext(ids[0])
+        let merged = try #require(mergedID)
+        #expect(p.operations[0].setup.pauseAfter == PauseStep(message: "Flip"))
+        guard case .merge(let m) = p.operations[0] else { throw Failure.notMerged }
+        #expect(m.params.children.allSatisfy { $0.setup.pauseAfter == nil })
+        // So the program stops between the merged toolpath and the third one.
+        let d2 = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
+        d2.calculateNow(d2.project.operations.map(\.id))
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: d2.project.operations, results: d2.results, groupByTool: false)
+        #expect(tps.map { $0.pauseAfter != nil } == [true, false])
+        let text = try #require(GCodeExporter.export(project: p, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T").text)
+        #expect(text.contains("(MSG, Flip)\nM0\n"))
+
+        // A paused merged operation cannot be merged further either (re-merging flattens its children).
+        #expect(p.mergeWithNextProblem(merged) != nil)
+        // Splitting gives the pause back to the last part.
+        p.splitMerged(merged)
+        #expect(p.operations.map { $0.setup.pauseAfter?.message } == [nil, "Flip", nil])
+    }
+
+    enum Failure: Error { case notMerged }
+
     @Test func anEmptyMessageNamesTheToolpath() {
         #expect(PauseStep().text(afterToolpath: "Pocket 1") == "Paused after Pocket 1")
         #expect(PauseStep(message: "  Flip  ").text(afterToolpath: "Pocket 1") == "Flip")

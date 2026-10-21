@@ -65,7 +65,8 @@ public struct MergeOperation: ToolpathOperation {
         guard let first = children.first else { return nil }
         var shapeIDs: [UUID] = []
         for c in children { for id in c.setup.shapeIDs where !shapeIDs.contains(id) { shapeIDs.append(id) } }
-        children = children.map { c in var s = c.setup; s.isEnabled = true; return c.with(setup: s) }
+        // Children are always cut, and only the merged operation as a whole can pause the machine.
+        children = children.map { c in var s = c.setup; s.isEnabled = true; s.pauseAfter = nil; return c.with(setup: s) }
         return MergeOperation(setup: OperationSetup(name: name, toolID: first.setup.toolID, shapeIDs: shapeIDs),
                               params: MergeParameters(children: children))
     }
