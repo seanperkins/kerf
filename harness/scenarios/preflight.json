@@ -1,0 +1,39 @@
+{
+  "name": "the Export sheet's pre-flight warning for a through cut with tabs off",
+  "window": [
+    1280,
+    900
+  ],
+  "steps": [
+    {
+      "op": "size",
+      "size": [
+        1280,
+        900
+      ]
+    },
+    {
+      "op": "project",
+      "name": "harness/projects/sign-loose.kerf"
+    },
+    {
+      "op": "tab",
+      "value": "toolpaths"
+    },
+    {
+      "op": "calculate"
+    },
+    {
+      "op": "sheet",
+      "value": "exportGCode"
+    },
+    {
+      "op": "wait",
+      "seconds": 2
+    },
+    {
+      "op": "captureSheet",
+      "name": "export-loose-part"
+    }
+  ]
+}

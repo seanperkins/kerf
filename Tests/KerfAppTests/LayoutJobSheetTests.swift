@@ -36,7 +36,9 @@ import Testing
         #expect(js.tools.allSatisfy { !$0.usedBy.isEmpty })
         #expect(js.zZeroInstruction.contains("TOP"))
         #expect(js.xyOriginInstruction.contains("lower-left"))
-        #expect(js.warnings.isEmpty)
+        // The default profile cuts through with tabs off, which is the one pre-flight warning due.
+        #expect(js.warnings.count == 1)
+        #expect(js.warnings.first?.contains("through the full 0.75 in with tabs off") == true)
         #expect(js.sheets.count == 1)
         #expect(js.sheets[0].shapes.count == 2)
     }

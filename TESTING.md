@@ -61,6 +61,9 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
      In the inspector, try Offset roughing, the Offset/Spiral finishing patterns, "Rest after" a
      larger ball nose, "Combine with" a second model, and "Two-Sided" (one toolpath per side).
      On a Fluting or Profile toolpath, "Project onto 3D" drops it onto the model's surface.
+   - **Pre-flight.** On the Profile, turn tabs off and set the cut depth to the material thickness:
+     Export G-code… and Check Toolpaths… show a warning that the part comes loose, and the Save
+     button still works (it is a warning, not an error). Turn tabs back on and the warning goes.
    - **Pause.** On a toolpath that is not the last, turn on Pause → "Pause the machine after this
      toolpath" and type a message. The sidebar row gets a pause mark. Export all toolpaths: between
      that toolpath and the next the program lifts to safe Z, then `M5`, `(MSG, your message)`, `M0`,

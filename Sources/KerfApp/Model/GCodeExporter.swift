@@ -149,6 +149,7 @@ enum GCodeExporter {
         var issues = validator.validate(toolpaths: toolpaths)
         issues += keepOutIssues(checked, document: doc)
         issues += LayoutChecks.toolpaths(toolpaths, job: doc.job, units: doc.units)
+        issues += PreflightChecks.issues(project: project, toolpaths: toolpaths, units: doc.units)
         issues += LayoutChecks.keepOut(checked, zones: Fixtures.zones(in: doc), job: doc.job, units: doc.units).map { i in
             guard i.message.contains(homeMoveName) else { return i }
             var fixed = i
