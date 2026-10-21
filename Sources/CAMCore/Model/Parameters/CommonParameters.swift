@@ -44,6 +44,10 @@ public struct DepthSettings: Codable, Hashable, Sendable {
     /// Keep every pass exactly the pass depth apart (the remainder goes in the last roughing pass)
     /// instead of dividing the depth evenly (toolpaths-2d addition; nil = even).
     public var exactStep: Bool?
+    /// The cut depth was set from the material thickness (a through cut): when Job Setup changes
+    /// the thickness, the cut depth moves by the same amount, so it stays the same distance past
+    /// the bottom. nil = a fixed depth. Kept outside the generators: `cutDepth` is always absolute.
+    public var followsThickness: Bool?
 
     public init(startDepth: Double = 0, cutDepth: Double = 0.25, passDepth: Double? = nil, finalPassDepth: Double = 0) {
         self.startDepth = startDepth; self.cutDepth = cutDepth; self.passDepth = passDepth

@@ -63,6 +63,8 @@ struct JobSheet: Equatable {
     var notes: String = ""
     /// Operator pauses in the program (steps with `pauseAfter`).
     var pauses: Int = 0
+    /// The lowest cut of the whole job, as the Export sheet words it ("Z -0.77 in (0.02 in below the material bottom)"); empty with no toolpaths.
+    var deepestCut: String = ""
 
     /// One entry per nesting sheet (shapes moved onto the material frame), or nil when the
     /// document has a single sheet.
@@ -166,6 +168,10 @@ struct JobSheet: Equatable {
         let defaultSheet = Sheet(title: "Sheet 1", shapes: visible, partNames: defaultParts.map(\.name),
                                  partCentres: defaultParts.map(\.centre))
         let total = ToolpathStats.estimatedSeconds(toolpaths, rapidRate: rapidRate, toolChangeSeconds: 90)
+        let deepest = toolpaths.compactMap(\.minZ).min().map { z -> String in
+            let depth = coords.depth(ofMachineZ: z)
+            return DeepestCut(machineZ: z, depthBelowTop: depth, belowBottom: depth - job.thickness).text(units: u)
+        } ?? ""
         let df = DateFormatter()
         df.locale = Locale(identifier: "en_US_POSIX")
         df.dateFormat = "yyyy-MM-dd HH:mm"
@@ -185,7 +191,8 @@ struct JobSheet: Equatable {
             materialSize: Vec2(job.width, job.height),
             layerColors: Dictionary(uniqueKeysWithValues: doc.layers.map { ($0.id, $0.colorHex) }),
             notes: doc.jobNotes,
-            pauses: steps.filter { $0.pauseAfter != nil }.count)
+            pauses: steps.filter { $0.pauseAfter != nil }.count,
+            deepestCut: deepest)
     }
 }
 
@@ -220,6 +227,7 @@ enum JobSheetHTML {
         <tr><td>XY origin</td><td>\(e(js.xyOriginInstruction))</td></tr>
         <tr><td>Safe Z</td><td>\(e(js.safeZ))</td></tr>
         <tr><td>Home</td><td>\(e(js.home))</td></tr>
+        \(js.deepestCut.isEmpty ? "" : "<tr><td>Deepest cut</td><td>\(e(js.deepestCut))</td></tr>")
         </table>
 
         """

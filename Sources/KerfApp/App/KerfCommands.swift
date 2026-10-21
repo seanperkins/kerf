@@ -218,7 +218,10 @@ struct KerfCommands: Commands {
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
                 .keyboardShortcut("p", modifiers: [.command, .option])
             Divider()
-            Button("Tool Database…") { openWindow(id: ToolDatabaseView.windowID) }
+            Button("Tool Database…") {
+                ToolLibraryModel.shared.jobMaterial = document?.document.job.material
+                openWindow(id: ToolDatabaseView.windowID)
+            }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             Button("Reload Post Profiles") { PostProfileCatalog.shared.reload() }
             Button("Open Post Profiles Folder") { openPostFolder() }

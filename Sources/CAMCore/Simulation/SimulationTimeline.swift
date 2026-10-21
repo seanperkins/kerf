@@ -19,7 +19,8 @@ public struct SimulationTimeline: Sendable {
 
     /// - Parameters:
     ///   - rapidRate: rapid speed in document units per minute.
-    ///   - toolChangeSeconds: allowance added whenever the tool differs from the previous toolpath.
+    ///   - toolChangeSeconds: allowance added whenever the machine stops between toolpaths: the tool
+    ///     differs from the previous toolpath's, or that toolpath ends in an operator pause.
     ///   - motion: acceleration model and calibration factor (default: length / feed).
     public init(toolpaths: [Toolpath], rapidRate: Double, toolChangeSeconds: TimeInterval = 0,
                 arcTolerance: Double = 0.001, motion: MachineMotion = .instant) {
@@ -31,15 +32,13 @@ public struct SimulationTimeline: Sendable {
         var pendingPause: TimeInterval = 0
         var stopPending = true
         var pos: Vec3?
-        var lastTool: Tool?
         let rapid = max(rapidRate, 1e-9)
         let scale = motion.effectiveScale
         for (ti, tp) in toolpaths.enumerated() {
-            if let last = lastTool, last.id != tp.tool.id || last.number != tp.tool.number {
+            if ti > 0, ToolpathStats.stopsBefore(tp, after: toolpaths[ti - 1]) {
                 pendingPause += toolChangeSeconds
                 stopPending = true
             }
-            lastTool = tp.tool
             // Between toolpaths the tool travels from where the last one ended.
             var moveStart = pos
             for (k, move) in tp.moves.enumerated() {

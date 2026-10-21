@@ -8,6 +8,9 @@ final class ToolLibraryModel: ObservableObject {
     /// Bumped on every change so documents can mark toolpaths stale.
     @Published private(set) var revision = 0
     @Published var lastError: String?
+    /// The material of the job whose window opened the Tool Database last, so the feeds calculator
+    /// can start from its preset (the database window has no document of its own).
+    @Published var jobMaterial: String?
     let store: ToolLibraryStore
 
     static let shared = ToolLibraryModel(store: ToolLibraryStore())

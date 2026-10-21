@@ -48,6 +48,7 @@ public struct PDFImporter: VectorImporter {
             warnings.append("\(state.textObjects) text object(s) were skipped; convert text to outlines first.")
         }
         if state.skippedImages > 0 { warnings.append("\(state.skippedImages) embedded image(s) were skipped.") }
+        warnings += ImportGaps.warnings(shapes: shapes, layers: [layer], units: targetUnits)
         let images = state.images.map {
             EmbeddedImage(rect: $0.rect, png: $0.png)
         }

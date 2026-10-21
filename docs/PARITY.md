@@ -72,9 +72,9 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `draw-smart-part-select` | drawing | Smart part selection (select every vector inside a clicked boundary) | missing | P3 | *r3* SelectionQueries has open, duplicate, similar and invert only |
 | `draw-text-spellcheck` | drawing | Spell checker in the text tool | missing | P3 | *r3* Text strings are entered in plain fields with no spelling check |
 | `draw-layer-extras` | drawing | Duplicate layer with contents, hide empty layers, drag-and-drop layer order | partial | P3 | *r3* Layers reorder only through Move Layer Up/Down in the context menu (SidebarView); no duplicate layer or empty-layer filter |
-| `io-svg-import` | io | SVG import | done | P1 | CADCore/IO/SVGImporter.swift; IOSVGTests |
+| `io-svg-import` | io | SVG import | done | P1 | CADCore/IO/SVGImporter.swift (reports open vectors whose ends nearly meet, ImportGaps); IOSVGTests, IOImportGapsTests |
 | `io-dxf-import` | io | DXF import | done | P1 | CADCore/IO/DXFImporter.swift (joins touching ends; Arrange > Join Open Vectors… takes a tolerance and previews how far ends move (DesignCommands.joinPreview); reports open vectors whose ends nearly meet, via PathOps.nearlyMeetingEnds); IODXFTests, GeometryNearMissTests; samples/bracket-plate.dxf |
-| `io-eps-import` | io | EPS import | done | P2 | CADCore/IO/EPSImporter.swift; IOEPSTests |
+| `io-eps-import` | io | EPS import | done | P2 | CADCore/IO/EPSImporter.swift (gap report like SVG); IOEPSTests, IOImportGapsTests |
 | `io-ai-pdf-import` | io | AI and PDF import (vectors, embedded images) | done | P2 | AI/PDF vector import |
 | `io-svg-text` | io | SVG text and image elements on import | done | P3 | SVG <text> imported as outlines |
 | `io-bitmap-import` | io | Bitmap import (JPG/PNG/BMP/TIF/GIF/WebP) | done | P2 | Document.images (PlacedImage), drawn under the vectors |

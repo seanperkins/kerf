@@ -25,9 +25,19 @@ struct JobSummary: Equatable {
         var toolpathNames: [String]
     }
 
+    /// An operator pause between two toolpaths.
+    struct PauseRow: Equatable {
+        var after: String
+        var text: String
+    }
+
     var rows: [Row]
     /// Tool loads (each is a manual tool change at the machine) in program order.
     var sequence: [ToolLoad]
+    /// Operator pauses in program order (the last toolpath's pause is never written).
+    var pauses: [PauseRow] = []
+    /// Stops at the machine: tool changes plus pauses, a pause that ends in a tool change counted once.
+    var stops: Int = 0
     /// Cutting, rapids and dwell of the enabled toolpaths, summed one by one. No tool-change
     /// allowance, not even for a change inside one operation: those are all in `toolChangeAllowance`.
     var machiningSeconds: TimeInterval
@@ -40,9 +50,9 @@ struct JobSummary: Equatable {
 
     /// Changes after the first tool is loaded.
     var toolChanges: Int { max(0, sequence.count - 1) }
-    /// What the tool changes add: the same allowance the 3D preview counts, so the sidebar and the
+    /// What the stops add: the same allowance the 3D preview counts, so the sidebar and the
     /// preview agree instead of showing two different times for one job.
-    var toolChangeAllowance: TimeInterval { Double(toolChanges) * toolChangeSeconds }
+    var toolChangeAllowance: TimeInterval { Double(stops) * toolChangeSeconds }
     var totalSeconds: TimeInterval { machiningSeconds + toolChangeAllowance }
 
     static func label(_ tool: Tool) -> String { "T\(tool.number) · \(tool.name)" }
@@ -60,12 +70,19 @@ struct JobSummary: Equatable {
         }
         let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: groupByTool)
         // A row's own time includes the tool changes inside its operation (a pocket's clearance
-        // tool, a V-carve's flat-area tool); the job total counts every change once, below.
+        // tool, a V-carve's flat-area tool); the job total counts every stop once, below.
         let total = operations.filter(\.setup.isEnabled).compactMap { op -> TimeInterval? in
             guard let r = results[op.id], r.error == nil else { return nil }
             return r.machiningSeconds
         }.reduce(0, +)
-        return JobSummary(rows: rows, sequence: sequence(of: tps), machiningSeconds: total, toolChangeSeconds: toolChangeSeconds)
+        var pauses: [PauseRow] = []
+        var stops = 0
+        for (i, tp) in tps.enumerated() where i > 0 {
+            if ToolpathStats.stopsBefore(tp, after: tps[i - 1]) { stops += 1 }
+            if let p = tps[i - 1].pauseAfter { pauses.append(PauseRow(after: tps[i - 1].name, text: p.text(afterToolpath: tps[i - 1].name))) }
+        }
+        return JobSummary(rows: rows, sequence: sequence(of: tps), pauses: pauses, stops: stops,
+                          machiningSeconds: total, toolChangeSeconds: toolChangeSeconds)
     }
 
     /// Consecutive toolpaths sharing a tool form one load.

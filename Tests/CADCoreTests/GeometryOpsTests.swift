@@ -96,6 +96,22 @@ import Testing
         #expect(approx(r.smallestGap, 0.2) && approx(r.largestGap, 0.2))
     }
 
+    @Test func ignoresAShortSquiggleWhoseEndsHappenToBeClose() {
+        // Three points 1 apart: the ends are 2.8 apart on a path 2.8 long, so it is not a failed outline.
+        let squiggle = Path(points: [Vec2(0, 0), Vec2(1, 1), Vec2(2, 2)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([squiggle], beyond: 0.01, upTo: 5) == nil)
+        // The same gap between two different pieces is still a gap.
+        let a = Path(points: [Vec2(0, 0), Vec2(1, 1)], closed: false)
+        let b = Path(points: [Vec2(2, 2), Vec2(3, 3)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([a, b], beyond: 0.01, upTo: 5)?.vectorCount == 2)
+        // A long path with a gap just under a tenth of its length is a slip; just over is not.
+        let long = Path(points: [Vec2(0, 0), Vec2(10, 0), Vec2(10, 10), Vec2(0, 10), Vec2(0, 2.9)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([long], beyond: 0.01, upTo: 5) != nil)
+        // (Length 36, gap 4: over a tenth.)
+        let wide = Path(points: [Vec2(0, 0), Vec2(10, 0), Vec2(10, 10), Vec2(0, 10), Vec2(0, 4)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([wide], beyond: 0.01, upTo: 5) == nil)
+    }
+
     @Test func countsBothPiecesAcrossAGap() throws {
         let a = Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false)
         let b = Path(points: [Vec2(5.3, 0), Vec2(10, 0)], closed: false)

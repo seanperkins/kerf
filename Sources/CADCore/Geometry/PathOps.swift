@@ -114,6 +114,9 @@ public enum PathOps {
     /// another end: the signature of a gap in a drawing that `joinOpenPaths(tolerance:)` leaves
     /// open. A path's own two ends count, so an outline that stops short of closing is found.
     /// A grid lookup keeps this linear in the number of ends. Nil when there is no such pair.
+    /// The largest gap between a path's own ends that still counts as a slip, as a share of its length.
+    public static let ownEndGapShare = 0.1
+
     public static func nearlyMeetingEnds(_ paths: [Path], beyond tolerance: Double, upTo limit: Double) -> EndGapReport? {
         guard limit > 0, limit.isFinite, limit > tolerance else { return nil }
         var ends: [(point: Vec2, path: Int)] = []
@@ -135,6 +138,14 @@ public enum PathOps {
         var grid: [Cell: [Int]] = [:]
         for (i, e) in ends.enumerated() { grid[cell(e.point), default: []].append(i) }
 
+        // A path's own two ends count only when the gap is small next to the path itself: a short
+        // open squiggle whose ends happen to be close is not an outline that failed to close.
+        var lengths: [Int: Double] = [:]
+        func isSlip(_ gap: Double, ofPath p: Int) -> Bool {
+            if lengths[p] == nil { lengths[p] = paths[p].length() }
+            return gap < lengths[p]! * Self.ownEndGapShare
+        }
+
         var involved = Set<Int>()
         var smallest = Double.infinity, largest = 0.0
         for (i, e) in ends.enumerated() {
@@ -144,7 +155,9 @@ public enum PathOps {
                 for dy in -1...1 {
                     for j in grid[Cell(x: c.x + dx, y: c.y + dy)] ?? [] where j != i {
                         let d = e.point.distance(to: ends[j].point)
-                        if d > tolerance && d <= limit { nearest = min(nearest, d) }
+                        guard d > tolerance && d <= limit else { continue }
+                        if ends[j].path == e.path && !isSlip(d, ofPath: e.path) { continue }
+                        nearest = min(nearest, d)
                     }
                 }
             }

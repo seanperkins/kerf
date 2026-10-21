@@ -58,7 +58,13 @@ struct JobSetupForm: Equatable {
 
     func apply(to project: KerfProject) -> KerfProject {
         var p = project.converted(to: units)
+        // Job Setup edits the current sheet's stock; the other sheets keep theirs, and so do
+        // the operations that cut them.
+        let oldThickness = p.document.job.thickness
+        let sheet = p.document.currentSheetID
+        let onThisSheet = Set(p.operations.filter { p.sheetID(of: $0) == sheet }.map(\.id))
         p.document.job = job
+        p.operations = DepthFollow.adjusted(p.operations, thicknessFrom: oldThickness, to: job.thickness) { onThisSheet.contains($0.id) }
         p.document.gridSpacing = gridSpacing
         p.document.name = name
         if isMultiSheet, !sheetName.isEmpty { p.document.activeSheetName = sheetName }

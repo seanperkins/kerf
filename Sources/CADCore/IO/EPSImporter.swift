@@ -36,6 +36,7 @@ public struct EPSImporter: VectorImporter {
         if !interp.unknown.isEmpty {
             warnings.append("Ignored PostScript operators: \(interp.unknown.sorted().prefix(10).joined(separator: ", ")).")
         }
+        warnings += ImportGaps.warnings(shapes: shapes, layers: [layer], units: targetUnits)
         return ImportResult(layers: shapes.isEmpty ? [] : [layer], shapes: shapes, warnings: warnings)
     }
 

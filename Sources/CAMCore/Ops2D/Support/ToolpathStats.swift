@@ -55,16 +55,21 @@ public struct ToolpathStats: Hashable, Sendable {
         return (cutMinutes + rapid) * 60 + dwellSeconds
     }
 
-    /// Estimate for a whole job: every toolpath plus `toolChangeSeconds` per tool change.
+    /// Estimate for a whole job: every toolpath plus `toolChangeSeconds` for every stop at the
+    /// machine, which is a tool change or an operator pause (`Toolpath.pauseAfter`); a pause that
+    /// ends in a tool change is one stop.
     public static func estimatedSeconds(_ toolpaths: [Toolpath], rapidRate: Double,
                                         toolChangeSeconds: Double = 60) -> TimeInterval {
         var total = 0.0
-        var lastTool: UUID?
-        for tp in toolpaths {
-            if let l = lastTool, l != tp.tool.id { total += toolChangeSeconds }
-            lastTool = tp.tool.id
+        for (i, tp) in toolpaths.enumerated() {
+            if i > 0, Self.stopsBefore(toolpaths[i], after: toolpaths[i - 1]) { total += toolChangeSeconds }
             total += ToolpathStats(tp).estimatedSeconds(rapidRate: rapidRate)
         }
         return total
+    }
+
+    /// True when the machine stops between `previous` and `next`: a different tool, or a pause after `previous`.
+    public static func stopsBefore(_ next: Toolpath, after previous: Toolpath) -> Bool {
+        previous.tool.id != next.tool.id || previous.tool.number != next.tool.number || previous.pauseAfter != nil
     }
 }
