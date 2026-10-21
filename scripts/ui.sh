@@ -40,7 +40,13 @@ BIN="$(swift build -c debug --show-bin-path ${=KERF_BUILD_FLAGS:-})/Kerf"
 mkdir -p "$out/home"
 out="${out:A}"
 echo "scenario: $scenario -> $out"
+# The app's exit status is the result (0 ok, 1 a failed step, 2 the watchdog); grep only filters.
+set +e
 HOME="$out/home" CFFIXED_USER_HOME="$out/home" "$BIN" \
   --ui-scenario "${scenario:A}" --ui-out "$out" "${extra[@]}" \
-  -ApplePersistenceIgnoreState YES -NSQuitAlwaysKeepsWindows NO 2>&1 | grep '^\[harness\]' || true
-echo "--- outputs"; ls -1 "$out" | grep -v '^home$'
+  -ApplePersistenceIgnoreState YES -NSQuitAlwaysKeepsWindows NO 2>&1 | grep '^\[harness\]'
+rc=${pipestatus[1]}
+set -e
+echo "--- outputs"; ls -1 "$out" | grep -v '^home$' || true
+(( rc == 0 )) || echo "harness failed with status $rc (see $out/harness.log)" >&2
+exit $rc
