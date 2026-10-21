@@ -12,10 +12,22 @@ public enum GeomKernel {
     /// Decimal places kept by Clipper (coordinates are scaled by 10^precision to int64).
     public static let defaultPrecision: Int32 = 6
 
+    /// Largest coordinate magnitude passed to Clipper (its int64 range at precision 8 is about
+    /// 9e10; real drawings are far smaller). Paths with a non-finite or larger coordinate are
+    /// dropped instead of aborting the process inside the C++ library.
+    public static let maxCoordinate = 1e10
+
+    static func representable(_ paths: [[Vec2]]) -> [[Vec2]] {
+        paths.filter { $0.allSatisfy { abs($0.x) <= maxCoordinate && abs($0.y) <= maxCoordinate } }
+    }
+
     /// Offset closed polygons (positive delta grows, negative shrinks) or open polylines.
     public static func offset(_ paths: [[Vec2]], by delta: Double, join: Join = .round,
                               end: EndType = .closedPolygon, arcTolerance: Double = 0,
                               precision: Int32 = defaultPrecision) -> [[Vec2]] {
+        let paths = representable(paths)
+        // Clipper returns open inputs unchanged for a zero delta; there is no zero-width outline.
+        guard !paths.isEmpty, delta.isFinite, end == .closedPolygon || delta != 0 else { return [] }
         let (xy, counts) = flatten(paths)
         var miter = 2.0
         let j: kg_join_type
@@ -45,8 +57,8 @@ public enum GeomKernel {
     public static func boolean(_ op: BooleanOp, subject: [[Vec2]], clip: [[Vec2]],
                                fillRule: FillRule = .nonZero, subjectsOpen: Bool = false,
                                precision: Int32 = defaultPrecision) -> [[Vec2]] {
-        let (sxy, sc) = flatten(subject)
-        let (cxy, cc) = flatten(clip)
+        let (sxy, sc) = flatten(representable(subject))
+        let (cxy, cc) = flatten(representable(clip))
         let o: kg_bool_op
         switch op {
         case .union: o = KG_OP_UNION

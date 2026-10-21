@@ -66,8 +66,9 @@ import Testing
         }
     }
 
-    @Test func invalidJSONIsAReadableError() {
-        do { _ = try parse("{not json") } catch let e as HarnessError { #expect(!e.message.isEmpty) } catch {}
+    @Test func invalidJSONIsAReadableError() throws {
+        let error = #expect(throws: HarnessError.self) { try parse("{not json") }
+        #expect(try #require(error).message.isEmpty == false)
     }
 }
 #endif

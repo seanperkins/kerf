@@ -66,8 +66,13 @@ extension KerfDocument {
 
     /// Project for one export: a single toolpath uses its own side, "all" the shown side.
     func outputProject(for scope: GCodeExportScope) -> KerfProject {
-        if case .operation(let id) = scope, let op = operation(id), let side = project.side(of: op) {
-            return project.sideProject(side)
+        if case .operation(let id) = scope, let op = operation(id) {
+            // The toolpath was calculated against its own sheet's job (thickness, Z zero, safe Z);
+            // the post, validator and footer must use the same one, not the sheet being shown.
+            var p = project
+            if case .success(let job) = project.machiningJob(for: op) { p.document.job = job }
+            p.operations = [op]
+            return p
         }
         return outputProject
     }

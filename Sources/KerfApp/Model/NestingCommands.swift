@@ -159,6 +159,7 @@ enum NestingCommands {
             guard !extra.isEmpty else { continue }
             s.shapeIDs += extra
             project.operations[i].editableSetup = s
+            TabAnchor.addCopies(idMap.mapValues { [$0] }, to: &project.operations[i])
         }
     }
 }

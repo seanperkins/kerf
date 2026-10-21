@@ -14,8 +14,8 @@ import Testing
     }
 
     /// Renders a carved, painted stock offscreen. Set KERF_RENDER_DIR to keep the PNG.
-    @Test @MainActor func rendersStockToPNG() throws {
-        guard MTLCreateSystemDefaultDevice() != nil else { return }
+    @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "needs a Metal device"))
+    @MainActor func rendersStockToPNG() throws {
         let job = JobSetup(width: 12, height: 8, thickness: 0.75)
         var hf = Heightfield(width: job.width, height: job.height, cellSize: 0.05)
         for i in 0..<hf.columns { for j in 0..<hf.rows {

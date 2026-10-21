@@ -19,7 +19,12 @@ final class ToolLibraryModel: ObservableObject {
         self.store = store
         do { library = try store.load() } catch {
             library = .seeded
-            lastError = "Could not read \(store.fileURL.path): \(error.localizedDescription). Using default tools."
+            // The next edit saves the seeded library over the file; keep the user's copy first.
+            let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+            let backup = store.fileURL.deletingPathExtension().appendingPathExtension("unreadable-\(stamp).json")
+            let kept = (try? FileManager.default.copyItem(at: store.fileURL, to: backup)) != nil
+            lastError = "Could not read \(store.fileURL.path): \(error.localizedDescription). Using default tools"
+                + (kept ? "; the unreadable file was kept as \(backup.lastPathComponent)." : ".")
         }
     }
 
@@ -35,7 +40,6 @@ final class ToolLibraryModel: ObservableObject {
 
     /// A reasonable starting tool of `kind` in `units`.
     static func template(kind: ToolKind, units: LengthUnit, number: Int) -> Tool {
-        let f = LengthUnit.inch.factor(to: units)
         let base: Tool
         switch kind {
         case .endMill:

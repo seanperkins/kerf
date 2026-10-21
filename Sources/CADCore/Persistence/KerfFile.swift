@@ -111,7 +111,7 @@ public enum DocumentFile {
     }
 
     public static func decode(from data: Data) throws -> Document {
-        try KerfFile.decode(Envelope.self, from: data).document
+        try KerfFile.decode(Envelope.self, from: data).document.repairingLayers()
     }
 
     public static func save(_ document: Document, to url: URL) throws {

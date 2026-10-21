@@ -76,6 +76,6 @@ import Testing
         window.contentView = host
         let data = try #require(png(host))
         keep(data, "window.png")
-        #expect(data.count > 1000)
+        #expect(AppTestSupport.looksDrawn(data))
     }
 }

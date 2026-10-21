@@ -170,10 +170,9 @@ private final class ScanState {
             st.lineTo(st.map(x + w, y)); st.lineTo(st.map(x + w, y + h)); st.lineTo(st.map(x, y + h))
             st.close()
         }
-        for op in ["S", "f", "F", "f*", "B", "B*"] {
-            CGPDFOperatorTableSetCallback(t, op) { _, info in ScanState.state(info).paint(closing: false) }
-        }
-        for op in ["s", "b", "b*"] {
+        // Only a plain stroke keeps an open subpath; every fill implicitly closes it.
+        CGPDFOperatorTableSetCallback(t, "S") { _, info in ScanState.state(info).paint(closing: false) }
+        for op in ["s", "f", "F", "f*", "b", "b*", "B", "B*"] {
             CGPDFOperatorTableSetCallback(t, op) { _, info in ScanState.state(info).paint(closing: true) }
         }
         CGPDFOperatorTableSetCallback(t, "n") { _, info in ScanState.state(info).discard() }

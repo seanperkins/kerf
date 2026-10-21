@@ -53,12 +53,12 @@ struct PathWriter3D {
         plunge(to: depth, approachDepth: approachDepth)
     }
 
-    /// Cutting move; a pure downward move uses the plunge rate.
+    /// Cutting move; a descent steeper than 45 degrees uses the plunge rate.
     mutating func cut(to xy: Vec2, depth: Double) {
         guard let p = position else { return }
         let horizontal = p.xy.distance(to: xy)
         if horizontal < 1e-12 && abs(depth - p.depth) < 1e-12 { return }
-        let isPlunge = horizontal < 1e-9 && depth > p.depth
+        let isPlunge = depth - p.depth > horizontal
         emitLinear(xy, depth: depth, feed: isPlunge ? plungeRate : feedRate)
     }
 

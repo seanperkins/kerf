@@ -51,7 +51,11 @@ public struct STLImporter: MeshImporter {
             tris.reserveCapacity(n)
             for i in 0..<n {
                 let base = 84 + i * 50 + 12 // skip the facet normal
-                tris.append((vertex(base), vertex(base + 12), vertex(base + 24)))
+                let tri = (vertex(base), vertex(base + 12), vertex(base + 24))
+                guard tri.0.isFinite, tri.1.isFinite, tri.2.isFinite else {
+                    throw KerfIOError.malformed("Binary STL: triangle \(i + 1) has a non-finite vertex")
+                }
+                tris.append(tri)
             }
             return tris
         }
@@ -93,9 +97,14 @@ public struct STLImporter: MeshImporter {
         var vertices: [Vec3] = []
         var indices: [UInt32] = []
         indices.reserveCapacity(tris.count * 3)
+        // Clamped so a huge coordinate cannot trap the Int64 conversion.
+        func cell(_ v: Double) -> Int64 {
+            let r = (v * q).rounded()
+            return r.isFinite ? Int64(max(-9e18, min(9e18, r))) : 0
+        }
         func index(_ v: Vec3) -> UInt32 {
             let s = Vec3(v.x * f, v.y * f, v.z * f)
-            let k = Key(x: Int64((s.x * q).rounded()), y: Int64((s.y * q).rounded()), z: Int64((s.z * q).rounded()))
+            let k = Key(x: cell(s.x), y: cell(s.y), z: cell(s.z))
             if let i = lookup[k] { return i }
             let i = UInt32(vertices.count)
             vertices.append(s)

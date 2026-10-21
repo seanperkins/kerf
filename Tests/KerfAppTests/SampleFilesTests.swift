@@ -225,11 +225,10 @@ struct SampleFilesTests {
         return out
     }
 
-    @Test("STL relief imports as a mesh")
+    /// Writes samples/relief.stl with KERF_WRITE_SAMPLES=1; the committed file is checked by
+    /// `checkedInSamples`, which is where its import is asserted.
+    @Test("STL relief sample is written on request")
     func stlRelief() throws {
-        let data = Data(Self.reliefSTL().utf8)
-        try Self.write(data, "relief.stl")
-        let mesh = try STLImporter(sourceUnits: .millimeter).importMesh(from: data, targetUnits: .inch)
-        #expect(mesh.indices.count / 3 > 1000)
+        try Self.write(Data(Self.reliefSTL().utf8), "relief.stl")
     }
 }

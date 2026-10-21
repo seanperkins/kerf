@@ -16,8 +16,13 @@ struct DesignCanvas: NSViewRepresentable {
 
     func updateNSView(_ v: CanvasNSView, context: Context) {
         v.document = document
-        if document.activeTool != .polyline && document.activeTool != .curve { v.clickPoints = [] }
-        if document.activeTool != .pen { v.pen = PenPath() }
+        // Clearing on every update would wipe a half-built arc or dimension as soon as the mouse
+        // moved (the cursor position is published); clear only when the tool changes.
+        if v.transientStateTool != document.activeTool {
+            v.transientStateTool = document.activeTool
+            v.clickPoints = []
+            v.pen = PenPath()
+        }
         v.handle(document.canvasRequest)
         v.needsDisplay = true
     }

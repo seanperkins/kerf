@@ -23,6 +23,7 @@ enum ArcGeometry {
         let r = start.xy.distance(to: center)
         guard r > 1e-12 else { return [end] }
         let total = sweep(from: start.xy, to: end.xy, center: center, clockwise: clockwise)
+        guard total.isFinite, r.isFinite, end.isFinite else { return [end] }
         let tol = min(max(tolerance, 1e-9), r)
         let maxStep = 2 * acos(1 - tol / r)
         let n = max(1, Int((abs(total) / max(maxStep, 1e-6)).rounded(.up)))

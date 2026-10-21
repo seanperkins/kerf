@@ -33,6 +33,11 @@ struct ProgramBuilder {
         for tp in active where tp.spindleRPM < profile.minRPM || tp.spindleRPM > profile.maxRPM {
             throw PostError.spindleSpeedOutOfRange(tp.spindleRPM)
         }
+        // "Xnan" is not a word any controller rejects reliably; NaN also hides from every
+        // comparison in the validators, so refuse it here.
+        for tp in active where !tp.moves.allSatisfy(Self.isFinite) {
+            throw PostError.nonFiniteMove(toolpath: tp.name)
+        }
 
         var w = GCodeWriter(profile: profile, safeZ: coords.safeZ)
         if profile.headerComments { writeHeader(into: &w, toolpaths: active) }
@@ -74,6 +79,15 @@ struct ProgramBuilder {
     }
 
     // MARK: Sections
+
+    static func isFinite(_ move: Move) -> Bool {
+        switch move {
+        case .rapid(let p): return p.isFinite
+        case .linear(let p, let f): return p.isFinite && f.isFinite
+        case .arcCW(let p, let c, let f), .arcCCW(let p, let c, let f): return p.isFinite && c.isFinite && f.isFinite
+        case .dwell(let s): return s.isFinite
+        }
+    }
 
     private func fmt(_ v: Double) -> String { NumberFormat.fixed(v, decimals: profile.decimals) }
 

@@ -78,7 +78,7 @@ enum DesignCommands {
     /// Boolean of closed shapes. Union/intersect combine all; subtract removes the others from
     /// the first-selected (`primary`). Result replaces the inputs. Returns the new shape's id.
     static func boolean(_ mode: BooleanMode, ids: [UUID], in project: inout KerfProject) -> UUID? {
-        let shapes = project.document.shapes(ids: ids).filter { $0.isClosed && !$0.isLocked }
+        let shapes = project.document.shapes(ids: ids).filter { $0.isClosed && project.isEditable($0) }
         guard shapes.count >= 2 else { return nil }
         let tol = project.document.units == .inch ? 0.0005 : 0.01
         let first = shapes[0], rest = Array(shapes.dropFirst())
@@ -91,8 +91,8 @@ enum DesignCommands {
         case .intersect:
             paths = rest.reduce(first.paths) { PathOps.intersect($0, with: $1.paths, tolerance: tol) }
         }
+        guard !paths.isEmpty else { return nil }   // nothing to replace them with: leave the inputs alone
         project.deleteShapes(Set(shapes.map(\.id)))
-        guard !paths.isEmpty else { return nil }
         let s = Shape(name: mode.title, layerID: first.layerID, paths: paths, origin: .derived(operation: mode.rawValue))
         project.document.add(s)
         return s.id

@@ -28,7 +28,7 @@ import Testing
         view.drag = .handle(.rotate, box: box, startDoc: box.center + Vec2(0, 5), currentDoc: box.center + Vec2(-5, 0))
         let rotated = try #require(smoke.png(view))
         smoke.keep(rotated, "edit-rotate.png")
-        #expect(data.count > 1000 && rotated.count > 1000)
+        #expect(AppTestSupport.looksDrawn(data) && AppTestSupport.looksDrawn(rotated))
     }
 
     @Test @MainActor func nodeEditingRenders() throws {
@@ -42,7 +42,7 @@ import Testing
         view.drag = .nodes(anchor: a, startDoc: a, currentDoc: a + Vec2(1, 1))
         let data = try #require(smoke.png(view))
         smoke.keep(data, "edit-nodes.png")
-        #expect(data.count > 1000)
+        #expect(AppTestSupport.looksDrawn(data))
     }
 
     @Test @MainActor func penPreviewRenders() throws {
@@ -55,7 +55,7 @@ import Testing
         view.lastSnap = .init(point: Vec2(10, 2), kind: .node)
         let data = try #require(smoke.png(view))
         smoke.keep(data, "edit-pen.png")
-        #expect(data.count > 1000)
+        #expect(AppTestSupport.looksDrawn(data))
     }
 
     @Test @MainActor func inspectorsRender() throws {
@@ -69,7 +69,7 @@ import Testing
             window.contentView = host
             let data = try #require(smoke.png(host))
             smoke.keep(data, name)
-            #expect(data.count > 1000)
+            #expect(AppTestSupport.looksDrawn(data), Comment(rawValue: name))
         }
     }
 }

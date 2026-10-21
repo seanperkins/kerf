@@ -33,8 +33,12 @@ public struct InlayOperation: ToolpathOperation {
         }
         let clearanceDepth = p.effectiveSurfaceClearance
         guard clearanceDepth > 0 else { throw CAMError.invalidParameter("inlay surface clearance must be positive") }
-        if p.surfaceClearance != nil, p.part != .female, clearanceDepth >= context.document.job.thickness {
-            throw CAMError.invalidParameter("inlay surface clearance must be less than the material thickness")
+        let thickness = context.document.job.thickness
+        if p.part != .female, p.maleStartDepth + clearanceDepth >= thickness {
+            throw CAMError.invalidParameter("inlay start depth + surface clearance must be less than the material thickness")
+        }
+        if p.part != .male, p.pocketDepth >= thickness {
+            throw CAMError.invalidParameter("inlay pocket depth must be less than the material thickness")
         }
         let (paths, skipped) = try VCarveEngine.closedPaths(context.shapes(for: setup))
         let vbit = try context.tool(setup.toolID)

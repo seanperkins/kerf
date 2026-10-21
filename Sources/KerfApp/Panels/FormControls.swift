@@ -98,7 +98,11 @@ struct IntField: View {
     var body: some View {
         LabeledContent(label) {
             HStack(spacing: 4) {
-                TextField(label, value: $value, format: .number.grouping(.never))
+                // The stepper honours `range`; a typed value must too, or a stray digit in a row
+                // count means billions of copies on the main thread.
+                TextField(label, value: Binding(get: { value },
+                                                set: { value = min(max($0, range.lowerBound), range.upperBound) }),
+                          format: .number.grouping(.never))
                     .labelsHidden()
                     .multilineTextAlignment(.trailing)
                     .frame(minWidth: 50, maxWidth: 80)

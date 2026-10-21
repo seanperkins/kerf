@@ -112,7 +112,9 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         }
     }
 
-    /// Controllers vary in how they treat non-ASCII bytes; keep comments plain ASCII.
+    /// Controllers vary in how they treat non-ASCII bytes; keep comments plain ASCII. Control
+    /// characters (a newline inside a tool or job name would start a new, uncommented block)
+    /// become spaces.
     public static func asciiOnly(_ text: String) -> String {
         let replaced = text.replacingOccurrences(of: "°", with: " deg")
             .replacingOccurrences(of: "–", with: "-").replacingOccurrences(of: "—", with: "-")

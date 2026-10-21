@@ -4,6 +4,15 @@ import Foundation
 public struct Transform2D: Codable, Hashable, Sendable {
     public var a, b, c, d, tx, ty: Double
 
+    /// The uniform scale factor when the transform is a similarity (rotation, mirror, uniform
+    /// scale, translation), else nil.
+    public var similarityScale: Double? {
+        let k2 = a * a + b * b
+        let tol = 1e-9 * max(1, k2)
+        guard abs(k2 - (c * c + d * d)) <= tol, abs(a * c + b * d) <= tol, k2 > 0 else { return nil }
+        return k2.squareRoot()
+    }
+
     public init(a: Double, b: Double, c: Double, d: Double, tx: Double, ty: Double) {
         self.a = a; self.b = b; self.c = c; self.d = d; self.tx = tx; self.ty = ty
     }

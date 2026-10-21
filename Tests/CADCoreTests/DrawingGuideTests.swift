@@ -15,9 +15,14 @@ import Testing
 
     @Test func guidesSurviveCodingAndOldFilesDecode() throws {
         var d = Document()
-        #expect(d.guides == nil)
         d.guides = [GuideLine(isVertical: false, position: 2)]
-        let back = try JSONDecoder().decode(Document.self, from: JSONEncoder().encode(d))
+        let json = try JSONEncoder().encode(d)
+        let back = try JSONDecoder().decode(Document.self, from: json)
         #expect(back.guides == d.guides)
+        // A file written before guides existed has no "guides" key at all.
+        var object = try #require(try JSONSerialization.jsonObject(with: json) as? [String: Any])
+        #expect(object.removeValue(forKey: "guides") != nil)
+        let old = try JSONDecoder().decode(Document.self, from: try JSONSerialization.data(withJSONObject: object))
+        #expect(old.guides == nil)
     }
 }

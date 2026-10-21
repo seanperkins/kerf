@@ -44,8 +44,11 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
         case tab(index: Int, preview: TabSettings?)
     }
     var drag: DragState = .none
-    /// Points clicked so far for polyline/curve tools.
+    /// Points clicked so far for the click-built tools (polyline, curve, arc, dimension).
     var clickPoints: [Vec2] = []
+    /// The tool `clickPoints` and `pen` belong to; they are cleared when the tool changes, not on
+    /// every document update (a mouse move publishes the cursor position).
+    var transientStateTool: CanvasTool?
     /// Nodes placed so far with the Bézier pen.
     var pen = PenPath()
     /// Last object/grid snap (drawn as a marker).

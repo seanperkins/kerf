@@ -170,12 +170,14 @@ extension AnyOperation {
     public func detachedFromDesign() -> AnyOperation {
         var s = setup
         s.shapeIDs = []
+        s.projectOntoModelID = nil
         switch with(setup: s) {
         case .profile(var o):
             if o.params.tabs.manualTabs != nil { o.params.tabs.manualTabs = nil }
             return .profile(o)
         case .relief3D(var o):
             o.params.boundaryShapeIDs = []
+            o.params.additionalModelIDs = nil
             return .relief3D(o)
         case .moulding(var o):
             o.params.sectionShapeID = nil

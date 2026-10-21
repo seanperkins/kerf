@@ -5,8 +5,9 @@ set -euo pipefail
 cd "${0:A:h}/.."
 CONFIG=release
 [[ "${1:-}" == "--debug" ]] && CONFIG=debug
-swift build -c $CONFIG --product Kerf
-BIN="$(swift build -c $CONFIG --show-bin-path)/Kerf"
+source scripts/swiftpm-env.sh
+swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --product Kerf
+BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --show-bin-path)/Kerf"
 APP=dist/Kerf.app
 VERSION=$(git describe --tags --always 2>/dev/null || echo 0.1)
 rm -rf $APP

@@ -653,8 +653,10 @@ struct ClearanceToolsEditor: View {
         params.clearanceToolID = new.first
     }
 
+    /// Index-guarded: SwiftUI may re-read a row after it was removed.
     private func row(_ i: Int) -> Binding<UUID> {
-        Binding(get: { ids[i] }, set: { v in var n = ids; n[i] = v; set(n) })
+        Binding(get: { i < ids.count ? ids[i] : UUID() },
+                set: { v in guard i < ids.count else { return }; var n = ids; n[i] = v; set(n) })
     }
 
     private var candidates: [Tool] {
@@ -667,11 +669,11 @@ struct ClearanceToolsEditor: View {
         ForEach(Array(ids.enumerated()), id: \.offset) { i, _ in
             HStack {
                 Picker("Clearance \(i + 1)", selection: row(i)) {
-                    if library.tool(id: ids[i]) == nil { Text("Missing tool").tag(ids[i]) }
+                    if let id = i < ids.count ? ids[i] : nil, library.tool(id: id) == nil { Text("Missing tool").tag(id) }
                     ForEach(candidates) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
                 }
                 .help("A larger tool that clears most of the pocket before the finish tool")
-                Button { var n = ids; n.remove(at: i); set(n) } label: { Image(systemName: "minus.circle") }
+                Button { guard i < ids.count else { return }; var n = ids; n.remove(at: i); set(n) } label: { Image(systemName: "minus.circle") }
                     .buttonStyle(.icon).help("Remove this clearance tool")
             }
             if let problem = problems[i] {

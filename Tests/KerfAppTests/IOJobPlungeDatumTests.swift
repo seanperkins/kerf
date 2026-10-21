@@ -60,7 +60,9 @@ import Testing
         let plain = try rapidZs(.profile, gap: nil)
         let shifted = try rapidZs(.profile, gap: nil, offset: Vec2(1, 2))
         let a = plain.tps[0].xyBounds, b = shifted.tps[0].xyBounds
-        #expect(a.min.isApproximatelyEqual(to: b.min + Vec2(1, 2), tolerance: 1e-9))
+        // The two loops start at different points (home is relative to the datum), so their
+        // fitted corner arcs differ within the arc tolerance; the bounds include arc bulges.
+        #expect(a.min.isApproximatelyEqual(to: b.min + Vec2(1, 2), tolerance: 1e-3))
         let text = try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch)
             .post(PostJob(name: "t", units: .inch, job: shifted.2.document.job, toolpaths: shifted.tps))
         #expect(text.contains("XY datum offset: X1.0000 Y2.0000"))

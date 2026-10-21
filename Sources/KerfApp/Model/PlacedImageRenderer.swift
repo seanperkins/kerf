@@ -13,7 +13,9 @@ enum PlacedImageRenderer {
 
     static func croppedImage(_ img: PlacedImage) -> CGImage? {
         let c = img.cropPixelRect
-        let key = "\(img.png.count)-\(img.png.hashValue)-\(c.x),\(c.y),\(c.width),\(c.height)"
+        // Keyed by id (a replaced image gets a new id) and byte count; hashing a 30 MB scan on
+        // every pan or hover made the canvas stutter.
+        let key = "\(img.png.count)-\(c.x),\(c.y),\(c.width),\(c.height)"
         if let e = cache.object(forKey: img.id as NSUUID), e.key == key { return e.image }
         guard let full = RasterCodec.cgImage(from: img.png) else { return nil }
         let cropped = img.crop == PlacedImage.fullCrop ? full

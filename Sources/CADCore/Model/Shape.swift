@@ -12,6 +12,26 @@ public enum ShapeOrigin: Codable, Hashable, Sendable {
     case star(points: Int, outerRadius: Double, innerRadius: Double)
     case text(String, fontName: String, size: Double)
     case derived(operation: String)
+
+    /// The origin after a transform: a similarity scales the stored sizes by `k`; anything else
+    /// (shear, non-uniform scale) leaves no circle or rectangle to speak of. Text keeps its spec,
+    /// which carries its own transform.
+    func transformed(by t: Transform2D) -> ShapeOrigin {
+        switch self {
+        case .drawn, .imported, .text, .derived: return self
+        case .rectangle, .circle, .ellipse, .polygon, .star: break
+        }
+        guard let k = t.similarityScale else { return .derived(operation: "transform") }
+        if abs(k - 1) < 1e-12 { return self }
+        switch self {
+        case .rectangle(let w, let h, let r): return .rectangle(width: w * k, height: h * k, cornerRadius: r * k)
+        case .circle(let r): return .circle(radius: r * k)
+        case .ellipse(let rx, let ry): return .ellipse(rx: rx * k, ry: ry * k)
+        case .polygon(let n, let r): return .polygon(sides: n, radius: r * k)
+        case .star(let n, let ro, let ri): return .star(points: n, outerRadius: ro * k, innerRadius: ri * k)
+        default: return self
+        }
+    }
 }
 
 /// A drawable object: one or more paths (e.g. a letter "O" is two closed paths).
@@ -47,6 +67,7 @@ public struct Shape: Codable, Hashable, Identifiable, Sendable {
         var s = self
         s.paths = paths.map { $0.transformed(t) }
         s.text?.transform = (text?.transform ?? .identity).concatenating(t)
+        s.origin = origin.transformed(by: t)
         return s
     }
 }

@@ -79,11 +79,17 @@ kg_paths *kg_offset(const double *xy, const int32_t *counts, int32_t pathCount,
     case KG_END_SQUARE: et = EndType::Square; break;
     case KG_END_ROUND: et = EndType::Round; break;
     }
-    PathsD input = toPaths(xy, counts, pathCount);
-    PathsD result = InflatePaths(input, delta, jt, et,
-                                 miterLimit > 0 ? miterLimit : 2.0,
-                                 clampPrecision(precision), arcTolerance);
-    return fromPaths(result);
+    // Clipper throws (range errors for coordinates beyond about 2e12 at precision 6, or inf);
+    // a C++ exception must never unwind into Swift, so a failed call returns null.
+    try {
+        PathsD input = toPaths(xy, counts, pathCount);
+        PathsD result = InflatePaths(input, delta, jt, et,
+                                     miterLimit > 0 ? miterLimit : 2.0,
+                                     clampPrecision(precision), arcTolerance);
+        return fromPaths(result);
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 kg_paths *kg_boolean(kg_bool_op op, kg_fill_rule fill,
@@ -105,14 +111,18 @@ kg_paths *kg_boolean(kg_bool_op op, kg_fill_rule fill,
     case KG_FILL_POSITIVE: fr = FillRule::Positive; break;
     case KG_FILL_NEGATIVE: fr = FillRule::Negative; break;
     }
-    ClipperD clipper(clampPrecision(precision));
-    PathsD subjects = toPaths(subjXY, subjCounts, subjPathCount);
-    if (subjectsOpen) clipper.AddOpenSubject(subjects);
-    else clipper.AddSubject(subjects);
-    clipper.AddClip(toPaths(clipXY, clipCounts, clipPathCount));
-    PathsD closed, open;
-    clipper.Execute(ct, fr, closed, open);
-    return fromPaths(subjectsOpen ? open : closed);
+    try {
+        ClipperD clipper(clampPrecision(precision));
+        PathsD subjects = toPaths(subjXY, subjCounts, subjPathCount);
+        if (subjectsOpen) clipper.AddOpenSubject(subjects);
+        else clipper.AddSubject(subjects);
+        clipper.AddClip(toPaths(clipXY, clipCounts, clipPathCount));
+        PathsD closed, open;
+        if (!clipper.Execute(ct, fr, closed, open)) return nullptr;
+        return fromPaths(subjectsOpen ? open : closed);
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 const char *kg_version(void) {

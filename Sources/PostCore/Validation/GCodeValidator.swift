@@ -41,6 +41,18 @@ public struct GCodeValidator: Sendable {
     public func validate(toolpaths: [Toolpath]) -> [GCodeIssue] {
         var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units)
         var pos: Vec3?
+        // Two different tools with one T number post as one tool: the controller sees no change
+        // and the second geometry cuts with the first bit in the spindle.
+        var byNumber: [Int: [Tool]] = [:]
+        for tp in toolpaths where !byNumber[tp.tool.number, default: []].contains(where: { $0.id == tp.tool.id }) {
+            byNumber[tp.tool.number, default: []].append(tp.tool)
+        }
+        for (number, tools) in byNumber where tools.count > 1 {
+            let sameGeometry = tools.allSatisfy { $0.kind == tools[0].kind && $0.diameter == tools[0].diameter && $0.angle == tools[0].angle }
+            check.issues.add("tool-number-\(number)", sameGeometry ? .warning : .error, line: nil,
+                             "T\(number) is used by \(tools.count) different tools (\(tools.map(\.name).joined(separator: ", ")))"
+                                 + (sameGeometry ? "" : " with different geometry; give each tool its own number"))
+        }
         for tp in toolpaths {
             if tp.moves.isEmpty {
                 check.issues.add("empty-\(tp.id)", .warning, line: nil, "Toolpath '\(tp.name)' has no moves")
@@ -97,15 +109,24 @@ public struct GCodeValidator: Sendable {
             carried.add("garbage", .warning, line: g.line, "Unrecognised text '\(g.text)'")
         }
         var absolute = true
+        var sawAbsolute = false
         var motion: Int?
         var x: Double?, y: Double?, z: Double?
         var feed: Double?
         var spindleOn = false
+        var sawSpeed = false
         var sawEnd = false
 
         for b in parsed.blocks {
             var nonMotion = false
+            if sawEnd, b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil {
+                carried.add("after-end", .warning, line: b.line, "Motion after the program end (M30/M2)")
+            }
             for g in b.values("G") {
+                if !Self.knownG.contains(g) {
+                    carried.add("unknown-g", .warning, line: b.line,
+                                "G\(NumberFormat.compact(g, maxDecimals: 1)) is not a code this validator knows")
+                }
                 switch g {
                 case 20, 21:
                     let u: LengthUnit = g == 20 ? .inch : .millimeter
@@ -123,24 +144,48 @@ public struct GCodeValidator: Sendable {
                         check.issues = old
                     }
                     gUnits = u
-                case 90: absolute = true
+                case 90: absolute = true; sawAbsolute = true
                 case 91:
                     absolute = false
                     carried.add("incremental", .warning, line: b.line, "Incremental positioning (G91) in program")
                 case 0, 1, 2, 3: motion = Int(g)
-                case 4, 10, 28, 30, 53, 92: nonMotion = true
+                case 4, 28, 30: nonMotion = true
+                case 10, 53, 92, 92.1, 92.2:
+                    // The controller now interprets every later coordinate in a frame this
+                    // validator cannot see, so the depth checks below say nothing about it.
+                    nonMotion = true
+                    carried.add("coordinate-shift", .warning, line: b.line,
+                                "G\(NumberFormat.compact(g, maxDecimals: 1)) changes the coordinate system; depth checks no longer apply")
                 default: break
                 }
             }
             var stop: Int?
             for m in b.values("M") {
+                if !Self.knownM.contains(m) {
+                    carried.add("unknown-m", .warning, line: b.line,
+                                "M\(NumberFormat.compact(m, maxDecimals: 0)) is not a code this validator knows")
+                }
                 switch m {
                 case 3, 4: spindleOn = true
                 case 5: spindleOn = false
                 case 0, 1: stop = Int(m)
-                case 2, 30: sawEnd = true
+                case 6:
+                    if spindleOn {
+                        carried.add("toolchange-spindle-on", .warning, line: b.line,
+                                    "Tool change (M6) with the spindle running; stop it (M5) first")
+                    }
+                case 2, 30:
+                    sawEnd = true
+                    if spindleOn {
+                        carried.add("end-spindle-on", .warning, line: b.line,
+                                    "Program ends with the spindle running (no M5 before M30/M2)")
+                    }
                 default: break
                 }
+            }
+            if let s = b.value("S") { sawSpeed = sawSpeed || s > 0 }
+            if (b.has("M", 3) || b.has("M", 4)), !sawSpeed, b.value("S") == nil {
+                carried.add("spindle-no-speed", .warning, line: b.line, "Spindle started (M3/M4) with no speed (S) set")
             }
             if let s = b.value("S"), s > 0 || b.has("M", 3) || b.has("M", 4) {
                 check.rpm(s, min: profile.minRPM, max: profile.maxRPM, line: b.line)
@@ -150,6 +195,11 @@ public struct GCodeValidator: Sendable {
             let bx = b.value("X"), by = b.value("Y"), bz = b.value("Z")
             if !nonMotion, bx != nil || by != nil || bz != nil {
                 if let m = motion {
+                    if !sawAbsolute, absolute {
+                        sawAbsolute = true   // report once
+                        carried.add("no-absolute", .warning, line: b.line,
+                                    "Motion before G90: the controller's last distance mode (possibly G91) applies")
+                    }
                     func resolve(_ v: Double?, _ cur: Double?) -> Double? {
                         guard let v else { return cur }
                         return absolute ? v : (cur ?? 0) + v
@@ -222,4 +272,10 @@ public struct GCodeValidator: Sendable {
         all.merge(carried)
         return all.issues
     }
+
+    /// G-codes the checker understands or knowingly ignores. Anything else is reported, because
+    /// a word the validator does not model is a word it cannot vouch for.
+    static let knownG: Set<Double> = [0, 1, 2, 3, 4, 10, 17, 18, 19, 20, 21, 28, 30, 40, 41, 42, 43, 49, 53, 54, 55, 56,
+                                      57, 58, 59, 61, 64, 80, 81, 82, 83, 90, 90.1, 91, 91.1, 92, 92.1, 92.2, 93, 94, 98, 99]
+    static let knownM: Set<Double> = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30]
 }

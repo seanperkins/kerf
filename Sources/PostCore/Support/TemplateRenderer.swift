@@ -4,12 +4,24 @@ import Foundation
 struct TemplateRenderer {
     var values: [String: String]
 
+    /// One left-to-right pass: a value is never re-scanned, so a tool named "Bit {S}" renders
+    /// the same every time and a value cannot pull in another placeholder.
     func render(_ template: String) -> String {
-        var out = template
-        for (key, value) in values {
-            out = out.replacingOccurrences(of: "{\(key)}", with: value)
+        var out = ""
+        var rest = Substring(template)
+        while let open = rest.firstIndex(of: "{") {
+            out += rest[..<open]
+            let afterOpen = rest.index(after: open)
+            guard let close = rest[afterOpen...].firstIndex(of: "}"),
+                  let value = values[String(rest[afterOpen..<close])] else {
+                out.append("{")
+                rest = rest[afterOpen...]
+                continue
+            }
+            out += value
+            rest = rest[rest.index(after: close)...]
         }
-        return out
+        return out + rest
     }
 
     func render(_ templates: [String]) -> [String] { templates.map(render) }

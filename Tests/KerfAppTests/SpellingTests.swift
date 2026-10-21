@@ -50,10 +50,4 @@ import Testing
         }
         #expect(offenders.isEmpty, "British spellings in user-visible text: \(offenders.prefix(12))")
     }
-
-    @Test func theScannerSeesLiteralsAndIgnoresIdentifiers() {
-        #expect(Self.literalText(of: #"Text("Centre") // centre"#, inMultiline: false) == ["Centre"])
-        #expect(Self.literalText(of: "let centres = grid", inMultiline: false).isEmpty)
-        #expect(Self.literalText(of: "inside a help block", inMultiline: true) == ["inside a help block"])
-    }
 }

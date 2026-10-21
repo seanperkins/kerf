@@ -37,13 +37,15 @@ import Testing
         doc.centerMode = .split
         let data = try #require(render(ContentView(document: doc).environmentObject(doc.toolLibrary),
                                        size: CGSize(width: 1400, height: 800)))
-        #expect(data.count > 1000)
+        #expect(AppTestSupport.looksDrawn(data))
     }
 
     @Test @MainActor func utilityWindowsRender() throws {
-        let prefs = PreferencesModel(defaults: UserDefaults(suiteName: "kerf-tests-render-\(UUID().uuidString)")!)
-        #expect(try #require(render(PreferencesView(model: prefs), size: CGSize(width: 640, height: 480))).count > 1000)
-        #expect(try #require(render(HelpView(), size: CGSize(width: 860, height: 600))).count > 1000)
-        #expect(try #require(render(WelcomeView(preferences: prefs), size: CGSize(width: 720, height: 520))).count > 1000)
+        let suite = "kerf-tests-render-\(UUID().uuidString)"
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        let prefs = PreferencesModel(defaults: UserDefaults(suiteName: suite)!)
+        #expect(AppTestSupport.looksDrawn(try #require(render(PreferencesView(model: prefs), size: CGSize(width: 640, height: 480)))))
+        #expect(AppTestSupport.looksDrawn(try #require(render(HelpView(), size: CGSize(width: 860, height: 600)))))
+        #expect(AppTestSupport.looksDrawn(try #require(render(WelcomeView(preferences: prefs), size: CGSize(width: 720, height: 520)))))
     }
 }

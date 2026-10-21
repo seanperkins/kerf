@@ -168,9 +168,24 @@ enum ProductionPlateCommands {
         if !extra.isEmpty {
             setup.shapeIDs += extra
             op.editableSetup = setup
+            TabAnchor.addCopies(copiesOf, to: &op)
             changed = true
         }
         return changed
+    }
+}
+
+extension TabAnchor {
+    /// Gives each copy of a vector the manual tabs of its original (same path, same fraction), so
+    /// a nested or plated part is held like the one it was copied from instead of cut free.
+    static func addCopies(_ copiesOf: [UUID: [UUID]], to op: inout AnyOperation) {
+        guard case .profile(var p) = op, let anchors = p.params.tabs.manualTabs else { return }
+        let added = anchors.flatMap { a in
+            (copiesOf[a.shapeID] ?? []).map { TabAnchor(shapeID: $0, pathIndex: a.pathIndex, fraction: a.fraction) }
+        }.filter { !anchors.contains($0) }
+        guard !added.isEmpty else { return }
+        p.params.tabs.manualTabs = anchors + added
+        op = .profile(p)
     }
 }
 

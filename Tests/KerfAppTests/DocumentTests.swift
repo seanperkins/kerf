@@ -148,15 +148,15 @@ import Testing
         #expect(doc.alert?.message.contains("cannot import .foo") == true)
     }
 
-    @Test func calculatingNeverCrashes() {
+    @Test func calculatingProducesToolpathsForPlainRectangles() throws {
         let (doc, um) = makeDoc()
         doc.selectAll()
         step(um) { doc.addOperation(.profile) }
         let id = doc.project.operations[0].id
         doc.calculateNow([id])
-        // Either real toolpaths (once cam-2d lands) or a readable error.
-        let r = doc.results[id]!
-        #expect(r.isOK || r.error?.isEmpty == false)
+        let r = try #require(doc.results[id])
+        #expect(r.isOK, "\(r.error ?? "")")
+        #expect(r.toolpaths.first?.moves.isEmpty == false)
     }
 }
 
@@ -203,11 +203,14 @@ import Testing
         #expect(r.text == nil && r.errorMessage != nil)
     }
 
-    @Test func exportProducesTextOrReadableError() {
+    @Test func exportProducesAValidatedProgram() throws {
         let tp = toolpath(ToolLibrary.seeded.tools[0], name: "a")
         let r = GCodeExporter.export(project: AppTestSupport.project(), toolpaths: [tp],
                                      profile: BuiltInPosts.avidMach4Inch, jobName: "Sign")
-        #expect(r.text != nil || r.errorMessage != nil)
+        #expect(r.errorMessage == nil, Comment(rawValue: r.errorMessage ?? ""))
+        let text = try #require(r.text)
+        #expect(text.contains("G20") && text.contains("T1 M6") && text.hasSuffix("M30\n"))
+        #expect(!r.hasErrors, "\(r.issues)")
         #expect(r.toolpathCount == 1)
     }
 

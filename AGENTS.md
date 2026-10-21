@@ -5,7 +5,7 @@ Guidance for coding agents working on Kerf. Read [README.md](README.md) for what
 ## Commands
 
 ```sh
-swift build                          # debug build
+scripts/build.sh                     # debug build (swift build; works in a sandboxed agent shell)
 scripts/test.sh                      # full swift-testing suite (~900 tests, ~20 s)
 scripts/test.sh --filter Ops2D       # subset
 scripts/bundle.sh                    # release build → dist/Kerf.app (ad-hoc signed)
@@ -15,7 +15,7 @@ KERF_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intende
 KERF_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
 ```
 
-Done means `swift build` and `scripts/test.sh` are both green. Judge a test run by its
+Done means `scripts/build.sh` and `scripts/test.sh` are both green. Judge a test run by its
 `Test run with N tests ... passed` line, not the exit code.
 
 ## Toolchain rules
@@ -24,6 +24,9 @@ Done means `swift build` and `scripts/test.sh` are both green. Judge a test run 
   no `xcodebuild`, no `.metal` files (compile Metal shader source at runtime if needed).
 - Tests use swift-testing (`import Testing`, `@Test`, `#expect`), not XCTest. Always run
   them through `scripts/test.sh`, which adds the framework paths a CLT-only machine needs.
+- Build and test through the scripts, not bare `swift build` / `swift test`: SwiftPM's own
+  `sandbox-exec` cannot nest inside an agent shell's sandbox, and `scripts/swiftpm-env.sh` adds
+  `--disable-sandbox` only when that is the case.
 - Don't write a source file and run tests in the same shell command; the test helper can
   hang. If a run sits at 0% CPU, kill `swift-test` / `swiftpm-testing-helper` and retry once.
 - Swift tools 6.0, macOS 14+, Apple Silicon.

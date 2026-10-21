@@ -46,7 +46,7 @@ The bundle is ad-hoc signed, so macOS treats a copy downloaded from elsewhere as
 A locally built one opens normally.
 
 ```sh
-swift build                 # debug build
+scripts/build.sh            # debug build
 scripts/test.sh             # swift-testing suite
 scripts/bundle.sh           # release build → dist/Kerf.app (ad-hoc signed)
 scripts/run.sh              # debug bundle + launch

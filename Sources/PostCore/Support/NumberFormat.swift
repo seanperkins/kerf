@@ -24,7 +24,8 @@ enum NumberFormat {
 
     /// "1h 02m 03s" style duration.
     static func duration(_ seconds: TimeInterval) -> String {
-        let total = Int(max(0, seconds).rounded())
+        guard seconds.isFinite else { return "unknown" }
+        let total = Int(min(max(0, seconds), 1e9).rounded())
         let h = total / 3600, m = (total % 3600) / 60, s = total % 60
         return h > 0 ? String(format: "%dh %02dm %02ds", h, m, s) : String(format: "%dm %02ds", m, s)
     }

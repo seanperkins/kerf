@@ -104,6 +104,15 @@ struct GCodeWriter {
         }
         let start = Vec3(sx, sy, sz)
         let radius = start.xy.distance(to: center)
+        // Rounding to the output precision can make a tiny arc's end coincide with (or fall just
+        // behind) its start, which a controller executes as a full circle at cut depth. Below
+        // two output digits of arc length a straight move is exact enough.
+        let sweep = ArcGeometry.sweep(from: start.xy, to: p.xy, center: center, clockwise: clockwise)
+        let resolution = pow(10, -Double(profile.decimals))
+        if abs(sweep) * radius < 2 * resolution {   // a true full circle has length 2*pi*r
+            linear(to: p, feed: feed)
+            return
+        }
         let isHelix = !same(sz, p.z)
         let mustLinearize = profile.arcOutput == .linearize || (isHelix && !profile.helicalArcs)
             || radius < max(1e-6, pow(10, -Double(profile.decimals)))

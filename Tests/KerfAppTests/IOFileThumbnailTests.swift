@@ -6,6 +6,14 @@ import Testing
 @testable import KerfApp
 
 @Suite struct IOFileThumbnailTests {
+    /// True when the test process runs under a sandbox (an agent shell): Launch Services then
+    /// refuses to set a Finder icon, so the icon test skips itself instead of failing.
+    static var isSandboxed: Bool {
+        guard let handle = dlopen(nil, RTLD_NOW), let symbol = dlsym(handle, "sandbox_check") else { return false }
+        typealias Check = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
+        return unsafeBitCast(symbol, to: Check.self)(getpid(), nil, 0) != 0
+    }
+
     func xattrs(_ url: URL) -> [String] {
         url.withUnsafeFileSystemRepresentation { p -> [String] in
             let n = listxattr(p!, nil, 0, 0)
@@ -16,7 +24,8 @@ import Testing
         }
     }
 
-    @Test func iconIsSetAndModificationTimeKept() throws {
+    @Test(.enabled(if: !isSandboxed, "Finder icons need Launch Services, which a sandboxed shell blocks"))
+    func iconIsSetAndModificationTimeKept() throws {
         let url = AppTestSupport.tempDir().appendingPathComponent("job.kerf")
         let content = try AppTestSupport.project().encoded()
         try content.write(to: url)

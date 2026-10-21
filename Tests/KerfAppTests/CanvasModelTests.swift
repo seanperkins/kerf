@@ -166,13 +166,21 @@ import Testing
         #expect(abs(b.width - 4) < 1e-9 && abs(b.height - 3) < 1e-9)
     }
 
-    @Test func mirrorKeepsBounds() {
+    @Test func mirrorFlipsAboutTheShapesOwnCentre() throws {
         var p = AppTestSupport.project()
-        let id = p.document.shapes[0].id
-        let before = p.document.shape(id: id)!.bounds()
-        TransformCommands.mirror([id], horizontally: true, in: &p)
-        let after = p.document.shape(id: id)!.bounds()
-        #expect(before.min.isApproximatelyEqual(to: after.min, tolerance: 1e-9))
+        // An asymmetric shape: a right triangle with its right angle at the lower left.
+        let tri = Shape(name: "T", layerID: p.document.defaultLayerID,
+                        paths: [Path(points: [Vec2(1, 1), Vec2(4, 1), Vec2(1, 3)], closed: true)])
+        p.document.add(tri)
+        let before = tri.bounds()
+        TransformCommands.mirror([tri.id], horizontally: true, in: &p)
+        let after = try #require(p.document.shape(id: tri.id))
+        #expect(before.min.isApproximatelyEqual(to: after.bounds().min, tolerance: 1e-9))
+        // The right angle is now at the lower right and the winding has flipped.
+        let pts = after.paths[0].flattened()
+        #expect(pts.contains { $0.isApproximatelyEqual(to: Vec2(4, 1), tolerance: 1e-9) })
+        #expect(pts.contains { $0.isApproximatelyEqual(to: Vec2(4, 3), tolerance: 1e-9) })
+        #expect(after.paths[0].signedArea() * tri.paths[0].signedArea() < 0)
     }
 
     @Test func unionReplacesInputs() {

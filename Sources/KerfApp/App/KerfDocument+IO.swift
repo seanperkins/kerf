@@ -19,7 +19,7 @@ extension KerfDocument {
 
 extension KerfDocument {
     /// File > Save as Template…: stores this project (job, layers, vectors, toolpaths, post).
-    func runSaveTemplatePanel(store: JobTemplateStore = JobTemplateStore()) {
+    func runSaveJobTemplatePanel(store: JobTemplateStore = JobTemplateStore()) {
         try? FileManager.default.createDirectory(at: store.directory, withIntermediateDirectories: true)
         let panel = NSSavePanel()
         panel.directoryURL = store.directory
@@ -67,7 +67,7 @@ struct TemplateMenu: View {
                 NSWorkspace.shared.open(store.directory)
             }
         }
-        Button("Save as Template…") { document?.runSaveTemplatePanel() }
+        Button("Save as Template…") { document?.runSaveJobTemplatePanel() }
             .disabled(document == nil)
     }
 }

@@ -33,7 +33,9 @@ public struct KerfProject: Codable, Hashable, Sendable {
 
     /// Decodes through `KerfFile` so version migrations run and newer files are rejected.
     public static func decode(from data: Data) throws -> KerfProject {
-        try KerfFile.decode(KerfProject.self, from: data)
+        var p = try KerfFile.decode(KerfProject.self, from: data)
+        p.document = p.document.repairingLayers()
+        return p
     }
 
     /// Tool library = project snapshot merged over `library` (library entries win on ID clash).

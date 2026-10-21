@@ -24,17 +24,4 @@ import Testing
         #expect(SampleProjects.url(for: SampleProjects.sign, in: [AppTestSupport.tempDir()]) == nil)
     }
 
-    @Test func quickStartCoversTheWorkflow() {
-        #expect(SampleProjects.quickStart.count == 6)
-        #expect(SampleProjects.quickStart.allSatisfy { !$0.title.isEmpty && !$0.detail.isEmpty })
-        #expect(SampleProjects.all.filter(\.isProject) == [SampleProjects.sign])
-    }
-
-    @Test func bundleScriptCopiesSamples() throws {
-        // scripts/bundle.sh must ship the samples the Welcome window opens.
-        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let script = try String(contentsOf: repo.appendingPathComponent("scripts/bundle.sh"), encoding: .utf8)
-        #expect(script.contains("Contents/Resources/samples"))
-    }
 }

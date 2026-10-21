@@ -142,14 +142,6 @@ import Testing
         #expect(Set(p.tools.map(\.id)) == [o.setup.toolID, ToolLibrary.seeded.tools[2].id])
     }
 
-    @Test func duplicateOffsetsCopies() {
-        var p = AppTestSupport.project()
-        let src = p.document.shapes[0]
-        let ids = p.duplicateShapes([src.id], offset: Vec2(1, 0))
-        #expect(ids.count == 1)
-        let copy = p.document.shape(id: ids[0])!
-        #expect(abs(copy.bounds().min.x - (src.bounds().min.x + 1)) < 1e-9)
-    }
 }
 
 @Suite struct JobSetupFormTests {

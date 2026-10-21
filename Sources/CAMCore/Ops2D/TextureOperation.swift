@@ -26,6 +26,7 @@ public struct TextureOperation: ToolpathOperation {
         guard !region.isEmpty else { throw CAMError.invalidGeometry("Texturing needs closed vectors") }
 
         let strokes = Self.strokes(in: region, params: p, tolerance: tol)
+        guard !strokes.isEmpty else { throw CAMError.invalidGeometry("The region is too small for a texture stroke") }
         var b = ToolpathBuilder(coords: context.coords, tool: tool, units: context.units, tolerance: tol)
         for s in strokes {
             b.cutChain(s)

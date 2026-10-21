@@ -132,7 +132,9 @@ enum DXFGeometry {
         let ctrl = zip(e.doubles(10), e.doubles(20)).map { Vec2($0, $1) }
         let fit = zip(e.doubles(11), e.doubles(21)).map { Vec2($0, $1) }
         if ctrl.count >= 2 {
-            let degree = max(1, e.int(71) ?? 3)
+            // A degree-p NURBS needs at least p + 1 control points; sloppy exporters write a short
+            // polyline as a degree-3 SPLINE, which would index outside the knot vector.
+            let degree = min(max(1, e.int(71) ?? 3), ctrl.count - 1)
             var knots = e.doubles(40)
             var weights = e.doubles(41)
             if weights.count != ctrl.count { weights = [Double](repeating: 1, count: ctrl.count) }
