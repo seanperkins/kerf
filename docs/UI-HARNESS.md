@@ -10,8 +10,11 @@ selected), and so a reviewer can read the result as an image and as an accessibi
 scripts/ui.sh main                    # harness/scenarios/main.json
 scripts/ui.sh toolpaths --light       # force light (or --dark) mode
 scripts/ui.sh sheets --size 1000x640  # override the window's content size
-scripts/ui.sh interact --active       # draw the window as the key window (steals focus for a moment)
+scripts/ui.sh interact --key          # draw the window as key without taking your focus (see Clips)
+scripts/ui.sh interact --active       # really activate the app (steals focus; table rows then take clicks)
 scripts/ui.sh path/to/mine.json --out .tmp/ui/mine
+scripts/reel.sh reel-pause            # record harness/scenarios/reel-pause.json → docs/images/pause.{gif,mp4}
+scripts/reel.sh all                   # every reel-*.json
 ```
 
 Output goes to `.tmp/ui/<scenario>-<time>/` (git-ignored):
@@ -73,11 +76,45 @@ minimum is 1000 x 640). Steps run in order and the run stops at the first error,
 | `sheet` / `closeSheet` | `value`: jobSetup, exportGCode, validation, … | opens a sheet, or closes the open sheet or alert |
 | `import` | `name`: a file path relative to the repo root | imports it as File > Import does; an import alert stays open until a `closeSheet` step |
 | `expand` | `name`: a collapsible section's title | opens it (the state the app remembers) |
-| `press` | `name`: text in a control's label, title, help or id; `value`: optional role (`AXButton`) | clicks that control with a real mouse event |
+| `press` | `name`: a control's title, label, text, help or id (an exact title wins over a mention; a field can be named by its label, `"Width"` with role `AXTextField`); `value`: optional role (`AXButton`) | clicks that control with a real mouse event |
+| `move` | `name`, `value`: as `press` | moves the recorded pointer onto the control without clicking |
+| `scroll` | `name`, `value`: as `press` | scrolls the enclosing scroll view until the control sits in the middle |
+| `pointer` | `size`: `[x, y]` window points, origin top left; `value`: `click` to click there | moves the pointer to a point (for the canvas) |
+| `type` | `value`: text | types it one key at a time into the focused field (`press` the field first; `key` `selectAll` replaces its text) |
+| `key` | `value`: `escape`, `return`, `tab`, `space`, `delete`, `selectAll` | sends that key to the sheet or window |
+| `fit` | | zooms the 2D canvas to the material |
 | `wait` | `seconds` | lets background work finish (the 3D preview builds its stock asynchronously) |
 | `capture` | `name` | window PNG and accessibility tree |
 | `captureSheet` | `name` | the open sheet's PNG and accessibility tree |
 | `menus` | `name` | the menu bar dump |
+| `record` | `name`, `fps` (default 10) | starts recording frames of the window (with its sheet, the pointer and the caption) as `<name>.frames/` and `<name>.ffconcat` |
+| `endRecord` | | stops the recording and writes the frame list |
+| `caption` | `value` (empty to clear) | text shown near the top of recorded frames |
+| `simulate` | `seconds` (default 6) | scrubs the 3D simulation from start to end over that long (needs `mode` `3d` or `split` and a `wait`) |
+| `view` | `value`: `threeQuarter`, `iso`, `top`, `front`, `back`, `left`, `right`, `bottom` | sets the 3D camera |
+
+## Clips
+
+`scripts/reel.sh <scenario>` runs a scenario and turns every recording in it into a GIF and an MP4 in
+`docs/images/` (`--out`, `--width`, `--fps`). A clip scenario wraps its steps in `record` / `endRecord`
+(`harness/scenarios/reel-*.json`); `caption` sets the line of text drawn over the frames, and `press`,
+`move`, `select` and `selectToolpath` glide a drawn pointer onto the control first, so the clip reads as
+someone using the app. Frames come from the window server (`CGWindowListCreateImage` of the app's own
+window, no Screen Recording permission) at the screen's scale, in a few milliseconds each, with the sheet
+composited where it sits. The window is parked just past the edge of its screen (a 4 pt sliver stays on
+screen, floating, so the window server and the accessibility server keep it) and drawn as key without
+activating the app, so your focus stays where it is; `--active` activates the app on screen instead.
+
+What that quiet mode cannot do: a click on a table row (the toolpath list, the layer list) only focuses a
+window that is not really key, so `selectToolpath` and `select` select in code and only pretend to click;
+buttons, segmented controls, checkboxes and text fields take the click. Control lookups need a visible
+window: a locked screen or a covered display hides every window from the accessibility server, and the run
+says so. SwiftUI reports the frames of a scroll view's content without the view's top inset (the inspector's
+sits 52 pt lower than its frames say), which the harness corrects; the `.ax.txt` dump ends with each scroll
+view's real frame and inset so a reader can do the same.
+
+The GIF is encoded from the frames with one palette per clip and no alpha channel (an alpha channel makes
+every frame a full frame and the file fifty times larger). ffmpeg from Homebrew is required.
 
 `scripts/ui.sh --help` and `HarnessScenario.ops` list them too; a bad scenario fails with the valid ops.
 Add a scenario by dropping a JSON file in `harness/scenarios/` (`HarnessScenarioTests` checks every file
@@ -95,4 +132,6 @@ there parses).
 - SceneKit (the 3D preview) is composited from its own snapshot; give it a `wait` before a capture, or the
   simulated stock is not built yet.
 - `press` delivers a mouse click; it does not toggle a disclosure group (use `expand`) and does not type.
+- `--key` draws the window as key through the key and main notifications; the title bar can fall back to
+  its inactive look on some redraws, which the run corrects after every step.
 - Debug builds only. A release build has no harness.

@@ -1,0 +1,23 @@
+{
+  "name": "clip: an expression with a document variable typed into the Width field",
+  "appearance": "dark",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "record", "name": "variables", "fps": 10},
+    {"op": "wait", "seconds": 0.8},
+    {"op": "caption", "value": "Any numeric field takes an expression"},
+    {"op": "select", "names": ["Panel"]},
+    {"op": "wait", "seconds": 1},
+    {"op": "press", "name": "Width", "value": "AXTextField"},
+    {"op": "key", "value": "selectAll"},
+    {"op": "type", "value": "=width/2"},
+    {"op": "wait", "seconds": 0.8},
+    {"op": "key", "value": "return"},
+    {"op": "wait", "seconds": 1.5},
+    {"op": "caption", "value": "width, height, thickness and safez are built in; add your own under Design > Variables"},
+    {"op": "wait", "seconds": 3},
+    {"op": "endRecord"},
+    {"op": "capture", "name": "end"}
+  ]
+}

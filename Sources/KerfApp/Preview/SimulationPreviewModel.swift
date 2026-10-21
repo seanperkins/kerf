@@ -76,6 +76,12 @@ enum PlaybackSpeed: Hashable, CaseIterable, Identifiable {
 
 @MainActor
 final class SimulationPreviewModel: ObservableObject {
+    #if DEBUG
+    /// The model most recently created, so the UI harness can scrub the simulation and set the view.
+    static weak var harnessCurrent: SimulationPreviewModel?
+    init() { Self.harnessCurrent = self }
+    #endif
+
     @Published var time: TimeInterval = 0 {
         didSet { if time != oldValue { requestFrame(); updateMoveLabel() } }
     }

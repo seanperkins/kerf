@@ -1,0 +1,103 @@
+{
+  "name": "clip: a DXF with a gap in its outline is reported on import, then joined (no end capture: the accessibility tree hangs after this import)",
+  "appearance": "dark",
+  "window": [
+    1280,
+    820
+  ],
+  "steps": [
+    {
+      "op": "sample",
+      "name": "sign"
+    },
+    {
+      "op": "select",
+      "names": [
+        "Panel"
+      ]
+    },
+    {
+      "op": "record",
+      "name": "import",
+      "fps": 10
+    },
+    {
+      "op": "wait",
+      "seconds": 0.6
+    },
+    {
+      "op": "caption",
+      "value": "Imports say what they found"
+    },
+    {
+      "op": "import",
+      "name": "harness/projects/cabinet-side-gap.dxf"
+    },
+    {
+      "op": "wait",
+      "seconds": 3.5
+    },
+    {
+      "op": "closeSheet"
+    },
+    {
+      "op": "fit",
+      "value": "selection"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "caption",
+      "value": "Join Open Vectors closes the gap, at a tolerance you choose"
+    },
+    {
+      "op": "sheet",
+      "value": "joinVectors"
+    },
+    {
+      "op": "wait",
+      "seconds": 1.5
+    },
+    {
+      "op": "pointer",
+      "size": [
+        169,
+        61
+      ],
+      "value": "sheetClick"
+    },
+    {
+      "op": "key",
+      "value": "selectAll"
+    },
+    {
+      "op": "type",
+      "value": "0.01"
+    },
+    {
+      "op": "key",
+      "value": "tab"
+    },
+    {
+      "op": "wait",
+      "seconds": 2
+    },
+    {
+      "op": "pointer",
+      "size": [
+        338,
+        -31
+      ],
+      "value": "sheetClick"
+    },
+    {
+      "op": "wait",
+      "seconds": 2.5
+    },
+    {
+      "op": "endRecord"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "clip: a pause between toolpaths, in the sidebar and the inspector",
+  "appearance": "dark",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "project", "name": "harness/projects/sign-pause.kerf"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "calculate"},
+    {"op": "record", "name": "pause", "fps": 10},
+    {"op": "wait", "seconds": 0.8},
+    {"op": "caption", "value": "Pause the machine between toolpaths"},
+    {"op": "selectToolpath", "name": "Pocket 1"},
+    {"op": "wait", "seconds": 1},
+    {"op": "scroll", "name": "Pause"},
+    {"op": "move", "name": "Pause the machine after this toolpath"},
+    {"op": "wait", "seconds": 1.2},
+    {"op": "caption", "value": "The operator sees your message; the G-code gets a retract, M5 and M0"},
+    {"op": "wait", "seconds": 3},
+    {"op": "endRecord"},
+    {"op": "capture", "name": "end"}
+  ]
+}

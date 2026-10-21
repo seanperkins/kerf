@@ -1,0 +1,19 @@
+{
+  "name": "clip: the Export sheet's pre-flight check catches a through cut with no tabs",
+  "appearance": "dark",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "project", "name": "harness/projects/reel-loose.kerf"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "calculate"},
+    {"op": "record", "name": "preflight", "fps": 10},
+    {"op": "wait", "seconds": 0.8},
+    {"op": "caption", "value": "Every export is checked before it is written"},
+    {"op": "press", "name": "Export G-code", "value": "AXButton"},
+    {"op": "wait", "seconds": 2.5},
+    {"op": "caption", "value": "Loose parts, depth past the material, duplicate tool numbers, keep-out zones"},
+    {"op": "wait", "seconds": 3},
+    {"op": "endRecord"},
+    {"op": "capture", "name": "end"}
+  ]
+}
