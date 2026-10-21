@@ -29,8 +29,8 @@ private func cutLength(_ tp: Toolpath) -> Double {
 
 @Test func reliefErodedGridMatchesFlatDropCutter() {
     var map = ReliefHeightmap(origin: Vec2(0.3, -0.2), cellSize: 0.01, columns: 61, rows: 47, baseDepth: 0.5)
-    var rng = ReliefSplitMix64(seed: 7)
-    for k in map.depths.indices { map.depths[k] = 0.2 + 0.3 * rng.unit() }
+    var rng = SplitMix64(seed: 7)
+    for k in map.depths.indices { map.depths[k] = 0.2 + 0.3 * rng.next() }
     let radius = 0.083
     let eroded = map.eroded(radius: radius)
     let cutter = DropCutter(map: map, cutter: CutterProfile(shape: .flat, radius: radius))

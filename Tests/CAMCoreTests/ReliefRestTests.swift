@@ -77,8 +77,8 @@ private func gridMesh(width w: Double, height h: Double, step: Double, z: (Vec2)
 
 @Test func reliefRestSweepMatchesDropCutter() {
     var map = ReliefHeightmap(origin: .zero, cellSize: 0.01, columns: 40, rows: 30, baseDepth: 0.5)
-    var rng = ReliefSplitMix64(seed: 3)
-    for k in map.depths.indices { map.depths[k] = 0.2 + 0.3 * rng.unit() }
+    var rng = SplitMix64(seed: 3)
+    for k in map.depths.indices { map.depths[k] = 0.2 + 0.3 * rng.next() }
     let cutter = CutterProfile(tool: ballQuarter)
     let swept = ReliefRest.sweep(map.depths, cols: map.columns, rows: map.rows,
                                  offsets: ReliefRest.offsets(cutter, cellSize: map.cellSize), deepest: false)
