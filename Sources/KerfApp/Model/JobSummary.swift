@@ -28,7 +28,8 @@ struct JobSummary: Equatable {
     var rows: [Row]
     /// Tool loads (each is a manual tool change at the machine) in program order.
     var sequence: [ToolLoad]
-    /// Cutting, rapids and dwell of the enabled toolpaths, summed one by one.
+    /// Cutting, rapids and dwell of the enabled toolpaths, summed one by one. No tool-change
+    /// allowance, not even for a change inside one operation: those are all in `toolChangeAllowance`.
     var machiningSeconds: TimeInterval
     /// Allowance for one manual tool change (the user's time-estimate setting).
     var toolChangeSeconds: TimeInterval = 0
@@ -58,7 +59,12 @@ struct JobSummary: Equatable {
                        error: r?.error)
         }
         let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: groupByTool)
-        let total = rows.filter(\.isEnabled).compactMap(\.estimatedSeconds).reduce(0, +)
+        // A row's own time includes the tool changes inside its operation (a pocket's clearance
+        // tool, a V-carve's flat-area tool); the job total counts every change once, below.
+        let total = operations.filter(\.setup.isEnabled).compactMap { op -> TimeInterval? in
+            guard let r = results[op.id], r.error == nil else { return nil }
+            return r.machiningSeconds
+        }.reduce(0, +)
         return JobSummary(rows: rows, sequence: sequence(of: tps), machiningSeconds: total, toolChangeSeconds: toolChangeSeconds)
     }
 

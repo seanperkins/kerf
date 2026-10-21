@@ -52,9 +52,10 @@ struct TimeEstimateSettings: Equatable, Sendable {
                              timeScale: Self.clampScale(scale))
     }
 
-    /// Estimated seconds for `toolpaths` (document units, rapid rate in units/minute).
-    func estimate(_ toolpaths: [Toolpath], rapidRate: Double, units: LengthUnit) -> TimeInterval {
-        MachiningTimeEstimator.estimate(toolpaths, rapidRate: rapidRate, toolChangeSeconds: toolChangeSeconds,
+    /// Estimated seconds for `toolpaths` (document units, rapid rate in units/minute). With
+    /// `toolChanges` false, motion and dwell only: no allowance for the tool changes between them.
+    func estimate(_ toolpaths: [Toolpath], rapidRate: Double, units: LengthUnit, toolChanges: Bool = true) -> TimeInterval {
+        MachiningTimeEstimator.estimate(toolpaths, rapidRate: rapidRate, toolChangeSeconds: toolChanges ? toolChangeSeconds : 0,
                                         motion: motion(units: units))
     }
 
@@ -107,8 +108,10 @@ extension KerfDocument {
         var changed = results
         for (id, r) in results where r.isOK {
             changed[id]?.estimatedSeconds = s.estimate(r.toolpaths, rapidRate: rapid, units: units)
+            changed[id]?.machiningSeconds = s.estimate(r.toolpaths, rapidRate: rapid, units: units, toolChanges: false)
         }
-        if changed.map({ ($0.key, $0.value.estimatedSeconds) }).contains(where: { results[$0.0]?.estimatedSeconds != $0.1 }) {
+        if changed.contains(where: { results[$0.key]?.estimatedSeconds != $0.value.estimatedSeconds
+                                        || results[$0.key]?.machiningSeconds != $0.value.machiningSeconds }) {
             results = changed
         }
     }
