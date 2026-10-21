@@ -31,18 +31,29 @@ enum PreflightChecks {
         let thickness = doc.job.thickness
         let tol = doc.units == .inch ? 0.0005 : 0.01
         var out: [GCodeIssue] = []
-        for op in operations {
-            guard case .profile(let p) = op, !p.params.tabs.isEnabled,
-                  p.params.depth.cutDepth >= thickness - tol else { continue }
-            let closed = doc.shapes(ids: op.setup.shapeIDs).filter { $0.paths.contains(where: \.isClosed) }
+        for (name, p) in operations.flatMap(profiles) {
+            guard !p.params.tabs.isEnabled, p.params.depth.cutDepth >= thickness - tol else { continue }
+            let closed = doc.shapes(ids: p.setup.shapeIDs).filter { $0.paths.contains(where: \.isClosed) }
             guard !closed.isEmpty else { continue }
             let n = closed.count
             let what = n == 1 ? "1 closed vector" : "\(n) closed vectors"
             out.append(GCodeIssue(severity: .warning, message:
-                "\(op.setup.name) cuts \(what) through the full \(RulerTicks.label(thickness)) \(doc.units.abbreviation) with tabs off: "
+                "\(name) cuts \(what) through the full \(RulerTicks.label(thickness)) \(doc.units.abbreviation) with tabs off: "
                 + "the part comes loose while the cutter is still in it. Turn on Tabs, or make sure the part is held another way."))
         }
         return out
+    }
+
+    /// The profiles an exported operation cuts, with the name to report: the operation itself, or
+    /// the parts of a merged operation (the merge is what the toolpaths point at, but each part
+    /// still makes its own cut with its own tabs and depth).
+    static func profiles(in op: AnyOperation) -> [(name: String, profile: ProfileOperation)] {
+        switch op {
+        case .profile(let p): return [(op.setup.name, p)]
+        case .merge(let m):
+            return m.params.children.flatMap(profiles).map { ("\($0.name) (in \(op.setup.name))", $0.profile) }
+        default: return []
+        }
     }
 
     // MARK: Tool numbers

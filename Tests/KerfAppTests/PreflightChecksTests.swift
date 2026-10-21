@@ -44,6 +44,26 @@ import Testing
         #expect(PreflightChecks.looseParts([profile(p, depth: 0.7499, tabs: false)], document: p.document).count == 1)
     }
 
+    @Test func aLoosePartInsideAMergedOperationIsStillReported() throws {
+        // Merge with Next turns two profiles into one operation; the through cut inside it is unchanged.
+        let p = project()
+        let through = profile(p, name: "Outline", depth: 0.75, tabs: false, shapes: [p.document.shapes[0].id])
+        let shallow = profile(p, name: "Groove", depth: 0.2, tabs: false, shapes: [p.document.shapes[1].id])
+        let merged = try #require(MergeOperation.merging([shallow, through], name: "Groove + Outline"))
+        let issues = PreflightChecks.looseParts([.merge(merged)], document: p.document)
+        #expect(issues.map(\.message) == [
+            "Outline (in Groove + Outline) cuts 1 closed vector through the full 0.75 in with tabs off: the part comes loose while the cutter is still in it. Turn on Tabs, or make sure the part is held another way.",
+        ])
+        // And through the whole export path, where the toolpaths point at the merge.
+        var project = p
+        project.operations = [.merge(merged)]
+        let doc = KerfDocument(project: project, toolLibrary: AppTestSupport.library())
+        doc.calculateNow([merged.setup.id])
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        let all = PreflightChecks.issues(project: doc.project, toolpaths: tps, units: .inch)
+        #expect(all.contains { $0.message.hasPrefix("Outline (in Groove + Outline) cuts") })
+    }
+
     @Test func onlyProfilesOfClosedVectorsCount() {
         let p = project()
         let pocket = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "P", toolID: endMill.id, shapeIDs: p.document.shapes.map(\.id)),
