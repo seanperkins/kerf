@@ -69,11 +69,11 @@ enum ToolpathOverlayRenderer {
 
     /// Transform fitting `bounds` (material frame, y up) into `size` (y down) with `margin`.
     static func fitTransform(bounds: Rect2, in size: CGSize, margin: CGFloat = 16) -> CGAffineTransform {
-        let w = max(bounds.width, 1e-9), h = max(bounds.height, 1e-9)
-        let s = min((size.width - 2 * margin) / w, (size.height - 2 * margin) / h)
-        let scale = max(s, 1e-6)
-        let ox = (size.width - w * scale) / 2 - bounds.min.x * scale
-        let oy = (size.height + h * scale) / 2 + bounds.min.y * scale
+        let w = CGFloat(max(bounds.width, 1e-9)), h = CGFloat(max(bounds.height, 1e-9))
+        let s: CGFloat = min((size.width - 2 * margin) / w, (size.height - 2 * margin) / h)
+        let scale: CGFloat = max(s, 1e-6)
+        let ox: CGFloat = (size.width - w * scale) / 2 - CGFloat(bounds.min.x) * scale
+        let oy: CGFloat = (size.height + h * scale) / 2 + CGFloat(bounds.min.y) * scale
         return CGAffineTransform(a: scale, b: 0, c: 0, d: -scale, tx: ox, ty: oy)
     }
 }

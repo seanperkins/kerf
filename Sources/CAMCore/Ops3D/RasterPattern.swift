@@ -22,8 +22,9 @@ struct RasterPattern {
         // Inset the outermost lines a hair so they do not graze a boundary edge exactly
         // (Clipper's result for collinear open paths is ill-defined).
         let inset = min(span * 1e-6, 1e-6)
-        let offsets = span < 1e-12 ? [range.lowerBound]
-            : (0...n).map { range.lowerBound + inset + (span - 2 * inset) * Double($0) / Double(n) }
+        let width: Double = span - 2 * inset
+        let offsets: [Double] = span < 1e-12 ? [range.lowerBound]
+            : (0...n).map { (i: Int) -> Double in range.lowerBound + inset + width * Double(i) / Double(n) }
         self.init(region: region, angleDegrees: angleDegrees, offsets: offsets)
     }
 
