@@ -115,16 +115,23 @@ public enum PathOps {
     /// open. A path's own two ends count, so an outline that stops short of closing is found.
     /// A grid lookup keeps this linear in the number of ends. Nil when there is no such pair.
     public static func nearlyMeetingEnds(_ paths: [Path], beyond tolerance: Double, upTo limit: Double) -> EndGapReport? {
-        guard limit > 0, limit > tolerance else { return nil }
+        guard limit > 0, limit.isFinite, limit > tolerance else { return nil }
         var ends: [(point: Vec2, path: Int)] = []
         for (i, p) in paths.enumerated() where !p.isClosed && !p.isEmpty {
+            guard p.start.x.isFinite, p.start.y.isFinite, p.end.x.isFinite, p.end.y.isFinite else { continue }
             ends.append((p.start, i))
             ends.append((p.end, i))
         }
         guard ends.count > 1 else { return nil }
 
+        // Cells are at least a billionth of the drawing's extent, so a cell index always fits an
+        // Int however small the tolerance (1e-20 in from the Join dialog on 10 in coordinates would
+        // otherwise trap). Ends further apart than `limit` inside one bigger cell are still rejected
+        // by the distance test below.
+        let extent = ends.reduce(0.0) { max($0, abs($1.point.x), abs($1.point.y)) }
+        let cellSize = max(limit, extent / 1e9)
         struct Cell: Hashable { var x: Int; var y: Int }
-        func cell(_ v: Vec2) -> Cell { Cell(x: Int((v.x / limit).rounded(.down)), y: Int((v.y / limit).rounded(.down))) }
+        func cell(_ v: Vec2) -> Cell { Cell(x: Int((v.x / cellSize).rounded(.down)), y: Int((v.y / cellSize).rounded(.down))) }
         var grid: [Cell: [Int]] = [:]
         for (i, e) in ends.enumerated() { grid[cell(e.point), default: []].append(i) }
 

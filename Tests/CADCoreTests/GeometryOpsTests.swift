@@ -129,6 +129,29 @@ import Testing
         #expect(PathOps.nearlyMeetingEnds([sq], beyond: 0.01, upTo: 1) == nil)
     }
 
+    @Test func aTinyToleranceOnOrdinaryCoordinatesDoesNotTrap() {
+        // The Join dialog accepts any positive tolerance; 1e-20 made the grid cell index overflow Int.
+        let line = Path(points: [Vec2(0, 0), Vec2(10, 0)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([line], beyond: 1e-20, upTo: 1e-18) == nil)
+        let pieces = [Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+                      Path(points: [Vec2(5 + 5e-19, 0), Vec2(10, 0)], closed: false)]
+        // 5 + 5e-19 is 5 in double precision: the ends coincide, so nothing is reported.
+        #expect(PathOps.nearlyMeetingEnds(pieces, beyond: 1e-20, upTo: 1e-18) == nil)
+        #expect(PathOps.nearlyMeetingEnds([line], beyond: 0, upTo: .infinity) == nil)
+    }
+
+    @Test func largeCoordinatesWithASmallLimitStillFindTheGap() throws {
+        // Far from the origin the cell is coarser than the limit; the distance test still decides.
+        let far = 1e6
+        let a = Path(points: [Vec2(far, far), Vec2(far + 5, far)], closed: false)
+        let b = Path(points: [Vec2(far + 5.3, far), Vec2(far + 10, far)], closed: false)
+        let r = try #require(PathOps.nearlyMeetingEnds([a, b], beyond: 1e-9, upTo: 1e-6 * 1e6))
+        #expect(r.vectorCount == 2)
+        #expect(approx(r.smallestGap, 0.3, 1e-6))
+        let c = Path(points: [Vec2(far + 12, far), Vec2(far + 20, far)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([b, c], beyond: 1e-9, upTo: 1)?.vectorCount == nil)
+    }
+
     @Test func handlesThousandsOfPathsQuickly() throws {
         // Short collinear pieces, each a hair apart: a grid lookup keeps this linear, not quadratic.
         let paths = (0..<6000).map { i in
