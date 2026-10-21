@@ -132,20 +132,12 @@ public struct GCodeValidator: Sendable {
                 default: break
                 }
             }
+            var stop: Int?
             for m in b.values("M") {
                 switch m {
                 case 3, 4: spindleOn = true
                 case 5: spindleOn = false
-                case 0, 1:
-                    // An unknown Z (nothing moved yet) is not a problem; a custom post's pause template might be.
-                    if spindleOn {
-                        carried.add("stop-spindle-on", .warning, line: b.line,
-                                    "Program stops (M\(Int(m))) with the spindle running")
-                    }
-                    if let z, z < check.safeZ - check.eps {
-                        carried.add("stop-below-safe-z", .warning, line: b.line,
-                                    "Program stops (M\(Int(m))) with the tool below safe Z")
-                    }
+                case 0, 1: stop = Int(m)
                 case 2, 30: sawEnd = true
                 default: break
                 }
@@ -156,51 +148,67 @@ public struct GCodeValidator: Sendable {
             if let f = b.value("F") { feed = f }
 
             let bx = b.value("X"), by = b.value("Y"), bz = b.value("Z")
-            guard !nonMotion, bx != nil || by != nil || bz != nil else { continue }
-            guard let m = motion else {
-                carried.add("no-motion-mode", .warning, line: b.line, "Axis words without a motion mode (G0/G1/G2/G3)")
-                continue
-            }
-            func resolve(_ v: Double?, _ cur: Double?) -> Double? {
-                guard let v else { return cur }
-                return absolute ? v : (cur ?? 0) + v
-            }
-            let tx = resolve(bx, x), ty = resolve(by, y), tz = resolve(bz, z)
-            let xyKnown = x != nil && y != nil
-            let start: Vec3? = z.map { Vec3(x ?? tx ?? 0, y ?? ty ?? 0, $0) }
-            let target = Vec3(tx ?? 0, ty ?? 0, tz ?? z ?? check.safeZ)
-
-            switch m {
-            case 0:
-                let xyMove = (bx != nil || by != nil)
-                    && (!xyKnown || Vec2(x ?? 0, y ?? 0).distance(to: target.xy) > check.eps)
-                check.rapid(from: start, to: target, xyMove: xyMove, line: b.line)
-            case 1:
-                check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleOn, line: b.line)
-            default:
-                var path = [target]
-                if let s = start, xyKnown {
-                    let i = b.value("I"), j = b.value("J")
-                    if i == nil && j == nil {
-                        if b.value("R") == nil {
-                            check.issues.add("arc-no-centre", .error, line: b.line, "Arc without I/J or R")
-                        }
-                    } else {
-                        let c = profile.arcOutput == .absoluteIJ
-                            ? Vec2(i ?? s.x, j ?? s.y)
-                            : Vec2(s.x + (i ?? 0), s.y + (j ?? 0))
-                        let r0 = s.xy.distance(to: c), r1 = target.xy.distance(to: c)
-                        if abs(r0 - r1) > check.eps * 2 {
-                            check.issues.add("arc-radius", .error, line: b.line,
-                                             "Arc start/end radii differ (\(NumberFormat.compact(r0, maxDecimals: 4)) vs \(NumberFormat.compact(r1, maxDecimals: 4)))")
-                        }
-                        path = ArcGeometry.points(from: s, to: target, center: c, clockwise: m == 2,
-                                                  tolerance: check.eps)
+            if !nonMotion, bx != nil || by != nil || bz != nil {
+                if let m = motion {
+                    func resolve(_ v: Double?, _ cur: Double?) -> Double? {
+                        guard let v else { return cur }
+                        return absolute ? v : (cur ?? 0) + v
                     }
+                    let tx = resolve(bx, x), ty = resolve(by, y), tz = resolve(bz, z)
+                    let xyKnown = x != nil && y != nil
+                    let start: Vec3? = z.map { Vec3(x ?? tx ?? 0, y ?? ty ?? 0, $0) }
+                    let target = Vec3(tx ?? 0, ty ?? 0, tz ?? z ?? check.safeZ)
+
+                    switch m {
+                    case 0:
+                        let xyMove = (bx != nil || by != nil)
+                            && (!xyKnown || Vec2(x ?? 0, y ?? 0).distance(to: target.xy) > check.eps)
+                        check.rapid(from: start, to: target, xyMove: xyMove, line: b.line)
+                    case 1:
+                        check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleOn, line: b.line)
+                    default:
+                        var path = [target]
+                        if let s = start, xyKnown {
+                            let i = b.value("I"), j = b.value("J")
+                            if i == nil && j == nil {
+                                if b.value("R") == nil {
+                                    check.issues.add("arc-no-centre", .error, line: b.line, "Arc without I/J or R")
+                                }
+                            } else {
+                                let c = profile.arcOutput == .absoluteIJ
+                                    ? Vec2(i ?? s.x, j ?? s.y)
+                                    : Vec2(s.x + (i ?? 0), s.y + (j ?? 0))
+                                let r0 = s.xy.distance(to: c), r1 = target.xy.distance(to: c)
+                                if abs(r0 - r1) > check.eps * 2 {
+                                    check.issues.add("arc-radius", .error, line: b.line,
+                                                     "Arc start/end radii differ (\(NumberFormat.compact(r0, maxDecimals: 4)) vs \(NumberFormat.compact(r1, maxDecimals: 4)))")
+                                }
+                                path = ArcGeometry.points(from: s, to: target, center: c, clockwise: m == 2,
+                                                          tolerance: check.eps)
+                            }
+                        }
+                        check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleOn, line: b.line)
+                    }
+                    x = tx ?? x; y = ty ?? y; z = tz ?? z
+                } else {
+                    carried.add("no-motion-mode", .warning, line: b.line, "Axis words without a motion mode (G0/G1/G2/G3)")
                 }
-                check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleOn, line: b.line)
             }
-            x = tx ?? x; y = ty ?? y; z = tz ?? z
+
+            // A controller runs a block's spindle word and its motion before it stops, whatever the
+            // word order (LinuxCNC's order of execution; Mach follows it), so the stop is judged on
+            // the state at the end of the block. An unknown Z (nothing moved yet) is not a problem;
+            // a custom post's pause template might be.
+            if let stop {
+                if spindleOn {
+                    carried.add("stop-spindle-on", .warning, line: b.line,
+                                "Program stops (M\(stop)) with the spindle running")
+                }
+                if let z, z < check.safeZ - check.eps {
+                    carried.add("stop-below-safe-z", .warning, line: b.line,
+                                "Program stops (M\(stop)) with the tool below safe Z")
+                }
+            }
         }
         check.finish()
 

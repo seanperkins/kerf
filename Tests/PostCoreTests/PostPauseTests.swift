@@ -177,6 +177,23 @@ import Testing
         #expect(issues.contains { $0.severity == .warning && $0.message.contains("Program stops (M1) with the tool below safe Z") })
     }
 
+    @Test func theStopIsJudgedAfterTheWholeBlock() {
+        // Controllers run a block's spindle word and motion before the stop, whatever the word order.
+        let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job(), units: .inch)
+        func stops(_ body: String) -> [String] {
+            v.validate(gcode: "G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X1 Y1\n\(body)\nG0 Z0.2\nM5\nM30\n")
+                .filter { $0.message.contains("stops") }.map(\.message)
+        }
+        // "M0 M5": the spindle is off when the machine stops.
+        #expect(stops("M0 M5").isEmpty)
+        // "M5 M0 M3 S18000": on again before the stop.
+        #expect(stops("M5\nM0 M3 S18000") == ["Program stops (M0) with the spindle running"])
+        // The block's own descent happens first: the stop is at Z0.1, below safe Z 0.2.
+        #expect(stops("M5\nG0 Z0.1 M0") == ["Program stops (M0) with the tool below safe Z"])
+        // And its own retract clears it.
+        #expect(stops("G1 Z-0.1 F30\nM5\nG0 Z0.2 M1").isEmpty)
+    }
+
     @Test func aStopBeforeAnyMoveIsFine() {
         // GRBL's first tool change writes M5 / comment / M0 before anything has moved.
         let text = "G20\nG90\nM5\nM0\nG0 Z0.2\nM30\n"
