@@ -116,10 +116,10 @@ struct GadgetRunView: View {
                 }
             }
             ForEach(problems, id: \.self) { p in
-                Label(p, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.callout)
+                Label(p, systemImage: "exclamationmark.triangle").foregroundStyle(Color.warningText).font(.callout)
             }
             if let error {
-                Text(error).foregroundStyle(.red).font(.callout).fixedSize(horizontal: false, vertical: true)
+                Text(error).foregroundStyle(Color.errorText).font(.callout).fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
             HStack {

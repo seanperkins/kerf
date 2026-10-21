@@ -40,7 +40,7 @@ struct SaveAllToolpathsSheet: View {
                 Spacer()
             } else if posted.isEmpty {
                 Label("There are no calculated, enabled toolpaths to save.", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
             } else {
                 List(Array(posted.enumerated()), id: \.offset) { _, item in fileRow(item.file, item.result) }
             }
@@ -87,12 +87,12 @@ struct SaveAllToolpathsSheet: View {
             Text(loads.map { "T\($0.number) \($0.name)" }.joined(separator: " → "))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
             if let e = r.errorMessage {
-                Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.red)
+                Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(Color.errorText)
             } else if errors + warnings > 0 {
                 Label("\(errors) error(s), \(warnings) warning(s)", systemImage: errors > 0 ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(errors > 0 ? .red : .orange)
             } else {
-                Label("No problems found", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(.green)
+                Label("No problems found", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.successText)
             }
         }
         .padding(.vertical, 2)
@@ -120,26 +120,36 @@ struct SaveAllToolpathsSheet: View {
     }
 
     private func save() {
-        do {
-            if mode.isSingleFile {
-                guard let item = posted.first, let text = item.result.text else { return }
-                let panel = NSSavePanel()
-                panel.nameFieldStringValue = item.file.fileName
-                if let t = UTType(filenameExtension: profile.fileExtension) { panel.allowedContentTypes = [t] }
-                panel.allowsOtherFileTypes = true
-                panel.canCreateDirectories = true
-                guard panel.runModal() == .OK, let url = panel.url else { return }
-                try text.write(to: url, atomically: true, encoding: .utf8)
-            } else {
-                let panel = NSOpenPanel()
-                panel.canChooseDirectories = true
-                panel.canChooseFiles = false
-                panel.canCreateDirectories = true
-                panel.prompt = "Save Here"
-                panel.message = "Choose a folder for \(posted.count) G-code files"
-                guard panel.runModal() == .OK, let dir = panel.url else { return }
-                try GCodeBatchExport.write(posted, to: dir)
+        if mode.isSingleFile {
+            guard let item = posted.first, let text = item.result.text else { return }
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = SavePanelName.suggested(item.file.fileName, allowedExtension: profile.fileExtension)
+            if let t = UTType(filenameExtension: profile.fileExtension) { panel.allowedContentTypes = [t] }
+            panel.allowsOtherFileTypes = true
+            panel.canCreateDirectories = true
+            PanelRunner.present(panel) { response in
+                guard response == .OK, let url = panel.url else { return }
+                finishSaving { try text.write(to: url, atomically: true, encoding: .utf8) }
             }
+        } else {
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.canCreateDirectories = true
+            panel.prompt = "Save Here"
+            panel.message = "Choose a folder for \(posted.count) G-code files"
+            let files = posted
+            PanelRunner.present(panel) { response in
+                guard response == .OK, let dir = panel.url else { return }
+                finishSaving { try GCodeBatchExport.write(files, to: dir) }
+            }
+        }
+    }
+
+    /// Runs the write chosen in the panel, then remembers the post and closes the sheet.
+    private func finishSaving(_ write: () throws -> Void) {
+        do {
+            try write()
             if document.project.postProfileID != profileID { document.setPostProfile(profileID) }
             dismiss()
         } catch {

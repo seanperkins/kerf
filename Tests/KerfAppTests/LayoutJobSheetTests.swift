@@ -41,10 +41,10 @@ import Testing
         #expect(js.sheets[0].shapes.count == 2)
     }
 
-    @Test func describesSpoilboardZeroAndCentreOrigin() {
+    @Test func describesSpoilboardZeroAndCenterOrigin() {
         let js = calculatedDoc(zZero: .spoilboard, origin: .center).makeJobSheet()
         #expect(js.zZeroInstruction.contains("SPOILBOARD"))
-        #expect(js.xyOriginInstruction.contains("centre"))
+        #expect(js.xyOriginInstruction.contains("center"))
         #expect(js.origin == Vec2(12, 9))
     }
 

@@ -1,0 +1,14 @@
+{
+  "name": "the Job Setup and Export sheets",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "sheet", "value": "jobSetup"},
+    {"op": "captureSheet", "name": "job-setup"},
+    {"op": "closeSheet"},
+    {"op": "calculate"},
+    {"op": "sheet", "value": "exportGCode"},
+    {"op": "captureSheet", "name": "export-gcode"},
+    {"op": "capture", "name": "window-with-sheet"}
+  ]
+}

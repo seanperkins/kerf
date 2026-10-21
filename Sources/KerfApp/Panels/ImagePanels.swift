@@ -27,9 +27,9 @@ struct PlacedImageRow: View {
             Text(image.name).lineLimit(1)
             Spacer()
             Button { toggleVisible() } label: { Image(systemName: image.isVisible ? "eye" : "eye.slash") }
-                .buttonStyle(.borderless).help(image.isVisible ? "Hide image" : "Show image")
+                .buttonStyle(.icon).help(image.isVisible ? "Hide image" : "Show image")
             Button { editing = true } label: { Image(systemName: "slider.horizontal.3") }
-                .buttonStyle(.borderless).help("Position, size, crop and fade")
+                .buttonStyle(.icon).help("Position, size, crop and fade")
                 .popover(isPresented: $editing, arrowEdge: .trailing) {
                     PlacedImageEditor(document: document, image: image) { editing = false }
                 }

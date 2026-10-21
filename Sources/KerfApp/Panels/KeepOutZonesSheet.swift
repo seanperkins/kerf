@@ -61,7 +61,7 @@ struct KeepOutZonesSheet: View {
                                                               } }))
                                 .help("Re-route toolpaths up and over this zone; the material under it is left uncut")
                             Button { update { $0.removeAll { $0.id == z.id } } } label: { Image(systemName: "trash") }
-                                .buttonStyle(.borderless).help("Delete zone")
+                                .buttonStyle(.icon).help("Delete zone")
                         }
                     }
                 } footer: {
@@ -79,7 +79,7 @@ struct KeepOutZonesSheet: View {
                 }
                 .disabled(document.selectedShapes.isEmpty)
                 Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+                DismissButton("Done") { dismiss() }
             }
             .padding(20)
         }

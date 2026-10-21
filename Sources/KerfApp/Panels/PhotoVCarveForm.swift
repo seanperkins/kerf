@@ -21,13 +21,13 @@ struct PhotoVCarveForm: View {
                 Button(params.image == nil ? "Choose Image…" : "Replace…") { chooseImage() }
             }
             if let image = params.image {
-                Text("\(image.width) × \(image.height) px (greyscale)").font(.caption).foregroundStyle(.secondary)
+                Text("\(image.width) × \(image.height) px (grayscale)").font(.caption).foregroundStyle(.secondary)
                 if let preview = Self.preview(image) {
                     Image(nsImage: preview).resizable().interpolation(.medium).aspectRatio(contentMode: .fit)
                         .frame(maxHeight: 140)
                 }
             }
-            if let loadError { Text(loadError).font(.caption).foregroundStyle(.orange) }
+            if let loadError { Text(loadError).font(.caption).foregroundStyle(Color.warningText) }
             LengthField("Left (X)", value: Binding(get: { params.origin.x }, set: { params.origin.x = $0 }), units: units)
             LengthField("Bottom (Y)", value: Binding(get: { params.origin.y }, set: { params.origin.y = $0 }), units: units)
             LengthField("Width", value: $params.width, units: units)
@@ -39,7 +39,7 @@ struct PhotoVCarveForm: View {
         Divider()
         InspectorSection(title: "Grooves") {
             LengthField("Line spacing", value: $params.lineSpacing, units: units,
-                        help: "Distance between groove centres; black areas are carved this wide")
+                        help: "Distance between groove centers; black areas are carved this wide")
             NumberField("Line angle", value: $params.angle, unit: "°", help: "0° = horizontal grooves")
             LengthField("Min depth", value: $params.minDepth, units: units, help: "Shallower grooves are skipped (light areas)")
             LengthField("Start depth", value: $params.startDepth, units: units)

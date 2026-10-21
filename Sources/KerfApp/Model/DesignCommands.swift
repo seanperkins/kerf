@@ -8,12 +8,12 @@ enum AlignMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .left: return "Align Left"
-        case .centerX: return "Align Centres Horizontally"
+        case .centerX: return "Align Centers Horizontally"
         case .right: return "Align Right"
         case .bottom: return "Align Bottom"
-        case .centerY: return "Align Centres Vertically"
+        case .centerY: return "Align Centers Vertically"
         case .top: return "Align Top"
-        case .materialCenter: return "Centre on Material"
+        case .materialCenter: return "Center on Material"
         }
     }
 }

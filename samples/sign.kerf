@@ -60,7 +60,7 @@
         "id" : "90C1C7D1-5FF0-4856-A059-F9E212CD53D2",
         "isLocked" : false,
         "layerID" : "1227444F-BBF3-46AD-8EC9-1B2743936840",
-        "name" : "Outline-5b61fcf9",
+        "name" : "Outline",
         "origin" : {
           "imported" : {
             "format" : "svg"
@@ -166,7 +166,7 @@
         "id" : "534D60D9-F09C-44CA-945B-08C79C72BB95",
         "isLocked" : false,
         "layerID" : "699E478E-1156-4919-9AF9-D58976B3E88B",
-        "name" : "Panel-93bc40ae",
+        "name" : "Panel",
         "origin" : {
           "imported" : {
             "format" : "svg"
@@ -272,7 +272,7 @@
         "id" : "D107E048-866F-4C11-AF8B-F060738AD46B",
         "isLocked" : false,
         "layerID" : "A75D717B-FAF5-4B3F-86C0-8F145FE11745",
-        "name" : "KERF-7109e02d",
+        "name" : "KERF",
         "origin" : {
           "imported" : {
             "format" : "svg"
@@ -962,7 +962,7 @@
         "id" : "6631F76C-729C-4E68-AAC5-D0F6EDFD5331",
         "isLocked" : false,
         "layerID" : "B2054B1A-B535-40D6-BCED-99AF9309FFA5",
-        "name" : "Hole-ad5805c2",
+        "name" : "Hole",
         "origin" : {
           "imported" : {
             "format" : "svg"
@@ -1010,7 +1010,7 @@
         "id" : "6E135C5F-B981-428C-8F78-2D5E75EB1C5D",
         "isLocked" : false,
         "layerID" : "B2054B1A-B535-40D6-BCED-99AF9309FFA5",
-        "name" : "Hole-b10f4fd8",
+        "name" : "Hole",
         "origin" : {
           "imported" : {
             "format" : "svg"
@@ -1058,7 +1058,7 @@
         "id" : "C2D9FFAB-F3BC-4980-ACF7-2686E56835FD",
         "isLocked" : false,
         "layerID" : "B2054B1A-B535-40D6-BCED-99AF9309FFA5",
-        "name" : "Hole-77716b58",
+        "name" : "Hole",
         "origin" : {
           "imported" : {
             "format" : "svg"
@@ -1106,7 +1106,7 @@
         "id" : "7A0F26B9-17F6-4B09-885F-BA1DF7DCA207",
         "isLocked" : false,
         "layerID" : "B2054B1A-B535-40D6-BCED-99AF9309FFA5",
-        "name" : "Hole-9988a925",
+        "name" : "Hole",
         "origin" : {
           "imported" : {
             "format" : "svg"
@@ -1154,7 +1154,7 @@
         "id" : "5DC3D7EE-17C1-4727-85B7-BB10E5FB4F51",
         "isLocked" : false,
         "layerID" : "B2054B1A-B535-40D6-BCED-99AF9309FFA5",
-        "name" : "Hole-629f2331",
+        "name" : "Hole",
         "origin" : {
           "imported" : {
             "format" : "svg"

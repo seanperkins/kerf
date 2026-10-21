@@ -1,0 +1,38 @@
+{
+  "name": "drive real controls (tab, Calculate All) and open a collapsible section",
+  "window": [
+    1280,
+    820
+  ],
+  "steps": [
+    {
+      "op": "sample",
+      "name": "sign"
+    },
+    {
+      "op": "press",
+      "name": "Toolpaths",
+      "value": "AXRadioButton"
+    },
+    {
+      "op": "press",
+      "name": "Calculate All"
+    },
+    {
+      "op": "wait",
+      "seconds": 3
+    },
+    {
+      "op": "expand",
+      "name": "Last Pass"
+    },
+    {
+      "op": "selectToolpath",
+      "name": "Profile 1"
+    },
+    {
+      "op": "capture",
+      "name": "profile-last-pass-open"
+    }
+  ]
+}

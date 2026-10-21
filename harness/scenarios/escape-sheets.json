@@ -1,0 +1,17 @@
+{
+  "name": "does Escape dismiss each sheet? (the window dump after the key shows whether a sheet is left)",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "calculate"},
+    {"op": "sheet", "value": "validation"},
+    {"op": "key", "value": "escape"},
+    {"op": "capture", "name": "after-escape-validation"},
+    {"op": "sheet", "value": "keepOutZones"},
+    {"op": "key", "value": "escape"},
+    {"op": "capture", "name": "after-escape-keepout"},
+    {"op": "sheet", "value": "jobSetup"},
+    {"op": "key", "value": "escape"},
+    {"op": "capture", "name": "after-escape-jobsetup"}
+  ]
+}

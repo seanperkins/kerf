@@ -1,0 +1,52 @@
+#!/bin/zsh
+# Runs a UI harness scenario against a debug build of Kerf and writes screenshots and dumps.
+#
+#   scripts/ui.sh main                       # harness/scenarios/main.json, appearance from the file
+#   scripts/ui.sh toolpaths --light          # force light (or --dark) mode
+#   scripts/ui.sh main --size 1000x640       # window content size, overriding the scenario
+#   scripts/ui.sh path/to/scenario.json --out .tmp/ui/mine --active
+#
+# Output goes to .tmp/ui/<scenario>-<time>/ (git-ignored): <name>.png, <name>.ax.txt (the accessibility
+# tree), <name>.menus.txt and harness.log. The app runs with its own HOME inside that folder, so it never
+# reads or writes your real preferences, tool library or recovery files. No Screen Recording or
+# Accessibility permission is needed: the app draws its own window into the PNG. Debug builds only.
+#
+# --active   make the app active so the window is drawn as the key window (it steals focus briefly)
+# --no-build reuse the last build
+# Set KERF_BUILD_FLAGS="--disable-sandbox" when running inside a sandbox that blocks SwiftPM's own.
+set -euo pipefail
+cd "${0:A:h}/.."
+
+scenario=""; out=""; extra=(); build=1
+while (( $# )); do
+  case "$1" in
+    --out) out="$2"; shift 2 ;;
+    --light) extra+=(--ui-appearance light); shift ;;
+    --dark) extra+=(--ui-appearance dark); shift ;;
+    --size) extra+=(--ui-size "$2"); shift 2 ;;
+    --active) extra+=(--ui-active 1); shift ;;
+    --no-build) build=0; shift ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    *) scenario="$1"; shift ;;
+  esac
+done
+[[ -n "$scenario" ]] || { echo "usage: scripts/ui.sh <scenario|file.json> [--light|--dark] [--size WxH] [--out DIR]" >&2; exit 2; }
+[[ -f "$scenario" ]] || scenario="harness/scenarios/${scenario%.json}.json"
+[[ -f "$scenario" ]] || { echo "no such scenario: $scenario (scenarios: $(ls harness/scenarios | sed 's/\.json//' | tr '\n' ' '))" >&2; exit 2; }
+[[ -n "$out" ]] || out=".tmp/ui/$(basename "${scenario%.json}")-$(date +%H%M%S)"
+
+(( build )) && swift build -c debug --product Kerf ${=KERF_BUILD_FLAGS:-} 2>&1 | grep -E 'error|Compiling|Build complete' | tail -3
+BIN="$(swift build -c debug --show-bin-path ${=KERF_BUILD_FLAGS:-})/Kerf"
+mkdir -p "$out/home"
+out="${out:A}"
+echo "scenario: $scenario -> $out"
+# The app's exit status is the result (0 ok, 1 a failed step, 2 the watchdog); grep only filters.
+set +e
+HOME="$out/home" CFFIXED_USER_HOME="$out/home" "$BIN" \
+  --ui-scenario "${scenario:A}" --ui-out "$out" "${extra[@]}" \
+  -ApplePersistenceIgnoreState YES -NSQuitAlwaysKeepsWindows NO 2>&1 | grep '^\[harness\]'
+rc=${pipestatus[1]}
+set -e
+echo "--- outputs"; ls -1 "$out" | grep -v '^home$' || true
+(( rc == 0 )) || echo "harness failed with status $rc (see $out/harness.log)" >&2
+exit $rc

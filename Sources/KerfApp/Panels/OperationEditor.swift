@@ -46,13 +46,19 @@ struct OperationEditor: View {
             }
         }
         Divider()
+        // Calculate and its result sit above the parameters: with 25-45 controls below them they were
+        // off-screen in the Pocket and Profile forms.
+        actionRow
+        resultView
+        Divider()
         parameterForm
         Divider()
-        InspectorSection(title: "Array Copies") {
+        InspectorSection(title: "Array Copies", collapsedByDefault: true) {
             ArrayCopyForm(array: setupBinding(\.arrayCopy), units: units)
         }
-        Divider()
-        resultView
+    }
+
+    private var actionRow: some View {
         HStack {
             Button("Calculate") { save(); document.calculate([draft.id]) }
                 .keyboardShortcut(.return, modifiers: .command)
@@ -61,6 +67,7 @@ struct OperationEditor: View {
                 .help("Undo every change made since this toolpath was selected")
             Spacer()
             Button(role: .destructive) { document.deleteOperation(draft.id) } label: { Image(systemName: "trash") }
+                .buttonStyle(.icon)
                 .help("Delete toolpath")
                 .accessibilityLabel("Delete toolpath")
         }
@@ -144,12 +151,12 @@ struct OperationEditor: View {
         } else if let r = document.results[draft.id] {
             VStack(alignment: .leading, spacing: 4) {
                 if let e = r.error {
-                    Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.warningText)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     let moves = r.toolpaths.reduce(0) { $0 + $1.moves.count }
                     Label("\(r.toolpaths.count) toolpath\(r.toolpaths.count == 1 ? "" : "s"), \(moves) moves",
-                          systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                          systemImage: "checkmark.circle.fill").foregroundStyle(Color.successText)
                     Text("Estimated time: " + ToolpathCalculator.formatDuration(r.estimatedSeconds))
                         .font(.caption).foregroundStyle(.secondary)
                     if r.toolpaths.count > 1 {
@@ -169,7 +176,7 @@ struct OperationEditor: View {
                     }
                 }
                 if document.isStale(draft.id) {
-                    Text("Parameters or design changed — recalculate.").font(.caption).foregroundStyle(.orange)
+                    Text("Parameters or design changed — recalculate.").font(.caption).foregroundStyle(Color.warningText)
                 }
             }
         }
@@ -230,7 +237,7 @@ struct ToolPicker: View {
                 ForEach(sorted) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
             Button { openWindow(id: ToolDatabaseView.windowID) } label: { Image(systemName: "wrench.and.screwdriver") }
-                .buttonStyle(.borderless).help("Tool Database").accessibilityLabel("Open Tool Database")
+                .buttonStyle(.icon).help("Tool Database").accessibilityLabel("Open Tool Database")
         }
         if let t = library.tool(id: toolID) {
             Text(toolSummary(t)).font(.caption).foregroundStyle(.secondary)

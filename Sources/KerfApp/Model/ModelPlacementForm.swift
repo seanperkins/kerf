@@ -11,7 +11,7 @@ struct ModelPlacementForm: Equatable {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .center: return "Centre of material"
+            case .center: return "Center of material"
             case .lowerLeft: return "Lower-left corner"
             case .custom: return "Custom"
             }

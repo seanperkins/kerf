@@ -8,7 +8,7 @@ struct WelcomeView: View {
     @State private var message: String?
 
     static func show() {
-        HostedWindows.show(id: windowID, title: "Welcome to Kerf", size: CGSize(width: 720, height: 520),
+        HostedWindows.show(id: windowID, title: "Welcome to Kerf", size: CGSize(width: 720, height: 560),
                            resizable: false) { WelcomeView() }
     }
 
@@ -33,6 +33,7 @@ struct WelcomeView: View {
                     .font(.callout)
             }
             .buttonStyle(.link)
+            .labelStyle(WelcomeLinkLabelStyle())
             .padding(24)
             .frame(width: 290, alignment: .leading)
             .frame(maxHeight: .infinity, alignment: .top)
@@ -61,19 +62,21 @@ struct WelcomeView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(s.title)
+                            // Two lines, not one cut off mid-word ("…a bore, to pra…").
                             Text(s.detail).font(.caption).foregroundStyle(.secondary)
+                                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                         }
                         Spacer()
                         Button("Show in Finder") { reveal(s) }
                             .help("Import it with File ▸ Import… in any document")
                     }
                 }
-                if let message { Text(message).font(.caption).foregroundStyle(.red) }
+                if let message { Text(message).font(.caption).foregroundStyle(Color.errorText) }
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 720, height: 520)
+        .frame(width: 720, height: 560)
     }
 
     private func newDocument() {
@@ -105,5 +108,15 @@ struct WelcomeView: View {
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+}
+
+/// A link with its icon in a fixed-width column, so the labels start at the same x whatever the icon's width.
+struct WelcomeLinkLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.icon.frame(width: 22, alignment: .center)
+            configuration.title
+        }
     }
 }

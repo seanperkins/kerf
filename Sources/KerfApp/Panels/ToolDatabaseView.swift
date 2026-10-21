@@ -88,7 +88,7 @@ struct ToolDatabaseView: View {
         } message: { Text(importMessage ?? "") }
         .overlay(alignment: .bottom) {
             if let e = library.lastError {
-                Text(e).font(.caption).foregroundStyle(.red).padding(6).background(.regularMaterial)
+                Text(e).font(.caption).foregroundStyle(Color.errorText).padding(6).background(.regularMaterial)
             }
         }
     }
@@ -181,7 +181,7 @@ struct ToolEditor: View {
                 LengthField("Pass depth (stepdown)", value: $tool.stepdown, units: u)
                 if !(tool.stepdown > 0) {
                     Text("Pass depth must be positive; toolpaths using this tool will not calculate.")
-                        .font(.caption).foregroundStyle(.red)
+                        .font(.caption).foregroundStyle(Color.errorText)
                 }
                 LabeledContent("Stepover") {
                     HStack {
@@ -199,7 +199,7 @@ struct ToolEditor: View {
                 NumberField("Feed rate", value: $tool.feedRate, unit: u.feedUnit)
                 NumberField("Plunge rate", value: $tool.plungeRate, unit: u.feedUnit)
                 if tool.spindleRPM < 6000 || tool.spindleRPM > 24000 {
-                    Text("The Avid 2.2 kW spindle runs 6000–24000 RPM.").font(.caption).foregroundStyle(.orange)
+                    Text("The Avid 2.2 kW spindle runs 6000–24000 RPM.").font(.caption).foregroundStyle(Color.warningText)
                 }
             }
             ToolShapeSection(tool: $tool)

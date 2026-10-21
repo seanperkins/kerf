@@ -1,89 +1,111 @@
 import CADCore
+import PostCore
 import SwiftUI
 
 /// Job Setup: material size, units, XY origin, Z zero, safe Z and home position.
 struct JobSetupSheet: View {
     @ObservedObject var document: KerfDocument
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var machines = MachineCatalog.shared
+    @ObservedObject private var posts = PostProfileCatalog.shared
     @State private var form: JobSetupForm
 
     init(document: KerfDocument) {
         self.document = document
-        _form = State(initialValue: JobSetupForm(document: document.document))
+        _form = State(initialValue: JobSetupForm(project: document.project, machines: MachineCatalog.shared.machines))
     }
 
     var body: some View {
         let u = form.units
-        VStack(alignment: .leading, spacing: 0) {
-            HStack { Text("Job Setup").font(.title2.bold()); Spacer(); HelpButton(topic: .jobSetup) }.padding([.horizontal, .top], 20)
-            Form {
-                Section("Job") {
-                    TextField("Job name", text: $form.name)
-                    if form.isMultiSheet { TextField("Sheet name", text: $form.sheetName) }
-                    Picker("Units", selection: Binding(get: { form.units }, set: { form.setUnits($0) })) {
-                        ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
+        let machine = machines.machine(id: form.machineID)
+        let problems = MachineResolver.fitProblems(job: form.job, units: form.units, machine: machine) + form.problems
+        VStack(alignment: .leading, spacing: 16) {
+            HStack { Text("Job Setup").font(.title2.bold()); Spacer(); HelpButton(topic: .jobSetup) }
+            // Two compact columns so every setting, including Safe Z and Home, is visible without scrolling.
+            HStack(alignment: .top, spacing: 28) {
+                Form {
+                    FormGroup("Job") {
+                        TextField("Job name", text: $form.name)
+                        if form.isMultiSheet { TextField("Sheet name", text: $form.sheetName) }
+                        Picker("Units", selection: Binding(get: { form.units }, set: { form.setUnits($0) })) {
+                            ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
-                }
-                Section("Material") {
-                    LengthField("Width (X)", value: $form.job.width, units: u)
-                    LengthField("Height (Y)", value: $form.job.height, units: u)
-                    LengthField("Thickness (Z)", value: $form.job.thickness, units: u)
-                    MaterialNameField(material: $form.job.material,
-                                      known: ToolGrouping.materialNames(document.mergedLibrary.tools))
-                }
-                Section("Z zero") {
-                    Picker("Z zero", selection: $form.job.zZero) {
-                        ForEach(ZZeroMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    FormGroup("Machine") {
+                        Picker("Machine", selection: Binding(get: { form.machineID ?? "" }, set: { id in
+                            if let m = machines.machine(id: id) { form.selectMachine(m, profiles: posts.profiles) }
+                        })) {
+                            if form.machineID == nil { Text("Custom (post limits)").tag("") }
+                            ForEach(machines.machines) { Text($0.name).tag($0.id) }
+                        }
+                        .help("Machine: bed size, travel limits and the post processors that drive it")
+                        PostProfilePicker(title: "Post processor",
+                                          selection: Binding(get: { form.postID ?? "" }, set: { form.postID = $0 }),
+                                          machine: machine)
+                            .help("Post processor (G-code dialect) for the selected machine")
                     }
-                    .pickerStyle(.radioGroup)
-                    Text(form.job.zZero == .materialTop
-                         ? "Touch off on top of the material. Cuts have negative Z."
-                         : "Touch off on the spoilboard. The material top is Z = thickness.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    FormGroup("Material") {
+                        LengthField("Width (X)", value: $form.job.width, units: u)
+                        LengthField("Height (Y)", value: $form.job.height, units: u)
+                        LengthField("Thickness (Z)", value: $form.job.thickness, units: u)
+                        MaterialNameField(material: $form.job.material,
+                                          known: ToolGrouping.materialNames(document.mergedLibrary.tools))
+                    }
+                    FormGroup("Drawing") {
+                        LengthField("Grid spacing", value: $form.gridSpacing, units: u)
+                    }
                 }
-                Section("XY origin") {
-                    HStack(alignment: .top, spacing: 20) {
-                        OriginPicker(origin: $form.job.xyOrigin)
-                        Text("Machine X0 Y0 is at the \(form.job.xyOrigin.displayName.lowercased()) of the material.")
+                .formStyle(.columns)
+                .frame(maxWidth: .infinity, alignment: .top)
+                Form {
+                    FormGroup("Z zero") {
+                        Picker("Z zero", selection: $form.job.zZero) {
+                            ForEach(ZZeroMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                        .pickerStyle(.radioGroup)
+                        .labelsHidden()
+                        Text(form.job.zZero == .materialTop
+                             ? "Touch off on top of the material. Cuts have negative Z."
+                             : "Touch off on the spoilboard. The material top is Z = thickness.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    Toggle("Offset the datum", isOn: Binding(get: { form.job.datumOffset != nil },
-                                                             set: { form.job.datumOffset = $0 ? (form.job.datumOffset ?? .zero) : nil }))
-                    if form.job.datumOffset != nil {
-                        LengthField("Offset X", value: Binding(get: { form.job.datumOffset?.x ?? 0 },
-                                                               set: { form.job.datumOffset?.x = $0 }), units: u,
-                                    help: "Distance from the chosen corner/centre to machine X0 (right is positive)")
-                        LengthField("Offset Y", value: Binding(get: { form.job.datumOffset?.y ?? 0 },
-                                                               set: { form.job.datumOffset?.y = $0 }), units: u,
-                                    help: "Distance from the chosen corner/centre to machine Y0 (up is positive)")
+                    FormGroup("XY origin") {
+                        HStack(alignment: .top, spacing: 20) {
+                            OriginPicker(origin: $form.job.xyOrigin)
+                            Text("Machine X0 Y0 is at the \(form.job.xyOrigin.displayName.lowercased()) of the material.")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Toggle("Offset the datum", isOn: Binding(get: { form.job.datumOffset != nil },
+                                                                 set: { form.job.datumOffset = $0 ? (form.job.datumOffset ?? .zero) : nil }))
+                        if form.job.datumOffset != nil {
+                            LengthField("Offset X", value: Binding(get: { form.job.datumOffset?.x ?? 0 },
+                                                                   set: { form.job.datumOffset?.x = $0 }), units: u,
+                                        help: "Distance from the chosen corner/center to machine X0 (right is positive)")
+                            LengthField("Offset Y", value: Binding(get: { form.job.datumOffset?.y ?? 0 },
+                                                                   set: { form.job.datumOffset?.y = $0 }), units: u,
+                                        help: "Distance from the chosen corner/center to machine Y0 (up is positive)")
+                        }
+                    }
+                    TwoSidedSection(job: $form.job)
+                    FormGroup("Rapid heights (above material top)") {
+                        LengthField("Safe Z", value: $form.job.safeZ, units: u)
+                        OptionalLengthField(label: "Plunge Z (rapid down to)", value: $form.job.plungeGap, units: u,
+                                            defaultValue: u == .inch ? 0.1 : 2.5)
+                        LengthField("Home Z", value: $form.job.homeZ, units: u)
+                        LengthField("Home X", value: $form.job.home.x, units: u, help: "Machine coordinates")
+                        LengthField("Home Y", value: $form.job.home.y, units: u, help: "Machine coordinates")
                     }
                 }
-                TwoSidedSection(job: $form.job)
-                Section("Rapid heights (above material top)") {
-                    LengthField("Safe Z", value: $form.job.safeZ, units: u)
-                    OptionalLengthField(label: "Plunge Z (rapid down to)", value: $form.job.plungeGap, units: u,
-                                        defaultValue: u == .inch ? 0.1 : 2.5)
-                    LengthField("Home Z", value: $form.job.homeZ, units: u)
-                    LengthField("Home X", value: $form.job.home.x, units: u, help: "Machine coordinates")
-                    LengthField("Home Y", value: $form.job.home.y, units: u, help: "Machine coordinates")
-                }
-                Section("Drawing") {
-                    LengthField("Grid spacing", value: $form.gridSpacing, units: u)
-                }
-                let fit = MachineResolver.fitProblems(job: form.job, units: form.units, machine: document.machine)
-                if !fit.isEmpty {
-                    Section("Machine") {
-                        ForEach(fit, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
-                    }
-                }
-                if !form.problems.isEmpty {
-                    Section {
-                        ForEach(form.problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
-                    }
+                .formStyle(.columns)
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            if !problems.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(problems, id: \.self) { Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(Color.warningText) }
                 }
             }
-            .formStyle(.grouped)
             HStack {
                 if form.units != document.units {
                     Text("Changing units converts the design and toolpath parameters.")
@@ -91,13 +113,13 @@ struct JobSetupSheet: View {
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("OK") { document.applyJobSetup(form); dismiss() }
+                Button("Apply") { document.applyJobSetup(form); dismiss() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!form.problems.isEmpty)
             }
-            .padding(20)
         }
-        .frame(width: 520, height: 680)
+        .padding(20)
+        .frame(width: 900)
     }
 }
 
@@ -116,9 +138,11 @@ struct OriginPicker: View {
                 Spacer()
                 HStack { dot(.lowerLeft); Spacer(); dot(.lowerRight) }
             }
-            .frame(width: 136, height: 96)
+            // Each dot is a 22 pt button, so its centre sits 11 pt in from this frame's edge: 142 x 102
+            // puts the centres on the corners of the 120 x 80 outline.
+            .frame(width: 142, height: 102)
         }
-        .frame(width: 140, height: 100)
+        .frame(width: 146, height: 106)
     }
 
     private func dot(_ o: XYOrigin) -> some View {
@@ -126,8 +150,10 @@ struct OriginPicker: View {
             Image(systemName: origin == o ? "largecircle.fill.circle" : "circle")
                 .foregroundStyle(origin == o ? Color.accentColor : Color.secondary)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.icon)
         .help(o.displayName)
+        .accessibilityLabel(AccessibilityNames.origin(o))
+        .accessibilityAddTraits(origin == o ? .isSelected : [])
     }
 }
 
@@ -136,7 +162,7 @@ struct TwoSidedSection: View {
     @Binding var job: JobSetup
 
     var body: some View {
-        Section("Sides") {
+        FormGroup("Sides") {
             Toggle("Two-sided job", isOn: Binding(get: { job.twoSided != nil },
                                                   set: { job.twoSided = $0 ? (job.twoSided ?? TwoSidedSetup()) : nil }))
             if let t = job.twoSided {
@@ -147,9 +173,29 @@ struct TwoSidedSection: View {
                     Text("Same as top side").tag(ZZeroMode?.none)
                     ForEach(ZZeroMode.allCases, id: \.self) { Text($0.displayName).tag(ZZeroMode?.some($0)) }
                 }
-                Text("Each side is drawn as seen from above while it faces up; the other side shows mirrored and dashed. Use the centre origin, or stock cut exactly to size, so the second side registers to the first.")
+                Text("Each side is drawn as seen from above while it faces up; the other side shows mirrored and dashed. Use the center origin, or stock cut exactly to size, so the second side registers to the first.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+/// A titled group in a `.columns` form, which shows plain `Section` headings in body weight:
+/// a headline heading with room above it, so the groups read as separate.
+struct FormGroup<Content: View>: View {
+    var title: String
+    @ViewBuilder var content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        Section {
+            content
+        } header: {
+            Text(title).font(.headline).padding(.top, 14)
         }
     }
 }

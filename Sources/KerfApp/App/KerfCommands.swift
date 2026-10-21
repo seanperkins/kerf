@@ -26,7 +26,7 @@ struct KerfCommands: Commands {
             Button("Recover Unsaved Work…") { RecoveryPrompt.offer(interactive: true) }
             Divider()
             Button("Import…") { runImportPanel() }
-                .keyboardShortcut("i", modifiers: .command)
+                .keyboardShortcut("i", modifiers: [.command, .shift])
                 .disabled(document == nil)
             Button("Import 3D Model as 2D Parts…") { document?.runModelPartsPanel() }
                 .disabled(document == nil)
@@ -65,7 +65,7 @@ struct KerfCommands: Commands {
             Button(document?.activeSide == .bottom ? "Show Top Side" : "Show Bottom Side") {
                 if let d = document { d.showSide(d.activeSide.other) }
             }
-            .keyboardShortcut("f", modifiers: [.command, .option])
+            .keyboardShortcut("b", modifiers: [.command, .shift])
             .disabled(!(document?.isTwoSided ?? false))
             SheetsMenu(document: document)
             Button("Document Variables…") { document?.sheet = .variables }
@@ -73,69 +73,9 @@ struct KerfCommands: Commands {
             Divider()
             Menu("Draw") {
                 ForEach(CanvasTool.allCases) { tool in
-                    Button(tool.title) { document?.activeTool = tool }
+                    Button(tool.titleWithKey) { document?.activeTool = tool }
                 }
             }
-            Divider()
-            Menu("Align") {
-                ForEach(AlignMode.allCases) { mode in
-                    Button(mode.title) { withSelection("Align") { ids, p in DesignCommands.align(ids, mode: mode, in: &p) } }
-                }
-                Divider()
-                Button("Distribute Horizontally") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: true, in: &p) } }
-                Button("Distribute Vertically") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: false, in: &p) } }
-                Button("Equal Spacing Horizontally") { withSelection("Distribute") { ids, p in DesignCommands.distributeSpacing(ids, horizontally: true, in: &p) } }
-                Button("Equal Spacing Vertically") { withSelection("Distribute") { ids, p in DesignCommands.distributeSpacing(ids, horizontally: false, in: &p) } }
-            }
-            Button("Group") { document?.groupSelection() }
-                .keyboardShortcut("g", modifiers: .command)
-                .disabled((document?.selection.count ?? 0) < 2)
-            Button("Ungroup") { document?.ungroupSelection() }
-                .keyboardShortcut("g", modifiers: [.command, .shift])
-                .disabled(!(document?.selectedShapes.contains { $0.groupID != nil } ?? false))
-            Button("Combine Vectors") {
-                guard let doc = document else { return }
-                let order = doc.selectedShapes.map(\.id)
-                var newID: UUID?
-                doc.perform("Combine") { newID = DesignCommands.combine(order, in: &$0) }
-                if let id = newID { doc.setSelection([id]) }
-            }
-            Button("Break Apart") {
-                guard let doc = document else { return }
-                let ids = doc.selection
-                var newIDs: [UUID] = []
-                doc.perform("Break Apart") { newIDs = DesignCommands.explode(ids, in: &$0) }
-                if !newIDs.isEmpty { doc.setSelection(newIDs) }
-            }
-            Button("Join Open Vectors") {
-                guard let doc = document else { return }
-                let order = doc.selectedShapes.map(\.id)
-                let tol = doc.units == .inch ? 0.001 : 0.025
-                var newID: UUID?
-                doc.perform("Join") { newID = DesignCommands.join(order, tolerance: tol, in: &$0) }
-                if let id = newID { doc.setSelection([id]) }
-            }
-            Button("Edit Nodes") { document?.activeTool = .nodeEdit }
-            Divider()
-            Menu("Boolean") {
-                ForEach(BooleanMode.allCases) { mode in
-                    Button(mode.title) {
-                        guard let doc = document else { return }
-                        let order = doc.selectedShapes.map(\.id)
-                        var newID: UUID?
-                        doc.perform(mode.title) { newID = DesignCommands.boolean(mode, ids: order, in: &$0) }
-                        if let id = newID { doc.setSelection([id]) }
-                    }
-                }
-            }
-            Button("Offset…") { document?.sheet = .offset }.disabled(document?.selection.isEmpty ?? true)
-            Button("Mirror Horizontally") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: true, in: &p) } }
-            Button("Mirror Vertically") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: false, in: &p) } }
-            Button("Rotate 90° Left") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: 90, in: &p) } }
-                .keyboardShortcut("[", modifiers: .command)
-            Button("Rotate 90° Right") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: -90, in: &p) } }
-                .keyboardShortcut("]", modifiers: .command)
-            Button("Close Open Vectors") { withSelection("Close Vectors") { ids, p in DesignCommands.close(ids, in: &p) } }
             Divider()
             Menu("Layout") {
                 Button("Nest Parts…") { document?.sheet = .nesting }
@@ -161,6 +101,83 @@ struct KerfCommands: Commands {
                 .keyboardShortcut("'", modifiers: .command)
             Toggle("Snap to Objects", isOn: Binding(get: { document?.snapToObjects ?? true }, set: { document?.snapToObjects = $0 }))
                 .keyboardShortcut("'", modifiers: [.command, .shift])
+        }
+        // The selection commands, split from Design (about 25 entries in one menu).
+        CommandMenu("Arrange") {
+            Menu("Align") {
+                ForEach(AlignMode.allCases) { mode in
+                    Button(mode.title) { withSelection("Align") { ids, p in DesignCommands.align(ids, mode: mode, in: &p) } }
+                        .disabled(!arrange.canAlign(mode))
+                }
+                Divider()
+                Button("Distribute Horizontally") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: true, in: &p) } }
+                    .disabled(!arrange.triple)
+                Button("Distribute Vertically") { withSelection("Distribute") { ids, p in DesignCommands.distribute(ids, horizontally: false, in: &p) } }
+                    .disabled(!arrange.triple)
+                Button("Equal Spacing Horizontally") { withSelection("Distribute") { ids, p in DesignCommands.distributeSpacing(ids, horizontally: true, in: &p) } }
+                    .disabled(!arrange.triple)
+                Button("Equal Spacing Vertically") { withSelection("Distribute") { ids, p in DesignCommands.distributeSpacing(ids, horizontally: false, in: &p) } }
+                    .disabled(!arrange.triple)
+            }
+            Button("Group") { document?.groupSelection() }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled((document?.selection.count ?? 0) < 2)
+            Button("Ungroup") { document?.ungroupSelection() }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(!(document?.selectedShapes.contains { $0.groupID != nil } ?? false))
+            Button("Combine Vectors") {
+                guard let doc = document else { return }
+                let order = doc.selectedShapes.map(\.id)
+                var newID: UUID?
+                doc.perform("Combine") { newID = DesignCommands.combine(order, in: &$0) }
+                if let id = newID { doc.setSelection([id]) }
+            }
+            .disabled(!arrange.pair)
+            Button("Break Apart") {
+                guard let doc = document else { return }
+                let ids = doc.selection
+                var newIDs: [UUID] = []
+                doc.perform("Break Apart") { newIDs = DesignCommands.explode(ids, in: &$0) }
+                if !newIDs.isEmpty { doc.setSelection(newIDs) }
+            }
+            .disabled(!arrange.any)
+            Button("Join Open Vectors") {
+                guard let doc = document else { return }
+                let order = doc.selectedShapes.map(\.id)
+                let tol = doc.units == .inch ? 0.001 : 0.025
+                var newID: UUID?
+                doc.perform("Join") { newID = DesignCommands.join(order, tolerance: tol, in: &$0) }
+                if let id = newID { doc.setSelection([id]) }
+            }
+            .disabled(!arrange.any)
+            Button("Edit Nodes") { document?.activeTool = .nodeEdit }
+                .disabled(!arrange.any)
+            Divider()
+            Menu("Boolean") {
+                ForEach(BooleanMode.allCases) { mode in
+                    Button(mode.title) {
+                        guard let doc = document else { return }
+                        let order = doc.selectedShapes.map(\.id)
+                        var newID: UUID?
+                        doc.perform(mode.title) { newID = DesignCommands.boolean(mode, ids: order, in: &$0) }
+                        if let id = newID { doc.setSelection([id]) }
+                    }
+                }
+            }
+            .disabled(!arrange.pair)
+            Button("Offset…") { document?.sheet = .offset }.disabled(!arrange.any)
+            Button("Mirror Horizontally") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: true, in: &p) } }
+                .disabled(!arrange.any)
+            Button("Mirror Vertically") { withSelection("Mirror") { ids, p in TransformCommands.mirror(ids, horizontally: false, in: &p) } }
+                .disabled(!arrange.any)
+            Button("Rotate 90° Left") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: 90, in: &p) } }
+                .keyboardShortcut("[", modifiers: [.command, .option])
+                .disabled(!arrange.any)
+            Button("Rotate 90° Right") { withSelection("Rotate") { ids, p in TransformCommands.rotate(ids, degrees: -90, in: &p) } }
+                .keyboardShortcut("]", modifiers: [.command, .option])
+                .disabled(!arrange.any)
+            Button("Close Open Vectors") { withSelection("Close Vectors") { ids, p in DesignCommands.close(ids, in: &p) } }
+                .disabled(!arrange.any)
         }
         CommandGroup(replacing: .help) {
             Button("Kerf Help") { showHelp(.gettingStarted) }
@@ -206,7 +223,7 @@ struct KerfCommands: Commands {
                 .disabled(document == nil)
             Divider()
             Toggle("Show Toolpaths", isOn: Binding(get: { document?.showToolpaths ?? true }, set: { document?.showToolpaths = $0 }))
-                .keyboardShortcut("t", modifiers: [.command, .option])
+                .keyboardShortcut("p", modifiers: [.command, .option])
             Divider()
             Button("Tool Database…") { openWindow(id: ToolDatabaseView.windowID) }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
@@ -214,6 +231,8 @@ struct KerfCommands: Commands {
             Button("Open Post Profiles Folder") { openPostFolder() }
         }
     }
+
+    private var arrange: ArrangeAvailability { ArrangeAvailability(selectionCount: document?.selection.count ?? 0) }
 
     private func showHelp(_ topic: HelpTopic) { HelpNavigator.show(topic) }
 
@@ -230,19 +249,22 @@ struct KerfCommands: Commands {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = ImportService.allowedContentTypes
         panel.message = "Import vectors (SVG, DXF, EPS, AI, PDF), a tracing image or a 3D model"
-        guard panel.runModal() == .OK else { return }
-        doc.importFiles(panel.urls)
+        PanelRunner.present(panel) { response in
+            guard response == .OK else { return }
+            doc.importFiles(panel.urls)
+        }
     }
 
     private func runExportVectorsPanel() {
         guard let doc = document else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = ["svg", "dxf", "pdf", "eps", "ai"].compactMap { UTType(filenameExtension: $0) }
-        panel.nameFieldStringValue = doc.document.name + ".svg"
-        panel.message = (doc.selection.isEmpty ? "Export all vectors" : "Export the selected vectors")
-            + " (SVG, DXF, PDF, EPS or AI — choose by file extension)"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        doc.exportVectors(to: url, selectionOnly: !doc.selection.isEmpty)
+        let format = VectorFormatAccessory(panel: panel, fileName: VectorExportFormat.svg.fileName(from: doc.document.name))
+        panel.message = doc.selection.isEmpty ? "Export all vectors" : "Export the selected vectors"
+        PanelRunner.present(panel) { response in
+            _ = format  // the accessory must outlive the panel
+            guard response == .OK, let url = panel.url else { return }
+            doc.exportVectors(to: url, selectionOnly: !doc.selection.isEmpty)
+        }
     }
 
     private func openPostFolder() {

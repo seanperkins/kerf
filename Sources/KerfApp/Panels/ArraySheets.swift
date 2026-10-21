@@ -62,7 +62,7 @@ struct CopyAlongSheet: View {
         let n = bySpacing ? (guide?.paths.first.map { CopyAlong.count(along: $0, spacing: spacing) } ?? 0) : count
         DrawingDialog(title: "Copy Along Vector", action: "Copy", disabled: order.count < 2 || n < 1,
                       note: order.count < 2 ? "Select the objects, then shift-click the guide vector last."
-                          : "Guide: the last selected vector\(guide.map { $0.name.isEmpty ? "" : " (\($0.name))" } ?? ""). \(n) cop\(n == 1 ? "y" : "ies") centred on evenly spaced points; open guides get one at each end.",
+                          : "Guide: the last selected vector\(guide.map { $0.name.isEmpty ? "" : " (\($0.name))" } ?? ""). \(n) cop\(n == 1 ? "y" : "ies") centered on evenly spaced points; open guides get one at each end.",
                       perform: {
                           let (c, r, k) = (n, rotate, keepOriginal)
                           var ids: [UUID] = []
@@ -127,13 +127,13 @@ struct CircularArraySheet: View {
                 NumberField("Step angle", value: $step, unit: "°")
             }
             Toggle("Rotate copies", isOn: $rotate)
-            Picker("Centre", selection: $centerChoice) {
-                Text("Material centre").tag(CenterChoice.material)
+            Picker("Center", selection: $centerChoice) {
+                Text("Material center").tag(CenterChoice.material)
                 Text("Custom point").tag(CenterChoice.custom)
             }
             if centerChoice == .custom {
-                LengthField("Centre X", value: $center.x, units: document.units)
-                LengthField("Centre Y", value: $center.y, units: document.units)
+                LengthField("Center X", value: $center.x, units: document.units)
+                LengthField("Center Y", value: $center.y, units: document.units)
             }
         }
     }
@@ -172,7 +172,7 @@ struct RectangularArraySheet: View {
             IntField("Columns", value: $columns, range: 1...500)
             Picker("Spacing", selection: $spacing) {
                 Text("Gap between copies").tag(ArrayLayout.Spacing.gap)
-                Text("Offset (centre to centre)").tag(ArrayLayout.Spacing.offset)
+                Text("Offset (center to center)").tag(ArrayLayout.Spacing.offset)
             }
             LengthField(spacing == .gap ? "X gap" : "X offset", value: $x, units: document.units)
             LengthField(spacing == .gap ? "Y gap" : "Y offset", value: $y, units: document.units)

@@ -86,6 +86,15 @@ struct DesignSidebar: View {
                 PlacedImagesSection(document: document)
             }
             .listStyle(.sidebar)
+            .overlay {
+                if document.document.shapes.isEmpty && document.document.models.isEmpty && document.document.placedImages.isEmpty {
+                    ContentUnavailableView {
+                        Label(EmptyState.noObjects.title, systemImage: EmptyState.noObjects.systemImage)
+                    } description: {
+                        Text(EmptyState.noObjects.detail)
+                    }
+                }
+            }
             .contextMenu(forSelectionType: UUID.self) { ids in
                 if !ids.isEmpty {
                     Menu("Move to Layer") {
@@ -110,7 +119,7 @@ struct ShapeRow: View {
             Text(shape.name.isEmpty ? "Vector" : shape.name).lineLimit(1)
             Spacer()
             if shape.isLocked { Image(systemName: "lock.fill").font(.caption).foregroundStyle(.secondary) }
-            if !shape.isClosed { Text("open").font(.caption2).foregroundStyle(.orange) }
+            if !shape.isClosed { Text("open").font(.caption2).foregroundStyle(Color.warningText) }
         }
     }
 
@@ -139,7 +148,7 @@ struct LayersList: View {
                 Text("Layers").font(.headline)
                 Spacer()
                 Button { document.perform("Add Layer") { $0.addLayer() } } label: { Image(systemName: "plus") }
-                    .buttonStyle(.borderless).help("Add layer").accessibilityLabel("Add layer")
+                    .buttonStyle(.icon).help("Add layer").accessibilityLabel("Add layer")
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             List {
@@ -162,18 +171,18 @@ struct LayerRow: View {
             Button { update { $0.isVisible.toggle() } } label: {
                 Image(systemName: layer.isVisible ? "eye" : "eye.slash")
             }
-            .buttonStyle(.borderless).help(layer.isVisible ? "Hide layer" : "Show layer")
+            .buttonStyle(.icon).help(layer.isVisible ? "Hide layer" : "Show layer")
             .accessibilityLabel(layer.isVisible ? "Hide layer \(layer.name)" : "Show layer \(layer.name)")
             Button { update { $0.isLocked.toggle() } } label: {
                 Image(systemName: layer.isLocked ? "lock.fill" : "lock.open")
             }
-            .buttonStyle(.borderless).help(layer.isLocked ? "Unlock layer" : "Lock layer")
+            .buttonStyle(.icon).help(layer.isLocked ? "Unlock layer" : "Lock layer")
             .accessibilityLabel(layer.isLocked ? "Unlock layer \(layer.name)" : "Lock layer \(layer.name)")
             ColorPicker("", selection: Binding(
                 get: { Color(nsColor: NSColor(hex: layer.colorHex) ?? .black) },
                 set: { c in update { $0.colorHex = NSColor(c).hexString } }), supportsOpacity: false)
-                .labelsHidden().frame(width: 28)
-                .accessibilityLabel("Colour of layer \(layer.name)")
+                .labelsHidden().frame(width: 44)
+                .accessibilityLabel("Color of layer \(layer.name)")
             TextField("Layer", text: $name, onCommit: { update { $0.name = name.isEmpty ? layer.name : name } })
                 .textFieldStyle(.plain)
             Spacer()
@@ -254,14 +263,13 @@ struct ToolpathsSidebar: View {
             }
             .padding(8)
             if document.project.operations.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Text("No toolpaths").font(.headline)
-                    Text("Select vectors on the canvas, then choose New Toolpath.")
-                        .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    Spacer()
+                ContentUnavailableView {
+                    Label(EmptyState.noToolpaths.title, systemImage: EmptyState.noToolpaths.systemImage)
+                } description: {
+                    Text(EmptyState.noToolpaths.detail)
                 }
-                .padding()
+                // Fill the column: unlike the Spacers it replaces, it would otherwise let the whole stack centre.
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(selection: selectedOp) {
                     ForEach(Array(document.project.operations.enumerated()), id: \.element.id) { i, op in
@@ -273,19 +281,28 @@ struct ToolpathsSidebar: View {
             }
             Divider()
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Button("Calculate All") { document.calculateAll() }
-                    Spacer()
-                    Button { document.sheet = .validation } label: { Image(systemName: "checkmark.shield") }
-                        .help("Check toolpaths with the validator")
-                        .accessibilityLabel("Check toolpaths")
-                    Button("Save All…") { document.sheet = .saveAllToolpaths }
-                        .help("Save all toolpaths: one combined file or one file per toolpath/tool")
+                ViewThatFits(in: .horizontal) {
+                    footerButtons(calculate: "Calculate All", save: "Save All…")
+                    footerButtons(calculate: "Calculate", save: "Save…")
                 }
                 .disabled(document.project.operations.isEmpty)
                 ToolChangeSummaryView(document: document)
             }
             .padding(8)
+        }
+    }
+
+    /// Short labels fit the sidebar's 220 pt minimum, where "Calculate All" was cut to "Calculate…".
+    private func footerButtons(calculate: String, save: String) -> some View {
+        HStack {
+            Button(calculate) { document.calculateAll() }
+                .help("Calculate all toolpaths")
+            Spacer()
+            Button { document.sheet = .validation } label: { Image(systemName: "checkmark.shield") }
+                .help("Check toolpaths with the validator")
+                .accessibilityLabel("Check toolpaths")
+            Button(save) { document.sheet = .saveAllToolpaths }
+                .help("Save all toolpaths: one combined file or one file per toolpath/tool")
         }
     }
 
@@ -316,12 +333,21 @@ struct ToolpathRow: View {
             Button { document.toggleToolpathVisibility(operation.id) } label: {
                 Image(systemName: document.hiddenToolpaths.contains(operation.id) ? "eye.slash" : "eye")
             }
-            .buttonStyle(.borderless).help("Show/hide on canvas")
+            .buttonStyle(.icon).help("Show/hide on canvas")
             .accessibilityLabel(document.hiddenToolpaths.contains(operation.id) ? "Show \(operation.setup.name) on canvas" : "Hide \(operation.setup.name) on canvas")
             Circle().fill(Color(nsColor: ToolpathColors.color(forIndex: colorIndex))).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 1) {
                 Text(operation.setup.name).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                // The time goes first when the sidebar is narrow: the tool number matters more.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 4) {
+                        Text(summary).lineLimit(1).fixedSize()
+                        Spacer(minLength: 4)
+                        if let duration { Text(duration).fixedSize() }
+                    }
+                    Text(summary).lineLimit(1)
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             status
@@ -329,18 +355,17 @@ struct ToolpathRow: View {
         .opacity(operation.setup.isEnabled ? 1 : 0.55)
     }
 
-    private var subtitle: String {
+    private var summary: String {
         let lib = document.mergedLibrary
-        var tools: [String] = []
-        for id in operation.referencedToolIDs {
-            let t = lib.tool(id: id).map { "T\($0.number)" } ?? "missing tool"
-            if !tools.contains(t) { tools.append(t) }
-        }
-        var s = "\(operation.kind.displayName) · \(tools.joined(separator: "+"))"
-        if let r = document.results[operation.id], r.error == nil, !document.isStale(operation.id) {
-            s += " · " + ToolpathCalculator.formatDuration(r.estimatedSeconds)
-        }
-        return s
+        let tools = operation.referencedToolIDs.map { id in lib.tool(id: id).map { "T\($0.number)" } ?? "missing tool" }
+        return ToolpathRowText.summary(kind: operation.kind.displayName, tools: tools)
+    }
+
+    /// The calculated time, once it is current; kept apart from the summary so a narrow sidebar
+    /// truncates the tools, not the time.
+    private var duration: String? {
+        guard let r = document.results[operation.id], r.error == nil, !document.isStale(operation.id) else { return nil }
+        return ToolpathCalculator.formatDuration(r.estimatedSeconds)
     }
 
     @ViewBuilder private var status: some View {
@@ -360,7 +385,30 @@ struct ToolpathRow: View {
             }
         } else {
             Button { document.calculate([operation.id]) } label: { Image(systemName: "play.circle") }
-                .buttonStyle(.borderless).help("Calculate").accessibilityLabel("Calculate \(operation.setup.name)")
+                .buttonStyle(.icon).help("Calculate").accessibilityLabel("Calculate \(operation.setup.name)")
         }
     }
+}
+
+/// Text for a toolpath row, kept apart from the view so it can be tested.
+enum ToolpathRowText {
+    /// "Pocket · T1+T6": the kind and the tools it uses, each once. A toolpath that uses none (a merged
+    /// one) is just its kind.
+    static func summary(kind: String, tools: [String]) -> String {
+        var unique: [String] = []
+        for t in tools where !unique.contains(t) { unique.append(t) }
+        return unique.isEmpty ? kind : "\(kind) · \(unique.joined(separator: "+"))"
+    }
+}
+
+/// The wording of the sidebar's empty states: what is missing and the next step.
+struct EmptyState {
+    var title: String
+    var systemImage: String
+    var detail: String
+
+    static let noToolpaths = EmptyState(title: "No Toolpaths", systemImage: "square.stack.3d.up",
+                                        detail: "Select vectors on the canvas, then choose New Toolpath.")
+    static let noObjects = EmptyState(title: "No Objects", systemImage: "scribble.variable",
+                                      detail: "Draw with the tool palette, or bring in vectors with File ▸ Import….")
 }

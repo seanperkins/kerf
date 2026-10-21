@@ -55,6 +55,60 @@ private enum Job {
         #expect(s.sequence.map(\.number) == [1])
     }
 
+    @Test func totalAddsTheAllowanceForEachToolChange() {
+        // The sidebar total used to leave tool changes out, while the 3D preview counted them.
+        let p = Job.project()
+        let results = Job.results(p)
+        let bare = JobSummary.make(operations: p.operations, results: results, groupByTool: true)
+        let allowed = JobSummary.make(operations: p.operations, results: results, groupByTool: true, toolChangeSeconds: 90)
+        #expect(bare.toolChangeAllowance == 0 && bare.totalSeconds == bare.machiningSeconds)
+        #expect(allowed.machiningSeconds == bare.machiningSeconds)
+        #expect(allowed.toolChangeAllowance == 2 * 90)  // T1, T6, T1
+        #expect(abs(allowed.totalSeconds - (bare.machiningSeconds + 180)) < 1e-6)
+    }
+
+    @Test func aToolChangeInsideOneOperationIsCountedOnce() throws {
+        // The pocket clears with a 1/2" end mill before its 1/4" finish, so its own estimate
+        // already holds one allowance; the job total used to add that change a second time.
+        var p = Job.project()
+        guard case .pocket(var pocket) = p.operations[2] else { throw TestError.notAPocket }
+        pocket.params.clearanceToolIDs = [ToolLibrary.seeded.tools[2].id]
+        p.operations[2] = .pocket(pocket)
+        let results = Job.results(p)
+        #expect(results[p.operations[2].id]!.toolpaths.count == 2)
+        let s = JobSummary.make(operations: p.operations, results: results, groupByTool: false, toolChangeSeconds: 90)
+        #expect(s.sequence.map(\.number) == [1, 6, 3, 1])
+        #expect(s.toolChanges == 3)
+        // Motion of every toolpath plus one allowance per change in the program: three, not four.
+        var settings = TimeEstimateSettings.load()
+        settings.toolChangeSeconds = 90
+        let motion = p.operations.map { settings.estimate(results[$0.id]!.toolpaths, rapidRate: 200, units: .inch, toolChanges: false) }
+            .reduce(0, +)
+        #expect(abs(s.machiningSeconds - motion) < 1e-6)
+        #expect(abs(s.totalSeconds - (motion + 3 * 90)) < 1e-6)
+        // The pocket's own row still includes its internal change.
+        let pocketResult = results[p.operations[2].id]!
+        #expect(abs(pocketResult.estimatedSeconds - pocketResult.machiningSeconds - 90) < 1e-6)
+        #expect(abs((s.rows[2].estimatedSeconds ?? 0) - pocketResult.estimatedSeconds) < 1e-9)
+    }
+
+    enum TestError: Error { case notAPocket }
+
+    @Test func nothingCalculatedMeansNoEstimate() {
+        // The sidebar read "Estimated time: 0s · No tools" before anything was calculated.
+        let p = Job.project()
+        #expect(!JobSummary.make(operations: p.operations, results: [:], groupByTool: true).hasEstimate)
+        #expect(JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true).hasEstimate)
+    }
+
+    @Test func aSingleToolJobHasNoAllowance() {
+        var p = Job.project()
+        p.operations[1].editableSetup.isEnabled = false  // the V-carve is the only T6 toolpath
+        let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true, toolChangeSeconds: 90)
+        #expect(s.toolChanges == 0 && s.toolChangeAllowance == 0)
+        #expect(s.totalSeconds == s.machiningSeconds)
+    }
+
     @Test func uncalculatedRowsHaveNoTime() {
         let p = Job.project()
         let s = JobSummary.make(operations: p.operations, results: [:], groupByTool: true)

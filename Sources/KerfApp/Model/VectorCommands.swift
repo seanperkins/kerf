@@ -449,8 +449,8 @@ enum VectorCommands {
         var id: String { rawValue }
         func title(horizontally: Bool) -> String {
             switch self {
-            case .selectionCenter: return "Selection centre"
-            case .materialCenter: return "Material centre"
+            case .selectionCenter: return "Selection center"
+            case .materialCenter: return "Material center"
             case .minEdge: return horizontally ? "Selection left edge" : "Selection bottom edge"
             case .maxEdge: return horizontally ? "Selection right edge" : "Selection top edge"
             }

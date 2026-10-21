@@ -42,8 +42,8 @@ struct ExportGCodeSheet: View {
                 LabeledContent("Z zero", value: document.outputProject.document.job.zZero.displayName)
                 LabeledContent("XY origin", value: document.document.job.xyOrigin.displayName)
             }
-            .formStyle(.grouped)
-            .frame(height: 230)
+            // Natural height: a fixed one clipped the last rows (and a two-sided job adds a row).
+            .formStyle(.columns)
             if calcTask != nil {
                 CalculationProgressView(count: calculatingCount) { stopCalculating() }
             }
@@ -78,15 +78,15 @@ struct ExportGCodeSheet: View {
     @ViewBuilder private var issuesView: some View {
         if let r = result {
             if let e = r.errorMessage {
-                Label(e, systemImage: "xmark.octagon.fill").foregroundStyle(.red)
+                Label(e, systemImage: "xmark.octagon.fill").foregroundStyle(Color.errorText)
             }
             if r.issues.isEmpty && r.errorMessage == nil {
                 Label("No problems found in \(r.toolpathCount) toolpath(s).", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.successText)
             }
             if !r.issues.isEmpty {
                 List(Array(r.issues.enumerated()), id: \.offset) { _, issue in
-                    Label(issue.description, systemImage: issue.severity == .error ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
+                    Label(issue.displayText, systemImage: issue.severity == .error ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(issue.severity == .error ? .red : .orange)
                 }
                 .frame(minHeight: 80, maxHeight: 140)
@@ -157,18 +157,21 @@ struct ExportGCodeSheet: View {
         let panel = NSSavePanel()
         var opName: String?
         if case .operation(let id) = scope { opName = document.operation(id)?.setup.name }
-        panel.nameFieldStringValue = GCodeExporter.suggestedFileName(jobName: document.document.name,
-                                                                     operationName: opName, profile: profile)
+        panel.nameFieldStringValue = SavePanelName.suggested(
+            GCodeExporter.suggestedFileName(jobName: document.document.name, operationName: opName, profile: profile),
+            allowedExtension: profile.fileExtension)
         if let t = UTType(filenameExtension: profile.fileExtension) { panel.allowedContentTypes = [t] }
         panel.allowsOtherFileTypes = true
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try text.write(to: url, atomically: true, encoding: .utf8)
-            if document.project.postProfileID != profileID { document.setPostProfile(profileID) }
-            dismiss()
-        } catch {
-            document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+        PanelRunner.present(panel) { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+                if document.project.postProfileID != profileID { document.setPostProfile(profileID) }
+                dismiss()
+            } catch {
+                document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+            }
         }
     }
 }

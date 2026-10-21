@@ -16,7 +16,7 @@ struct DepthForm: View {
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
         PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: toolStepdown)
         if depth.cutDepth <= depth.startDepth {
-            Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(.orange)
+            Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(Color.warningText)
         }
     }
 }
@@ -121,6 +121,11 @@ struct ProfileForm: View {
                 Text("On").tag(ProfileSide.on)
             }
             .pickerStyle(.segmented)
+            DirectionPicker(direction: $params.direction)
+            LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
+        }
+        Divider()
+        InspectorSection(title: "Order & Corners", collapsedByDefault: true) {
             Picker("Open vectors", selection: Binding(get: { params.openVectorSide ?? .on },
                                                       set: { params.openVectorSide = $0 == .on ? nil : $0 })) {
                 Text("On").tag(OpenVectorSide.on)
@@ -130,7 +135,7 @@ struct ProfileForm: View {
             .help("Open vectors: cut on the line, or keep the tool to the left or right of the vector's direction")
             Picker("Start point", selection: Binding(get: { params.startPoint ?? .nearest },
                                                      set: { params.startPoint = $0 == .nearest ? nil : $0 })) {
-                Text("Nearest (optimised)").tag(ProfileStartPoint.nearest)
+                Text("Nearest (optimized)").tag(ProfileStartPoint.nearest)
                 Text("Vector start node").tag(ProfileStartPoint.vectorStart)
                 Text("Left side").tag(ProfileStartPoint.left)
                 Text("Right side").tag(ProfileStartPoint.right)
@@ -147,15 +152,13 @@ struct ProfileForm: View {
                 Text("Grid (rows from bottom)").tag(ProfileOrder.grid)
             }
             .help("Order the parts are cut in. Holes are always cut before the part around them.")
-            DirectionPicker(direction: $params.direction)
-            LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
             Toggle("Sharp external corners", isOn: Binding(get: { params.sharpCorners == true },
                                                            set: { params.sharpCorners = $0 ? true : nil }))
                 .help("Run straight out to a square corner instead of rolling round the part's corners")
         }
         Divider()
-        InspectorSection(title: "Last Pass") { ProfileLastPassForm(lastPass: $params.lastPass, side: params.side, units: units) }
+        InspectorSection(title: "Last Pass", collapsedByDefault: true) { ProfileLastPassForm(lastPass: $params.lastPass, side: params.side, units: units) }
         Divider()
         InspectorSection(title: "Tabs", helpTopic: .tabs) {
             Toggle("Add tabs", isOn: $params.tabs.isEnabled)
@@ -184,7 +187,7 @@ struct ProfileForm: View {
             }
         }
         Divider()
-        InspectorSection(title: "Ramps & Leads", helpTopic: .tabs) {
+        InspectorSection(title: "Ramps & Leads", helpTopic: .tabs, collapsedByDefault: true) {
             RampForm(ramp: $params.ramp, units: units)
             Picker("Lead in/out", selection: $params.lead.type) {
                 Text("None").tag(LeadType.none)
@@ -219,7 +222,7 @@ struct PocketForm: View {
             ClearanceToolsEditor(params: $params, library: library, finishToolID: finishToolID)
         }
         Divider()
-        InspectorSection(title: "Ramps") { RampForm(ramp: $params.ramp, units: units) }
+        InspectorSection(title: "Ramps", collapsedByDefault: true) { RampForm(ramp: $params.ramp, units: units) }
     }
 }
 
@@ -241,7 +244,7 @@ struct DrillForm: View {
             }
             NumberField("Dwell at bottom", value: $params.dwellSeconds, unit: "s")
             Text(OperationHints.peckSummary(params, units: units)).font(.caption).foregroundStyle(.secondary)
-            Text("Drills at the centre of each selected vector.").font(.caption).foregroundStyle(.secondary)
+            Text("Drills at the center of each selected vector.").font(.caption).foregroundStyle(.secondary)
         }
     }
 }
@@ -349,7 +352,7 @@ struct ClearanceToolList: View {
                 ForEach(choices) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
             Button { if i < tools.count { tools.remove(at: i) } } label: { Image(systemName: "minus.circle") }
-                .buttonStyle(.borderless).help("Remove this clearance tool")
+                .buttonStyle(.icon).help("Remove this clearance tool")
         }
         if library.tool(id: id)?.angle != nil {
             Toggle("Corner sharpen", isOn: Binding(get: { i < tools.count && tools[i].cornerSharpen },
@@ -385,7 +388,7 @@ struct InlayForm: View {
             }
             let gap = params.pocketDepth - params.maleStartDepth
             if params.maleStartDepth + params.glueGap > params.pocketDepth + 1e-9 {
-                Text("Plug start depth + glue gap must not exceed the pocket depth.").font(.caption).foregroundStyle(.orange)
+                Text("Plug start depth + glue gap must not exceed the pocket depth.").font(.caption).foregroundStyle(Color.warningText)
             } else {
                 Text("Gap under the plug: \(RulerTicks.label((gap * 1000).rounded() / 1000)) \(units.abbreviation)")
                     .font(.caption).foregroundStyle(.secondary)
@@ -611,10 +614,10 @@ struct ClearanceToolsEditor: View {
                     ForEach(candidates) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
                 }
                 Button { var n = ids; n.remove(at: i); set(n) } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.borderless).help("Remove this clearance tool")
+                    .buttonStyle(.icon).help("Remove this clearance tool")
             }
             if let problem = problems[i] {
-                Text(problem).font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                Text(problem).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
             }
         }
         Button { if let t = nextSuggestion { set(ids + [t.id]) } } label: { Label("Add Clearance Tool", systemImage: "plus") }

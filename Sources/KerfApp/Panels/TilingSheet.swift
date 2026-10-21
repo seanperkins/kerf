@@ -35,7 +35,7 @@ struct TilingSheet: View {
                 CalculationProgressView(count: calculatingCount) { calcTask?.cancel(); calcTask = nil }
             } else if files.isEmpty {
                 Label("There are no calculated, enabled toolpaths to save.", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
             } else {
                 List(Array(files.enumerated()), id: \.offset) { _, f in row(f) }
             }
@@ -78,13 +78,13 @@ struct TilingSheet: View {
                  + "tile \(RulerTicks.label(f.tile.region.width)) x \(RulerTicks.label(f.tile.region.height)) \(document.units.abbreviation)")
                 .font(.caption).foregroundStyle(.secondary)
             if let e = f.result.errorMessage {
-                Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(.red)
+                Label(e, systemImage: "xmark.octagon.fill").font(.caption).foregroundStyle(Color.errorText)
             } else if errors + warnings > 0 {
                 Label("\(errors) error(s), \(warnings) warning(s)", systemImage: errors > 0 ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(errors > 0 ? .red : .orange)
                     .help(f.result.issues.map(\.message).joined(separator: "\n"))
             } else {
-                Label("No problems found", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(.green)
+                Label("No problems found", systemImage: "checkmark.seal.fill").font(.caption).foregroundStyle(Color.successText)
             }
         }
     }

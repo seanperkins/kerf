@@ -59,7 +59,7 @@ struct InlayWizardSheet: View {
                 if !problems.isEmpty {
                     Section {
                         ForEach(problems, id: \.self) {
-                            Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                            Label($0, systemImage: "exclamationmark.triangle").foregroundStyle(Color.warningText)
                         }
                     }
                 }

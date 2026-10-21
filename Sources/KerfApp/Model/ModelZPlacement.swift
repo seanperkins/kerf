@@ -10,7 +10,7 @@ extension ModelPlacementForm {
         var title: String {
             switch self {
             case .top: return "Top"
-            case .center: return "Centre"
+            case .center: return "Center"
             case .bottom: return "Bottom"
             }
         }

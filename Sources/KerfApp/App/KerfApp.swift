@@ -3,6 +3,14 @@ import SwiftUI
 
 final class KerfAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        // Scripted UI run (see UIHarness): no Welcome window, no recovery prompt or timer, no Dock icon.
+        if UIHarness.isActive {
+            NSApp.setActivationPolicy(UIHarness.request?.active == true ? .regular : .accessory)
+            UIHarness.shared.start()
+            return
+        }
+        #endif
         // Needed when launched as a bare SwiftPM executable (no bundle).
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -31,6 +39,8 @@ struct KerfApp: App {
                 .environmentObject(toolLibrary)
                 .frame(minWidth: 1000, minHeight: 640)
         }
+        // Open wider than the minimum so the 2D | 3D split has room beside the sidebar and inspector.
+        .defaultSize(width: 1280, height: 820)
         .commands {
             KerfCommands()
             VectorMenuCommands()

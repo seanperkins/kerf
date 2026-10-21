@@ -152,7 +152,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Kerf turns vector drawings into G-code for a CNC router. A typical job:
 
             1. **Job Setup** (⇧⌘J): material width, height and thickness, where X0 Y0 is, and whether Z zero is the material top or the spoilboard.
-            2. **Pick the machine** in the toolbar. It sets the bed size and the post processors you can use.
+            2. **Pick the machine and post processor**, also in Job Setup. The machine sets the bed size and the posts you can use.
             3. **Draw or import** vectors (File ▸ Import… for SVG, DXF, EPS or STL).
             4. **Select vectors and add a toolpath** (Toolpaths ▸ New Toolpath). Choose the tool and depths in the inspector.
             5. **Calculate** (⌘R) and look at the 2D overlay and the 3D preview.
@@ -166,9 +166,10 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Job Setup describes the stock you clamp to the bed.
 
             - **Units**: changing them converts the design and every toolpath length.
+            - **Machine and post processor**: the router and the G-code dialect it understands (see Machines).
             - **Material**: width (X), height (Y) and thickness (Z). The design area is the material rectangle, with (0, 0) at its lower-left corner.
             - **Z zero**: *Material surface* means you touch off on top of the stock and cuts have negative Z. *Machine bed* means you touch off on the spoilboard and the stock top is Z = thickness.
-            - **XY origin**: which corner (or the centre) of the material is machine X0 Y0. Moving the origin never moves the design; it only changes the G-code numbers.
+            - **XY origin**: which corner (or the center) of the material is machine X0 Y0. Moving the origin never moves the design; it only changes the G-code numbers.
             - **Safe Z / Home**: rapid moves happen at Safe Z above the material. The program ends by going to the home position.
 
             Kerf warns when the material is bigger than the selected machine's bed.
@@ -177,7 +178,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             return """
             A **machine** is the physical router: bed size, Z travel, how far a cut may go into the spoilboard, rapid speed and spindle range. A **post processor** is the G-code dialect the controller understands.
 
-            Pick both in the toolbar. Choosing a machine switches to one of its posts if the current one does not drive it. Validation and time estimates use the machine's limits.
+            Pick both in Job Setup (⇧⌘J). The status bar shows them, and clicking it opens Job Setup. Choosing a machine switches to one of its posts if the current one does not drive it. Validation and time estimates use the machine's limits.
 
             Add your own machines in Preferences ▸ Machines: duplicate a built-in machine and edit it. Custom machines are JSON files in Application Support/Kerf/machines; custom posts go in Application Support/Kerf/posts (Toolpaths ▸ Open Post Profiles Folder).
             """
@@ -194,15 +195,15 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .nodeEditing:
             return """
-            Press **N** (or Design ▸ Edit Nodes) to edit the points of a vector. Drag nodes or curve handles; Shift-click to select several. The inspector can make nodes smooth or corners, convert segments between lines and curves, insert nodes and break a path.
+            Press **N** (or Arrange ▸ Edit Nodes) to edit the points of a vector. Drag nodes or curve handles; Shift-click to select several. The inspector can make nodes smooth or corners, convert segments between lines and curves, insert nodes and break a path.
 
             The first node edit turns arcs into curves and the shape becomes a plain drawn vector (it loses its rectangle/circle settings).
 
-            **Mirror** in the inspector edits symmetrically: moving a node or handle also moves its partner on the other side of the vector's centre line (Left – Right, Top – Bottom or Both). Nodes on a centre line only slide along it, so a symmetric shape stays symmetric.
+            **Mirror** in the inspector edits symmetrically: moving a node or handle also moves its partner on the other side of the vector's center line (Left – Right, Top – Bottom or Both). Nodes on a center line only slide along it, so a symmetric shape stays symmetric.
             """
         case .layers:
             return """
-            Layers live in the Design sidebar. Hide a layer to keep its vectors out of the way, lock it to stop accidental edits, and give it a colour. New shapes go to the layer of the current selection.
+            Layers live in the Design sidebar. Hide a layer to keep its vectors out of the way, lock it to stop accidental edits, and give it a color. New shapes go to the layer of the current selection.
 
             **Group** (⌘G) keeps shapes together when selecting; **Ungroup** (⇧⌘G) splits them again. **Combine Vectors** merges shapes into one; **Break Apart** splits a multi-path shape.
 
@@ -210,9 +211,9 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .transforms:
             return """
-            The Design menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors, closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
+            The Arrange menu aligns and distributes the selection, mirrors, rotates by 90°, joins open vectors, closes them, and runs boolean operations (union, subtract, intersect). **Offset…** grows or shrinks closed vectors.
 
-            Drag the selection box handles to scale (Shift keeps proportions, Option scales about the centre). The round handle above the box rotates (Shift snaps to 15°).
+            Drag the selection box handles to scale (Shift keeps proportions, Option scales about the center). The round handle above the box rotates (Shift snaps to 15°).
 
             **Vectors ▸ Distort Envelope on Canvas** puts four corner handles on the selection's box: drag them and the vectors are previewed bending to follow; Return or **Apply** makes the change, Esc cancels. Typed corner offsets are under **Values…** or in Vectors ▸ Shear / Distort….
             """
@@ -241,11 +242,11 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .drilling:
             return """
-            Drilling plunges once at the centre of each selected closed vector (or each point). Turn on **Peck drilling** to drill in steps and retract between them to clear chips; **Dwell at bottom** pauses before retracting.
+            Drilling plunges once at the center of each selected closed vector (or each point). Turn on **Peck drilling** to drill in steps and retract between them to clear chips; **Dwell at bottom** pauses before retracting.
             """
         case .vcarve:
             return """
-            V-carving follows the centre line of shapes with a V-bit, going deeper where the shape is wider, so letters get crisp corners.
+            V-carving follows the center line of shapes with a V-bit, going deeper where the shape is wider, so letters get crisp corners.
 
             - **Flat depth** limits the depth; wider areas are then cleared flat, optionally with a separate **flat area tool** (an end mill).
             - **Max pass depth** splits deep carves into several passes.
@@ -273,7 +274,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .holeMill:
             return """
-            Hole Milling cuts round holes with an end mill smaller than the hole, centred on each selected circle.
+            Hole Milling cuts round holes with an end mill smaller than the hole, centered on each selected circle.
 
             - **Helical bore** spirals down at the hole radius, then makes one flat lap at the bottom. **Helix pitch** is the depth per turn.
             - **Thread milling** cuts an internal thread with a thread mill in a pilot hole. Set the thread pitch and hand.
@@ -281,7 +282,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .prism:
             return """
-            Prism Carve runs a V-bit round each shape deep enough that the two sloping walls meet in a sharp ridge down the middle, so letters and shapes stand out as bevelled prisms.
+            Prism Carve runs a V-bit round each shape deep enough that the two sloping walls meet in a sharp ridge down the middle, so letters and shapes stand out as beveled prisms.
 
             Set a **max depth** to stop wide shapes going too deep; they then keep a flat top.
             """
@@ -343,15 +344,15 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .preview:
             return """
-            The **2D** view draws calculated toolpaths over the design: solid lines are cuts, dashed red lines are rapid moves. Toolpaths ▸ Show Toolpaths (⌥⌘T) hides them.
+            The **2D** view draws calculated toolpaths over the design: solid lines are cuts, dashed red lines are rapid moves. Toolpaths ▸ Show Toolpaths (⌥⌘P) hides them.
 
             The **3D** view simulates cutting the material. Press Play, scrub the timeline or change the speed. **2D | 3D** shows both side by side.
 
             The **view** button (cube) resets the camera; its arrow picks a standard view (top, front, back, left, right, bottom, isometric) and switches **Orthographic** projection on or off. Drag to orbit, scroll to zoom.
 
-            The **Show** menu next to the Tool checkbox draws **toolpath lines** (cuts coloured by depth, rapid moves in orange) and the design **vectors** in the 3D view, on top of the simulated stock.
+            The **Show** menu next to the Tool checkbox draws **toolpath lines** (cuts colored by depth, rapid moves in orange) and the design **vectors** in the 3D view, on top of the simulated stock.
 
-            **Toolpaths ▸ Preview G-code File…** simulates a saved program (.tap, .nc, …) from another job on this job's material, in its own window. It assumes the program uses this job's XY origin and Z zero. Tools named in a Kerf header are recognised; otherwise set each tool's type and diameter in the window. Nothing is added to the job. To reuse toolpath settings across jobs, use a toolpath template instead.
+            **Toolpaths ▸ Preview G-code File…** simulates a saved program (.tap, .nc, …) from another job on this job's material, in its own window. It assumes the program uses this job's XY origin and Z zero. Tools named in a Kerf header are recognized; otherwise set each tool's type and diameter in the window. Nothing is added to the job. To reuse toolpath settings across jobs, use a toolpath template instead.
             """
         case .checkToolpaths:
             return """
@@ -380,7 +381,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .preferences:
             return """
-            Kerf ▸ Settings… (⌘,) sets the defaults for **new** documents (units, grid spacing, machine, post, snapping), the canvas colours, how often recovery copies are saved, and whether the Welcome window opens at launch. Open documents keep their own settings.
+            Kerf ▸ Settings… (⌘,) sets the defaults for **new** documents (units, grid spacing, machine, post, snapping), the canvas colors, how often recovery copies are saved, and whether the Welcome window opens at launch. Open documents keep their own settings.
             """
         case .recovery:
             return """
@@ -390,9 +391,11 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .shortcuts:
             return """
+            - **File**: ⇧⌘I import · ⌘P print
             - **Canvas tools**: V select · N nodes · R rectangle · C circle · E ellipse · L polyline · P pen · T text
-            - **View**: ⌘0 zoom to material · ⌘2 zoom to selection · ⌘= / ⌘- zoom · ⌥⌘1 2D · ⌥⌘2 2D and 3D · ⌥⌘3 3D · ⌥⌘T toolpaths
-            - **Design**: ⇧⌘J Job Setup · ⌘D duplicate · ⌘G / ⇧⌘G group / ungroup · ⌘[ / ⌘] rotate 90° · ⌘' snap to grid · ⇧⌘' snap to objects
+            - **View**: ⌘0 zoom to material · ⌘2 zoom to selection · ⌘= / ⌘- zoom · ⌥⌘1 2D · ⌥⌘2 2D and 3D · ⌥⌘3 3D · ⌥⌘P toolpaths
+            - **Design**: ⇧⌘J Job Setup · ⇧⌘B top / bottom side (two-sided jobs) · ⌘' snap to grid · ⇧⌘' snap to objects
+            - **Selection** (Edit and Arrange menus): ⌘D duplicate · ⌘G / ⇧⌘G group / ungroup · ⌥⌘[ / ⌥⌘] rotate 90°
             - **Canvas keyboard**: Tab / ⇧Tab select the next / previous shape (⌃Tab leaves the canvas) · arrow keys nudge (⇧ for ×10) · Delete removes · Esc clears
             - **Toolpaths**: ⌘R calculate all · ⇧⌘K check · ⇧⌘E export · ⌥⌘S save all · ⇧⌘T tool database
             - **Help**: ⌘? Kerf Help
@@ -443,7 +446,7 @@ enum FieldHelp {
         "Angle": "Direction of the strokes (0° = along X)",
         "Variation": "How much stroke length and depth vary randomly",
         "Resolution": "Size of the height grid cell used to calculate 3D toolpaths",
-        "Stepover": "Distance between neighbouring passes",
+        "Stepover": "Distance between neighboring passes",
         "Width (X)": "Material size along the machine's X axis",
         "Height (Y)": "Material size along the machine's Y axis",
         "Thickness (Z)": "Material thickness",

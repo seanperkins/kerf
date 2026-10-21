@@ -204,11 +204,13 @@ struct SimulationPreviewView: View {
             Toggle(isOn: toolBinding(.select)) { Image(systemName: "cursorarrow") }
                 .toggleStyle(.button)
                 .help("Select vectors by clicking them in the 3D view")
+                .accessibilityLabel("Select vectors in the 3D view")
         }
         if onDrawShape != nil {
             Toggle(isOn: toolBinding(.draw)) { Image(systemName: "pencil.line") }
                 .toggleStyle(.button)
                 .help("Draw a polyline on the material top by clicking points in the 3D view")
+                .accessibilityLabel("Draw a polyline in the 3D view")
         }
     }
 
@@ -216,8 +218,10 @@ struct SimulationPreviewView: View {
         Binding(get: { model.tool == t }, set: { model.tool = $0 ? t : .none })
     }
 
+    /// Wraps onto further lines in a narrow pane (the sidebar and inspector leave about 430 pt at the
+    /// minimum window width) rather than forcing the whole window layout wider than the screen.
     private var controls: some View {
-        HStack(spacing: 10) {
+        WrappingHStack(spacing: 10, lineSpacing: 8) {
             if let scope {
                 Picker("Simulate", selection: scope) {
                     ForEach(PreviewScope.allCases) { Text($0.title).tag($0) }
@@ -231,26 +235,33 @@ struct SimulationPreviewView: View {
         }
     }
 
-    private var playbackControls: some View {
-        HStack(spacing: 10) {
+    @ViewBuilder private var playbackControls: some View {
+        Group {
             Button(action: model.rewind) { Image(systemName: "backward.end.fill") }
                 .help("Back to start")
+                .accessibilityLabel("Back to start")
             Button(action: model.togglePlay) {
                 Image(systemName: model.isPlaying ? "pause.fill" : "play.fill").frame(width: 16)
             }
             .keyboardShortcut(.space, modifiers: [])
             .help(model.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
             Button(action: model.stepBackward) { Image(systemName: "backward.frame.fill") }
                 .help("Step back one move")
+                .accessibilityLabel("Step back one move")
             Button(action: model.stepForward) { Image(systemName: "forward.frame.fill") }
                 .help("Step forward one move")
+                .accessibilityLabel("Step forward one move")
             Button(action: model.runToNextRetract) { Image(systemName: "arrow.up.to.line") }
                 .help("Run to the next retract")
+                .accessibilityLabel("Run to the next retract")
             Button(action: model.jumpToEnd) { Image(systemName: "forward.end.fill") }
                 .help("Show finished result")
+                .accessibilityLabel("Show finished result")
             Slider(value: Binding(get: { model.progress }, set: { model.pause(); model.progress = $0 }),
                    in: 0...1)
                 .frame(minWidth: 160)
+                .flexibleInWrappingStack()
             Text("\(MachiningTimeEstimator.format(model.time)) / \(MachiningTimeEstimator.format(model.totalTime))")
                 .font(.caption.monospacedDigit())
                 .frame(minWidth: 110, alignment: .trailing)
@@ -265,14 +276,18 @@ struct SimulationPreviewView: View {
                 Image(systemName: "camera")
             }
             .help("Save the preview as an image…")
+                .accessibilityLabel("Save the preview as an image")
             Toggle(isOn: toolBinding(.measure)) { Image(systemName: "ruler") }
                 .toggleStyle(.button)
                 .help("Measure: click the stock for a depth, click again for a distance")
+                .accessibilityLabel("Measure")
             Button { showAppearance.toggle() } label: { Image(systemName: "paintpalette") }
                 .help("Material appearance")
+                .accessibilityLabel("Material appearance")
                 .popover(isPresented: $showAppearance) { PreviewAppearancePopover(store: appearanceStore) }
             Button { showTimeSettings.toggle() } label: { Image(systemName: "stopwatch") }
                 .help("Time estimate settings (acceleration, calibration)")
+                .accessibilityLabel("Time estimate settings")
                 .popover(isPresented: $showTimeSettings) {
                     TimeEstimatePopover(store: timeStore, toolpaths: toolpaths, rapidRate: rapidRate, units: units)
                 }
@@ -294,6 +309,7 @@ struct SimulationPreviewView: View {
         .menuIndicator(.visible)
         .fixedSize()
         .help("Show toolpath lines, rapids and design vectors in the 3D view")
+                .accessibilityLabel("Show in the 3D view")
     }
 
     /// Standard view directions and the orthographic switch.
@@ -312,6 +328,7 @@ struct SimulationPreviewView: View {
         .menuIndicator(.visible)
         .fixedSize()
         .help("Reset the view (the arrow lists top, front, side and isometric views and orthographic mode)")
+        .accessibilityLabel("View direction")
     }
 
     /// Profile rapid rate converted to `units` per minute.

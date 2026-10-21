@@ -92,7 +92,7 @@ struct ClipartBrowserSheet: View {
                 folderList.frame(width: 190)
                 grid
             }
-            if let error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+            if let error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(Color.warningText) }
             HStack {
                 Text("Vectors (SVG, DXF, EPS, AI, PDF), 3D models (STL, OBJ, DAE) and Kerf projects. Double-click to insert.")
                     .font(.caption).foregroundStyle(.secondary)

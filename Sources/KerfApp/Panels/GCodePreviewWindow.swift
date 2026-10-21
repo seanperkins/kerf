@@ -79,7 +79,7 @@ struct GCodePreviewView: View {
             if !model.reader.warnings.isEmpty {
                 Section("Notes (\(model.reader.warnings.count))") {
                     ForEach(Array(model.reader.warnings.prefix(50).enumerated()), id: \.offset) { _, w in
-                        Text(w).font(.caption).foregroundStyle(.orange)
+                        Text(w).font(.caption).foregroundStyle(Color.warningText)
                     }
                 }
             }

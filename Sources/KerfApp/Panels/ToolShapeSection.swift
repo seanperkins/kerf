@@ -77,7 +77,7 @@ struct ToolShapeSection: View {
                 .pickerStyle(.segmented)
                 editor
                 if let s = tool.shape, let p = s.problem(toolRadius: tool.radius) {
-                    Text(p + " The plain shape is used until this is fixed.").font(.caption).foregroundStyle(.orange)
+                    Text(p + " The plain shape is used until this is fixed.").font(.caption).foregroundStyle(Color.warningText)
                 }
                 ToolSilhouetteView(tool: tool).frame(height: 110)
             }
@@ -123,7 +123,7 @@ private struct FormPointsEditor: View {
                           format: decimalFormat).multilineTextAlignment(.trailing)
                 Text(units.abbreviation).foregroundStyle(.secondary)
                 Button { points.remove(at: i) } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.borderless).disabled(points.count <= 2)
+                    .buttonStyle(.icon).disabled(points.count <= 2)
             }
         }
         HStack {

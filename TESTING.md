@@ -37,10 +37,10 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    button selects vectors by clicking them in 3D. Switch back with ⌥⌘1.
 4. **Export.** File → Export G-code… (⇧⌘E) and save `test.tap`. It should match `samples/sign.tap`
    (only the date or job name may differ). Toolpaths → Check Toolpaths… (⇧⌘K) should report no errors.
-5. **Import.** Make a new document (⌘N). Use File → Import… (⌘I) to import `bracket-plate.dxf`.
+5. **Import.** Make a new document (⌘N). Use File → Import… (⇧⌘I) to import `bracket-plate.dxf`.
    The plate and its six inner features should appear.
 6. **Draw.** Use the canvas tools (V select, N node edit, R rectangle, C circle, E ellipse, L line,
-   P Bézier pen, T text). In the Design menu, try Align, Boolean (union/subtract/intersect),
+   P Bézier pen, T text). In the Arrange menu, try Align, Boolean (union/subtract/intersect),
    Offset…, Mirror, Rotate, Group/Ungroup and Join/Close vectors. Use ⌘Z/⇧⌘Z to undo and redo.
    Type some text in a font you have installed.
 7. **Each toolpath type.** Select vectors, then choose Toolpaths → New Toolpath → …:
@@ -71,7 +71,7 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
   the Design sidebar's Images section: fade, crop, size), OBJ and COLLADA (.dae, e.g. exported from
   SketchUp) models. Export Vectors… writes PDF, EPS or AI by file extension.
 - **Templates:** File → Save as Template…, then File → New from Template.
-- **Job Setup:** Plunge Z, datum offset, and a two-sided job (Design → Show Bottom Side, ⌥⌘F).
+- **Job Setup:** Plunge Z, datum offset, and a two-sided job (Design → Show Bottom Side, ⇧⌘B).
   Design → Sheets adds more material sheets; each sheet exports its own G-code.
 - **Variables:** Design → Document Variables…; type `=thickness - 0.05` or `1/4in` in any number field.
 

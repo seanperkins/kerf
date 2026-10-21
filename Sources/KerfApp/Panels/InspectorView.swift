@@ -45,14 +45,14 @@ struct DrawingOptionsView: View {
                 LengthField("Corner radius", value: $document.drawingOptions.cornerRadius, units: units)
                 Text("Drag a box. Hold Shift for a square.").font(.callout).foregroundStyle(.secondary)
             case .circle:
-                Text("Drag from the centre outwards.").font(.callout).foregroundStyle(.secondary)
+                Text("Drag from the center outwards.").font(.callout).foregroundStyle(.secondary)
             case .polygon:
                 IntField("Sides", value: $document.drawingOptions.polygonSides, range: 3...64)
-                Text("Drag from the centre to a corner.").font(.callout).foregroundStyle(.secondary)
+                Text("Drag from the center to a corner.").font(.callout).foregroundStyle(.secondary)
             case .star:
                 IntField("Points", value: $document.drawingOptions.starPoints, range: 2...64)
                 NumberField("Inner ratio", value: $document.drawingOptions.starInnerRatio)
-                Text("Drag from the centre to a point.").font(.callout).foregroundStyle(.secondary)
+                Text("Drag from the center to a point.").font(.callout).foregroundStyle(.secondary)
             case .polyline:
                 Text("Click to add points. Click the first point to close, double-click or Return to finish, Esc to cancel.")
                     .font(.callout).foregroundStyle(.secondary)
@@ -82,7 +82,7 @@ struct DrawingOptionsView: View {
                 TextLayoutFields(alignment: $document.drawingOptions.textAlignment,
                                  lineSpacing: $document.drawingOptions.lineSpacing,
                                  letterSpacing: $document.drawingOptions.letterSpacing, units: units)
-                Text("Click on the canvas to place the text. The click is the start, centre or end of the first baseline, following the justification. Text stays editable until converted to curves.")
+                Text("Click on the canvas to place the text. The click is the start, center or end of the first baseline, following the justification. Text stays editable until converted to curves.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             case .select, .nodeEdit:
                 EmptyView()
@@ -108,7 +108,6 @@ struct DrawingOptionsView: View {
 
 struct ShapeInspector: View {
     @ObservedObject var document: KerfDocument
-    @State private var box = Rect2(x: 0, y: 0, width: 1, height: 1)
     @State private var keepAspect = true
     @State private var rotation = 90.0
     @State private var name = ""
@@ -141,33 +140,27 @@ struct ShapeInspector: View {
             TextEditSection(document: document, shape: s).id(s.id)
         }
         Divider()
+        // Applies as you type (on Return or leaving the field), like the toolpath inspector; Undo reverts it.
         InspectorSection(title: "Position & Size") {
-            LengthField("X (left)", value: $box.min.x, units: units)
-            LengthField("Y (bottom)", value: $box.min.y, units: units)
-            LengthField("Width", value: Binding(get: { box.width }, set: { setSize(w: $0, h: nil) }), units: units)
-            LengthField("Height", value: Binding(get: { box.height }, set: { setSize(w: nil, h: $0) }), units: units)
+            LengthField("X (left)", value: boxBinding(BoxEdit.x, action: "Move", read: { $0.min.x }), units: units)
+            LengthField("Y (bottom)", value: boxBinding(BoxEdit.y, action: "Move", read: { $0.min.y }), units: units)
+            LengthField("Width", value: boxBinding(BoxEdit.width, action: "Resize", read: { $0.width }), units: units)
+            LengthField("Height", value: boxBinding(BoxEdit.height, action: "Resize", read: { $0.height }), units: units)
             Toggle("Keep proportions", isOn: $keepAspect)
-            HStack {
-                Button("Apply") {
-                    let target = box
-                    document.perform("Resize") { TransformCommands.fit(ids, to: target, keepAspect: false, in: &$0) }
-                }
-                Button("Revert") { box = bounds }
-            }
         }
-        .onAppear { box = bounds; name = shapes.first?.name ?? "" }
-        .onChange(of: document.project) { _, _ in box = bounds; name = document.selectedShapes.first?.name ?? "" }
-        .onChange(of: document.selection) { _, _ in box = bounds; name = document.selectedShapes.first?.name ?? "" }
+        .onAppear { name = shapes.first?.name ?? "" }
+        .onChange(of: document.project) { _, _ in name = document.selectedShapes.first?.name ?? "" }
+        .onChange(of: document.selection) { _, _ in name = document.selectedShapes.first?.name ?? "" }
         Divider()
         InspectorSection(title: "Transform") {
-            HStack {
-                NumberField("Rotate", value: $rotation, unit: "°")
-                Button("Apply") { let r = rotation; document.perform("Rotate") { TransformCommands.rotate(ids, degrees: r, in: &$0) } }
-            }
+            NumberField("Rotate by", value: $rotation, unit: "°")
+            ActionRow("Rotate") { let r = rotation; document.perform("Rotate") { TransformCommands.rotate(ids, degrees: r, in: &$0) } }
             MoveScaleFields(document: document)
             HStack {
                 Button("Mirror ↔") { document.perform("Mirror") { TransformCommands.mirror(ids, horizontally: true, in: &$0) } }
+                    .accessibilityLabel(AccessibilityNames.directional("Mirror", horizontally: true))
                 Button("Mirror ↕") { document.perform("Mirror") { TransformCommands.mirror(ids, horizontally: false, in: &$0) } }
+                    .accessibilityLabel(AccessibilityNames.directional("Mirror", horizontally: false))
             }
         }
         Divider()
@@ -186,13 +179,15 @@ struct ShapeInspector: View {
         }
     }
 
-    private func setSize(w: Double?, h: Double?) {
-        let b = box
-        var nw = w ?? b.width, nh = h ?? b.height
-        if keepAspect, b.width > 0, b.height > 0 {
-            if let w { nh = b.height * w / b.width } else if let h { nw = b.width * h / b.height }
-        }
-        box = Rect2(x: b.min.x, y: b.min.y, width: max(nw, 1e-6), height: max(nh, 1e-6))
+    /// A field of the selection's bounding box that applies as soon as it is edited.
+    private func boxBinding(_ edit: @escaping (Double) -> BoxEdit, action: String,
+                            read: @escaping (Rect2) -> Double) -> Binding<Double> {
+        Binding(get: { read(bounds) }, set: { v in
+            let change = edit(v)
+            guard change.changes(bounds) else { return }
+            let target = change.apply(to: bounds, keepAspect: keepAspect)
+            document.perform(action) { TransformCommands.fit(ids, to: target, keepAspect: false, in: &$0) }
+        })
     }
 
     private func describe(_ s: Shape) -> String {
@@ -226,19 +221,23 @@ struct AlignButtons: View {
             }
         }
         HStack {
-            Button("Centre on Material") { document.perform("Align") { DesignCommands.align(ids, mode: .materialCenter, in: &$0) } }
+            Button("Center on Material") { document.perform("Align") { DesignCommands.align(ids, mode: .materialCenter, in: &$0) } }
         }
         HStack {
             Button("Distribute ↔") { document.perform("Distribute") { DesignCommands.distribute(ids, horizontally: true, in: &$0) } }
                 .disabled(ids.count < 3)
+                .accessibilityLabel(AccessibilityNames.directional("Distribute", horizontally: true))
             Button("Distribute ↕") { document.perform("Distribute") { DesignCommands.distribute(ids, horizontally: false, in: &$0) } }
                 .disabled(ids.count < 3)
+                .accessibilityLabel(AccessibilityNames.directional("Distribute", horizontally: false))
         }
         HStack {
             Button("Space ↔") { document.perform("Distribute") { DesignCommands.distributeSpacing(ids, horizontally: true, in: &$0) } }
                 .disabled(ids.count < 3).help("Equal gaps between shapes, horizontally")
+                .accessibilityLabel(AccessibilityNames.directional("Space", horizontally: true))
             Button("Space ↕") { document.perform("Distribute") { DesignCommands.distributeSpacing(ids, horizontally: false, in: &$0) } }
                 .disabled(ids.count < 3).help("Equal gaps between shapes, vertically")
+                .accessibilityLabel(AccessibilityNames.directional("Space", horizontally: false))
         }
     }
 
@@ -248,6 +247,7 @@ struct AlignButtons: View {
             Image(systemName: icon).frame(width: 24)
         }
         .help(mode.title)
+        .accessibilityLabel(mode.title)
         .disabled(ids.count < 2)
     }
 }

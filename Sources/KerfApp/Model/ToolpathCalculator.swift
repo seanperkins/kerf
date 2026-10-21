@@ -10,7 +10,18 @@ struct ToolpathResult: Sendable {
     var operation: AnyOperation
     /// `KerfDocument.designRevision` at calculation time (to detect design/tool edits).
     var designRevision: Int
+    /// The operation's own run time, tool changes inside it included (what its row shows).
     var estimatedSeconds: TimeInterval
+    /// Motion and dwell only. Job totals add one allowance per stop in the exported order, so a
+    /// tool change inside an operation is never counted here and again at the job level.
+    var machiningSeconds: TimeInterval
+
+    init(toolpaths: [Toolpath], error: String?, operation: AnyOperation, designRevision: Int,
+         estimatedSeconds: TimeInterval, machiningSeconds: TimeInterval? = nil) {
+        self.toolpaths = toolpaths; self.error = error; self.operation = operation
+        self.designRevision = designRevision; self.estimatedSeconds = estimatedSeconds
+        self.machiningSeconds = machiningSeconds ?? estimatedSeconds
+    }
 
     var isOK: Bool { error == nil && !toolpaths.isEmpty }
 }
@@ -42,10 +53,12 @@ enum ToolpathCalculator {
         }
         do {
             let tps = try op.generate(in: context)
-            let secs = TimeEstimateSettings.load().estimate(tps, rapidRate: rapidRate, units: project.document.units)
+            let settings = TimeEstimateSettings.load()
+            let secs = settings.estimate(tps, rapidRate: rapidRate, units: project.document.units)
+            let motion = settings.estimate(tps, rapidRate: rapidRate, units: project.document.units, toolChanges: false)
             let err = tps.isEmpty ? "No toolpath was generated (check the selected vectors and depths)." : nil
             return ToolpathResult(toolpaths: tps, error: err, operation: op, designRevision: designRevision,
-                                  estimatedSeconds: secs)
+                                  estimatedSeconds: secs, machiningSeconds: motion)
         } catch {
             return ToolpathResult(toolpaths: [], error: describe(error), operation: op,
                                   designRevision: designRevision, estimatedSeconds: 0)

@@ -14,7 +14,7 @@ struct QuickEntryHelp: View {
 
     private var text: String? {
         if [.circle, .polygon, .star].contains(tool) {
-            return "Typed entry: with the pointer at the centre, type a radius (or radius<angle) and press Return."
+            return "Typed entry: with the pointer at the center, type a radius (or radius<angle) and press Return."
         }
         if tool.isDragShape {
             return "Typed entry: with the pointer at the lower-left corner (or while dragging), type W,H and press Return."
@@ -53,7 +53,7 @@ struct DimensionToolOptions: View {
                             if p.document.dimensions?.isEmpty == true { p.document.dimensions = nil }
                         }
                     } label: { Image(systemName: "trash") }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.icon)
                 }
             }
             Button("Delete All Dimensions") { document.perform("Delete Dimensions") { $0.document.dimensions = nil } }
@@ -110,17 +110,17 @@ struct ArcToolOptions: View {
         let units = document.units
         Picker("Draw by", selection: $document.drawingOptions.arcFromCenter) {
             Text("3 points").tag(false)
-            Text("Centre").tag(true)
+            Text("Center").tag(true)
         }
         .pickerStyle(.segmented)
         Text(document.drawingOptions.arcFromCenter
-             ? "Click the centre, then the start point (sets the radius), then the end direction. The arc runs counter-clockwise."
+             ? "Click the center, then the start point (sets the radius), then the end direction. The arc runs counter-clockwise."
              : "Click the start point, the end point, then a point the arc passes through.")
             .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         Divider()
         Text("Exact arc").font(.subheadline.bold())
-        LengthField("Centre X", value: $document.drawingOptions.exactCenter.x, units: units)
-        LengthField("Centre Y", value: $document.drawingOptions.exactCenter.y, units: units)
+        LengthField("Center X", value: $document.drawingOptions.exactCenter.x, units: units)
+        LengthField("Center Y", value: $document.drawingOptions.exactCenter.y, units: units)
         LengthField("Radius", value: $document.drawingOptions.arcRadius, units: units)
         NumberField("Start angle", value: $document.drawingOptions.arcStartAngle, unit: "°", help: "0° points right, counter-clockwise positive")
         NumberField("End angle", value: $document.drawingOptions.arcEndAngle, unit: "°")
