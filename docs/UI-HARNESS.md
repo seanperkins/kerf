@@ -69,7 +69,8 @@ minimum is 1000 x 640). Steps run in order and the run stops at the first error,
 | `select` | `names`: shape names | selects shapes |
 | `selectToolpath` | `name` | selects a toolpath (and shows the Toolpaths tab) |
 | `calculate` | | calculates all toolpaths and waits |
-| `sheet` / `closeSheet` | `value`: jobSetup, exportGCode, validation, … | opens or closes a sheet |
+| `sheet` / `closeSheet` | `value`: jobSetup, exportGCode, validation, … | opens a sheet, or closes the open sheet or alert |
+| `import` | `name`: a file path relative to the repo root | imports it as File > Import does; an import alert stays open until a `closeSheet` step |
 | `expand` | `name`: a collapsible section's title | opens it (the state the app remembers) |
 | `press` | `name`: text in a control's label, title, help or id; `value`: optional role (`AXButton`) | clicks that control with a real mouse event |
 | `wait` | `seconds` | lets background work finish (the 3D preview builds its stock asynchronously) |

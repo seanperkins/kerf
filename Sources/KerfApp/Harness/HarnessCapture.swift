@@ -160,8 +160,11 @@ enum HarnessCapture {
         let origin = frame(root)?.origin ?? .zero
 
         var lines: [String] = []
+        // An open alert's tree can loop back on itself; bound the depth (this runs on a small background
+        // stack) and skip elements already seen.
+        var seen = Set<CFHashCode>()
         func visit(_ e: AXUIElement, depth: Int) {
-            guard lines.count < 6000 else { return }
+            guard lines.count < 6000, depth < 60, seen.insert(CFHash(e)).inserted else { return }
             var line = String(repeating: "  ", count: depth) + text(e, kAXRoleAttribute)
             let sub = text(e, kAXSubroleAttribute)
             if !sub.isEmpty { line += "/" + sub }

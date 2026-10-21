@@ -27,6 +27,7 @@ struct DrawingSheetHost: View {
         case .vectorTexture: VectorTextureSheet(document: document)
         case .boundary: BoundarySheet(document: document)
         case .plaque: PlaqueSheet(document: document)
+        case .joinVectors: JoinVectorsSheet(document: document)
         }
     }
 }
@@ -160,6 +161,34 @@ struct DogboneSheet: View {
                 Text("Openings (cut inside)").tag(Dogbone.CutSide.opening)
             }
             NumberField("Max corner angle", value: $maxAngle, unit: "°", help: "Corners wider than this are left alone")
+        }
+    }
+}
+
+/// Arrange > Join Open Vectors…: joins open vectors whose ends meet within a tolerance, and says
+/// how far ends will move and what still will not join before anything changes.
+struct JoinVectorsSheet: View {
+    @ObservedObject var document: KerfDocument
+    @State private var tolerance: Double
+
+    init(document: KerfDocument) {
+        self.document = document
+        _tolerance = State(initialValue: DesignCommands.defaultJoinTolerance(document.units))
+    }
+
+    var body: some View {
+        let ids = document.selectedShapes.map(\.id)
+        let preview = tolerance > 0 ? DesignCommands.joinPreview(ids, tolerance: tolerance, in: document.project) : nil
+        let note = preview?.lines(units: document.units).joined(separator: "\n")
+            ?? (tolerance > 0 ? "The selection has no open vectors to join." : "Enter a tolerance above zero.")
+        DrawingDialog(title: "Join Open Vectors", action: "Join", disabled: preview == nil, note: note,
+                      perform: {
+                          let tol = tolerance
+                          var newID: UUID?
+                          document.perform("Join") { newID = DesignCommands.join(ids, tolerance: tol, in: &$0) }
+                          if let id = newID { document.setSelection([id]) }
+                      }) {
+            LengthField("Join gaps up to", value: $tolerance, units: document.units)
         }
     }
 }

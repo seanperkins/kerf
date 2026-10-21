@@ -122,6 +122,7 @@ struct SampleFilesTests {
         let dxf = try ImportService.importFile(data: try read("bracket-plate.dxf"), fileName: "bracket-plate.dxf",
                                                into: &scratch)
         #expect(dxf.shapeIDs.count >= 7)
+        #expect(!dxf.warnings.contains { $0.contains("nearly meet") })  // a clean drawing raises no gap report
         let mesh = try STLImporter(sourceUnits: .millimeter).importMesh(from: try read("relief.stl"),
                                                                        targetUnits: .inch)
         #expect(mesh.indices.count / 3 > 1000)

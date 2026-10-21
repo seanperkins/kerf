@@ -2,7 +2,8 @@ import Foundation
 
 /// DXF (ASCII) import: LINE, ARC, CIRCLE, ELLIPSE, LWPOLYLINE (bulges), POLYLINE, SPLINE
 /// (sampled), INSERT (block references); `$INSUNITS` → document units. DXF layers become
-/// layers. Loose open entities on the same layer whose ends touch are joined into vectors.
+/// layers. Loose open entities on the same layer whose ends touch are joined into vectors;
+/// vectors that stay open with ends that nearly meet (a gap in the drawing) are reported in `warnings`.
 public struct DXFImporter: VectorImporter {
     public static let fileExtensions = ["dxf"]
 
@@ -62,13 +63,34 @@ public struct DXFImporter: VectorImporter {
             let layer = Layer(name: name, colorHex: color(file.layerColors[name], index: layers.count))
             layers.append(layer)
             var paths = pathsByLayer[name] ?? []
-            if joinTol > 0 { paths = PathOps.joinOpenPaths(paths, tolerance: joinTol) }
+            if joinTol > 0 {
+                paths = PathOps.joinOpenPaths(paths, tolerance: joinTol)
+                if let gaps = PathOps.nearlyMeetingEnds(paths, beyond: joinTol, upTo: joinTol * Self.nearMissFactor) {
+                    warnings.append(Self.gapWarning(layer: name, gaps: gaps, joinTolerance: joinTol, units: targetUnits))
+                }
+            }
             for p in paths {
                 shapes.append(Shape(name: p.isClosed ? "Closed vector" : "Open vector", layerID: layer.id,
                                     paths: [p], origin: .imported(format: "dxf")))
             }
         }
         return ImportResult(layers: layers, shapes: shapes, warnings: warnings)
+    }
+
+    /// Open ends further apart than the join tolerance but within this many times it are reported:
+    /// that is a slip in the drawing, where a lone open line (engraving, a V-carve centerline) is not.
+    public static let nearMissFactor = 100.0
+
+    /// "Layer "Cabinet": 2 open vectors have ends that nearly meet, 0.1 to 0.4 mm apart. ..."
+    static func gapWarning(layer: String, gaps: PathOps.EndGapReport, joinTolerance: Double, units: LengthUnit) -> String {
+        func length(_ v: Double) -> String { String(format: "%.2g", v) }
+        let lo = length(gaps.smallestGap), hi = length(gaps.largestGap)
+        let apart = lo == hi ? lo : "\(lo) to \(hi)"
+        let n = gaps.vectorCount
+        return "Layer \"\(layer)\": \(n) open vector\(n == 1 ? " has" : "s have") ends that nearly meet, "
+            + "\(apart) \(units.abbreviation) apart. The import joins ends within \(length(joinTolerance)) "
+            + "\(units.abbreviation), so \(n == 1 ? "it stayed" : "they stayed") open; "
+            + "a gap in the source drawing is the usual cause."
     }
 
     /// Scale factor from DXF drawing units to `target`.

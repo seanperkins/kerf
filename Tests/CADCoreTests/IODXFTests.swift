@@ -117,6 +117,69 @@ func dxf(header: [(Int, String)] = [], entities: [(Int, String)]) -> Data {
         #expect(r.shapes.count == 1 && r.shapes[0].isClosed)
     }
 
+    // MARK: Gap report
+
+    /// Four LINE entities on `layer` forming a 20-unit square whose last side stops `gap` short.
+    func squareWithGap(_ gap: Double, layer: String = "Cabinet", x0: Double = 0) -> [(Int, String)] {
+        func line(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) -> [(Int, String)] {
+            [(0, "LINE"), (8, layer), (10, "\(x0 + x1)"), (20, "\(y1)"), (11, "\(x0 + x2)"), (21, "\(y2)")]
+        }
+        return line(0, 0, 20, 0) + line(20, 0, 20, 20) + line(20, 20, 0, 20) + line(0, 20, 0, gap)
+    }
+
+    func mm(_ entities: [(Int, String)], target: LengthUnit = .millimeter) throws -> ImportResult {
+        try DXFImporter().importVectors(from: dxf(header: [(9, "$INSUNITS"), (70, target == .inch ? "1" : "4")],
+                                                  entities: entities), targetUnits: target)
+    }
+
+    @Test func warnsWhenAnOutlineStopsJustShortOfClosing() throws {
+        let r = try mm(squareWithGap(0.2))
+        #expect(r.shapes.count == 1 && !r.shapes[0].isClosed)
+        let note = try #require(r.warnings.first { $0.contains("nearly meet") })
+        #expect(note.contains("Layer \"Cabinet\""))
+        #expect(note.contains("1 open vector has ends"))
+        #expect(note.contains("0.2 mm apart"))
+        #expect(note.contains("joins ends within 0.01 mm"))
+    }
+
+    @Test func staysQuietWhenTheGapIsWithinTheJoinTolerance() throws {
+        let r = try mm(squareWithGap(0.005))
+        #expect(r.shapes.count == 1 && r.shapes[0].isClosed)
+        #expect(!r.warnings.contains { $0.contains("nearly meet") })
+    }
+
+    @Test func staysQuietForALoneOpenLineAndForGapsTooBigToBeASlip() throws {
+        let lone: [(Int, String)] = [(0, "LINE"), (8, "Engrave"), (10, "0"), (20, "0"), (11, "30"), (21, "0")]
+        #expect(!(try mm(lone)).warnings.contains { $0.contains("nearly meet") })
+        #expect(!(try mm(squareWithGap(2))).warnings.contains { $0.contains("nearly meet") })
+    }
+
+    @Test func reportsEachLayerAndPluralizes() throws {
+        let r = try mm(squareWithGap(0.2, layer: "Cabinet") + squareWithGap(0.4, layer: "Drawer", x0: 100)
+            + squareWithGap(0.1, layer: "Drawer", x0: 200))
+        let notes = r.warnings.filter { $0.contains("nearly meet") }
+        #expect(notes.count == 2)
+        let drawer = try #require(notes.first { $0.contains("Layer \"Drawer\"") })
+        #expect(drawer.contains("2 open vectors have ends"))
+        #expect(drawer.contains("0.1 to 0.4 mm apart"))
+    }
+
+    @Test func usesInchesWhenTheDocumentIsInInches() throws {
+        let r = try mm(squareWithGap(0.004), target: .inch)
+        let note = try #require(r.warnings.first { $0.contains("nearly meet") })
+        #expect(note.contains("0.004 in apart"))
+        #expect(note.contains("joins ends within 0.0005 in"))
+    }
+
+    @Test func fixtureOutlineWithAGapReportsItInEitherUnit() throws {
+        let data = try IOFixtures.data("outline-with-gap.dxf")
+        let mm = try DXFImporter().importVectors(from: data, targetUnits: .millimeter)
+        #expect(mm.shapes.count == 1 && !mm.shapes[0].isClosed)
+        #expect(mm.warnings.contains { $0.contains("Layer \"Cabinet\"") && $0.contains("0.2 mm apart") })
+        let inch = try DXFImporter().importVectors(from: data, targetUnits: .inch)
+        #expect(inch.warnings.contains { $0.contains("0.0079 in apart") && $0.contains("within 0.0005 in") })
+    }
+
     @Test func rejectsGarbage() {
         #expect(throws: KerfIOError.self) { try DXFImporter().importVectors(from: Data("hello\nworld\n".utf8), targetUnits: .inch) }
     }

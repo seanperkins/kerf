@@ -43,11 +43,123 @@ import Testing
         #expect(approx(joined[0].signedArea(tolerance: 1e-5), .pi / 2, 1e-3))
     }
 
+    @Test func reportsTheLargestGapItClosed() {
+        let lines = [
+            Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+            Path(points: [Vec2(1, 0.0002), Vec2(1, 1)], closed: false),    // 0.0002 from the first
+            Path(points: [Vec2(1, 1), Vec2(0, 1)], closed: false),         // meets the second exactly
+            Path(points: [Vec2(0, 1), Vec2(0, 0.0004)], closed: false),    // stops 0.0004 short of the first's start
+        ]
+        let r = PathOps.joinOpenPathsReporting(lines, tolerance: 0.001)
+        #expect(r.paths.count == 1 && r.paths[0].isClosed)
+        #expect(approx(r.largestGapClosed, 0.0004, 1e-9))
+    }
+
+    @Test func reportsNothingMovedWhenEndsAlreadyTouchOrNothingJoins() {
+        let touching = [Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+                        Path(points: [Vec2(1, 0), Vec2(2, 0)], closed: false)]
+        let a = PathOps.joinOpenPathsReporting(touching, tolerance: 0.001)
+        #expect(a.paths.count == 1 && a.largestGapClosed == 0)
+        let apart = [Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+                     Path(points: [Vec2(1.3, 0), Vec2(2, 0)], closed: false)]
+        let b = PathOps.joinOpenPathsReporting(apart, tolerance: 0.001)
+        #expect(b.paths.count == 2 && b.largestGapClosed == 0)
+    }
+
+    @Test func theGapThatClosesALoopCounts() {
+        let p = Path(points: [Vec2(0, 0), Vec2(10, 0), Vec2(10, 10), Vec2(0, 10), Vec2(0, 0.0007)], closed: false)
+        let r = PathOps.joinOpenPathsReporting([p], tolerance: 0.001)
+        #expect(r.paths.count == 1 && r.paths[0].isClosed)
+        #expect(approx(r.largestGapClosed, 0.0007, 1e-9))
+    }
+
+    @Test func plainJoinStillReturnsJustThePaths() {
+        let lines = [Path(points: [Vec2(0, 0), Vec2(1, 0)], closed: false),
+                     Path(points: [Vec2(1, 0.0004), Vec2(2, 0)], closed: false)]
+        #expect(PathOps.joinOpenPaths(lines, tolerance: 0.001) == PathOps.joinOpenPathsReporting(lines, tolerance: 0.001).paths)
+    }
+
     @Test func closeIfNearlyClosed() {
         let p = Path(points: [Vec2(0, 0), Vec2(1, 0), Vec2(1, 1), Vec2(0.0001, 0)], closed: false)
         let c = PathOps.closeIfNearlyClosed(p, tolerance: 0.001)
         #expect(c.isClosed && c.end == c.start)
         #expect(!PathOps.closeIfNearlyClosed(p, tolerance: 0.00001).isClosed)
+    }
+}
+
+@Suite struct GeometryNearMissTests {
+    @Test func reportsAPathWhoseOwnEndsNearlyMeet() throws {
+        // A square outline that stops 0.2 short of where it started.
+        let p = Path(points: [Vec2(0, 0), Vec2(10, 0), Vec2(10, 10), Vec2(0, 10), Vec2(0, 0.2)], closed: false)
+        let r = try #require(PathOps.nearlyMeetingEnds([p], beyond: 0.01, upTo: 1))
+        #expect(r.vectorCount == 1)
+        #expect(approx(r.smallestGap, 0.2) && approx(r.largestGap, 0.2))
+    }
+
+    @Test func countsBothPiecesAcrossAGap() throws {
+        let a = Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false)
+        let b = Path(points: [Vec2(5.3, 0), Vec2(10, 0)], closed: false)
+        let r = try #require(PathOps.nearlyMeetingEnds([a, b], beyond: 0.01, upTo: 1))
+        #expect(r.vectorCount == 2)
+        #expect(approx(r.smallestGap, 0.3) && approx(r.largestGap, 0.3))
+    }
+
+    @Test func reportsTheRangeOfGaps() throws {
+        let paths = [
+            Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+            Path(points: [Vec2(5.1, 0), Vec2(10, 0)], closed: false),
+            Path(points: [Vec2(20, 0), Vec2(25, 0)], closed: false),
+            Path(points: [Vec2(25.4, 0), Vec2(30, 0)], closed: false),
+        ]
+        let r = try #require(PathOps.nearlyMeetingEnds(paths, beyond: 0.01, upTo: 1))
+        #expect(r.vectorCount == 4)
+        #expect(approx(r.smallestGap, 0.1) && approx(r.largestGap, 0.4))
+    }
+
+    @Test func ignoresEndsThatMeetAreFarApartOrBelongToClosedPaths() {
+        let lone = Path(points: [Vec2(0, 0), Vec2(10, 0)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([lone], beyond: 0.01, upTo: 1) == nil)
+        let touching = [Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+                        Path(points: [Vec2(5.005, 0), Vec2(10, 0)], closed: false)]
+        #expect(PathOps.nearlyMeetingEnds(touching, beyond: 0.01, upTo: 1) == nil)
+        let tooFar = [Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+                      Path(points: [Vec2(7, 0), Vec2(10, 0)], closed: false)]
+        #expect(PathOps.nearlyMeetingEnds(tooFar, beyond: 0.01, upTo: 1) == nil)
+        let sq = ShapeFactory.rectangle(Rect2(x: 0, y: 0, width: 1, height: 1))
+        #expect(PathOps.nearlyMeetingEnds([sq], beyond: 0.01, upTo: 1) == nil)
+    }
+
+    @Test func aTinyToleranceOnOrdinaryCoordinatesDoesNotTrap() {
+        // The Join dialog accepts any positive tolerance; 1e-20 made the grid cell index overflow Int.
+        let line = Path(points: [Vec2(0, 0), Vec2(10, 0)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([line], beyond: 1e-20, upTo: 1e-18) == nil)
+        let pieces = [Path(points: [Vec2(0, 0), Vec2(5, 0)], closed: false),
+                      Path(points: [Vec2(5 + 5e-19, 0), Vec2(10, 0)], closed: false)]
+        // 5 + 5e-19 is 5 in double precision: the ends coincide, so nothing is reported.
+        #expect(PathOps.nearlyMeetingEnds(pieces, beyond: 1e-20, upTo: 1e-18) == nil)
+        #expect(PathOps.nearlyMeetingEnds([line], beyond: 0, upTo: .infinity) == nil)
+    }
+
+    @Test func largeCoordinatesWithASmallLimitStillFindTheGap() throws {
+        // Far from the origin the cell is coarser than the limit; the distance test still decides.
+        let far = 1e6
+        let a = Path(points: [Vec2(far, far), Vec2(far + 5, far)], closed: false)
+        let b = Path(points: [Vec2(far + 5.3, far), Vec2(far + 10, far)], closed: false)
+        let r = try #require(PathOps.nearlyMeetingEnds([a, b], beyond: 1e-9, upTo: 1e-6 * 1e6))
+        #expect(r.vectorCount == 2)
+        #expect(approx(r.smallestGap, 0.3, 1e-6))
+        let c = Path(points: [Vec2(far + 12, far), Vec2(far + 20, far)], closed: false)
+        #expect(PathOps.nearlyMeetingEnds([b, c], beyond: 1e-9, upTo: 1)?.vectorCount == nil)
+    }
+
+    @Test func handlesThousandsOfPathsQuickly() throws {
+        // Short collinear pieces, each a hair apart: a grid lookup keeps this linear, not quadratic.
+        let paths = (0..<6000).map { i in
+            Path(points: [Vec2(Double(i) * 1.3, 0), Vec2(Double(i) * 1.3 + 1, 0)], closed: false)
+        }
+        let r = try #require(PathOps.nearlyMeetingEnds(paths, beyond: 0.01, upTo: 0.5))
+        #expect(r.vectorCount == 6000)
+        #expect(approx(r.smallestGap, 0.3, 1e-9))
     }
 }
 
