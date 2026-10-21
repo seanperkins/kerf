@@ -13,11 +13,11 @@ Kerf is built for the Avid CNC PRO6096 (Mach4) and replaces VCarve Pro for that 
 
 ## See the cut before the router does
 
-<img alt="The 3D preview cutting the sample sign: the pocket, then the V-carved letters, the drilled holes and the cut-out" src="docs/images/cut.gif">
+<img alt="The 3D preview cutting the sample sign (the pocket, then the V-carved letters, then the cut-out), followed by the design and the simulation side by side" src="docs/images/preview.gif">
 
 The 3D preview removes material move by move and estimates the run time. This is the sample sign
-(`samples/sign.kerf`): a pocket, V-carved letters, five drilled holes, then the cut-out with tabs.
-Kerf estimates about 15 minutes of machine time.
+(`samples/sign.kerf`): a pocket, V-carved letters, then the cut-out with tabs, about 13 minutes of
+machine time. Scrub it, step it one move at a time, or run to the next retract.
 
 ## From design to G-code
 
@@ -49,13 +49,43 @@ Kerf estimates about 15 minutes of machine time.
   </tr>
 </table>
 
+## The parts that save a cut
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img alt="The Export sheet refusing to stay quiet: a through cut with tabs off is flagged before the G-code is saved" src="docs/images/preflight.gif"><br>
+      <b>Pre-flight checks.</b> Every export is checked before it is written: a through cut with no
+      tabs, a cut past the material, two tools sharing a number, a rapid through a clamp. The sheet
+      also names the post, the Z zero and the deepest cut, so the numbers can be read against the machine.
+    </td>
+    <td width="50%" valign="top">
+      <img alt="Selecting a toolpath that pauses the machine, with the operator message in the inspector" src="docs/images/pause.gif"><br>
+      <b>A pause between toolpaths.</b> Stop the machine to flip the part, add clamps or clear chips.
+      The operator sees your message on the controller, the program gets a retract, M5 and M0, and the
+      next toolpath restarts the spindle.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img alt="Typing =width/2 into the Width field, and the panel resizing to half the material width" src="docs/images/variables.gif"><br>
+      <b>Numbers that follow the job.</b> Any numeric field takes an expression (`=width/2`,
+      `1/4in + 1mm`). `width`, `height`, `thickness` and `safez` are built in, you can add your own
+      under Design > Variables, and a through cut follows the material thickness when it changes.
+    </td>
+    <td width="50%" valign="top">
+      <img alt="Importing a DXF whose outline has a small gap: the import names the gap, and Join Open Vectors closes it" src="docs/images/import.gif"><br>
+      <b>Imports that say what they found.</b> A DXF outline whose ends nearly meet is reported on
+      import, with the size of the gap. Join Open Vectors closes it at a tolerance you choose and says
+      how far each end moved.
+    </td>
+  </tr>
+</table>
+
 ## Highlights
 
 - **172 of 196 VCarve Pro features**, including every one marked essential (P1). Status is tracked
   in [docs/PARITY.md](docs/PARITY.md).
-- **Pre-flight checks.** Export warns you when a through cut has no tabs and the part would come loose.
-- **Numbers that follow the job.** Fields accept expressions and document variables
-  (`=thickness/2`, `1/4in`), and a through cut follows the material thickness when it changes.
 - **Production runs.** True-shape nesting across sheets, production plates (one design per CSV row),
   and tiled G-code for jobs bigger than the bed.
 - **Gadgets.** JavaScript add-ons that draw vectors and set up toolpaths (Gadgets > Gadget API Reference).
@@ -135,7 +165,9 @@ scripts/run.sh              # debug bundle + launch
   `KerfApp` itself.
 - **Over 1,000 tests** in swift-testing, including the golden G-code above.
 - **A UI harness.** `scripts/ui.sh` drives the app through a scripted scenario and saves each window as
-  a PNG with its accessibility tree, in light or dark mode (see [docs/UI-HARNESS.md](docs/UI-HARNESS.md)).
+  a PNG with its accessibility tree, in light or dark mode. The screenshots and clips on this page are
+  made the same way: `scripts/reel.sh all` regenerates them after a UI change
+  (see [docs/UI-HARNESS.md](docs/UI-HARNESS.md)).
 
 ## More
 
