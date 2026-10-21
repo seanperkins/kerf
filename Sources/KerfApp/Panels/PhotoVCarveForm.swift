@@ -28,9 +28,11 @@ struct PhotoVCarveForm: View {
                 }
             }
             if let loadError { Text(loadError).font(.caption).foregroundStyle(Color.warningText) }
-            LengthField("Left (X)", value: Binding(get: { params.origin.x }, set: { params.origin.x = $0 }), units: units)
-            LengthField("Bottom (Y)", value: Binding(get: { params.origin.y }, set: { params.origin.y = $0 }), units: units)
-            LengthField("Width", value: $params.width, units: units)
+            LengthField("Left (X)", value: Binding(get: { params.origin.x }, set: { params.origin.x = $0 }), units: units,
+                        help: "Left edge of the picture on the material")
+            LengthField("Bottom (Y)", value: Binding(get: { params.origin.y }, set: { params.origin.y = $0 }), units: units,
+                        help: "Bottom edge of the picture on the material")
+            LengthField("Width", value: $params.width, units: units, help: "Width of the picture; the height keeps its proportions")
             LabeledContent("Height") {
                 Text("\(RulerTicks.label((params.height * 1000).rounded() / 1000)) \(units.abbreviation)").monospacedDigit()
             }
@@ -44,6 +46,7 @@ struct PhotoVCarveForm: View {
             LengthField("Min depth", value: $params.minDepth, units: units, help: "Shallower grooves are skipped (light areas)")
             LengthField("Start depth", value: $params.startDepth, units: units)
             Toggle("Invert (carve light areas)", isOn: $params.invert)
+                .fieldHelp("Invert (carve light areas)")
             Text("Dark areas get wide, deep grooves and light areas narrow ones, so the picture shows when the grooves are darker than the wood (or filled with paint).")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }

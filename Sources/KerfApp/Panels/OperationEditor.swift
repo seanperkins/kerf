@@ -27,6 +27,7 @@ struct OperationEditor: View {
         InspectorSection(title: draft.kind.displayName + " Toolpath", helpTopic: HelpTopic.forOperation(draft.kind)) {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
+                .fieldHelp("Include in export")
             if draft.kind != .merge {
                 ToolPicker(title: OperationFactory.primaryToolTitle(draft.kind), toolID: setupBinding(\.toolID),
                            library: library, preferred: OperationFactory.preferredToolKinds(for: draft.kind))

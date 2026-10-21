@@ -27,12 +27,14 @@ struct RampForm: View {
 
     var body: some View {
         Toggle("Ramp plunges", isOn: $ramp.isEnabled)
+            .fieldHelp("Ramp plunges")
         if ramp.isEnabled {
             Picker("Ramp type", selection: $ramp.type) {
                 Text("Smooth").tag(RampType.smooth)
                 Text("Zig-zag").tag(RampType.zigzag)
                 Text("Spiral").tag(RampType.spiral)
             }
+                .fieldHelp("Ramp type")
             LengthField("Ramp length", value: $ramp.length, units: units)
             NumberField("Max angle", value: $ramp.maxAngle, unit: "°")
         }
@@ -47,6 +49,7 @@ struct DirectionPicker: View {
             Text("Conventional").tag(CutDirection.conventional)
         }
         .pickerStyle(.segmented)
+            .fieldHelp("Direction")
     }
 }
 
@@ -74,6 +77,7 @@ struct PocketStrategyForm: View {
             Text("Raster").tag(true)
         }
         .pickerStyle(.segmented)
+            .fieldHelp("Clearing")
         if isRaster.wrappedValue {
             NumberField("Raster angle", value: angle, unit: "°")
             if let profileFirst {
@@ -91,6 +95,7 @@ struct PocketStrategyForm: View {
                 .help("Wall clean-up pass before or after the raster")
             } else {
                 Toggle("Final profile pass", isOn: profilePass)
+                    .fieldHelp("Final profile pass")
             }
         }
     }
@@ -123,6 +128,7 @@ struct ProfileForm: View {
                 Text("On").tag(ProfileSide.on)
             }
             .pickerStyle(.segmented)
+                .fieldHelp("Side")
             DirectionPicker(direction: $params.direction)
             LengthField("Allowance", value: $params.allowance, units: units, help: "Material left on the part (negative removes more)")
         }
@@ -155,6 +161,7 @@ struct ProfileForm: View {
             }
             .help("Order the parts are cut in. Holes are always cut before the part around them.")
             Toggle("Output arcs (G2/G3)", isOn: $params.preferArcs)
+                .fieldHelp("Output arcs (G2/G3)")
             Toggle("Sharp external corners", isOn: Binding(get: { params.sharpCorners == true },
                                                            set: { params.sharpCorners = $0 ? true : nil }))
                 .help("Run straight out to a square corner instead of rolling round the part's corners")
@@ -164,6 +171,7 @@ struct ProfileForm: View {
         Divider()
         InspectorSection(title: "Tabs", helpTopic: .tabs) {
             Toggle("Add tabs", isOn: $params.tabs.isEnabled)
+                .fieldHelp("Add tabs")
             if params.tabs.isEnabled {
                 LengthField("Length", value: $params.tabs.length, units: units)
                 LengthField("Tab height", value: $params.tabs.thickness, units: units)
@@ -176,11 +184,13 @@ struct ProfileForm: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Toggle("Triangular (3D) tabs", isOn: $params.tabs.isTriangular)
+                    .fieldHelp("Triangular (3D) tabs")
                 Picker("Placement", selection: manualBinding) {
                     Text("Automatic").tag(false)
                     Text("Manual").tag(true)
                 }
                 .pickerStyle(.segmented)
+                    .fieldHelp("Placement")
                 if let manual = params.tabs.manualTabs {
                     let n = manual.count
                     Text("\(n) tab\(n == 1 ? "" : "s") placed by hand").font(.caption).foregroundStyle(.secondary)
@@ -204,6 +214,7 @@ struct ProfileForm: View {
                 Text("Linear").tag(LeadType.linear)
                 Text("Arc").tag(LeadType.arc)
             }
+                .fieldHelp("Lead in/out")
             if params.lead.type != .none {
                 LengthField(params.lead.type == .arc ? "Lead radius" : "Lead length", value: $params.lead.distance, units: units)
             }
@@ -247,6 +258,7 @@ struct DrillForm: View {
             Toggle("Peck drilling", isOn: Binding(get: { params.peckDepth > 0 }, set: { on in
                 params.peckDepth = on ? (units == .inch ? 0.125 : 3) : 0
             }))
+                .fieldHelp("Peck drilling")
             if params.peckDepth > 0 {
                 LengthField("Peck depth", value: $params.peckDepth, units: units, help: "Depth added by each peck")
                 LengthField("Retract height", value: $params.retractHeight, units: units,
@@ -318,6 +330,7 @@ struct PlugBoundaryFields: View {
             Text("Vector offset").tag(InlayPlugBoundary.vectorOffset)
             Text("Sheet limits").tag(InlayPlugBoundary.sheetLimits)
         }
+            .fieldHelp("Plug boundary")
         if boundary != .sheetLimits {
             LengthField(boundary == .vectorOffset ? "Outline margin" : "Box margin", value: $margin, units: units,
                         help: boundary == .vectorOffset
@@ -361,6 +374,7 @@ struct ClearanceToolList: View {
                 if library.tool(id: id) == nil { Text("Missing tool").tag(id) }
                 ForEach(choices) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
             }
+            .help("A smaller tool that clears only what the tools before it could not reach")
             Button { if i < tools.count { tools.remove(at: i) } } label: { Image(systemName: "minus.circle") }
                 .buttonStyle(.icon).help("Remove this clearance tool")
         }
@@ -384,10 +398,12 @@ struct InlayForm: View {
                 Text("Plug (male)").tag(InlayPart.male)
                 Text("Both").tag(InlayPart.both)
             }
+                .fieldHelp("Part")
             LengthField("Pocket depth", value: $params.pocketDepth, units: units)
             LengthField("Plug start depth", value: $params.maleStartDepth, units: units)
             LengthField("Glue gap", value: $params.glueGap, units: units)
             Toggle("Mirror plug", isOn: $params.mirrorMale)
+                .fieldHelp("Mirror plug")
             PlugBoundaryFields(boundary: $params.plugBoundary, margin: $params.maleBoundaryMargin,
                                surfaceClearance: $params.surfaceClearance,
                                defaultClearance: params.pocketDepth - params.maleStartDepth, units: units)
@@ -421,9 +437,11 @@ struct FlutingForm: View {
                 Text("Both").tag(FluteRamp.both)
             }
             .pickerStyle(.segmented)
+                .fieldHelp("Ramp")
             NumberField("Ramp length", value: Binding(get: { params.rampFraction * 100 },
                                                       set: { params.rampFraction = min(max($0 / 100, 0), 0.5) }), unit: "%")
             Toggle("Smooth ramp", isOn: $params.smoothRamp)
+                .fieldHelp("Smooth ramp")
             Text("Each selected vector is cut once, plunging gradually over the ramp length to full depth. Use a ball nose or V-bit for tapered flutes.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
@@ -471,16 +489,19 @@ struct Relief3DForm: View {
             Toggle("Machine from both sides", isOn: Binding(get: { params.twoSided != nil }, set: { on in
                 params.twoSided = on ? TwoSidedSettings(web: units == .inch ? 0.04 : 1) : nil
             }))
+                .fieldHelp("Machine from both sides")
             if params.twoSided != nil {
                 Picker("This toolpath cuts", selection: twoSidedBinding(\.side, default: .top)) {
                     Text("Top side").tag(TwoSidedSettings.Side.top)
                     Text("Bottom side").tag(TwoSidedSettings.Side.bottom)
                 }
                 .pickerStyle(.segmented)
+                    .fieldHelp("This toolpath cuts")
                 Picker("Flip board", selection: twoSidedBinding(\.flip, default: .leftRight)) {
                     Text("Left to right").tag(TwoSidedSettings.Flip.leftRight)
                     Text("Top to bottom").tag(TwoSidedSettings.Flip.topBottom)
                 }
+                    .fieldHelp("Flip board")
                 OptionalLengthField(label: "Split depth", value: twoSidedBinding(\.splitDepth, default: nil), units: units,
                                     defaultValue: units == .inch ? 0.25 : 6)
                 LengthField("Web", value: twoSidedBinding(\.web, default: 0), units: units,
@@ -506,6 +527,7 @@ struct Relief3DForm: View {
                 if !models.contains(where: { $0.id == params.modelID }) { Text("Missing model").tag(params.modelID) }
                 ForEach(models) { Text($0.name).tag($0.id) }
             }
+                .fieldHelp("Model")
             if models.count > 1 {
                 Text("Combine with").font(.caption).foregroundStyle(.secondary)
                 ForEach(models.filter { $0.id != params.modelID }) { m in
@@ -525,6 +547,7 @@ struct Relief3DForm: View {
         Divider()
         InspectorSection(title: "Roughing") {
             Toggle("Rough first", isOn: $params.roughing.isEnabled)
+                .fieldHelp("Rough first")
             if params.roughing.isEnabled {
                 OptionalToolPicker(title: "Roughing tool", toolID: $params.roughing.toolID, library: library, kinds: [.endMill])
                 LengthField("Allowance", value: $params.roughing.allowance, units: units)
@@ -536,6 +559,7 @@ struct Relief3DForm: View {
         Divider()
         InspectorSection(title: "Finishing") {
             Toggle("Finish", isOn: $params.finishing.isEnabled)
+                .fieldHelp("Finish")
             if params.finishing.isEnabled {
                 OptionalLengthField(label: "Stepover", value: $params.finishing.stepover, units: units,
                                     defaultValue: units == .inch ? 0.02 : 0.5)
@@ -546,6 +570,7 @@ struct Relief3DForm: View {
                     Text("Spiral").tag(FinishingStrategy.spiral)
                 }
                 .pickerStyle(.segmented)
+                    .fieldHelp("Pattern")
                 if (params.finishing.strategy ?? .raster) == .raster {
                     NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
                 }
@@ -578,11 +603,14 @@ struct ProfileLastPassForm: View {
 
     var body: some View {
         Toggle("Separate last pass", isOn: enabled)
+            .fieldHelp("Separate last pass")
         if lastPass != nil {
             LengthField("Last pass allowance", value: field(\.allowance, 0), units: units,
                         help: "Material the roughing passes leave on the wall for the last pass")
             Toggle("Reverse direction", isOn: field(\.reverseDirection, false))
+                .fieldHelp("Reverse direction")
             Toggle("Last pass at full depth", isOn: field(\.fullDepth, true))
+                .fieldHelp("Last pass at full depth")
             Text(side == .on
                  ? "Not used when cutting on the line."
                  : "Roughing passes stay the allowance away from the wall; one more lap then cuts the wall to size.")
@@ -623,6 +651,7 @@ struct ClearanceToolsEditor: View {
                     if library.tool(id: ids[i]) == nil { Text("Missing tool").tag(ids[i]) }
                     ForEach(candidates) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
                 }
+                .help("A larger tool that clears most of the pocket before the finish tool")
                 Button { var n = ids; n.remove(at: i); set(n) } label: { Image(systemName: "minus.circle") }
                     .buttonStyle(.icon).help("Remove this clearance tool")
             }

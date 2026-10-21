@@ -54,11 +54,13 @@ struct ChamferForm: View {
                 Text("On").tag(ProfileSide.on)
             }
             .pickerStyle(.segmented)
+                .fieldHelp("Side")
             Picker("Size by", selection: byDepth) {
                 Text("Width").tag(false)
                 Text("Depth").tag(true)
             }
             .pickerStyle(.segmented)
+                .fieldHelp("Size by")
             if let d = params.depth {
                 LengthField("Depth", value: Binding(get: { d }, set: { params.depth = $0 }), units: units,
                             help: "Depth of the bit tip below the start depth's surface")
@@ -142,7 +144,7 @@ struct PassEditor: View {
                         guard var list = depth.customPasses, i < list.count else { return }
                         list[i] = v
                         depth.customPasses = list
-                    }), units: units)
+                    }), units: units, help: "Depth of this pass below the material top")
                     Button { depth.customPasses?.remove(at: i) } label: { Image(systemName: "minus.circle") }
                         .buttonStyle(.icon).help("Remove this pass")
                 }
@@ -187,6 +189,7 @@ struct HoleMillForm: View {
                 Text("Thread mill").tag(HoleMillMode.thread)
             }
             .pickerStyle(.segmented)
+                .fieldHelp("Mode")
             LengthField("Start depth", value: $params.startDepth, units: units)
             LengthField("Cut depth", value: $params.cutDepth, units: units)
             OptionalLengthField(label: params.mode == .thread ? "Major diameter" : "Hole diameter",
@@ -201,6 +204,7 @@ struct HoleMillForm: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Toggle("Right-hand thread", isOn: $params.rightHandThread)
+                    .fieldHelp("Right-hand thread")
             }
             DirectionPicker(direction: $params.direction)
             Text(params.mode == .helical
@@ -218,7 +222,8 @@ struct PrismForm: View {
     var body: some View {
         InspectorSection(title: "Prism Carve") {
             OptionalLengthField(label: "Max depth", value: $params.maxDepth, units: units,
-                                defaultValue: units == .inch ? 0.25 : 6)
+                                defaultValue: units == .inch ? 0.25 : 6,
+                                help: "Stop the V-bit at this depth; wider shapes keep a flat top")
             OptionalLengthField(label: "Pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.1 : 2.5)
             DirectionPicker(direction: $params.direction)
@@ -241,6 +246,7 @@ struct ArrayCopyForm: View {
         Toggle("Repeat on a grid", isOn: Binding(get: { array != nil }, set: { on in
             array = on ? ArrayCopySettings(spacingX: units == .inch ? 6 : 150, spacingY: units == .inch ? 6 : 150) : nil
         }))
+            .fieldHelp("Repeat on a grid")
         if let a = array {
             IntField("Columns", value: field(\.columns, 1), range: 1...100)
             IntField("Rows", value: field(\.rows, 1), range: 1...100)
@@ -304,10 +310,12 @@ struct StraightInlayForm: View {
                 Text("Both").tag(InlayPart.both)
             }
             .pickerStyle(.segmented)
+                .fieldHelp("Part")
             LengthField("Pocket depth", value: $params.pocketDepth, units: units)
             LengthField("Plug depth", value: $params.plugDepth, units: units, help: "Depth of the cut round the plug")
             LengthField("Clearance", value: $params.clearance, units: units, help: "Gap all round between plug and pocket")
             Toggle("Mirror plug", isOn: $params.mirrorPlug)
+                .fieldHelp("Mirror plug")
             OptionalLengthField(label: "Pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.125 : 3)
             Text("Both parts use the same outline with every corner rounded to the end mill's radius, so the plug drops into the pocket. Cut the pocket and the plug on separate boards (export them separately).")
@@ -341,10 +349,12 @@ struct MouldingForm: View {
                 Text("Right").tag(OpenVectorSide.right)
             }
             .pickerStyle(.segmented)
+                .fieldHelp("Section side (open rails)")
             LengthField("Start depth", value: $params.startDepth, units: units, help: "Extra depth under the whole section")
             OptionalLengthField(label: "Stepover", value: $params.stepover, units: units,
                                 defaultValue: units == .inch ? 0.02 : 0.5)
             Toggle("Rough in levels first", isOn: $params.roughing)
+                .fieldHelp("Rough in levels first")
             Text("The toolpath's vectors are the rails. The cross-section's width runs out from the rail (left or right of an open rail, inwards on a closed one) and its top is the material top. Use a ball nose for curved sections.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
