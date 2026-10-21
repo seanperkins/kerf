@@ -102,6 +102,17 @@ struct FeedsCalculatorSection: View {
             }
             NumberField("Target chip load", value: $chipLoad, unit: "\(u.abbreviation)/tooth",
                         help: "Advance per cutting edge; pick a material above for a starting point, or use your bit maker's chart")
+            // Choosing the same material again fires no change, so once the target has drifted from
+            // the preset (a hand edit, or a new diameter) this is the way back to the number shown.
+            if let p = MaterialPresets.preset(named: presetName), abs(startingLoad(p) - chipLoad) > 1e-12 {
+                HStack {
+                    Text("\(p.name) starts at \(startingLoad(p), format: .number.precision(.fractionLength(0...4))) \(u.abbreviation)/tooth for this cutter")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Use Starting Point") { chipLoad = startingLoad(p) }
+                        .help("Set the target back to the \(p.name) preset for the tool's current diameter")
+                }
+            }
             HStack {
                 Text("Feed = \(Int(tool.spindleRPM)) RPM × \(tool.flutes) flutes × chip load = \(feed, format: .number.precision(.fractionLength(0...1))) \(u.feedUnit)")
                     .font(.caption).foregroundStyle(.secondary)
