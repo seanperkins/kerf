@@ -218,10 +218,18 @@ enum DepthFollow {
     /// depth moves by the difference, so a through cut stays through and an overcut keeps its
     /// overcut. Hand-edited passes at or past the new depth are dropped (the cut depth is always
     /// the last pass).
-    static func adjusted(_ operations: [AnyOperation], thicknessFrom old: Double, to new: Double) -> [AnyOperation] {
+    /// `affected` limits the change to the operations on the sheet whose thickness changed; a
+    /// merged operation's parts are adjusted one by one, since each keeps its own depth.
+    static func adjusted(_ operations: [AnyOperation], thicknessFrom old: Double, to new: Double,
+                         where affected: (AnyOperation) -> Bool = { _ in true }) -> [AnyOperation] {
         let delta = new - old
         guard abs(delta) > 1e-12 else { return operations }
         return operations.map { op in
+            guard affected(op) else { return op }
+            if case .merge(var m) = op {
+                m.params.children = adjusted(m.params.children, thicknessFrom: old, to: new)
+                return .merge(m)
+            }
             guard var d = op.editableDepth, d.followsThickness == true else { return op }
             d.cutDepth += delta
             if let passes = d.customPasses { d.customPasses = passes.filter { $0 < d.cutDepth - 1e-9 } }
