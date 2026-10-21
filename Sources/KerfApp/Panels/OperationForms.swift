@@ -103,6 +103,8 @@ struct ProfileForm: View {
     var shapes: [Shape] = []
     var isEditingTabs: Binding<Bool> = .constant(false)
     var toolStepdown: Double? = nil
+    /// The material thickness, so the Tabs section can say what a tab really holds.
+    var materialThickness: Double? = nil
 
     private var manualBinding: Binding<Bool> {
         Binding(get: { params.tabs.isManual }, set: { manual in
@@ -164,7 +166,15 @@ struct ProfileForm: View {
             Toggle("Add tabs", isOn: $params.tabs.isEnabled)
             if params.tabs.isEnabled {
                 LengthField("Length", value: $params.tabs.length, units: units)
-                LengthField("Thickness", value: $params.tabs.thickness, units: units)
+                LengthField("Tab height", value: $params.tabs.thickness, units: units)
+                    .help("Measured up from the bottom of the cut, not from the material bottom")
+                if let thickness = materialThickness {
+                    let note = TabHold.note(tabHeight: params.tabs.thickness, cutDepth: params.depth.cutDepth,
+                                            materialThickness: thickness, units: units)
+                    Text(note.text).font(.caption)
+                        .foregroundStyle(note.isProblem ? Color.warningText : Color.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Toggle("Triangular (3D) tabs", isOn: $params.tabs.isTriangular)
                 Picker("Placement", selection: manualBinding) {
                     Text("Automatic").tag(false)

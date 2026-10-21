@@ -45,6 +45,7 @@ struct HarnessScenario: Decodable {
     /// Each op and what it needs; `capture` and friends write `<name>.png` and `<name>.ax.txt`.
     static let ops: [String: String] = [
         "sample": "name: load a sample project (sign)",
+        "project": "name: load a .kerf project file, relative to the repo root (scripts/ui.sh runs from there); harness/projects/ holds variants of the sample",
         "appearance": "value: light | dark | system",
         "size": "size: [w, h] content size of the window",
         "mode": "value: 2d | split | 3d",
@@ -114,6 +115,8 @@ struct HarnessScenario: Decodable {
             guard step.name?.isEmpty == false else { throw fail("name must be the section's title") }
         case "import":
             guard step.name?.isEmpty == false else { throw fail("name must be the path of the file to import") }
+        case "project":
+            guard step.name?.isEmpty == false else { throw fail("name must be the path of a .kerf file") }
         case "wait":
             guard let s = step.seconds, s >= 0 else { throw fail("seconds is required") }
         case "capture", "captureSheet", "menus":

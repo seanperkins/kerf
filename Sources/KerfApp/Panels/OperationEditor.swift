@@ -99,7 +99,7 @@ struct OperationEditor: View {
         case .profile(let o):
             ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units,
                         shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding,
-                        toolStepdown: primaryStepdown)
+                        toolStepdown: primaryStepdown, materialThickness: document.document.job.thickness)
         case .pocket(let o):
             PocketForm(params: paramsBinding(o.params) { .pocket(PocketOperation(setup: draft.setup, params: $0)) },
                        units: units, library: library, finishToolID: draft.setup.toolID, toolStepdown: primaryStepdown)

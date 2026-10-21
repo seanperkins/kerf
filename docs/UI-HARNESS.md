@@ -61,6 +61,7 @@ minimum is 1000 x 640). Steps run in order and the run stops at the first error,
 | op | arguments | does |
 |---|---|---|
 | `sample` | `name`: `sign` | loads the sample project into the document |
+| `project` | `name`: a `.kerf` path relative to the repo root | loads that project; `harness/projects/` holds variants of the sample |
 | `appearance` | `value`: light / dark / system | changes appearance mid-run |
 | `size` | `size`: `[w, h]` | resizes the window |
 | `mode` | `value`: 2d / split / 3d | centre view |
