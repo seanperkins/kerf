@@ -80,7 +80,7 @@ public struct PocketOperation: ToolpathOperation {
 
     private func clearing(_ planner: PocketPlanner, from start: Vec2) -> [[Chain2D]] {
         switch params.strategy {
-        case .offset: return planner.offsetClearing(from: start)
+        case .offset: return planner.offsetClearing(from: start, closeGaps: true)
         case .raster(let angle, let profilePass):
             return planner.rasterClearing(angle: angle, profilePass: profilePass,
                                           profileFirst: params.profilePassFirst == true, from: start)
