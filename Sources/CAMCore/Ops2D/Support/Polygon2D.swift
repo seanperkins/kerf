@@ -103,16 +103,19 @@ public enum Polygon2D {
         GeomKernel.boolean(.union, subject: loops.filter { $0.count > 2 }, clip: [], fillRule: .evenOdd)
     }
 
-    /// Which part each of `loops` belongs to: two loops that overlap or nest (their intersection
-    /// has area) are one part, and so is anything joined to either through further loops; loops
-    /// that only touch or sit apart, however close, are not. Returns a part index per loop.
-    public static func parts(of loops: [[Vec2]]) -> [Int] {
+    /// Which part each of `loops` belongs to once each is offset alone by its entry in `offsets`
+    /// (outward when positive, inward when negative, none at zero): two loops whose offsets overlap
+    /// or nest (their intersection has area) are one part, and so is anything joined to either
+    /// through further loops; offsets that only touch or stay apart, however close, are not. Returns
+    /// a part index per loop.
+    public static func parts(of loops: [[Vec2]], offsets: [Double], join: GeomKernel.Join, tolerance: Double) -> [Int] {
         var parent = Array(loops.indices)
         func root(_ i: Int) -> Int { var i = i; while parent[i] != i { i = parent[i] }; return i }
-        let boxes = loops.map { Rect2(points: $0) }
+        let grown = zip(loops, offsets).map { loop, d in d == 0 ? [loop] : GeomKernel.offset([loop], by: d, join: join, arcTolerance: tolerance) }
+        let boxes = grown.map { Rect2(points: $0.joined()) }
         for i in loops.indices {
             for j in loops.indices where j > i && boxes[i].intersects(boxes[j]) && root(i) != root(j) {
-                if !GeomKernel.boolean(.intersection, subject: [loops[i]], clip: [loops[j]]).isEmpty { parent[root(j)] = root(i) }
+                if !GeomKernel.boolean(.intersection, subject: grown[i], clip: grown[j], fillRule: .evenOdd).isEmpty { parent[root(j)] = root(i) }
             }
         }
         var label: [Int: Int] = [:]

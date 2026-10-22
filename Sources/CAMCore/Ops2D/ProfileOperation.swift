@@ -26,7 +26,8 @@ public struct ProfileOperation: ToolpathOperation {
         let closed = vectors.map(\.points), open = flat.filter { !$0.isClosed }.map(\.points)
         let lastPass = effectiveLastPass(tolerance: tol)
         let finalOffset = tool.radius + params.allowance
-        let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset + (lastPass?.allowance ?? 0),
+        let roughOffset = finalOffset + (lastPass?.allowance ?? 0)
+        let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: roughOffset,
                                          direction: params.direction, tolerance: tol, join: join)
         let finishPlan = lastPass.map {
             ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset,
@@ -59,22 +60,37 @@ public struct ProfileOperation: ToolpathOperation {
         var tabNotes = TabNotes()
         // Each pass resolves manual anchors against its own loops: an anchor's tab sits where the
         // loop this toolpath would cut for the anchor's part passes it, at this pass's offset. The
-        // part is the anchor's vector with every selected closed vector that overlaps or nests with
-        // it (a hole drawn as its own shape, or two shapes that overlap), offset together, so the
-        // loop is the one the toolpath cuts; a neighbour that only touches is not part of it.
+        // part is the anchor's vector with every selected closed vector whose offset at that pass
+        // joins it (a hole drawn as its own shape, two shapes that overlap, two parts closer than
+        // the tool), offset together, so the loop is the one the toolpath cuts. Each vector offsets
+        // on the side its nesting in the selection puts it, as the even-odd plan does.
         let manual = params.tabs.isEnabled && !(params.tabs.manualTabs ?? []).isEmpty
-        let parts = manual ? Polygon2D.parts(of: closed) : []
+        let holes = manual ? Polygon2D.holes(in: closed, tolerance: tol) : []
         var vectorIndex: [UUID: [Int: Int]] = [:]
         for (i, v) in vectors.enumerated() { vectorIndex[v.shapeID, default: [:]][v.pathIndex] = i }
-        let ownLoops = { (anchor: TabAnchor, offset: Double) -> [ArcLengthChain] in
-            guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex], k < parts.count else { return [] }
-            let part = closed.indices.filter { parts[$0] == parts[k] }.map { closed[$0] }
-            return ProfileGeometry.loops(closed: part, side: params.side, offset: offset, direction: params.direction,
-                                         tolerance: tol, join: join).chains.map { ArcLengthChain($0) }
+        func side(ofHole hole: Bool) -> ProfileSide {
+            switch params.side {
+            case .outside: hole ? .inside : .outside
+            case .inside: hole ? .outside : .inside
+            case .on: .on
+            }
+        }
+        func ownLoops(at offset: Double) -> (TabAnchor) -> TabAnchors.OwnLoops {
+            guard manual else { return { _ in TabAnchors.OwnLoops(part: [], vector: []) } }
+            let parts = Polygon2D.parts(of: closed, offsets: holes.map { side(ofHole: $0) == .outside ? offset : side(ofHole: $0) == .inside ? -offset : 0 },
+                                        join: join, tolerance: tol)
+            func offsetLoops(_ loops: [[Vec2]], side: ProfileSide) -> [ArcLengthChain] {
+                ProfileGeometry.loops(closed: loops, side: side, offset: offset, direction: params.direction, tolerance: tol, join: join)
+                    .chains.map { ArcLengthChain($0) }
+            }
+            return { anchor in
+                guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex] else { return TabAnchors.OwnLoops(part: [], vector: []) }
+                let part = closed.indices.filter { parts[$0] == parts[k] }.map { closed[$0] }
+                return TabAnchors.OwnLoops(part: offsetLoops(part, side: params.side), vector: offsetLoops([closed[k]], side: side(ofHole: holes[k])))
+            }
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
-                             sourceStarts: sourceStarts, shapeLoops: shapeLoops,
-                             ownLoops: { ownLoops($0, finalOffset + (lastPass?.allowance ?? 0)) },
+                             sourceStarts: sourceStarts, shapeLoops: shapeLoops, ownLoops: ownLoops(at: roughOffset),
                              context: context, builder: &builder, tabNotes: &tabNotes)
         var ignoredAnchors = rough.ignored
         if let lastPass, let finishPlan {
@@ -87,7 +103,7 @@ public struct ProfileOperation: ToolpathOperation {
             let finishPasses = lastPass.fullDepth ? [params.depth.cutDepth] : passes
             let finish = cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
                                   wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
-                                  ownLoops: { ownLoops($0, finalOffset) },
+                                  ownLoops: ownLoops(at: finalOffset),
                                   roughing: (tabs: rough.placed, loops: plan.chains.map { ArcLengthChain($0) }, allowance: lastPass.allowance),
                                   context: context, builder: &builder, tabNotes: &tabNotes)
             ignoredAnchors = finish.ignored
@@ -143,7 +159,7 @@ public struct ProfileOperation: ToolpathOperation {
     /// beside them; a loop the roughing offset swallowed lays out its own tabs and counts what it
     /// could not do, which the roughing pass did for every loop it had.
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
-                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], ownLoops: (TabAnchor) -> [ArcLengthChain],
+                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], ownLoops: (TabAnchor) -> TabAnchors.OwnLoops,
                           roughing: (tabs: [Vec2], loops: [ArcLengthChain], allowance: Double)? = nil, context: CAMContext,
                           builder: inout ToolpathBuilder, tabNotes: inout TabNotes) -> (placed: [Vec2], ignored: Int) {
         let tol = context.tolerance

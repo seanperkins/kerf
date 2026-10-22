@@ -42,20 +42,30 @@ public enum TabAnchors {
         return best?.anchor
     }
 
+    /// The loops a manual anchor is judged against: what the toolpath cuts for the anchor's `part`
+    /// (its vector and whatever selected vectors the offset joins it to, offset together), and the
+    /// anchor's `vector` offset alone, on the side its part puts it (a hole's loop moves into the
+    /// hole).
+    public struct OwnLoops {
+        public var part: [ArcLengthChain]
+        public var vector: [ArcLengthChain]
+        public init(part: [ArcLengthChain], vector: [ArcLengthChain]) { self.part = part; self.vector = vector }
+    }
+
     /// Tab centre parameters for each closed loop. An anchor travels with its vector, so it is used
     /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
-    /// cuts) and the loop the toolpath would cut for the anchor's part (`ownLoops`: its vector and
-    /// whatever selected vectors overlap or nest with it, offset together on the same side with the
-    /// same offset and join) runs through one of `loops` at the anchor's nearest point; it goes onto
-    /// that loop there. One on another part however near, on an open vector, on a vector that no
-    /// longer exists, or whose own loop the offset swallowed or merged away is never attached to
-    /// whatever loop happens to be nearest; `ignored` counts them so the operation can say so.
+    /// cuts), the part's loop (`ownLoops`) runs nearest the anchor at a point the vector's own loop
+    /// also runs through, and one of `loops` runs through that point; it goes onto that loop there.
+    /// One on another part however near, on an open vector, on a vector that no longer exists, or
+    /// whose own loop the offset swallowed (a hole smaller than the tool, in a part whose other loops
+    /// survive) is never attached to whatever loop happens to be nearest; `ignored` counts them so
+    /// the operation can say so.
     public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
-                               ownLoops: (TabAnchor) -> [ArcLengthChain], document: Document,
+                               ownLoops: (TabAnchor) -> OwnLoops, document: Document,
                                tolerance: Double) -> (centers: [[Double]], ignored: Int) {
         var out = Array(repeating: [Double](), count: loops.count)
         var ignored = 0
-        var own: [UUID: [Int: [ArcLengthChain]]] = [:]
+        var own: [UUID: [Int: OwnLoops]] = [:]
         for a in anchors {
             guard shapeIDs.contains(a.shapeID), let shape = document.shape(id: a.shapeID),
                   shape.paths.indices.contains(a.pathIndex), shape.paths[a.pathIndex].isClosed,
@@ -70,11 +80,8 @@ public enum TabAnchors {
                 own[a.shapeID, default: [:]][a.pathIndex] = l
                 return l
             }()
-            var site: (point: Vec2, distance: Double)?
-            for l in mine where l.isClosed && l.length > 0 {
-                let pr = l.project(p)
-                if pr.distance < (site?.distance ?? .infinity) { site = (l.point(at: pr.s), pr.distance) }
-            }
+            var site = nearest(p, on: mine.part)
+            if let s = site, (nearest(s.point, on: mine.vector)?.distance ?? .infinity) > 8 * tolerance + 1e-6 { site = nil }
             var best: (index: Int, s: Double, d: Double)?
             if let site {
                 for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
@@ -85,5 +92,14 @@ public enum TabAnchors {
             if let b = best { out[b.index].append(b.s) } else { ignored += 1 }
         }
         return (out.map { $0.sorted() }, ignored)
+    }
+
+    private static func nearest(_ p: Vec2, on loops: [ArcLengthChain]) -> (point: Vec2, distance: Double)? {
+        var best: (point: Vec2, distance: Double)?
+        for l in loops where l.isClosed && l.length > 0 {
+            let pr = l.project(p)
+            if pr.distance < (best?.distance ?? .infinity) { best = (l.point(at: pr.s), pr.distance) }
+        }
+        return best
     }
 }

@@ -285,6 +285,8 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         ProfileGeometry.loops(closed: ShapeGeometry.loops(of: shapes, tolerance: 0.001).closed, side: .outside, offset: offset,
                               direction: .climb, tolerance: 0.001, join: join).chains.map { ArcLengthChain($0) }
     }
+    // Each shape here is a part of its own.
+    func alone(_ l: [ArcLengthChain]) -> TabAnchors.OwnLoops { TabAnchors.OwnLoops(part: l, vector: l) }
     let gone = TabAnchor(shapeID: UUID(), fraction: 0.25)
     let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: other.id, fraction: 0.25),
                    TabAnchor(shapeID: line.id, fraction: 0.5), gone]
@@ -293,7 +295,7 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     // the line is open, the last vector is gone. Selection alone is not enough; so with miter joins.
     for join in [GeomKernel.Join.round, .miter(limit: ProfileGeometry.sharpMiterLimit)] {
         let loop = loops([near], offset: 0.125, join: join)
-        let r = TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { loops([doc.shape(id: $0.shapeID)!], offset: 0.125, join: join) },
+        let r = TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone(loops([doc.shape(id: $0.shapeID)!], offset: 0.125, join: join)) },
                                    document: doc, tolerance: 0.001)
         #expect(r.centers.map(\.count) == [1] && r.ignored == 3)
         #expect(abs(r.centers[0][0] - loop[0].project(Vec2(3, 0)).s) < 1e-6)
@@ -301,11 +303,11 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     // Loops of another offset are not this toolpath's; a loop two vectors merged into is both
     // vectors' offset, and an anchor on the swallowed stretch between them has no loop to go to.
     let loop = loops([near], offset: 0.125)
-    #expect(TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { loops([doc.shape(id: $0.shapeID)!], offset: 0.25) }, document: doc, tolerance: 0.001).ignored == 4)
+    #expect(TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone(loops([doc.shape(id: $0.shapeID)!], offset: 0.25)) }, document: doc, tolerance: 0.001).ignored == 4)
     let merged = loops([near, other], offset: 0.2)
     #expect(merged.count == 1)
     let r = TabAnchors.centers(for: anchors + [TabAnchor(shapeID: near.id, fraction: 0.4)], loops: merged, shapeIDs: all,
-                               ownLoops: { loops([doc.shape(id: $0.shapeID)!], offset: 0.2) }, document: doc, tolerance: 0.001)
+                               ownLoops: { alone(loops([doc.shape(id: $0.shapeID)!], offset: 0.2)) }, document: doc, tolerance: 0.001)
     #expect(r.centers.map(\.count) == [2] && r.ignored == 3)   // near 0.25, other 0.25; near 0.4 faces the gap
 }
 
@@ -332,6 +334,28 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: fraction)])
     }
     #expect(tabCount(over, ctx) == 2 && over.metadata["warning"] == nil)
+    // Two parts the roughing offset joins (touching, 0.001 in apart, 0.1 in apart) but the last
+    // pass does not: an anchor on A's edge just above B's top sits at the joined loop's inner corner
+    // on the roughing pass and on A's own stretch on the last pass; both passes hold it.
+    for x0 in [2.0, 2.001, 2.1] {
+        let (joined, ctxJ) = try tabbedProfile([a, F.rect(x0, 0, 2, 1)], select: [1], lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: onA.project(Vec2(2, 1.15)).s / onA.length)])
+        }
+        #expect(tabCount(joined, ctxJ) == 2 && joined.metadata["warning"] == nil, "\(x0)")
+    }
+    // A hole smaller than the tool in a part whose outer loop survives: cut outside its loop is
+    // gone, and its anchor is reported, not moved to the outer loop; cut inside the hole is an
+    // island whose loop grows, and the anchor is placed.
+    for lastPass in [nil, ProfileLastPass(allowance: 0.1)] {
+        for side in [ProfileSide.outside, .inside] {
+            let (tiny, ctxT) = try tabbedProfile([outer, F.rect(2.9, 1.9, 0.2, 0.2)], select: [1], side: side, lastPass: lastPass) { ids in
+                TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[1], fraction: 0.25)])
+            }
+            let placed = side == .inside ? (lastPass == nil ? 1 : 2) : 0
+            #expect(tabCount(tiny, ctxT) == placed, "\(side) \(String(describing: lastPass))")
+            #expect((tiny.metadata["warning"]?.contains("1 \(ignoredAnchors)") ?? false) == (side == .outside), "\(side) \(String(describing: lastPass))")
+        }
+    }
     // Within one shape each path is its own vector: an anchor on a second path 0.001 in beyond
     // the first, swallowed by an inside cut, is not lent the first path's loop.
     let (two, ctx2) = try tabbedProfile([outer, F.rect(6.001, 0, 0.2, 1)], side: .inside, asOneShape: true) { ids in
