@@ -47,7 +47,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     /// removed the material above it (0 = the top); the flute check measures the cut from there.
     /// Only a start depth with that meaning counts: moulding's is an offset into solid material,
     /// the inlay's male start depth a glue-gap offset, and the rest have none.
-    public var startDepth: Double {
+    private var startDepth: Double {
         switch self {
         case .profile(let o): o.params.depth.startDepth
         case .pocket(let o): o.params.depth.startDepth
