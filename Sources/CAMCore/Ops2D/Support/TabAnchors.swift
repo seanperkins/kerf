@@ -42,17 +42,21 @@ public enum TabAnchors {
         return best?.anchor
     }
 
-    /// Tab centre parameters for each closed loop: every anchor on one of `shapeIDs` goes to the
-    /// loop nearest to its position, at that loop's closest parameter. An anchor travels with its
-    /// vector, so one on a shape this toolpath does not cut (another part, however near), or on a
-    /// vector that no longer exists, is not attached to whatever loop happens to be nearest: it
-    /// comes back in `ignored` so the operation can say so.
+    /// Tab centre parameters for each closed loop: every anchor goes to the loop nearest to its
+    /// position, at that loop's closest parameter. An anchor travels with its vector, so it is used
+    /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
+    /// cuts) and a loop lies within `maxDistance` of it, the offset the toolpath actually applied
+    /// plus some slack. One on another part however near, on an open vector, on a vector that no
+    /// longer exists, or whose own loop the offset swallowed is not attached to whatever loop
+    /// happens to be nearest: it comes back in `ignored` so the operation can say so.
     public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
-                               document: Document, tolerance: Double) -> (centers: [[Double]], ignored: [TabAnchor]) {
+                               maxDistance: Double, document: Document, tolerance: Double) -> (centers: [[Double]], ignored: [TabAnchor]) {
         var out = Array(repeating: [Double](), count: loops.count)
         var ignored: [TabAnchor] = []
         for a in anchors {
-            guard shapeIDs.contains(a.shapeID), let p = point(of: a, in: document, tolerance: tolerance) else {
+            guard shapeIDs.contains(a.shapeID), let shape = document.shape(id: a.shapeID),
+                  shape.paths.indices.contains(a.pathIndex), shape.paths[a.pathIndex].isClosed,
+                  let p = point(of: a, in: document, tolerance: tolerance) else {
                 ignored.append(a)
                 continue
             }
@@ -61,7 +65,7 @@ public enum TabAnchors {
                 let pr = loop.project(p)
                 if pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
             }
-            if let b = best { out[b.index].append(b.s) } else { ignored.append(a) }
+            if let b = best, b.d <= maxDistance { out[b.index].append(b.s) } else { ignored.append(a) }
         }
         return (out.map { $0.sorted() }, ignored)
     }
