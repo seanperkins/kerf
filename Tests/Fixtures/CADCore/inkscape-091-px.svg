@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+<!-- Hand-written in the style of Inkscape 0.91: no units, no viewBox, 90 user units per inch. A 3 in square. -->
+<svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+     xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns="http://www.w3.org/2000/svg"
+     version="1.1" id="svg2" width="744.09448819" height="1052.3622047"
+     inkscape:version="0.91 r13725" sodipodi:docname="square.svg">
+  <g inkscape:label="Layer 1" inkscape:groupmode="layer" id="layer1">
+    <rect id="square" x="100" y="100" width="270" height="270"/>
+  </g>
+</svg>

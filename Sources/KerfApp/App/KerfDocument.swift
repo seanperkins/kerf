@@ -107,6 +107,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var kerningShapeID: UUID?
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
+    /// SVG files with no physical size, waiting for their scale to be confirmed (`IOSheet.svgScale`).
+    var pendingScales: [SVGScaleRequest] = []
     var deferredAlert: AlertMessage?
     /// Expressions typed into numeric fields, linked to parameters on the next edit (io).
     let expressionRecorder = ExpressionRecorder()
@@ -505,6 +507,12 @@ final class KerfDocument: ReferenceFileDocument {
         sheet = .placeModel(pendingPlacements.removeFirst())
     }
 
+    /// Shows the next SVG whose scale the file does not state.
+    func showNextScaleRequest() {
+        guard sheet == nil, !pendingScales.isEmpty else { return }
+        sheet = .io(.svgScale(pendingScales.removeFirst()))
+    }
+
     func editPlacement(of modelID: UUID) {
         guard let m = project.document.model(id: modelID) else { return }
         sheet = .placeModel(ModelPlacementForm(editing: m, job: project.document.job, library: mergedLibrary))
@@ -674,11 +682,12 @@ final class KerfDocument: ReferenceFileDocument {
                         data: data, fileName: url.lastPathComponent, project: project, library: mergedLibrary))
                     continue
                 }
-                var outcome = ImportOutcome()
-                var p = project
-                outcome = try ImportService.importFile(data: data, fileName: url.lastPathComponent, into: &p)
-                let imported = p
-                perform("Import \(url.lastPathComponent)") { $0 = imported }
+                // An SVG that does not say how big it is waits for the user to confirm the scale.
+                if let ask = ImportService.scaleRequest(data: data, fileName: url.lastPathComponent, units: units) {
+                    pendingScales.append(ask)
+                    continue
+                }
+                let outcome = try commitImport(data: data, fileName: url.lastPathComponent)
                 newShapes += outcome.shapeIDs
                 if !outcome.imageIDs.isEmpty && outcome.shapeIDs.isEmpty { requestCanvas(.fit) }
                 messages += outcome.warnings.map { "\(url.lastPathComponent): \($0)" }
@@ -688,14 +697,25 @@ final class KerfDocument: ReferenceFileDocument {
         }
         if !newShapes.isEmpty { setSelection(newShapes); sidebarTab = .design; requestCanvas(.fit) }
         let message = messages.isEmpty ? nil : AlertMessage(title: "Import", message: messages.joined(separator: "\n"))
-        if pendingPlacements.isEmpty {
+        if pendingPlacements.isEmpty && pendingScales.isEmpty {
             if let message { report(message) }
         } else {
-            // A sheet and an alert cannot show together: report after the placement dialogs.
+            // A sheet and an alert cannot show together: report after the placement and scale dialogs.
             hold(message)
             showDesignCanvas()
             showNextPlacement()
+            showNextScaleRequest()
         }
+    }
+
+    /// Imports one file as one undo step. `svgPixelsPerInch` is the scale the user confirmed for an SVG with no
+    /// physical size (nil: the importer guesses).
+    func commitImport(data: Data, fileName: String, svgPixelsPerInch: Double? = nil) throws -> ImportOutcome {
+        var p = project
+        let outcome = try ImportService.importFile(data: data, fileName: fileName, into: &p, svgPixelsPerInch: svgPixelsPerInch)
+        let imported = p
+        perform("Import \(fileName)") { $0 = imported }
+        return outcome
     }
 
     /// Reports a result to the user: at once, or after the open sheet closes (`sheetDismissed()` shows
@@ -724,6 +744,8 @@ final class KerfDocument: ReferenceFileDocument {
         _ = expressionRecorder.take()
         if !pendingPlacements.isEmpty {
             showNextPlacement()
+        } else if !pendingScales.isEmpty {
+            showNextScaleRequest()
         } else if let a = deferredAlert {
             deferredAlert = nil
             alert = a

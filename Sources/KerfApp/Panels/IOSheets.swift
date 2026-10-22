@@ -11,10 +11,13 @@ enum IOSheet: Equatable {
     case jobNotes(openedWithFile: Bool)
     /// File > Clipart…
     case clipart
+    /// An SVG that does not state its size: which pixels per inch it was drawn at.
+    case svgScale(SVGScaleRequest)
 
     var id: String {
         switch self {
         case .modelParts(let f): return "parts-\(f.id)"
+        case .svgScale(let r): return "svg-\(r.id)"
         case .jobNotes: return "notes"
         case .clipart: return "clipart"
         }
@@ -30,6 +33,7 @@ struct IOSheetHost: View {
         case .modelParts(let form): ModelPartsSheet(document: document, form: form)
         case .jobNotes(let opened): JobNotesSheet(document: document, openedWithFile: opened)
         case .clipart: ClipartBrowserSheet(document: document)
+        case .svgScale(let request): SVGScaleSheet(document: document, request: request)
         }
     }
 }
@@ -100,6 +104,26 @@ extension KerfDocument {
             sheet = .io(.modelParts(try ModelPartsForm.read(data: data, fileName: url.lastPathComponent, units: units)))
         } catch {
             alert = AlertMessage(title: "Import", message: "\(url.lastPathComponent): \(ImportService.describe(error))")
+        }
+    }
+
+    /// Imports an SVG at the scale the user confirmed. Failures and notes are reported with `report(_:)`:
+    /// the sheet is still up when this runs.
+    func importSVG(_ request: SVGScaleRequest, pixelsPerInch: Double) {
+        do {
+            let outcome = try commitImport(data: request.data, fileName: request.fileName, svgPixelsPerInch: pixelsPerInch)
+            if !outcome.shapeIDs.isEmpty {
+                setSelection(outcome.shapeIDs)
+                sidebarTab = .design
+                requestCanvas(.fit)
+            } else if !outcome.imageIDs.isEmpty {
+                requestCanvas(.fit)
+            }
+            if !outcome.warnings.isEmpty {
+                report(AlertMessage(title: "Import", message: outcome.warnings.map { "\(request.fileName): \($0)" }.joined(separator: "\n")))
+            }
+        } catch {
+            report(AlertMessage(title: "Import", message: "\(request.fileName): \(ImportService.describe(error))"))
         }
     }
 

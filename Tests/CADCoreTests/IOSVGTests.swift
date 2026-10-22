@@ -146,10 +146,10 @@ import Testing
     }
 
     @Test func lengthUnits() {
-        #expect(SVGAttributes.pixels("1in") == 96)
-        #expect(approx(SVGAttributes.pixels("25.4mm") ?? 0, 96))
-        #expect(SVGAttributes.pixels("72pt") == 96)
-        #expect(SVGAttributes.pixels("50%", percentOf: 200) == 100)
+        #expect(SVGAttributes.pixels("1in", pixelsPerInch: 96) == 96)
+        #expect(approx(SVGAttributes.pixels("25.4mm", pixelsPerInch: 96) ?? 0, 96))
+        #expect(SVGAttributes.pixels("72pt", pixelsPerInch: 96) == 96)
+        #expect(SVGAttributes.pixels("50%", percentOf: 200, pixelsPerInch: 96) == 100)
     }
 }
 

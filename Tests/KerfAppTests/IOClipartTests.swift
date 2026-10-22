@@ -51,6 +51,20 @@ import Testing
         #expect(abs(b.width - 1.8) < 1e-6)   // inches, from the SVG's physical size
     }
 
+    /// Clipart is inserted without a dialog, so an SVG that does not state its size is read at the scale of the
+    /// program that wrote it, not at 96 (docs/DECISIONS.md, "SVG scale").
+    @Test func clipartWithNoPhysicalSizeIsReadAtItsProgramsScale() throws {
+        let dir = AppTestSupport.tempDir()
+        let url = dir.appendingPathComponent("Illustrator.svg")
+        try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/CADCore/illustrator-px.svg")).write(to: url)
+        let item = try #require(ClipartLibrary.scan(dir).first)
+        var p = KerfProject()
+        let ids = try ClipartLibrary.insert(item, into: &p)
+        let b = try #require(p.document.shapes(ids: ids).first).bounds()
+        #expect(abs(b.width - 3) < 1e-6)   // 216 px at 72 per inch, not 2.25 in at 96
+    }
+
     @Test func projectClipartBringsItsLayers() throws {
         let items = ClipartLibrary.scan(try Self.library())
         var p = KerfProject()

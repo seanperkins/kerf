@@ -10,6 +10,33 @@ struct ImportOutcome: Equatable {
     var warnings: [String] = []
 }
 
+/// An SVG that does not fix its own size, held until the user confirms the scale it was drawn at.
+struct SVGScaleRequest: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    var fileName: String
+    var data: Data
+    var guess: SVGImporter.ScaleGuess
+    var units: LengthUnit
+
+    /// The scales programs draw in: Illustrator, Inkscape 0.91 and older, the web.
+    static let choices: [Double] = [72, 90, 96]
+
+    /// The width and height of everything the file imports (vectors and embedded images) in `units` at every
+    /// choice; a choice it cannot be measured at (nothing to import, or a file that cannot be read) is missing.
+    /// Physical lengths inside the drawing keep their size, so the sizes are not simply proportional to the scale.
+    func drawingSizes() -> [Double: Vec2] {
+        var sizes: [Double: Vec2] = [:]
+        for choice in Self.choices {
+            guard let result = try? SVGImporter(pixelsPerInch: choice).importVectors(from: data, targetUnits: units) else { continue }
+            let boxes = result.shapes.map { $0.bounds() } + result.images.map(\.rect)
+            guard let first = boxes.first else { continue }
+            let all = boxes.dropFirst().reduce(first) { $0.union($1) }
+            sizes[choice] = Vec2(all.width, all.height)
+        }
+        return sizes
+    }
+}
+
 /// File > Import: vectors (SVG/DXF/EPS) become shapes on their own layers; STL becomes a
 /// placed 3D model centred on the material.
 enum ImportService {
@@ -46,7 +73,17 @@ enum ImportService {
                                   job: project.document.job, library: library)
     }
 
-    static func importFile(data: Data, fileName: String, into project: inout KerfProject) throws -> ImportOutcome {
+    /// The question to ask before importing an SVG whose scale the file does not state; nil for any other
+    /// file, and for an SVG with a physical page size and a viewBox.
+    static func scaleRequest(data: Data, fileName: String, units: LengthUnit) -> SVGScaleRequest? {
+        guard (fileName as NSString).pathExtension.lowercased() == "svg",
+              let guess = try? SVGImporter.scaleGuess(of: data) else { return nil }
+        return SVGScaleRequest(fileName: fileName, data: data, guess: guess, units: units)
+    }
+
+    /// `svgPixelsPerInch` is the scale the user chose for an SVG with no physical size (nil = guess it).
+    static func importFile(data: Data, fileName: String, into project: inout KerfProject,
+                           svgPixelsPerInch: Double? = nil) throws -> ImportOutcome {
         let ext = (fileName as NSString).pathExtension.lowercased()
         let base = (fileName as NSString).deletingPathExtension
         let units = project.document.units
@@ -59,7 +96,7 @@ enum ImportService {
         if imageExtensions.contains(ext) {
             return try importBitmap(data: data, name: base, into: &project)
         }
-        guard let importer = FileFormats.importer(forExtension: ext) else {
+        guard let importer = ext == "svg" ? SVGImporter(pixelsPerInch: svgPixelsPerInch) : FileFormats.importer(forExtension: ext) else {
             throw KerfIOError.unsupportedFormat(ext)
         }
         let result = try importer.importVectors(from: data, targetUnits: units)

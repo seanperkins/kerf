@@ -36,29 +36,36 @@ enum SVGAttributes {
         return result
     }
 
-    /// A length in CSS pixels (SVG user units). Percentages resolve against `percentOf`.
-    static func pixels(_ s: String?, percentOf ref: Double = 0) -> Double? {
+    /// The physical units of a length, as how many make an inch.
+    private static let unitsPerInch: [String: Double] = ["in": 1, "mm": 25.4, "cm": 2.54, "pt": 72, "pc": 6]
+
+    /// The number and the unit (lowercased, "" for a bare number) of a length attribute.
+    private static func lengthParts(_ s: String?) -> (value: Double, unit: String)? {
         guard let raw = s?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
         var sc = SVGNumberScanner(raw)
         guard let v = sc.number() else { return nil }
         let unit = String(raw.utf8.dropFirst(sc.index).map { Character(UnicodeScalar($0)) })
             .trimmingCharacters(in: .whitespaces).lowercased()
-        switch unit {
-        case "", "px": return v
-        case "in": return v * 96
-        case "mm": return v * 96 / 25.4
-        case "cm": return v * 96 / 2.54
-        case "pt": return v * 96 / 72
-        case "pc": return v * 16
-        case "%": return v / 100 * ref
-        case "em": return v * 16
-        default: return v
-        }
+        return (v, unit)
     }
 
-    /// A length converted to `unit` (physical: 96 px per inch).
-    static func physical(_ s: String?, in unit: LengthUnit, percentOf ref: Double = 0) -> Double? {
-        pixels(s, percentOf: ref).map { LengthUnit.inch.convert($0 / 96, to: unit) }
+    /// True when `s` is a length in a physical unit (in, mm, cm, pt, pc): it fixes a size, whatever the
+    /// pixels per inch. "50vmin" is not.
+    static func hasPhysicalUnit(_ s: String?) -> Bool {
+        guard let unit = lengthParts(s)?.unit else { return false }
+        return unitsPerInch[unit] != nil
+    }
+
+    /// A length in pixels of an SVG drawn at `pixelsPerInch` (96 by CSS). There is no default: every length of a file
+    /// goes through its scale. Percentages resolve against `percentOf`.
+    static func pixels(_ s: String?, percentOf ref: Double = 0, pixelsPerInch: Double) -> Double? {
+        guard let (v, unit) = lengthParts(s) else { return nil }
+        if let perInch = unitsPerInch[unit] { return v * pixelsPerInch / perInch }
+        switch unit {
+        case "%": return v / 100 * ref
+        case "em": return v * 16
+        default: return v   // "", "px", and units that are not understood
+        }
     }
 
     /// Declarations from a `style="a:b; c:d"` attribute.
