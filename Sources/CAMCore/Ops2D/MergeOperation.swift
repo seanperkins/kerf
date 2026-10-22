@@ -2,7 +2,8 @@ import CADCore
 import Foundation
 
 /// Several toolpaths cut as one: the children are generated in order and consecutive results
-/// that use the same tool are joined into a single toolpath (one tool load, no tool change).
+/// that use the same tool, and have the same material cleared above them, are joined into a
+/// single toolpath (one tool load, no tool change).
 public struct MergeOperation: ToolpathOperation {
     public static let kind = OperationKind.merge
     public var setup: OperationSetup
