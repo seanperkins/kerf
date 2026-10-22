@@ -209,7 +209,7 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `ux-context-menus` | app-ux | Context (right-click) menus | done | P2 | Canvas/CanvasEditMenu.swift, SidebarView contextMenu |
 | `ux-contextual-help` | app-ux | Contextual help and tooltips | done | P2 | Model/HelpTopics.swift, Panels/HelpView.swift (per-form ? buttons, field tooltips); HelpTopicsTests |
 | `ux-onboarding` | app-ux | First-run onboarding and sample project | done | P2 | Panels/WelcomeView.swift, Model/SampleProjects.swift, bundle.sh ships samples; OnboardingTests |
-| `ux-accessibility` | app-ux | Accessibility basics (VoiceOver labels, keyboard navigation, contrast) | done | P3 | Canvas/CanvasAccessibilityElements.swift, Model/CanvasAccessibility.swift (Tab selection); AccessibilityTests |
+| `ux-accessibility` | app-ux | Accessibility basics (VoiceOver labels, keyboard navigation, contrast) | done | P3 | Canvas/CanvasAccessibilityElements.swift, Model/CanvasAccessibility.swift (Tab selection); the inspector lays its content out below the toolbar so its accessibility frames match the drawn controls; AccessibilityTests, InspectorLayoutTests |
 | `ux-machine-config` | app-ux | Machine configuration (bed size, post, travel limits) | done | P1 | PostCore/Model/MachineDefinition.swift, Model/MachineStore.swift, Job Setup machine + post pickers, status bar; MachineConfigTests, JobSetupMachineTests |
 | `ux-async-calc` | app-ux | Background toolpath calculation with progress and cancel | done | P1 | KerfDocument.calculateAndWait, Panels/CalculationProgressView.swift |
 | `ux-zoom-pan` | app-ux | Zoom/pan (fit material, fit selection, trackpad pinch) | done | P1 | CanvasViewport.swift, CanvasEvents scroll/magnify |
