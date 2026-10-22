@@ -122,8 +122,8 @@ import Testing
         var set = GCodeFileSet(files: [file("a.tap", "A"), file("b.tap", "B"), file("c.tap", "C")])
         let live = GCodeFileSet.FileOperations.live
         set.operations.writeText = { text, folder, name in
-            if name == "c.tap" { throw Boom() }
             try live.writeText(text, folder, name)
+            if name == "c.tap" { throw Boom() }   // after the create: a write that failed part way
         }
         let m = message { try set.write(to: dir, replacing: ["a.tap"]) }
         #expect(m.contains("c.tap") && m.contains("as they were"))
@@ -298,6 +298,19 @@ import Testing
         #expect(names(in: projects) == ["b.tap", "notes.txt"])
         // The real working folder, moved away, was cleaned out by name and is empty.
         #expect(names(in: dir.appendingPathComponent("elsewhere")).isEmpty)
+        // An empty folder swapped in is not deleted either: the final rmdir checks identity first.
+        let other = AppTestSupport.tempDir()
+        var again = GCodeFileSet(files: [file("a.tap", "A")])
+        var planted: URL?
+        again.operations.writeText = { text, folder, name in
+            try live.writeText(text, folder, name)
+            try FileManager.default.moveItem(at: folder.url, to: other.appendingPathComponent("elsewhere"))
+            try FileManager.default.createDirectory(at: folder.url, withIntermediateDirectories: false)
+            planted = folder.url
+        }
+        try again.write(to: other)
+        #expect(try content(other, "a.tap") == "G0 Z1\nM30\n")
+        #expect(FileManager.default.fileExists(atPath: try #require(planted).path))
     }
 
     @Test func theLiveOperationsNeverWriteOverAnything() throws {

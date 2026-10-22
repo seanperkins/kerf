@@ -64,6 +64,12 @@ struct GCodeFileSet {
             return info.st_mode & S_IFMT
         }
 
+        /// Where the folder is now, which is not where it was made if something renamed it meanwhile.
+        var currentURL: URL {
+            var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+            return fcntl(fd, F_GETPATH, &buffer) == 0 ? URL(fileURLWithPath: String(cString: buffer), isDirectory: true) : url
+        }
+
         /// True while `name` in `parent` is still this very folder and not something put in its place.
         func isStill(in parent: Folder, named name: String) -> Bool {
             var info = stat()
@@ -216,9 +222,10 @@ struct GCodeFileSet {
     /// each file goes into place by two renames: the file that was there into `was/` inside the
     /// working folder, then the new one onto its name. Both renames are exclusive, so a file that
     /// appeared in the meantime stops the save rather than being lost. The chosen folder, the
-    /// working folder and `was/` are opened once and held, so nothing swapped in at their names
-    /// during the save is used, and the working folder is cleaned out only by the names this save
-    /// put in it. A failure removes the new files and renames the files that were there back; if
+    /// working folder and `was/` are opened once and held, every operation is relative to them, and
+    /// the working folder is cleaned out by name, never recursively, and removed only while it is
+    /// still the folder that was opened. A failure removes the new files and renames the files that
+    /// were there back; if
     /// even that fails the working folder is kept and the error says which earlier files are in it.
     /// On success the working folder, old files included, is removed. A crash part way through
     /// leaves the working folder in the user's folder, not in a temporary one. Returns the written
@@ -245,16 +252,16 @@ struct GCodeFileSet {
             if staging.isStill(in: dir, named: stagingName) { try? operations.removeItem(dir, stagingName) }
             throw GCodeFileSetError.couldNotStage(error)
         }
-        // `staged` holds the names this save wrote into the working folder, `aside` the names whose
-        // old file is in was/, `placed` the names whose new file is in place; each is appended after
-        // the operation that made it true, and an operation that throws did nothing. The working
-        // folder is cleaned out by those names alone and removed only while it is still itself, so
-        // anything this save did not put there is left where it is.
-        var staged: [String] = [], aside: [String] = [], placed: [String] = []
+        // `aside` holds the names whose old file is in was/, `placed` the names whose new file is in
+        // place; each is appended after the rename that made it true, and a rename that throws did
+        // nothing. The working folder is held, so cleaning it out by the set's names (a write that
+        // failed part way leaves one) reaches nothing else, and it is removed only while it is
+        // still itself, so something swapped in at its name is neither emptied nor deleted.
+        var aside: [String] = [], placed: [String] = []
         var keepWorkingFolder = false
         defer {
             if !keepWorkingFolder {
-                for name in staged where !placed.contains(name) { try? operations.removeItem(staging, name) }
+                for file in files where !placed.contains(file.fileName) { try? operations.removeItem(staging, file.fileName) }
                 for name in aside { try? operations.removeItem(was, name) }
                 try? operations.removeItem(staging, Self.replacedFolderName)
                 if staging.isStill(in: dir, named: stagingName) { try? operations.removeItem(dir, stagingName) }
@@ -266,7 +273,6 @@ struct GCodeFileSet {
         for file in files {
             do { try operations.writeText(file.text!, staging, file.fileName) }
             catch { throw GCodeFileSetError.writeFailed(file: file.fileName, title: file.title, underlying: error) }
-            staged.append(file.fileName)
         }
 
         // 2. Into place by renames.
@@ -295,7 +301,7 @@ struct GCodeFileSet {
                 }
                 keepWorkingFolder = !oldLeft.isEmpty
                 throw GCodeFileSetError.rollbackFailed(file: name, underlying: error, newLeft: newLeft,
-                                                       oldLeft: oldLeft, workingFolder: was.url)
+                                                       oldLeft: oldLeft, workingFolder: was.currentURL)
             }
         }
         // 3. The set is in place: the working folder, old files included, goes with the defer.
