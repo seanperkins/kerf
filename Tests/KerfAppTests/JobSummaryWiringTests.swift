@@ -71,18 +71,22 @@ import Testing
     @Test func summaryIsRebuiltOnlyWhenItsInputsChange() {
         let doc = makeDoc(units: .inch)
         let memo = JobSummary.Memo()
-        func summary(groupByTool: Bool = false, settings: TimeEstimateSettings = TimeEstimateSettings(), rapid: Double = 200) -> JobSummary {
+        // One input changes per step; the others keep the value they had on the step before.
+        var groupByTool = false, settings = TimeEstimateSettings(), rapid = 200.0
+        func summary() -> JobSummary {
             memo.summary(operations: doc.outputProject.operations, results: doc.results, groupByTool: groupByTool,
                          settings: settings, rapidRate: rapid, units: .inch)
         }
         let first = summary()
         #expect(summary() == first && memo.builds == 1)
-        _ = summary(groupByTool: true)
+        groupByTool = true
+        _ = summary()
         #expect(memo.builds == 2)
-        var slower = TimeEstimateSettings(); slower.toolChangeSeconds += 1
-        _ = summary(settings: slower)
+        settings.toolChangeSeconds += 1
+        _ = summary()
         #expect(memo.builds == 3)
-        _ = summary(rapid: 300)
+        rapid = 300
+        _ = summary()
         #expect(memo.builds == 4)
         // A recalculation replaces the toolpaths, so the summary is rebuilt.
         doc.calculateNow(doc.project.operations.map(\.id))
@@ -93,7 +97,16 @@ import Testing
         doc.results[id]?.estimatedSeconds += 1
         _ = summary()
         #expect(memo.builds == 6)
+        // And an edit to an operation that leaves its toolpaths as they were.
+        var renamed = doc.project.operations[0]
+        var setup = renamed.editableSetup
+        setup.name += " again"
+        renamed.editableSetup = setup
+        let edited = renamed
+        doc.perform("Rename") { $0.upsertOperation(edited) }
         _ = summary()
-        #expect(memo.builds == 6)
+        #expect(memo.builds == 7)
+        _ = summary()
+        #expect(memo.builds == 7)
     }
 }
