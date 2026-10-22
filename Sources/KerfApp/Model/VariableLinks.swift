@@ -45,7 +45,17 @@ enum VariableLinks {
     static func reconcile(_ p: inout KerfProject, old: KerfProject, pending: [ExpressionRecorder.Entry]) -> [VariableLink] {
         var links = p.document.linkedValues
         guard !links.isEmpty || !pending.isEmpty else { return [] }
+        // After a unit change every leaf is rescaled; compared with the old project converted the
+        // same way, only the leaves the edit touched differ, so an expression typed in the new
+        // units finds its value without a coincidence elsewhere. Links that already existed are
+        // still dropped: their literals ("=thickness - 0.1") were written in the old units.
         let unitsChanged = p.document.units != old.document.units
+        let old = unitsChanged ? old.converted(to: p.document.units) : old
+        func same(_ a: Double?, _ b: Double?) -> Bool {
+            guard let a, let b else { return a == nil && b == nil }
+            // Exact when nothing was converted: a field nudged by one ulp must still read as changed.
+            return unitsChanged ? abs(a - b) <= 1e-9 * max(1, abs(a), abs(b)) : a == b
+        }
         let sheetIDs = Set(p.document.allSheets.map(\.id))
         let opIDs = Set(p.operations.map(\.id))
         links.removeAll {
@@ -54,9 +64,10 @@ enum VariableLinks {
             case .operation(let id): return !opIDs.contains(id)
             }
         }
-        // A job field linked to an expression of itself (`=thickness/2` typed into Thickness) would
-        // move every time the links are re-evaluated; such a link is never made and never kept.
-        links.removeAll { isSelfReferencing($0, in: p) }
+        // Job fields linked in a cycle (`=thickness/2` typed into Thickness; Safe Z from the
+        // thickness and the thickness from Safe Z) would move every time the links are re-evaluated;
+        // such links are never made and never kept.
+        links = withoutCycles(links, in: p)
         var targets = Set(links.map(\.target))
         if !pending.isEmpty {
             targets.formUnion(p.document.allSheets.map { VariableLink.Target.job(sheetID: $0.id) })
@@ -65,25 +76,23 @@ enum VariableLinks {
         for t in targets {
             guard let newTree = tree(of: t, in: p) else { continue }
             let oldTree = tree(of: t, in: old)
-            // Hand edits (and unit conversion, whose scaled values no longer match) unlink.
+            // Hand edits (and unit conversion, whose literals no longer match) unlink.
             links.removeAll { l in
                 guard l.target == t else { return false }
                 if unitsChanged { return true }
                 guard let o = oldTree else { return false }
-                return number(at: l.path, in: o) != number(at: l.path, in: newTree)
+                return !same(number(at: l.path, in: o), number(at: l.path, in: newTree))
             }
             guard !pending.isEmpty else { continue }
             var newLeaves: [[String]: Double] = [:]
             leaves(newTree, prefix: [], into: &newLeaves)
             for (path, v) in newLeaves.sorted(by: { $0.key.lexicographicallyPrecedes($1.key) }) {
-                // After a unit change every leaf is rescaled, so none can be told unchanged; an
-                // expression typed in the new units (Job Setup's form) still finds its value.
-                if !unitsChanged, let o = oldTree, number(at: path, in: o) == v { continue }
+                if let o = oldTree, same(number(at: path, in: o), v) { continue }
                 guard let e = pending.last(where: { abs($0.value - v) <= 1e-9 * max(1, abs($0.value)) }) else { continue }
                 let link = VariableLink(target: t, path: path, expression: e.text)
-                guard !isSelfReferencing(link, in: p) else { continue }
-                links.removeAll { $0.target == t && $0.path == path }
-                links.append(link)
+                let others = links.filter { !($0.target == t && $0.path == path) }
+                guard !closesCycle(link, among: others, in: p) else { continue }
+                links = others + [link]
             }
         }
         p.document.linkedValues = links
@@ -114,12 +123,43 @@ enum VariableLinks {
         return failed
     }
 
-    /// A link on a job field whose expression uses that field's own name (`width`, `height`,
-    /// `thickness`, `safez`).
-    static func isSelfReferencing(_ l: VariableLink, in p: KerfProject) -> Bool {
-        guard case .job(let sheet) = l.target, let field = l.path.last else { return false }
-        return VariableLink.references(field, in: l.expression, variables: p.document.variableTable(forSheet: sheet),
-                                       units: p.document.units)
+    /// The job fields an expression can name.
+    static let jobFields = ["width", "height", "thickness", "safez"]
+
+    /// The job fields (lower-cased) a job link's expression uses on its own sheet. A user variable
+    /// that shares a field's name counts as the field here, which errs towards refusing a link.
+    static func jobFieldsUsed(by l: VariableLink, in p: KerfProject) -> Set<String> {
+        guard case .job(let sheet) = l.target else { return [] }
+        let table = p.document.variableTable(forSheet: sheet)
+        return Set(jobFields.filter { VariableLink.references($0, in: l.expression, variables: table, units: p.document.units) })
+    }
+
+    /// True when `link` on a job field, with the other job links of its sheet, leads back to its
+    /// own field: `=thickness/2` in Thickness, or Safe Z from the thickness and the thickness from
+    /// Safe Z. Followed through the job links only; operation links cannot feed a job field.
+    static func closesCycle(_ link: VariableLink, among links: [VariableLink], in p: KerfProject) -> Bool {
+        guard case .job(let sheet) = link.target, let field = link.path.last?.lowercased() else { return false }
+        var uses: [String: Set<String>] = [:]
+        for l in links + [link] {
+            guard case .job(let s) = l.target, s == sheet, let f = l.path.last?.lowercased() else { continue }
+            uses[f] = jobFieldsUsed(by: l, in: p)
+        }
+        var seen: Set<String> = []
+        var stack = Array(uses[field] ?? [])
+        while let f = stack.popLast() {
+            if f == field { return true }
+            guard seen.insert(f).inserted else { continue }
+            stack += uses[f] ?? []
+        }
+        return false
+    }
+
+    /// `links` without the job links that are part of a cycle.
+    static func withoutCycles(_ links: [VariableLink], in p: KerfProject) -> [VariableLink] {
+        links.filter { l in
+            guard case .job = l.target else { return true }
+            return !closesCycle(l, among: links.filter { $0 != l }, in: p)
+        }
     }
 
     static func evaluate(_ l: VariableLink, in p: KerfProject) -> Double? {

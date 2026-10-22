@@ -41,22 +41,60 @@ import Testing
         let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
         var form = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
         #expect(form.variableTable(in: doc.document)["margin"] == 0.1)
-        // Switching the form to millimetres scales the draft job; the table gives the user variable in
-        // millimetres too, so the two scales never meet in one expression.
+        // Switching the form to millimetres scales the draft job; a user variable is a plain number
+        // (a count or a ratio as often as a length) and keeps its value.
         form.setUnits(.millimeter)
         let table = form.variableTable(in: doc.document)
-        #expect(abs((table["width"] ?? 0) - 24 * 25.4) < 1e-9 && abs((table["margin"] ?? 0) - 2.54) < 1e-9)
+        #expect(abs((table["width"] ?? 0) - 24 * 25.4) < 1e-9 && table["margin"] == 0.1)
         form.job.height = try Self.type("=width/2 + margin", into: form, document: doc, current: form.job.height)
-        #expect(abs(form.job.height - (12 * 25.4 + 2.54)) < 1e-9)
+        #expect(abs(form.job.height - (12 * 25.4 + 0.1)) < 1e-9)
         // A suffix converts into the form's units, not the saved document's.
         #expect(abs(try Self.type("1/4in", into: form, document: doc, current: 0) - 6.35) < 1e-9)
         // Applying converts the project and still links the expression, typed in the new units.
         doc.applyJobSetup(form)
-        #expect(doc.units == .millimeter && abs(doc.document.job.height - (12 * 25.4 + 2.54)) < 1e-9)
-        #expect(doc.document.userVariables.map(\.value) == [2.54])
+        #expect(doc.units == .millimeter && abs(doc.document.job.height - (12 * 25.4 + 0.1)) < 1e-9)
+        #expect(doc.document.userVariables.map(\.value) == [0.1])
         #expect(doc.document.linkedValues.map { ($0.expression, $0.path) }.contains { $0 == "=width/2 + margin" && $1 == ["height"] })
         doc.perform("Wider") { $0.document.job.width = 400 }
-        #expect(abs(doc.document.job.height - 202.54) < 1e-9)
+        #expect(abs(doc.document.job.height - 200.1) < 1e-9)
+    }
+
+    @Test func aUnitChangeLinksOnlyTheTypedField() throws {
+        // A profile cut 0.375 in deep by hand, and a pocket whose depth is linked to the thickness
+        // with an inch literal, which cannot mean the same in millimetres.
+        var p = AppTestSupport.project()
+        let profile = OperationFactory.make(kind: .profile, project: p, library: .seeded, shapeIDs: [p.document.shapes[0].id])!
+        let pocket = OperationFactory.make(kind: .pocket, project: p, library: .seeded, shapeIDs: [p.document.shapes[1].id])!
+        p.operations = [profile, pocket]
+        let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
+        func depth(_ id: UUID) -> Double {
+            switch doc.operation(id) {
+            case .profile(let o)?: return o.params.depth.cutDepth
+            case .pocket(let o)?: return o.params.depth.cutDepth
+            default: return .nan
+            }
+        }
+        guard case .profile(var pr) = doc.operation(profile.id) else { throw TestError.notAProfile }
+        pr.params.depth.cutDepth = 0.375
+        doc.updateOperation(.profile(pr))
+        guard case .pocket(var po) = doc.operation(pocket.id) else { throw TestError.notAProfile }
+        let style = ExpressionNumberStyle(variables: doc.document.variableTable, units: .inch, recorder: doc.expressionRecorder)
+        po.params.depth.cutDepth = doc.expressionRecorder.valueToWrite(try style.parseStrategy.parse("=thickness - 0.1"), current: po.params.depth.cutDepth)
+        doc.updateOperation(.pocket(po))
+        #expect(doc.document.linkedValues.count == 1 && abs(depth(pocket.id) - 0.65) < 1e-12)
+        // Switch to millimetres and type =thickness/2 (9.525 mm) into Safe Z: the profile's 0.375 in,
+        // now 9.525 mm too, is not linked by the coincidence; the pocket's old link is dropped, as
+        // every link is by a unit change, and its converted value stands.
+        var form = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        form.setUnits(.millimeter)
+        form.job.safeZ = try Self.type("=thickness/2", into: form, document: doc, current: form.job.safeZ)
+        doc.applyJobSetup(form)
+        let links = doc.document.linkedValues.map { ($0.path, $0.expression) }
+        #expect(links.count == 1 && links[0] == (["safeZ"], "=thickness/2"))
+        #expect(abs(depth(profile.id) - 9.525) < 1e-9 && abs(depth(pocket.id) - 16.51) < 1e-9)
+        doc.perform("Thicker") { $0.document.job.thickness = 25.4 }
+        #expect(abs(depth(profile.id) - 9.525) < 1e-9 && abs(depth(pocket.id) - 16.51) < 1e-9)
+        #expect(abs(doc.document.job.safeZ - 12.7) < 1e-9)
     }
 
     @Test func aCancelledSheetDropsItsTypedExpressions() throws {
@@ -88,6 +126,17 @@ import Testing
         #expect(doc.document.job.thickness == 0.375 && doc.document.linkedValues.isEmpty)
         doc.perform("Unrelated") { $0.document.job.width = 30 }
         #expect(doc.document.job.thickness == 0.375)
+        // Two fields that feed each other are a cycle too: the second link is refused, so the
+        // first stands and nothing moves on later edits.
+        var cyclic = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        cyclic.job.safeZ = try Self.type("=thickness/2", into: cyclic, document: doc, current: cyclic.job.safeZ)
+        cyclic.job.thickness = try Self.type("=safez/2", into: cyclic, document: doc, current: cyclic.job.thickness)
+        doc.applyJobSetup(cyclic)
+        #expect(doc.document.linkedValues.map(\.path) == [["safeZ"]])
+        #expect(doc.document.job.thickness == cyclic.job.thickness && doc.document.job.safeZ == cyclic.job.thickness / 2)
+        let before = (doc.document.job.thickness, doc.document.job.safeZ)
+        doc.perform("Unrelated") { $0.document.job.width = 31 }
+        #expect((doc.document.job.thickness, doc.document.job.safeZ) == before)
         // Also an existing self-link from an older file: dropped, and the value no longer moves.
         doc.perform("Stale link") {
             $0.document.linkedValues = [VariableLink(target: .job(sheetID: $0.document.currentSheetID), path: ["safeZ"], expression: "=safez*2")]
