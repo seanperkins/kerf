@@ -173,6 +173,12 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.15)])
     }
     #expect(tabCount(wide, ctxW) == 2 && wide.metadata["warning"] == nil)
+    // A negative allowance beyond the tool radius cuts on the line (the offset is clamped at zero),
+    // and the anchor is judged at that offset.
+    let (onLine, ctxL) = try tabbedProfile([F.rect(0, 0, 6, 4)], allowance: -0.2) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.15)])
+    }
+    #expect(tabCount(onLine, ctxL) == 1 && onLine.metadata["warning"] == nil)
     let triangle = Path(points: [Vec2(0, 0), Vec2(6, 0), Vec2(0, 6 * tan(Double.pi / 6))], closed: true)
     let (acute, ctxA) = try tabbedProfile([triangle], side: .inside, lastPass: ProfileLastPass(allowance: 0.1)) { ids in
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.35)])

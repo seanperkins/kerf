@@ -76,6 +76,7 @@ public struct ProfileOperation: ToolpathOperation {
             }
         }
         func ownLoops(at offset: Double) -> (TabAnchor) -> TabAnchors.OwnLoops {
+            let offset = max(offset, 0)   // a negative allowance beyond the tool radius cuts on the line, as ProfileGeometry does
             let none = TabAnchors.OwnLoops(outline: [], part: [], vector: [], reach: 0)
             guard manual else { return { _ in none } }
             let parts = Polygon2D.parts(of: closed, offsets: holes.map { side(ofHole: $0) == .outside ? offset : side(ofHole: $0) == .inside ? -offset : 0 },
