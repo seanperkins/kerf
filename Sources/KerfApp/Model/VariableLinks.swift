@@ -48,16 +48,13 @@ enum VariableLinks {
         var links = p.document.linkedValues
         guard !links.isEmpty || !pending.isEmpty else { return [] }
         // After a unit change every leaf is rescaled; compared with the old project converted the
-        // same way, only the leaves the edit touched differ, so an expression typed in the new
-        // units finds its value without a coincidence elsewhere. Links that already existed are
-        // still dropped: their literals ("=thickness - 0.1") were written in the old units.
+        // same way (the same factor through the same scaling code, so untouched leaves are equal
+        // to the bit and a field nudged by one ulp still reads as changed), only the leaves the
+        // edit touched differ, so an expression typed in the new units finds its value without a
+        // coincidence elsewhere. Links that already existed are still dropped: their literals
+        // ("=thickness - 0.1") were written in the old units.
         let unitsChanged = p.document.units != old.document.units
         let old = unitsChanged ? old.converted(to: p.document.units) : old
-        func same(_ a: Double?, _ b: Double?) -> Bool {
-            guard let a, let b else { return a == nil && b == nil }
-            // Exact when nothing was converted: a field nudged by one ulp must still read as changed.
-            return unitsChanged ? abs(a - b) <= 1e-9 * max(1, abs(a), abs(b)) : a == b
-        }
         let sheetIDs = Set(p.document.allSheets.map(\.id))
         let opIDs = Set(p.operations.map(\.id))
         links.removeAll {
@@ -83,13 +80,13 @@ enum VariableLinks {
                 guard l.target == t else { return false }
                 if unitsChanged { return true }
                 guard let o = oldTree else { return false }
-                return !same(number(at: l.path, in: o), number(at: l.path, in: newTree))
+                return number(at: l.path, in: o) != number(at: l.path, in: newTree)
             }
             guard !pending.isEmpty else { continue }
             var newLeaves: [[String]: Double] = [:]
             leaves(newTree, prefix: [], into: &newLeaves)
             for (path, v) in newLeaves.sorted(by: { $0.key.lexicographicallyPrecedes($1.key) }) {
-                if let o = oldTree, same(number(at: path, in: o), v) { continue }
+                if let o = oldTree, number(at: path, in: o) == v { continue }
                 // A value typed in other units than the project now has (the form's units were
                 // switched after the typing) is matched after the same conversion.
                 func matches(_ e: ExpressionRecorder.Entry) -> Bool {

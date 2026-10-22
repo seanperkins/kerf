@@ -74,6 +74,23 @@ import Testing
         #expect(doc.document.job.height == 200)
     }
 
+    @Test func retypingAnEqualExpressionAfterAUnitChangeStillLinks() throws {
+        // Safe Z is already thickness/2. Switch the form to millimetres and retype =thickness/2:
+        // the field writes one ulp above the equal value, and that must still read as a change
+        // after the conversion, so the link is made (a unit change drops the old links, and this
+        // is how a user restores one).
+        let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
+        doc.perform("Half") { $0.document.job.safeZ = $0.document.job.thickness / 2 }
+        var form = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        form.setUnits(.millimeter)
+        form.job.safeZ = try Self.type("=thickness/2", into: form, document: doc, current: form.job.safeZ)
+        doc.applyJobSetup(form)
+        #expect(abs(doc.document.job.safeZ - 9.525) < 1e-9)
+        #expect(doc.document.linkedValues.map { ($0.path, $0.expression) }.contains { $0 == ["safeZ"] && $1 == "=thickness/2" })
+        doc.perform("Thicker") { $0.document.job.thickness = 25.4 }
+        #expect(abs(doc.document.job.safeZ - 12.7) < 1e-9)
+    }
+
     @Test func anUnknownNameCannotHideASelfReference() throws {
         // "=zzz + thickness/2" in Thickness fails on zzz first; the guard still sees the thickness.
         let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
