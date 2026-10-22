@@ -87,32 +87,18 @@ enum GCodeBatchExport {
             let ext = (f.fileName as NSString).pathExtension
             let base = (f.fileName as NSString).deletingPathExtension
             var n = 2
-            while used.contains(out.fileName.lowercased()) {
+            while used.contains(GCodeFileSet.collisionKey(out.fileName)) {
                 out.fileName = "\(base)_\(n)" + (ext.isEmpty ? "" : ".\(ext)")
                 n += 1
             }
-            used.insert(out.fileName.lowercased())
+            used.insert(GCodeFileSet.collisionKey(out.fileName))
             return out
         }
     }
 
-    /// Posts every planned file (validator included).
+    /// Posts every planned file (validator included). `GCodeFileSet(posted:)` writes the result.
     static func post(_ files: [PlannedGCodeFile], project: KerfProject, profile: PostProfile,
                      jobName: String) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
         files.map { ($0, GCodeExporter.export(project: project, toolpaths: $0.toolpaths, profile: profile, jobName: jobName)) }
-    }
-
-    /// Writes every posted program into `directory`. Returns the written URLs; files whose post
-    /// failed are skipped.
-    @discardableResult
-    static func write(_ posted: [(file: PlannedGCodeFile, result: GCodeExportResult)], to directory: URL) throws -> [URL] {
-        var urls: [URL] = []
-        for (file, result) in posted {
-            guard let text = result.text else { continue }
-            let url = directory.appendingPathComponent(file.fileName)
-            try text.write(to: url, atomically: true, encoding: .utf8)
-            urls.append(url)
-        }
-        return urls
     }
 }

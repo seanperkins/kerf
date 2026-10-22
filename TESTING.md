@@ -75,7 +75,9 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
      that toolpath and the next the program lifts to safe Z, then `M5`, `(MSG, your message)`, `M0`,
      and the next toolpath starts with `M3`. File → Export Job Sheet… lists the pause under the step.
    Press Calculate All, then check the 2D overlay and the 3D preview for each one.
-8. **Save All Toolpaths…** (⌥⌘S): try "one file per toolpath" in a scratch folder.
+8. **Save All Toolpaths…** (⌥⌘S): try "one file per toolpath" in a scratch folder. Save into the
+   same folder again: "Replace N files?" names the files; Cancel leaves them. If a program failed to
+   generate, the Save button is disabled (a set with a file missing is never written).
 9. **Tool Database** (⇧⌘T): add or edit a tool. Tools are stored in
    `~/Library/Application Support/Kerf/`.
 10. **Round trip.** Save the document as a `.kerf` file, close it and open it again.
@@ -111,7 +113,8 @@ minute or two. Use `samples/sign.kerf` (or a new document) unless a step says ot
 4. **Layout.** Design → Layout → Nest Parts… on the bracket plate copied several times (parts that do not
    fit spill onto extra sheets). Then try Clamps and Fixture Holes…, Toolpaths → Keep-Out Zones… (export
    refuses cuts in a zone), Label Parts…, and Production Plates… with a two-row CSV and `{Name}` in
-   a text object. Toolpaths → Save Tiled G-code… splits a job longer than 96 in into bed-sized tiles.
+   a text object. Toolpaths → Save Tiled G-code… splits a job longer than 96 in into bed-sized tiles;
+   saving twice into one folder asks "Replace N files?" the same way Save All does.
 5. **Drawing.** Vectors menu: Dog-bone Fillets…, Fillet / Chamfer Corners…, Rectangular and Circular
    Array…, Copy Along Vector…, Trim Tool, Extend to Nearest Vector, Fit Curves to Vectors…, Text on
    Curve / Arc…, Fit Text to Box…, Convert Text to Curves, Distort Envelope on Canvas and Validate

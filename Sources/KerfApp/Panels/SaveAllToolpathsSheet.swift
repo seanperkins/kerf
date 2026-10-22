@@ -17,12 +17,17 @@ struct SaveAllToolpathsSheet: View {
     @State private var initialProfileID = ""
     @State private var posted: [(file: PlannedGCodeFile, result: GCodeExportResult)] = []
     @State private var confirmErrors = false
+    /// A folder save waiting for the user to agree to replace the files already there.
+    @State private var replaceRequest: ReplaceRequest?
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
-    private var hasErrors: Bool { posted.contains { $0.result.hasErrors || $0.result.text == nil } }
+    /// Validator errors, which "Save Anyway" may override.
+    private var hasErrors: Bool { posted.contains { $0.result.hasErrors } }
+    /// A set with a program missing is never written (see `GCodeFileSet`), so the save waits.
+    private var hasUnposted: Bool { posted.contains { $0.result.text == nil } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -54,7 +59,10 @@ struct SaveAllToolpathsSheet: View {
                     if hasErrors { confirmErrors = true } else { save() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(posted.allSatisfy { $0.result.text == nil })
+                .disabled(posted.isEmpty || hasUnposted)
+                .help(hasUnposted ? "A program could not be generated; fix it before saving, so no file is left out." : "")
+                // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
+                .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
             }
         }
         .padding(20)
@@ -71,7 +79,7 @@ struct SaveAllToolpathsSheet: View {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Some programs have errors or could not be generated. Running them may damage the machine or the work.")
+            Text("Some programs have validator errors. Running them may damage the machine or the work.")
         }
     }
 
@@ -153,22 +161,30 @@ struct SaveAllToolpathsSheet: View {
             panel.canCreateDirectories = true
             panel.prompt = "Save Here"
             panel.message = "Choose a folder for \(posted.count) G-code files"
-            let files = posted
+            let set = GCodeFileSet(posted: posted)
             PanelRunner.present(panel) { response in
                 guard response == .OK, let dir = panel.url else { return }
-                finishSaving { try GCodeBatchExport.write(files, to: dir) }
+                if set.needsReplaceConfirmation(in: dir) {
+                    replaceRequest = ReplaceRequest(set: set, directory: dir)
+                } else {
+                    finishSaving { try set.write(to: dir) }
+                }
             }
         }
     }
 
-    /// Runs the write chosen in the panel, then remembers the post and closes the sheet.
+    /// Runs the write chosen in the panel, then remembers the post and closes the sheet. A failure
+    /// closes the sheet too, so the alert that names the file is seen (an alert under an open sheet
+    /// is not).
     private func finishSaving(_ write: () throws -> Void) {
         do {
             try write()
             if profileID != initialProfileID { document.setPostProfile(profileID) }
             dismiss()
         } catch {
-            document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+            dismiss()
+            let message = error.localizedDescription
+            Task { @MainActor in document.alert = AlertMessage(title: "Could not save G-code", message: message) }
         }
     }
 }
