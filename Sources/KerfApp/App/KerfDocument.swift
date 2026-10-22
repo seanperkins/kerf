@@ -197,10 +197,12 @@ final class KerfDocument: ReferenceFileDocument {
     private let pendingLock = NSLock()
     private var pendingSaves: [PendingSave] = []
     private var lastSaveID = 0
-    /// The newest save the file has been seen to hold.
-    private var lastConfirmedID = 0
-    /// Set when a save newer than `lastConfirmedID` is dropped from the list unlooked-at: the file may hold it,
-    /// so the document stays "needs recovery" until a later save is matched.
+    /// The size and digest of the file when it was last seen to hold a save: the evidence for `lastSavedProject`,
+    /// kept apart from the bounded list so it survives the list forgetting that save.
+    private var confirmedBytes: (count: Int, digest: SHA256Digest)?
+    /// Set when the file may hold something no known save explains: a save that was encoded and may have landed
+    /// was dropped from the list, or the file no longer holds what it held when `lastSavedProject` was set. The
+    /// document then stays "needs recovery" until the file is seen to hold a known save again.
     private var savedStateUnknown = false
 
     init(project: KerfProject, toolLibrary: ToolLibraryModel = .shared) {
@@ -241,8 +243,8 @@ final class KerfDocument: ReferenceFileDocument {
         let id = lastSaveID
         pendingSaves.append(PendingSave(id: id, project: project, bytes: nil))
         if pendingSaves.count > Self.pendingLimit {
-            let dropped = pendingSaves.removeFirst()
-            if dropped.id > lastConfirmedID { savedStateUnknown = true }
+            // An encoded save may have landed; with it forgotten, equality with the saved project proves nothing.
+            if pendingSaves.removeFirst().bytes != nil { savedStateUnknown = true }
         }
         pendingLock.unlock()
         var p = project
@@ -267,26 +269,48 @@ final class KerfDocument: ReferenceFileDocument {
         return data
     }
 
-    /// Looks at the file at `fileURL`: when it holds exactly what one of the pending saves handed over (the newest
+    /// Looks at the file at `fileURL`. When it holds exactly what one of the pending saves handed over (the newest
     /// that matches), that save's project is the saved one, so the document is clean if it still equals it and its
-    /// recovery copy goes at the next tick. The file's content decides, so a late older write that replaced a newer
-    /// one moves the saved project back. A write that failed or has not happened, a file that is not a regular
-    /// file, or one that holds something else leaves everything as it was. Returns whether a save matched.
+    /// recovery copy goes at the next tick. The file's content decides: a late older write that replaced a newer
+    /// one moves the saved project back. When the file holds neither a known save nor what it held when the saved
+    /// project was last set (an older save that was forgotten landed, the file was replaced or removed), the saved
+    /// state is unknown and the document stays dirty. A write that failed or has not happened leaves the file
+    /// as it was, which changes nothing. Returns whether the file holds a known save.
     @discardableResult
     func confirmSave() -> Bool {
         pendingLock.lock()
         let candidates = pendingSaves.filter { $0.bytes != nil }
+        let baseline = confirmedBytes
         pendingLock.unlock()
-        guard !candidates.isEmpty, let url = fileURL,
-              let onDisk = Self.regularFileDigest(at: url, ofSizes: Set(candidates.compactMap { $0.bytes?.count })),
-              let match = candidates.last(where: { $0.bytes?.count == onDisk.count && $0.bytes?.digest == onDisk.digest })
-        else { return false }
+        guard let url = fileURL, !candidates.isEmpty || baseline != nil else { return false }
+        var sizes = Set(candidates.compactMap { $0.bytes?.count })
+        if let baseline { sizes.insert(baseline.count) }
+        guard let onDisk = Self.regularFileDigest(at: url, ofSizes: sizes) else {
+            if baseline != nil { markSavedStateUnknown() }   // gone, unreadable, or a size nothing we saved had
+            return false
+        }
+        if let match = candidates.last(where: { $0.bytes?.count == onDisk.count && $0.bytes?.digest == onDisk.digest }) {
+            pendingLock.lock()
+            confirmedBytes = onDisk
+            savedStateUnknown = false
+            pendingLock.unlock()
+            lastSavedProject = match.project
+            return true
+        }
+        if let baseline, baseline.count == onDisk.count, baseline.digest == onDisk.digest {
+            pendingLock.lock()
+            savedStateUnknown = false        // still exactly the project last seen saved
+            pendingLock.unlock()
+            return true
+        }
+        if baseline != nil { markSavedStateUnknown() }
+        return false
+    }
+
+    private func markSavedStateUnknown() {
         pendingLock.lock()
-        lastConfirmedID = max(lastConfirmedID, match.id)
-        savedStateUnknown = false
+        savedStateUnknown = true
         pendingLock.unlock()
-        lastSavedProject = match.project
-        return true
     }
 
     /// Size and SHA-256 of the file at `url`, read in chunks, or nil unless it is a regular file of one of

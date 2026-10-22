@@ -231,4 +231,82 @@ import Testing
         #expect(doc.needsRecovery)
         #expect(store.entries().map(\.name) == ["Again"])             // the newest work is protected again
     }
+
+    /// A save forgotten by the list can still land later and replace a confirmed newer one. The file then holds
+    /// something no known save explains, so the document must not be called clean (confirmation before eviction).
+    @Test func aForgottenSaveLandingOverAConfirmedOneKeepsTheDocumentDirty() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("evicted-late.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let doc = makeDoc()
+        let um = UndoManager()
+        um.groupsByEvent = false
+        doc.undoManager = um
+        doc.fileURL = url
+        let coordinator = RecoveryCoordinator(store: store)
+        coordinator.register(doc)
+
+        um.beginUndoGrouping(); doc.perform("A") { $0.document.name = "A" }; um.endUndoGrouping()
+        let a = try doc.snapshot(contentType: .kerfProject)
+        let aBytes = try doc.fileData(for: a)                          // encoded, its write delayed
+        um.beginUndoGrouping(); doc.perform("B") { $0.document.name = "B" }; um.endUndoGrouping()
+        try saveBytes(doc).write(to: url)
+        coordinator.tick()                                             // B is the file and the saved project
+        #expect(!doc.needsRecovery && doc.lastSavedProject.document.name == "B")
+
+        um.beginUndoGrouping(); doc.perform("C") { $0.document.name = "C" }; um.endUndoGrouping()
+        for _ in 0..<8 { _ = try saveBytes(doc) }                      // seven or more unwritten saves push A out
+        coordinator.tick()
+        um.undo()                                                      // C undone: the project is B again
+        #expect(doc.project.document.name == "B")
+
+        try aBytes.write(to: url)                                      // the delayed write lands over B
+        coordinator.tick()
+        #expect(doc.needsRecovery)                                     // the file holds A: not clean
+        let copy = try #require(store.entries().first)
+        #expect(try store.project(for: copy.id).document.name == "B")
+    }
+
+    /// The other order: uncertainty raised by a forgotten save is cleared by matching a newer retained save, and
+    /// the forgotten one lands afterwards.
+    @Test func aMatchAfterTheEvictionDoesNotLetTheForgottenSaveLandUnnoticed() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("evicted-then-match.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let doc = makeDoc()
+        doc.fileURL = url
+        let coordinator = RecoveryCoordinator(store: store)
+        coordinator.register(doc)
+
+        doc.perform("A") { $0.document.name = "A" }
+        let aBytes = try doc.fileData(for: doc.snapshot(contentType: .kerfProject))   // A's write is delayed
+        for i in 0..<8 {
+            doc.perform("N\(i)") { $0.document.name = "N\(i)" }
+            _ = try saveBytes(doc)                                     // eight more: A is forgotten
+        }
+        doc.perform("Last") { $0.document.name = "Last" }
+        try saveBytes(doc).write(to: url)
+        coordinator.tick()                                             // a retained save matches
+        #expect(!doc.needsRecovery && doc.lastSavedProject.document.name == "Last")
+
+        try aBytes.write(to: url)                                      // now the forgotten one lands
+        coordinator.tick()
+        #expect(doc.needsRecovery)
+        #expect(store.entries().map(\.name) == ["Last"])
+    }
+
+    @Test func aSavedFileThatIsLaterRemovedOrReplacedIsNotCalledSaved() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("gone.kerf")
+        let doc = makeDoc()
+        doc.fileURL = url
+        doc.perform("A") { $0.document.name = "A" }
+        try saveBytes(doc).write(to: url)
+        #expect(doc.confirmSave() && !doc.needsRecovery)
+        try FileManager.default.removeItem(at: url)
+        #expect(!doc.confirmSave())
+        #expect(doc.needsRecovery)                                     // equal to the saved project, but not on disk
+        // It is settled again when a save lands.
+        try saveBytes(doc).write(to: url)
+        #expect(doc.confirmSave() && !doc.needsRecovery)
+        try Data("something else entirely".utf8).write(to: url)
+        #expect(!doc.confirmSave() && doc.needsRecovery)
+    }
 }
