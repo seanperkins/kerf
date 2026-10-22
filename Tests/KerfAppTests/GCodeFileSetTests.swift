@@ -43,7 +43,7 @@ import Testing
 
     @Test func namesThatAreNotOnePlainFileEachAreRefused() {
         let dir = AppTestSupport.tempDir()
-        for bad in ["", ".", "..", "a/b.tap", "x/../../evil.tap", "nul\0.tap"] {
+        for bad in ["", ".", "..", "was", "a/b.tap", "x/../../evil.tap", "nul\0.tap"] {
             let set = GCodeFileSet(files: [file(bad, "Bad"), file("ok.tap", "OK")])
             #expect(set.invalidNames == [bad], "\(bad.debugDescription)")
             #expect(throws: GCodeFileSetError.self) { try set.write(to: dir) }
@@ -93,8 +93,13 @@ import Testing
         let m = message { try set.write(to: dir, replacing: ["b.tap", "c.tap"]) }
         #expect(m.contains("a.tap") && m.contains("Nothing was saved"))
         #expect(try content(dir, "a.tap/x.txt") == "inside")
-        // Confirmed links are replaced by files; what a live link pointed to is untouched.
+        // The alert says which names are links, singular and plural.
         let links = GCodeFileSet(files: [file("b.tap", "B"), file("c.tap", "C")])
+        let both = ReplaceRequest(set: links, directory: dir)
+        #expect(both.links == ["b.tap", "c.tap"] && both.summary.contains("2 of them are links"))
+        let one = ReplaceRequest(set: GCodeFileSet(files: [file("c.tap", "C")]), directory: dir)
+        #expect(one.summary.contains("c.tap is a link") && one.summary.contains("left as it is"))
+        // Confirmed links are replaced by files; what a live link pointed to is untouched.
         try links.write(to: dir, replacing: ["b.tap", "c.tap"])
         #expect(try content(dir, "b.tap") == "G0 Z1\nM30\n")
         #expect(try content(dir, "c.tap") == "G0 Z1\nM30\n")
@@ -135,15 +140,21 @@ import Testing
         var set = GCodeFileSet(files: [file("a.tap", "A"), file("b.tap", "B"), file("c.tap", "C"), file("d.tap", "D")])
         let live = GCodeFileSet.FileOperations.live
         var moves: [String] = []
+        func where_(_ url: URL) -> String {
+            let folder = url.deletingLastPathComponent().lastPathComponent
+            let place = folder.hasPrefix(GCodeFileSet.workingFolderPrefix) ? "staging" : folder == "was" ? "was" : "dir"
+            return "\(place)/\(url.lastPathComponent)"
+        }
         set.operations.moveItem = { from, to in
             if to.lastPathComponent == "c.tap" { throw Boom() }
             try live.moveItem(from, to)
-            moves.append("\(from.lastPathComponent)>\(to.lastPathComponent)")
+            moves.append("\(where_(from))>\(where_(to))")
         }
         let m = message { try set.write(to: dir, replacing: ["a.tap", "b.tap"]) }
         #expect(m.contains("c.tap") && m.contains("as they were"))
-        // a aside, a in, b aside, b in; then b back, a back (the new ones are removed, not moved).
-        #expect(moves == ["a.tap>a.tap", "a.tap>a.tap", "b.tap>b.tap", "b.tap>b.tap", "b.tap>b.tap", "a.tap>a.tap"])
+        // a aside, a in, b aside, b in; the new ones are removed (not moved), then b back, a back.
+        #expect(moves == ["dir/a.tap>was/a.tap", "staging/a.tap>dir/a.tap", "dir/b.tap>was/b.tap", "staging/b.tap>dir/b.tap",
+                          "was/b.tap>dir/b.tap", "was/a.tap>dir/a.tap"])
         #expect(names(in: dir) == ["a.tap", "b.tap"])
         #expect(try content(dir, "a.tap") == "old a")
         #expect(try content(dir, "b.tap") == "old b")
@@ -188,7 +199,7 @@ import Testing
         }
         let m = message { try set.write(to: dir, replacing: ["a.tap", "b.tap"]) }
         #expect(!m.contains("as they were"))
-        #expect(m.contains("earlier 1 file") && m.contains("b.tap") && m.contains("/was"))
+        #expect(m.contains("Your earlier files are in") && m.contains(": b.tap.") && m.contains("/was"))
         let working = names(in: dir).filter { $0.hasPrefix(GCodeFileSet.workingFolderPrefix) }
         #expect(working.count == 1)
         #expect(try content(dir, "a.tap") == "old a")
@@ -212,6 +223,74 @@ import Testing
         let m = message { try set.write(to: dir) }
         #expect(m.contains("from this save") && m.contains("a.tap") && !m.contains("earlier"))
         #expect(names(in: dir) == ["a.tap"])   // the working folder goes: nothing of the user's is in it
+    }
+
+    @Test func aNewFileThatCannotBeRemovedKeepsItsOriginalAndSaysSo() throws {
+        // The same double fault over a replaced file: the new a.tap cannot be removed, so the old one
+        // cannot come back either. It must survive in was/ and the message must name both.
+        let dir = AppTestSupport.tempDir()
+        try write("old a", dir, "a.tap")
+        var set = GCodeFileSet(files: [file("a.tap", "A"), file("b.tap", "B")])
+        let live = GCodeFileSet.FileOperations.live
+        set.operations.moveItem = { from, to in
+            if to.lastPathComponent == "b.tap" { throw Boom() }
+            try live.moveItem(from, to)
+        }
+        set.operations.removeItem = { url in
+            if url.lastPathComponent == "a.tap" { throw Boom() }
+            try live.removeItem(url)
+        }
+        let m = message { try set.write(to: dir, replacing: ["a.tap"]) }
+        #expect(m.contains("from this save, do not run as a set: a.tap.") && m.contains("Your earlier files are in"))
+        let working = names(in: dir).filter { $0.hasPrefix(GCodeFileSet.workingFolderPrefix) }
+        #expect(working.count == 1)
+        #expect(try content(dir, "\(working[0])/was/a.tap") == "old a")
+        #expect(try content(dir, "a.tap") == "G0 Z1\nM30\n")
+    }
+
+    @Test func aFileThatBecomesADirectoryDuringTheSaveIsPutBackAndRefused() throws {
+        // b.tap is a file at the check and a folder by the time it is renamed aside: it must not be
+        // deleted with the working folder.
+        let dir = AppTestSupport.tempDir()
+        try write("old b", dir, "b.tap")
+        var set = GCodeFileSet(files: [file("a.tap", "A"), file("b.tap", "B")])
+        let live = GCodeFileSet.FileOperations.live
+        set.operations.writeText = { text, url in
+            try live.writeText(text, url)
+            if url.lastPathComponent == "a.tap" {
+                try FileManager.default.removeItem(at: dir.appendingPathComponent("b.tap"))
+                try FileManager.default.createDirectory(at: dir.appendingPathComponent("b.tap"), withIntermediateDirectories: false)
+                try "inside".write(to: dir.appendingPathComponent("b.tap/x.txt"), atomically: true, encoding: .utf8)
+            }
+        }
+        let m = message { try set.write(to: dir, replacing: ["b.tap"]) }
+        #expect(m.contains("a folder, not a file, named b.tap") && m.contains("Nothing was saved"))
+        #expect(names(in: dir) == ["b.tap"])
+        #expect(try content(dir, "b.tap/x.txt") == "inside")
+    }
+
+    @Test func theLiveOperationsNeverWriteOverAnything() throws {
+        // The exclusive create and exclusive rename the app uses: a file, a dangling link and a case
+        // twin at the destination all refuse, and nothing is followed.
+        let dir = AppTestSupport.tempDir()
+        let live = GCodeFileSet.FileOperations.live
+        try live.writeText("one", dir.appendingPathComponent("a.tap"))
+        #expect(throws: (any Error).self) { try live.writeText("two", dir.appendingPathComponent("a.tap")) }
+        #expect(try content(dir, "a.tap") == "one")
+        let elsewhere = AppTestSupport.tempDir()
+        try write("pointed at", elsewhere, "real.tap")
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("l.tap"), withDestinationURL: elsewhere.appendingPathComponent("real.tap"))
+        #expect(throws: (any Error).self) { try live.writeText("through", dir.appendingPathComponent("l.tap")) }
+        #expect(try content(elsewhere, "real.tap") == "pointed at")
+        try live.writeText("new", dir.appendingPathComponent("n.tap"))
+        for taken in ["a.tap", "A.TAP", "l.tap"] {
+            #expect(throws: (any Error).self) { try live.moveItem(dir.appendingPathComponent("n.tap"), dir.appendingPathComponent(taken)) }
+        }
+        #expect(try content(dir, "n.tap") == "new")
+        #expect(try content(dir, "a.tap") == "one")
+        #expect(try content(elsewhere, "real.tap") == "pointed at")
+        try live.moveItem(dir.appendingPathComponent("n.tap"), dir.appendingPathComponent("m.tap"))
+        #expect(try content(dir, "m.tap") == "new")
     }
 
     @Test func aFileThatAppearsLateStopsTheSave() throws {

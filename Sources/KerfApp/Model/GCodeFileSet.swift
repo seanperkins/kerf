@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import PostCore
 
@@ -17,8 +18,9 @@ struct GCodeFileSet {
     }
 
     /// The file operations a write uses. Tests swap in ones that fail on cue, so every rollback
-    /// path is exercised; the app uses `FileManager`. `moveItem` is a rename: it never writes over
-    /// an item that is already at the destination.
+    /// path is exercised; the app uses the live ones. `writeText` creates the file and fails when
+    /// anything is at the path already; `moveItem` is an exclusive rename that never writes over an
+    /// item at the destination, link or file, and never follows one.
     struct FileOperations {
         var createDirectory: (URL) throws -> Void
         var writeText: (String, URL) throws -> Void
@@ -27,9 +29,32 @@ struct GCodeFileSet {
 
         static let live = FileOperations(
             createDirectory: { try FileManager.default.createDirectory(at: $0, withIntermediateDirectories: false) },
-            writeText: { try $0.write(to: $1, atomically: false, encoding: .utf8) },
-            moveItem: { try FileManager.default.moveItem(at: $0, to: $1) },
+            writeText: { text, url in
+                let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o644)
+                guard fd >= 0 else { throw posixError(errno, url.path) }
+                defer { close(fd) }
+                try FileHandle(fileDescriptor: fd, closeOnDealloc: false).write(contentsOf: Data(text.utf8))
+            },
+            moveItem: { from, to in
+                if renamex_np(from.path, to.path, UInt32(RENAME_EXCL)) == 0 { return }
+                var code = errno
+                if code == ENOTSUP {
+                    // A volume without an exclusive rename: check, then rename, the way FileManager does.
+                    var info = stat()
+                    if lstat(to.path, &info) == 0 { code = EEXIST }
+                    else if rename(from.path, to.path) == 0 { return }
+                    else { code = errno }
+                }
+                throw posixError(code, to.path)
+            },
             removeItem: { try FileManager.default.removeItem(at: $0) })
+
+        private static func posixError(_ code: Int32, _ path: String) -> NSError {
+            NSError(domain: NSPOSIXErrorDomain, code: Int(code), userInfo: [
+                NSFilePathErrorKey: path,
+                NSLocalizedDescriptionKey: "\(String(cString: strerror(code))) (\((path as NSString).lastPathComponent)).",
+            ])
+        }
     }
 
     var files: [File]
@@ -55,130 +80,147 @@ struct GCodeFileSet {
         name.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil)
     }
 
+    /// Name of the hidden working folder a write makes inside the chosen folder, and of the folder
+    /// inside it that holds the files being replaced.
+    static let workingFolderPrefix = ".kerf-save-"
+    static let replacedFolderName = "was"
+
     /// Names the folder cannot take as one file each: empty, "." or "..", a path rather than a name,
-    /// a NUL, or a name another file in the set shares once the file system folds case and Unicode
-    /// form, which would make two programs one file. Nothing is written while there are any.
+    /// a NUL, the working folder's own `was`, or a name another file in the set shares once the file
+    /// system folds case and Unicode form, which would make two programs one file. Nothing is
+    /// written while there are any.
     var invalidNames: [String] {
         var seen: [String: Int] = [:]
         for f in files { seen[Self.collisionKey(f.fileName), default: 0] += 1 }
         return files.map(\.fileName).filter { name in
-            name.isEmpty || name == "." || name == ".." || name.contains("/") || name.contains("\0")
-                || seen[Self.collisionKey(name), default: 0] > 1
+            name.isEmpty || name == "." || name == ".." || name == Self.replacedFolderName
+                || name.contains("/") || name.contains("\0") || seen[Self.collisionKey(name), default: 0] > 1
         }
     }
 
     /// Names of planned files already in `directory` (a file or a symbolic link, not a directory);
     /// the caller asks before they are replaced.
     func existing(in directory: URL) -> [String] {
-        files.map(\.fileName).filter { name in
-            if let type = Self.type(at: directory.appendingPathComponent(name)) { return type != .typeDirectory }
-            return false
-        }
+        let found = (try? inspect(directory)) ?? [:]
+        return files.map(\.fileName).filter { found[$0] != nil && found[$0] != .typeDirectory }
     }
 
     /// Planned names that are symbolic links in `directory`: the link itself is replaced by a file,
     /// and what it pointed to is left as it is, which the caller should say.
     func links(in directory: URL) -> [String] {
-        files.map(\.fileName).filter { Self.type(at: directory.appendingPathComponent($0)) == .typeSymbolicLink }
+        let found = (try? inspect(directory)) ?? [:]
+        return files.map(\.fileName).filter { found[$0] == .typeSymbolicLink }
     }
 
     /// Planned names that are directories in `directory`. A directory is never replaced.
     func directories(in directory: URL) -> [String] {
-        files.map(\.fileName).filter { Self.type(at: directory.appendingPathComponent($0)) == .typeDirectory }
+        let found = (try? inspect(directory)) ?? [:]
+        return files.map(\.fileName).filter { found[$0] == .typeDirectory }
     }
 
     /// True when writing into `directory` would replace a file that is there now.
     func needsReplaceConfirmation(in directory: URL) -> Bool { !existing(in: directory).isEmpty }
 
-    /// What is at `url` without following a final symbolic link; nil when nothing is.
-    private static func type(at url: URL) -> FileAttributeType? {
-        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType
+    /// What is at each planned name in `directory`, without following a final symbolic link; a name
+    /// with nothing at it is absent. Throws when a name could not be looked at for any reason other
+    /// than there being nothing there, so a folder that cannot be read fails closed.
+    private func inspect(_ directory: URL) throws -> [String: FileAttributeType] {
+        var found: [String: FileAttributeType] = [:]
+        for name in files.map(\.fileName) {
+            if let type = try Self.type(at: directory.appendingPathComponent(name), name: name) { found[name] = type }
+        }
+        return found
     }
 
-    /// Name of the hidden working folder a write makes inside the chosen folder.
-    static let workingFolderPrefix = ".kerf-save-"
+    private static func type(at url: URL, name: String) throws -> FileAttributeType? {
+        do {
+            return try FileManager.default.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType
+        } catch let error as NSError {
+            let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError
+            if error.code == NSFileReadNoSuchFileError || (underlying?.domain == NSPOSIXErrorDomain && underlying?.code == Int(ENOENT)) {
+                return nil
+            }
+            throw GCodeFileSetError.couldNotRead(file: name, underlying: error)
+        }
+    }
 
     /// Writes every file into `directory` or none. Refuses while any post failed, any name is not a
     /// plain unique file name, a planned name is a directory, or a file is there that the caller did
     /// not confirm (`confirmed`: the names shown to the user). Then every program is written into a
     /// hidden working folder inside `directory` (same volume, and nothing visible has changed), and
     /// each file goes into place by two renames: the file that was there into `was/` inside the
-    /// working folder, then the new one onto its name. A rename never writes over anything, so a
-    /// file that appeared in the meantime stops the save rather than being lost. A failure renames
-    /// the files that were there back and removes the new ones, in reverse; if even that fails the
-    /// working folder is kept and the error says that the earlier files are in it. On success the
-    /// working folder, old files included, is removed. A crash part way through leaves the working
-    /// folder in the user's folder, not in a temporary one. Returns the written URLs in order.
+    /// working folder, then the new one onto its name. Both renames are exclusive, so a file that
+    /// appeared in the meantime stops the save rather than being lost. A failure removes the new
+    /// files and renames the files that were there back; if even that fails the working folder is
+    /// kept and the error says which earlier files are in it. On success the working folder, old
+    /// files included, is removed. A crash part way through leaves the working folder in the user's
+    /// folder, not in a temporary one. Returns the written URLs in order.
     @discardableResult
     func write(to directory: URL, replacing confirmed: [String] = []) throws -> [URL] {
         let missing = unposted
         guard missing.isEmpty else { throw GCodeFileSetError.notPosted(missing) }
         let bad = invalidNames
         guard bad.isEmpty else { throw GCodeFileSetError.invalidNames(bad) }
-        let inTheWay = directories(in: directory)
+        let found = try inspect(directory)
+        let inTheWay = files.map(\.fileName).filter { found[$0] == .typeDirectory }
         guard inTheWay.isEmpty else { throw GCodeFileSetError.directoryInTheWay(inTheWay) }
-        let present = Set(existing(in: directory))
+        let present = Set(found.keys)
         let unconfirmed = present.subtracting(confirmed).sorted()
         guard unconfirmed.isEmpty else { throw GCodeFileSetError.notConfirmed(unconfirmed) }
 
         let tag = String(UUID().uuidString.prefix(8)).lowercased()
         let staging = directory.appendingPathComponent(Self.workingFolderPrefix + tag, isDirectory: true)
-        let was = staging.appendingPathComponent("was", isDirectory: true)
-        do {
-            try operations.createDirectory(staging)
-            try operations.createDirectory(was)
-        } catch {
-            try? operations.removeItem(staging)
-            throw GCodeFileSetError.couldNotStage(error)
-        }
+        let was = staging.appendingPathComponent(Self.replacedFolderName, isDirectory: true)
+        do { try operations.createDirectory(staging) } catch { throw GCodeFileSetError.couldNotStage(error) }
         var keepWorkingFolder = false
         defer { if !keepWorkingFolder { try? operations.removeItem(staging) } }
+        do { try operations.createDirectory(was) } catch { throw GCodeFileSetError.couldNotStage(error) }
 
-        // 1. Every program into the working folder: nothing the user can see has changed.
+        // 1. Every program into the working folder: nothing the user can see has changed. The create
+        //    is exclusive, so two names the volume folds into one fail here, on the second.
         for file in files {
             do { try operations.writeText(file.text!, staging.appendingPathComponent(file.fileName)) }
             catch { throw GCodeFileSetError.writeFailed(file: file.fileName, title: file.title, underlying: error) }
         }
-        // The folder is the file system's own word on which names it tells apart.
-        let stagedCount = (try? FileManager.default.contentsOfDirectory(atPath: staging.path))?.filter { $0 != "was" }.count ?? files.count
-        guard stagedCount == files.count else { throw GCodeFileSetError.invalidNames(files.map(\.fileName)) }
 
-        // 2. Into place by renames, each step recorded before it is taken.
-        enum Step { case none, movedAside, placed }
-        var done: [(file: File, hadOriginal: Bool, step: Step)] = []
+        // 2. Into place by renames. `aside` holds the names whose old file is in was/, `placed` the
+        //    names whose new file is in place; each is appended after the rename that made it true,
+        //    and a rename that throws did nothing.
+        var aside: [String] = [], placed: [String] = []
         for file in files {
-            let target = directory.appendingPathComponent(file.fileName)
-            let hadOriginal = present.contains(file.fileName)
-            done.append((file, hadOriginal, .none))
+            let name = file.fileName
+            let target = directory.appendingPathComponent(name)
             do {
-                if hadOriginal {
-                    try operations.moveItem(target, was.appendingPathComponent(file.fileName))
-                    done[done.count - 1].step = .movedAside
+                if present.contains(name) {
+                    let kept = was.appendingPathComponent(name)
+                    try operations.moveItem(target, kept)
+                    aside.append(name)
+                    // A directory that took the name after the check would be deleted with the
+                    // working folder: put it back and refuse instead.
+                    if try Self.type(at: kept, name: name) == .typeDirectory { throw GCodeFileSetError.directoryInTheWay([name]) }
                 }
-                try operations.moveItem(staging.appendingPathComponent(file.fileName), target)
-                done[done.count - 1].step = .placed
+                try operations.moveItem(staging.appendingPathComponent(name), target)
+                placed.append(name)
             } catch {
                 var newLeft: [String] = [], oldLeft: [String] = []
-                for entry in done.reversed() {
-                    let target = directory.appendingPathComponent(entry.file.fileName)
-                    if entry.step == .placed {
-                        do { try operations.removeItem(target) } catch { newLeft.append(entry.file.fileName); continue }
-                    }
-                    if entry.hadOriginal, entry.step != .none {
-                        do { try operations.moveItem(was.appendingPathComponent(entry.file.fileName), target) }
-                        catch { oldLeft.append(entry.file.fileName) }
-                    }
+                for n in placed.reversed() {
+                    do { try operations.removeItem(directory.appendingPathComponent(n)) } catch { newLeft.append(n) }
+                }
+                for n in aside.reversed() {
+                    do { try operations.moveItem(was.appendingPathComponent(n), directory.appendingPathComponent(n)) }
+                    catch { oldLeft.append(n) }
                 }
                 if newLeft.isEmpty && oldLeft.isEmpty {
-                    throw GCodeFileSetError.writeFailed(file: file.fileName, title: file.title, underlying: error)
+                    if let refusal = error as? GCodeFileSetError { throw refusal }
+                    throw GCodeFileSetError.writeFailed(file: name, title: file.title, underlying: error)
                 }
                 keepWorkingFolder = !oldLeft.isEmpty
-                throw GCodeFileSetError.rollbackFailed(file: file.fileName, underlying: error, newLeft: newLeft,
+                throw GCodeFileSetError.rollbackFailed(file: name, underlying: error, newLeft: newLeft,
                                                        oldLeft: oldLeft, workingFolder: was)
             }
         }
         // 3. The set is in place: the working folder, old files included, goes with the defer.
-        return done.map { directory.appendingPathComponent($0.file.fileName) }
+        return files.map { directory.appendingPathComponent($0.fileName) }
     }
 }
 
@@ -191,6 +233,8 @@ enum GCodeFileSetError: LocalizedError {
     case directoryInTheWay([String])
     /// Files in the folder the user was not asked about; nothing was written.
     case notConfirmed([String])
+    /// A planned name in the folder could not be looked at; nothing was written.
+    case couldNotRead(file: String, underlying: Error)
     /// The hidden working folder could not be made; nothing was written.
     case couldNotStage(Error)
     /// A file could not be written or put in place; the folder is as it was.
@@ -212,6 +256,8 @@ enum GCodeFileSetError: LocalizedError {
             return "The folder has a folder, not a file, named \(list(names)). Kerf does not replace folders. Nothing was saved."
         case .notConfirmed(let names):
             return "\(count(names.count, "file")) appeared in the folder after you were asked (\(list(names))). Nothing was saved; save again to be asked about \(names.count == 1 ? "it" : "them")."
+        case .couldNotRead(let file, let underlying):
+            return "Could not check whether \(file) is already in the folder: \(underlying.localizedDescription) Nothing was saved."
         case .couldNotStage(let error):
             return "Could not make a working folder beside the files: \(error.localizedDescription) Nothing was saved."
         case .writeFailed(let file, let title, let underlying):
@@ -220,10 +266,10 @@ enum GCodeFileSetError: LocalizedError {
         case .rollbackFailed(let file, let underlying, let newLeft, let oldLeft, let workingFolder):
             var parts = ["Could not write \(file): \(underlying.localizedDescription) Putting the folder back failed too."]
             if !newLeft.isEmpty {
-                parts.append("\(count(newLeft.count, "file")) from this save \(newLeft.count == 1 ? "is" : "are") still in the folder (\(list(newLeft))); do not run \(newLeft.count == 1 ? "it" : "them") as a set.")
+                parts.append("Still in the folder from this save, do not run as a set: \(list(newLeft)).")
             }
             if !oldLeft.isEmpty {
-                parts.append("Your earlier \(count(oldLeft.count, "file")) (\(list(oldLeft))) \(oldLeft.count == 1 ? "is" : "are") in \(workingFolder.path); move \(oldLeft.count == 1 ? "it" : "them") back by hand.")
+                parts.append("Your earlier files are in \(workingFolder.path): \(list(oldLeft)). Move them back by hand.")
             }
             return parts.joined(separator: " ")
         }
