@@ -42,24 +42,31 @@ public enum TabAnchors {
         return best?.anchor
     }
 
-    /// The loops a manual anchor is judged against: what the toolpath cuts for the anchor's `part`
-    /// (its vector and whatever selected vectors the offset joins it to, offset together), and the
-    /// anchor's `vector` offset alone, on the side its part puts it (a hole's loop moves into the
-    /// hole).
+    /// What a manual anchor is judged against. `outline` is the anchor's part as drawn (its vector
+    /// and whatever selected vectors the offset joins it to, united), `part` what the toolpath cuts
+    /// for it (the outline offset), `vector` the anchor's vector offset alone on the side its part
+    /// puts it (a hole's loop moves into the hole), and `reach` how far from the anchor its stretch's
+    /// loop may lie: one offset straight across, more where a corner trims or extends it, up to the
+    /// miter limit's multiple of the offset.
     public struct OwnLoops {
+        public var outline: [ArcLengthChain]
         public var part: [ArcLengthChain]
         public var vector: [ArcLengthChain]
-        public init(part: [ArcLengthChain], vector: [ArcLengthChain]) { self.part = part; self.vector = vector }
+        public var reach: Double
+        public init(outline: [ArcLengthChain], part: [ArcLengthChain], vector: [ArcLengthChain], reach: Double) {
+            self.outline = outline; self.part = part; self.vector = vector; self.reach = reach
+        }
     }
 
     /// Tab centre parameters for each closed loop. An anchor travels with its vector, so it is used
     /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
-    /// cuts), the part's loop (`ownLoops`) runs nearest the anchor at a point the vector's own loop
+    /// cuts), the anchor lies on its part's outline (`ownLoops`: not on a stretch another selected
+    /// vector covers), the part's loop runs nearest it within reach at a point the vector's own loop
     /// also runs through, and one of `loops` runs through that point; it goes onto that loop there.
-    /// One on another part however near, on an open vector, on a vector that no longer exists, or
-    /// whose own loop the offset swallowed (a hole smaller than the tool, in a part whose other loops
-    /// survive) is never attached to whatever loop happens to be nearest; `ignored` counts them so
-    /// the operation can say so.
+    /// One on another part however near, on an open vector, on a vector that no longer exists, on a
+    /// stretch the toolpath does not cut, or whose own loop the offset swallowed (a hole smaller than
+    /// the tool, in a part whose other loops survive) is never attached to whatever loop happens to
+    /// be nearest; `ignored` counts them so the operation can say so.
     public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
                                ownLoops: (TabAnchor) -> OwnLoops, document: Document,
                                tolerance: Double) -> (centers: [[Double]], ignored: Int) {
@@ -80,14 +87,17 @@ public enum TabAnchors {
                 own[a.shapeID, default: [:]][a.pathIndex] = l
                 return l
             }()
-            var site = nearest(p, on: mine.part)
-            if let s = site, (nearest(s.point, on: mine.vector)?.distance ?? .infinity) > 8 * tolerance + 1e-6 { site = nil }
+            let slack = 8 * tolerance + 1e-6
+            guard (nearest(p, on: mine.outline)?.distance ?? .infinity) <= slack,
+                  let site = nearest(p, on: mine.part), site.distance <= mine.reach + slack,
+                  (nearest(site.point, on: mine.vector)?.distance ?? .infinity) <= slack else {
+                ignored += 1
+                continue
+            }
             var best: (index: Int, s: Double, d: Double)?
-            if let site {
-                for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
-                    let pr = loop.project(site.point)
-                    if pr.distance <= 8 * tolerance + 1e-6, pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
-                }
+            for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
+                let pr = loop.project(site.point)
+                if pr.distance <= slack, pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
             }
             if let b = best { out[b.index].append(b.s) } else { ignored += 1 }
         }

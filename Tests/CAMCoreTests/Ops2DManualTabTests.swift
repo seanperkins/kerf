@@ -265,7 +265,7 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     let (gone, _) = try tabbedProfile([slot, line], select: [1], side: .inside, lastPass: last) { _ in
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: UUID(), fraction: 0.5)])
     }
-    #expect(gone.metadata["warning"]?.contains("1 \(ignoredAnchors): not on a closed vector this toolpath cuts, or the vector is gone; no tab placed for them") == true)
+    #expect(gone.metadata["warning"]?.contains("1 \(ignoredAnchors): not on a stretch of a closed vector this toolpath cuts, or the vector is gone; no tab placed for them") == true)
     // Overlapping anchors on the swallowed slot are reported even beside a surviving loop.
     let (merged, ctx5) = try tabbedProfile([slot, wide], select: [1], side: .inside, lastPass: last) { ids in
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1,
@@ -286,7 +286,9 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
                               direction: .climb, tolerance: 0.001, join: join).chains.map { ArcLengthChain($0) }
     }
     // Each shape here is a part of its own.
-    func alone(_ l: [ArcLengthChain]) -> TabAnchors.OwnLoops { TabAnchors.OwnLoops(part: l, vector: l) }
+    func alone(_ a: TabAnchor, _ l: [ArcLengthChain], reach: Double) -> TabAnchors.OwnLoops {
+        TabAnchors.OwnLoops(outline: [TabAnchors.chain(for: a, in: doc, tolerance: 0.001)!], part: l, vector: l, reach: reach)
+    }
     let gone = TabAnchor(shapeID: UUID(), fraction: 0.25)
     let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: other.id, fraction: 0.25),
                    TabAnchor(shapeID: line.id, fraction: 0.5), gone]
@@ -295,7 +297,7 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     // the line is open, the last vector is gone. Selection alone is not enough; so with miter joins.
     for join in [GeomKernel.Join.round, .miter(limit: ProfileGeometry.sharpMiterLimit)] {
         let loop = loops([near], offset: 0.125, join: join)
-        let r = TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone(loops([doc.shape(id: $0.shapeID)!], offset: 0.125, join: join)) },
+        let r = TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.125, join: join), reach: 0.5) },
                                    document: doc, tolerance: 0.001)
         #expect(r.centers.map(\.count) == [1] && r.ignored == 3)
         #expect(abs(r.centers[0][0] - loop[0].project(Vec2(3, 0)).s) < 1e-6)
@@ -303,11 +305,11 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     // Loops of another offset are not this toolpath's; a loop two vectors merged into is both
     // vectors' offset, and an anchor on the swallowed stretch between them has no loop to go to.
     let loop = loops([near], offset: 0.125)
-    #expect(TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone(loops([doc.shape(id: $0.shapeID)!], offset: 0.25)) }, document: doc, tolerance: 0.001).ignored == 4)
+    #expect(TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.25), reach: 1) }, document: doc, tolerance: 0.001).ignored == 4)
     let merged = loops([near, other], offset: 0.2)
     #expect(merged.count == 1)
     let r = TabAnchors.centers(for: anchors + [TabAnchor(shapeID: near.id, fraction: 0.4)], loops: merged, shapeIDs: all,
-                               ownLoops: { alone(loops([doc.shape(id: $0.shapeID)!], offset: 0.2)) }, document: doc, tolerance: 0.001)
+                               ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.2), reach: 0.8) }, document: doc, tolerance: 0.001)
     #expect(r.centers.map(\.count) == [2] && r.ignored == 3)   // near 0.25, other 0.25; near 0.4 faces the gap
 }
 
@@ -334,6 +336,14 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: fraction)])
     }
     #expect(tabCount(over, ctx) == 2 && over.metadata["warning"] == nil)
+    // An anchor on a stretch of A that B covers (A's right edge runs through B) is on a vector the
+    // toolpath cuts, but not on a stretch it cuts: reported, not moved to A's nearest cut edge.
+    for lastPass in [nil, ProfileLastPass(allowance: 0.1)] {
+        let (covered, ctxC) = try tabbedProfile([a, F.rect(1, 0, 3, 2)], select: [1], lastPass: lastPass) { ids in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: onA.project(Vec2(2, 1)).s / onA.length)])
+        }
+        #expect(tabCount(covered, ctxC) == 0 && covered.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true, "\(String(describing: lastPass))")
+    }
     // Two parts the roughing offset joins (touching, 0.001 in apart, 0.1 in apart) but the last
     // pass does not: an anchor on A's edge just above B's top sits at the joined loop's inner corner
     // on the roughing pass and on A's own stretch on the last pass; both passes hold it.

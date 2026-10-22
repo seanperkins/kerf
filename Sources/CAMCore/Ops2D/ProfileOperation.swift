@@ -76,7 +76,8 @@ public struct ProfileOperation: ToolpathOperation {
             }
         }
         func ownLoops(at offset: Double) -> (TabAnchor) -> TabAnchors.OwnLoops {
-            guard manual else { return { _ in TabAnchors.OwnLoops(part: [], vector: []) } }
+            let none = TabAnchors.OwnLoops(outline: [], part: [], vector: [], reach: 0)
+            guard manual else { return { _ in none } }
             let parts = Polygon2D.parts(of: closed, offsets: holes.map { side(ofHole: $0) == .outside ? offset : side(ofHole: $0) == .inside ? -offset : 0 },
                                         join: join, tolerance: tol)
             func offsetLoops(_ loops: [[Vec2]], side: ProfileSide) -> [ArcLengthChain] {
@@ -84,9 +85,12 @@ public struct ProfileOperation: ToolpathOperation {
                     .chains.map { ArcLengthChain($0) }
             }
             return { anchor in
-                guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex] else { return TabAnchors.OwnLoops(part: [], vector: []) }
+                guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex] else { return none }
                 let part = closed.indices.filter { parts[$0] == parts[k] }.map { closed[$0] }
-                return TabAnchors.OwnLoops(part: offsetLoops(part, side: params.side), vector: offsetLoops([closed[k]], side: side(ofHole: holes[k])))
+                return TabAnchors.OwnLoops(outline: Polygon2D.region(fromLoops: part).map { ArcLengthChain(Chain2D(points: $0, isClosed: true)) },
+                                           part: offsetLoops(part, side: params.side),
+                                           vector: offsetLoops([closed[k]], side: side(ofHole: holes[k])),
+                                           reach: ProfileGeometry.sharpMiterLimit * offset)
             }
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
@@ -118,7 +122,7 @@ public struct ProfileOperation: ToolpathOperation {
             warnings.append("tabs did not carry to the last pass on \(tabNotes.lostOnLastPass) loop(s); the part may come free")
         }
         if ignoredAnchors > 0 {
-            warnings.append("\(ignoredAnchors) tab anchor(s) ignored: not on a closed vector this toolpath cuts, "
+            warnings.append("\(ignoredAnchors) tab anchor(s) ignored: not on a stretch of a closed vector this toolpath cuts, "
                 + "or the vector is gone; no tab placed for them")
         }
         let dropped = finishPlan?.droppedLoops ?? plan.droppedLoops
