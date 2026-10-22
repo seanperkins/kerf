@@ -98,6 +98,12 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 - **More imports:** File → Import… also takes PDF/AI vectors, JPG/PNG/… tracing images (edit them in
   the Design sidebar's Images section: fade, crop, size), OBJ and COLLADA (.dae, e.g. exported from
   SketchUp) models. Export Vectors… writes PDF, EPS or AI by file extension.
+- **SVG scale:** File → Import… an SVG that does not state its size (Illustrator, Inkscape 0.91 and older,
+  hand-made files) opens "Scale of …": the program's own scale (72, 90 or 96 pixels per inch) is
+  selected and the size the drawing comes out at is shown for the choice. Pick another and the size
+  changes; Import brings it in at that size, Cancel brings in nothing. An SVG that states a physical
+  size (Inkscape 1.x, CorelDRAW) imports at once. Measure the imported shape in the inspector against
+  the size you drew it at.
 - **Templates:** File → Save as Template…, then File → New from Template.
 - **Job Setup:** Plunge Z, datum offset, and a two-sided job (Design → Show Bottom Side, ⇧⌘B).
   Design → Sheets adds more material sheets; each sheet exports its own G-code.
