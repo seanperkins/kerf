@@ -14,11 +14,12 @@ struct MotionChecker {
     var issues = IssueCollector()
     private var minP = Vec3(.infinity, .infinity, .infinity)
     private var maxP = Vec3(-.infinity, -.infinity, -.infinity)
-    /// Deepest Z a straight-down feed reached at each XY (quantised to `eps`) since the last tool
-    /// change: a hole the current tool has already cut, which a later rapid may re-enter down to
-    /// that depth. Only plunges are recorded, so the table stays small on long programs.
-    private var drilledZ: [Cell: Double] = [:]
-    private struct Cell: Hashable { let x: Int, y: Int }
+    /// The hole the tool is standing in: the XY of the straight-down feed that cut it and its deepest Z.
+    /// Kept through Z-only moves, dropped by any XY move, any other feed, a tool change or a coordinate
+    /// shift. A rapid back down into it, stopping at or above its bottom, only moves through air, which
+    /// is how peck drilling re-enters every hole. One slot is enough: nothing returns to a hole after
+    /// visiting another, and the old warning is the safe answer if something does.
+    private var hole: (xy: Vec2, z: Double)?
 
     /// `job` is in `jobUnits`; everything is converted to `units`.
     init(profile: PostProfile, job: JobSetup, jobUnits: LengthUnit, units: LengthUnit) {
@@ -38,16 +39,16 @@ struct MotionChecker {
     var allowedMinZ: Double { coords.materialBottomZ - limits.maxSpoilboardCut }
 
     private func f(_ v: Double) -> String { NumberFormat.fixed(v, decimals: units == .inch ? 4 : 3) }
-    private func cell(_ p: Vec3) -> Cell { Cell(x: Int((p.x / eps).rounded()), y: Int((p.y / eps).rounded())) }
-
-    /// Forget the holes cut so far: a different tool may not fit them.
-    mutating func toolChanged() { drilledZ.removeAll() }
+    /// Forget the hole the tool is in: after a tool change a different tool may not fit it, and after a
+    /// coordinate shift the same XY words name another place.
+    mutating func leaveHole() { hole = nil }
 
     // MARK: Rules
 
     /// `xyMove`: the rapid changes (or may change, when the start XY is unknown) X/Y.
     mutating func rapid(from start: Vec3?, to target: Vec3, xyMove: Bool, line: Int?) {
         if xyMove {
+            hole = nil
             guard let s = start else {
                 issues.add("rapid-unknown-z", .warning, line: line,
                            "Rapid XY move before the Z height is known; retract to safe Z first")
@@ -63,18 +64,22 @@ struct MotionChecker {
                            "Rapid XY move below safe Z (Z\(f(low)) < Z\(f(safeZ)))")
             }
         } else if let s = start, target.z < s.z - eps, target.z < topZ - eps,
-                  !(drilledZ[cell(target)].map { target.z >= $0 - eps } ?? false) {
-            // A rapid straight down into a hole this tool has already drilled, stopping at or above
-            // its bottom, only moves through air (peck drilling re-enters every hole that way).
+                  !(hole.map { $0.xy.distance(to: target.xy) <= eps && target.z >= $0.z } ?? false) {
+            // Not a re-entry into the hole this tool has just drilled (a NaN coordinate compares false
+            // and so is never one).
             issues.add("rapid-plunge", .warning, line: line,
                        "Rapid plunge below the material top to Z\(f(target.z)); use a feed move")
         }
         visit(target, line: line)
     }
 
-    mutating func feedMove(from start: Vec3?, path: [Vec3], feed: Double?, spindleOn: Bool, line: Int?) {
+    /// `startKnown`: the start XY is a position the program set, not a guess for a program that has
+    /// not named X and Y yet; only a feed from a known XY can drill a hole the checker remembers.
+    mutating func feedMove(from start: Vec3?, path: [Vec3], feed: Double?, spindleOn: Bool, line: Int?,
+                           startKnown: Bool = true) {
         guard let feed else {
             issues.add("feed-missing", .error, line: line, "Feed move without a feed rate (F)")
+            hole = nil
             path.forEach { visit($0, line: line) }
             return
         }
@@ -88,9 +93,14 @@ struct MotionChecker {
         if !spindleOn, low < topZ - eps {
             issues.add("spindle-off", .error, line: line, "Cutting move with the spindle off (no M3 before cutting)")
         }
-        if let s = start, let end = path.last, path.allSatisfy({ $0.xy.distance(to: s.xy) <= eps }) {
-            let c = cell(end)
-            drilledZ[c] = min(drilledZ[c] ?? .infinity, min(s.z, low))
+        if let s = start, path.allSatisfy({ $0.xy.distance(to: s.xy) <= eps }) {
+            // Straight up or down. A plunge from a known XY drills, or deepens, the hole the tool is in.
+            if startKnown, low < s.z - eps {
+                let deepest = hole.map { $0.xy.distance(to: s.xy) <= eps ? min($0.z, low) : low } ?? low
+                hole = (s.xy, deepest)
+            }
+        } else {
+            hole = nil   // the tool moved sideways (or from nowhere known): it did not plunge where it is
         }
         path.forEach { visit($0, line: line) }
     }

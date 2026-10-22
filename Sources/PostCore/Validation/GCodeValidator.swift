@@ -41,6 +41,7 @@ public struct GCodeValidator: Sendable {
     public func validate(toolpaths: [Toolpath]) -> [GCodeIssue] {
         var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units)
         var pos: Vec3?
+        var toolID: UUID?
         // Two different tools with one T number post as one tool: the controller sees no change
         // and the second geometry cuts with the first bit in the spindle.
         var byNumber: [Int: [Tool]] = [:]
@@ -59,7 +60,8 @@ public struct GCodeValidator: Sendable {
                 continue
             }
             check.rpm(tp.spindleRPM, min: profile.minRPM, max: profile.maxRPM, line: nil)
-            check.toolChanged()   // each toolpath may post with a different tool
+            if tp.tool.id != toolID { check.leaveHole() }   // where the post puts its tool change
+            toolID = tp.tool.id
             for move in tp.moves {
                 switch move {
                 case .dwell: continue
@@ -151,10 +153,13 @@ public struct GCodeValidator: Sendable {
                     carried.add("incremental", .warning, line: b.line, "Incremental positioning (G91) in program")
                 case 0, 1, 2, 3: motion = Int(g)
                 case 4, 28, 30: nonMotion = true
+                case 54, 55, 56, 57, 58, 59:
+                    check.leaveHole()   // the same XY words now name another place
                 case 10, 53, 92, 92.1, 92.2:
                     // The controller now interprets every later coordinate in a frame this
                     // validator cannot see, so the depth checks below say nothing about it.
                     nonMotion = true
+                    check.leaveHole()
                     carried.add("coordinate-shift", .warning, line: b.line,
                                 "G\(NumberFormat.compact(g, maxDecimals: 1)) changes the coordinate system; depth checks no longer apply")
                 default: break
@@ -169,9 +174,11 @@ public struct GCodeValidator: Sendable {
                 switch m {
                 case 3, 4: spindleOn = true
                 case 5: spindleOn = false
-                case 0, 1: stop = Int(m)
+                case 0, 1:
+                    stop = Int(m)
+                    check.leaveHole()   // a post without M6 changes tools at a stop
                 case 6:
-                    check.toolChanged()
+                    check.leaveHole()
                     if spindleOn {
                         carried.add("toolchange-spindle-on", .warning, line: b.line,
                                     "Tool change (M6) with the spindle running; stop it (M5) first")
@@ -185,6 +192,7 @@ public struct GCodeValidator: Sendable {
                 default: break
                 }
             }
+            if b.value("T") != nil { check.leaveHole() }
             if let s = b.value("S") { sawSpeed = sawSpeed || s > 0 }
             if (b.has("M", 3) || b.has("M", 4)), !sawSpeed, b.value("S") == nil {
                 carried.add("spindle-no-speed", .warning, line: b.line, "Spindle started (M3/M4) with no speed (S) set")
@@ -217,7 +225,8 @@ public struct GCodeValidator: Sendable {
                             && (!xyKnown || Vec2(x ?? 0, y ?? 0).distance(to: target.xy) > check.eps)
                         check.rapid(from: start, to: target, xyMove: xyMove, line: b.line)
                     case 1:
-                        check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleOn, line: b.line)
+                        check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleOn, line: b.line,
+                                       startKnown: xyKnown)
                     default:
                         var path = [target]
                         if let s = start, xyKnown {

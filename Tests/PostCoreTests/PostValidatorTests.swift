@@ -233,43 +233,136 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     #expect(issues.isEmpty, "\(issues)")
 }
 
-@Test func rapidDeeperThanTheDrilledHoleStillWarns() {
-    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.12"))
-    #expect(has(issues, "Rapid plunge", .warning))
+@Test func rapidMayTouchTheHoleBottomButNotPassIt() {
+    // eps is 0.0005 in: exactly the bottom is air the tool has been in; 2·eps below it is not.
+    #expect(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.1")).isEmpty)
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.101")), "Rapid plunge", .warning))
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.12")), "Rapid plunge", .warning))
 }
 
 @Test func rapidIntoTheMaterialAtAnotherXYStillWarns() {
-    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nG0 X2\nG0 Z-0.08"))
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nG0 X2\nG0 Z-0.08")), "Rapid plunge", .warning))
+}
+
+@Test func onlyTheLastHoleIsRemembered() {
+    // Back at the first hole after visiting a second XY: the checker gives the safe answer.
+    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nG0 X2\nG0 X1\nG0 Z-0.08"))
     #expect(has(issues, "Rapid plunge", .warning))
 }
 
-@Test func onlyPlungesCountAsDrilledHoles() {
-    // A horizontal cut through X2 does not make X2 a hole a rapid may drop into.
-    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nX2 F100\nG0 Z0.2\nG0 Z-0.05"))
+@Test func onlyPlungesDrillHoles() {
+    // A horizontal cut through X2, or a ramp down to it, does not make X2 a hole a rapid may drop into.
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nX2 F100\nG0 Z0.2\nG0 Z-0.05")), "Rapid plunge", .warning))
+    #expect(has(validate(program("G0 X1 Y1\nG1 X2 Z-0.1 F30\nG0 Z0.2\nG0 Z-0.05")), "Rapid plunge", .warning))
+    // An upward feed drills nothing: both rapids down are reported.
+    let up = validate(program("G0 X1 Y1\nG0 Z-0.1\nG1 Z0.2 F30\nG0 Z-0.08"))
+    #expect(up.first { $0.message.contains("Rapid plunge") }?.message.hasSuffix("(1 more)") == true, "\(up)")
+}
+
+@Test func feedBeforeAnyXYDrillsNothing() {
+    // The start XY of the first feed is a guess (the program never set X or Y), so it is no hole.
+    let issues = validate(program("G1 Z-0.1 F30\nG0 Z0.2\nG0 X0 Y0\nG0 Z-0.08"))
     #expect(has(issues, "Rapid plunge", .warning))
 }
 
-@Test func toolChangeForgetsDrilledHoles() {
-    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nM5\nT2 M6\nM3 S18000\nG0 Z0.05\nG0 Z-0.08"))
-    #expect(has(issues, "Rapid plunge", .warning))
+@Test func toolChangeForgetsTheHole() {
+    for change in ["M5\nT2 M6\nM3 S18000", "M5\nM0\nM3 S18000", "T2"] {
+        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\n\(change)\nG0 Z0.05\nG0 Z-0.08"))
+        #expect(has(issues, "Rapid plunge", .warning), "after \(change): \(issues)")
+    }
+}
+
+@Test func grblStopToolChangeForgetsTheHoleInMillimetres() {
+    // The GRBL post has no M6: it stops with M0 for a manual tool change. Also the only mm case.
+    let job = PostFixtures.job().scaled(by: 25.4)
+    let v = GCodeValidator(profile: BuiltInPosts.genericGRBLMM, job: job, units: .millimeter)
+    func run(_ body: String) -> [GCodeIssue] {
+        v.validate(gcode: "G21\nG90\nG0 Z5.08\nM3 S18000\n\(body)\nG0 Z5.08\nM5\nM2\n")
+    }
+    let pecks = "G0 X25 Y25\nG0 Z1\nG1 Z-3 F500\nG0 Z1\nG0 Z-2.5\nG1 Z-6 F500"
+    #expect(run(pecks).isEmpty, "\(run(pecks))")
+    let changed = run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z5.08\nM5\n(Change to Tool: 12 mm)\nM0\nM3 S18000\nG0 Z1\nG0 Z-2.5")
+    #expect(has(changed, "Rapid plunge", .warning), "\(changed)")
+}
+
+@Test func coordinateShiftForgetsTheHole() {
+    for shift in ["G92 X1 Y1", "G55", "G10 L2 P1 X0 Y0"] {
+        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\n\(shift)\nG0 Z-0.08"))
+        #expect(has(issues, "Rapid plunge", .warning), "after \(shift): \(issues)")
+    }
+}
+
+@Test func absurdCoordinatesDoNotTrapTheChecker() {
+    // A coordinate the parser accepts but no grid could hold: the checker must answer, not crash.
+    let issues = validate(program("G0 X10000000000000000000 Y0\nG1 Z-0.1 F30\nG0 Z0.2\nG0 Z-0.05"))
+    #expect(has(issues, "X travel"))
+}
+
+// MARK: Toolpath check
+
+private func drillMoves(_ p: Vec2, mc: MachineCoordinates, pecks: [Double], retractAbove: Double = 0.05) -> [Move] {
+    let retract = Vec3(p.x, p.y, mc.z(aboveTop: retractAbove))
+    var moves: [Move] = [.rapid(to: Vec3(p.x, p.y, mc.safeZ)), .rapid(to: retract)]
+    var cleared = 0.0
+    for d in pecks {
+        if cleared > 0 { moves.append(.rapid(to: Vec3(p.x, p.y, mc.z(depth: cleared - 0.02)))) }
+        moves.append(.linear(to: Vec3(p.x, p.y, mc.z(depth: d)), feed: 30))
+        cleared = d
+        if d != pecks.last { moves.append(.rapid(to: retract)) }
+    }
+    moves.append(.rapid(to: Vec3(p.x, p.y, mc.safeZ)))
+    return moves
+}
+
+private func toolpath(_ name: String, tool: Tool, _ moves: [Move]) -> Toolpath {
+    Toolpath(name: name, kind: .drill, tool: tool, moves: moves)
 }
 
 @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
-func toolpathValidatorAcceptsPeckDrillingAndRejectsADeeperRapid(mode: ZZeroMode) {
+func toolpathCheckAcceptsPeckDrilling(mode: ZZeroMode) {
     let job = PostFixtures.job(zZero: mode)
     let mc = MachineCoordinates(job: job)
-    let p = Vec2(2, 2), retract = mc.z(aboveTop: 0.05)
-    func at(_ depth: Double) -> Vec3 { Vec3(p.x, p.y, mc.z(depth: depth)) }
-    var moves: [Move] = [
-        .rapid(to: Vec3(p.x, p.y, mc.safeZ)), .rapid(to: Vec3(p.x, p.y, retract)),
-        .linear(to: at(0.1), feed: 30), .rapid(to: Vec3(p.x, p.y, retract)),
-        .rapid(to: at(0.08)), .linear(to: at(0.2), feed: 30), .rapid(to: Vec3(p.x, p.y, mc.safeZ)),
-    ]
-    let validator = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
-    func issues(_ moves: [Move]) -> [GCodeIssue] {
-        validator.validate(toolpaths: [Toolpath(name: "Drill", kind: .drill, tool: PostFixtures.endMill, moves: moves)])
-    }
-    #expect(issues(moves).isEmpty, "\(issues(moves))")
-    moves.insert(contentsOf: [.rapid(to: Vec3(p.x, p.y, retract)), .rapid(to: at(0.25))], at: moves.count - 1)
-    #expect(has(issues(moves), "Rapid plunge", .warning))
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    let two = drillMoves(Vec2(2, 2), mc: mc, pecks: [0.1, 0.2]) + drillMoves(Vec2(4, 2), mc: mc, pecks: [0.1, 0.2, 0.3])
+    let issues = v.validate(toolpaths: [toolpath("Drill", tool: PostFixtures.endMill, two)])
+    #expect(issues.isEmpty, "\(issues)")
+}
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
+    let job = PostFixtures.job(zZero: mode)
+    let mc = MachineCoordinates(job: job)
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    let p = Vec2(2, 2)
+    let moves = drillMoves(p, mc: mc, pecks: [0.1]).dropLast()
+        + [.rapid(to: Vec3(p.x, p.y, mc.z(aboveTop: 0.05))), .rapid(to: Vec3(p.x, p.y, mc.z(depth: 0.15)))]
+    let issues = v.validate(toolpaths: [toolpath("Drill", tool: PostFixtures.endMill, Array(moves))])
+    #expect(has(issues, "Rapid plunge", .warning), "\(issues)")
+}
+
+@Test func toolpathCheckForgetsTheHoleWhenTheToolChanges() {
+    // The post writes a tool change only where the tool differs, so the check forgets the hole there
+    // and only there: the same tool may come back down its own hole from the next toolpath.
+    let job = PostFixtures.job()
+    let mc = MachineCoordinates(job: job)
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    let p = Vec2(2, 2)
+    let first = drillMoves(p, mc: mc, pecks: [0.1])
+    let reenter: [Move] = [.rapid(to: Vec3(p.x, p.y, mc.z(aboveTop: 0.05))), .rapid(to: Vec3(p.x, p.y, mc.z(depth: 0.08))),
+                           .linear(to: Vec3(p.x, p.y, mc.z(depth: 0.2)), feed: 30), .rapid(to: Vec3(p.x, p.y, mc.safeZ))]
+    let sameTool = v.validate(toolpaths: [toolpath("A", tool: PostFixtures.endMill, first),
+                                          toolpath("B", tool: PostFixtures.endMill, reenter)])
+    #expect(sameTool.isEmpty, "\(sameTool)")
+    let otherTool = v.validate(toolpaths: [toolpath("A", tool: PostFixtures.endMill, first),
+                                           toolpath("B", tool: PostFixtures.vBit, reenter)])
+    #expect(has(otherTool, "Rapid plunge", .warning), "\(otherTool)")
+}
+
+@Test func toolpathCheckSurvivesANonFiniteHoleCentre() {
+    // The exporter validates toolpaths before the post refuses a NaN move; the checker must not trap.
+    let job = PostFixtures.job()
+    let mc = MachineCoordinates(job: job)
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    let moves = drillMoves(Vec2(.nan, 2), mc: mc, pecks: [0.1, 0.2])
+    _ = v.validate(toolpaths: [toolpath("Drill", tool: PostFixtures.endMill, moves)])
 }

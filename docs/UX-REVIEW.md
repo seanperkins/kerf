@@ -138,7 +138,7 @@ Date: 2026-10-20. Scope: `Sources/KerfApp` and the running app (window shell, si
 ### 14. The Export sheet lists the same validator warning twice
 - **HIG:** Alerts, Writing.
 - **Evidence** (`09-export.png`): "warning: Rapid plunge below the material top to Z-0.1050; use a feed move (14 more)" and then "warning line 1156: Rapid plunge … (14 more)". Each line also has a warning icon, so the word "warning" is redundant. This is the dialog that gates what goes to the machine.
-- **Separately, not UI:** the shipped sample produces 15 "Rapid plunge below the material top" warnings. This may be normal peck-drilling re-entry, but the Welcome window invites people to run this sample, so confirm whether the G-code or the validator rule is wrong.
+- **Separately, not UI:** the shipped sample produces 15 "Rapid plunge below the material top" warnings. This may be normal peck-drilling re-entry, but the Welcome window invites people to run this sample, so confirm whether the G-code or the validator rule is wrong. (Resolved: the validator rule was wrong; see DECISIONS validator-peck, issue #36.)
 - **Fix:** Merge duplicate issues and drop the text prefix. Link each issue to its line in the preview.
 - **Scope:** one or two files.
 
