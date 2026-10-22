@@ -58,30 +58,9 @@ enum VCarveStrokes {
     }
 
     /// Removes points so that every removed point lies within `tolerance` of the 3D segment that replaces it
-    /// (between the kept points before and after it). Each segment is lengthened while every point it spans stays
-    /// within tolerance, so the error does not build up along a gentle curve.
+    /// (Douglas-Peucker, so the error does not build up along a gentle curve).
     static func simplified(_ pts: [Vec3], tolerance: Double) -> [Vec3] {
-        guard pts.count > 2 else { return pts }
-        var out: [Vec3] = [pts[0]]
-        var anchor = 0
-        for j in 2..<pts.count {
-            let spans = (anchor + 1)..<j
-            if spans.contains(where: { distance(pts[$0], toSegment: pts[anchor], pts[j]) > tolerance }) {
-                out.append(pts[j - 1])
-                anchor = j - 1
-            }
-        }
-        out.append(pts[pts.count - 1])
-        return out
-    }
-
-    private static func distance(_ p: Vec3, toSegment a: Vec3, _ b: Vec3) -> Double {
-        let ab = Vec3(b.x - a.x, b.y - a.y, b.z - a.z)
-        let ap = Vec3(p.x - a.x, p.y - a.y, p.z - a.z)
-        let len2 = ab.dot(ab)
-        let t = len2 > 0 ? max(0, min(1, ap.dot(ab) / len2)) : 0
-        let q = Vec3(a.x + ab.x * t, a.y + ab.y * t, a.z + ab.z * t)
-        return p.distance(to: q)
+        Polyline3D.simplify(pts, tolerance: tolerance)
     }
 
     /// Greedy nearest-neighbour order; open strokes may be reversed.
