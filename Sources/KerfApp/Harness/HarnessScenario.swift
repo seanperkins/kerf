@@ -59,7 +59,7 @@ struct HarnessScenario: Decodable {
         "select": "names: shapes to select by name",
         "selectToolpath": "name: a toolpath to select (also shows the Toolpaths tab)",
         "calculate": "calculate all toolpaths and wait",
-        "fileTarget": "name: the path the next save or folder panel answers with (the system file panel cannot be driven); empty clears it",
+        "fileTarget": "name: the path every save or folder panel made by a sheet answers with until closeSheet or an empty fileTarget (the system file panel cannot be driven)",
         "sheet": "value: " + sheets.sorted().joined(separator: " | "),
         "closeSheet": "close the open sheet or alert",
         "import": "name: a file to import as File > Import does, relative to the repo root (scripts/ui.sh runs from there). An import alert stays open until a closeSheet step",

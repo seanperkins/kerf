@@ -28,8 +28,9 @@ enum PanelRunner {
 
     #if DEBUG
     /// The UI harness cannot drive the system file panel. A scenario's `fileTarget` step sets this, and
-    /// the next save or folder panel made by `makeSavePanel`/`makeOpenPanel` answers OK with it at once,
-    /// so the sheet's real save (and failure) path runs.
+    /// every save or folder panel made by `makeSavePanel`/`makeOpenPanel` answers OK with it at once
+    /// (until `closeSheet` or an empty `fileTarget` clears it), so the sheet's real save (and failure)
+    /// path runs.
     nonisolated(unsafe) static var harnessTarget: URL?
     #endif
 
