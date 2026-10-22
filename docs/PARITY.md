@@ -163,7 +163,7 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `vc-inlay` | vcarve | V-carve inlay (pocket + plug, glue gap, start depth, boundary) | done | P1 | CAMCore/OpsVCarve/InlayOperation.swift, Panels/InlayWizardSheet.swift; VCarveInlayTests |
 | `vc-inlay-boundary-options` | vcarve | Inlay plug boundary options and surface clearance | done | P2 | InlayParameters.plugBoundary/surfaceClearance; VCarveParityTests |
 | `vc-vbit-engrave` | vcarve | Engraving with V-bit on open vectors (sketch carving) | done | P2 | VCarveParameters.openVectorDepth/openVectorTaper, VCarveEngraving.swift; VCarveParityTests |
-| `vc-small-detail` | vcarve | Small-detail / thin-feature handling | done | P2 | Voronoi on snapped grid with sampled radii (DECISIONS scaffold/cam-vcarve); VCarveTests, VCarveGlyphTests (every glyph in five fonts) |
+| `vc-small-detail` | vcarve | Small-detail / thin-feature handling | done | P2 | Voronoi on snapped grid with sampled radii (DECISIONS scaffold/cam-vcarve); VCarveTests, VCarveGlyphTests (A-Z a-z 0-9 & @ % in five fonts) |
 | `vc-vector-start-order` | vcarve | V-carve vector start points / selection order | done | P3 | VCarveParameters.useVectorStartPoints/useSelectionOrder, VCarveOrdering.swift; VCarveParityTests |
 | `vc-photo` | vcarve | PhotoVCarve (image to V-groove engraving) | done | P3 | PhotoVCarveOperation, PhotoImageLoader, Panels/PhotoVCarveForm.swift; VCarvePhotoTests |
 | `3d-import-place` | cam-3d | 3D model import, size, position and Z offset | done | P1 | Panels/ModelPlacementSheet.swift, CAMCore/Ops3D/ModelPlacement.swift; Relief3DTests |

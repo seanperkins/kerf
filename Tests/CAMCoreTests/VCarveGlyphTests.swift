@@ -81,6 +81,8 @@ private struct Verdict {
     var shortfallAt = Vec2.zero
     /// The farthest any point of the outline is from every groove's edge.
     var worstOutlineGap = 0.0
+    /// The most any groove is wider than the outline allows where it is (a groove outside the letter counts as all of it).
+    var worstOvercut = 0.0
     var cuts = 0
     var pieces = 0
     /// Pieces of the glyph with no cut in them.
@@ -105,6 +107,13 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     let grid = GrooveGrid(g, cell: size * 0.05)
     let bitRadius = VCarveFixture.vbit60.radius
     let allowed = size * 0.02
+
+    // Overcut: a groove is never wider than the outline allows at its axis (or than the bit can cut), and
+    // never has its axis outside the letter. Every eighth groove point is enough to see a region built wrong.
+    for (i, groove) in g.enumerated() where groove.radius > 0 && i % 8 == 0 {
+        let room = inside(groove.xy) ? min(outlineDistance(groove.xy), bitRadius) : 0
+        v.worstOvercut = max(v.worstOvercut, groove.radius - room)
+    }
 
     // Interior: at q the outline allows a groove of radius min(d, bit radius) (a stroke wider than the bit is
     // cleared flat at the bit's full depth); the groove at s leaves r_s - |q - s| of its radius at q.
@@ -136,7 +145,7 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
 
     // Outline: every point of every contour is within reach of some groove (its edge touches or passes it),
     // which also sees a thin stroke or serif the interior grid steps over.
-    let step = size / 60
+    let step = size / 45
     for loop in region {
         var carried = 0.0
         for i in loop.indices {
@@ -158,9 +167,9 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     }
 
     // Connected cuts: the runs of cutting moves, joined where one run's groove reaches the axis of another's
-    // (a run starts at a junction of the skeleton, and at a reflex corner of a letter the next groove just
-    // touches the first). This is stricter than two grooves overlapping, which two unrelated strokes close
-    // together also do.
+    // and the floor between the two axes is carved (a run starts at a junction of the skeleton, and at a
+    // reflex corner of a letter the next groove just touches the first). A gap in the skeleton that leaves
+    // a ridge between its ends is not a join, and neither are two unrelated strokes close together.
     var byRun: [[Groove]] = Array(Set(g.map(\.run))).sorted().map { id in g.filter { $0.run == id } }
     byRun = byRun.filter { !$0.isEmpty }
     var parent = Array(byRun.indices)
@@ -171,8 +180,12 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
         for b in byRun.indices where b > a && find(a) != find(b) && boxes[a].intersects(boxes[b]) {
             search: for p in byRun[a] {
                 for q in byRun[b] where p.xy.distance(to: q.xy) <= max(p.radius, q.radius) + slack {
-                    parent[find(a)] = find(b)
-                    break search
+                    let m = p.xy.lerp(to: q.xy, 0.5)
+                    let carved = max(p.radius - m.distance(to: p.xy), q.radius - m.distance(to: q.xy))
+                    if carved >= min(outlineDistance(m), bitRadius) - allowed {
+                        parent[find(a)] = find(b)
+                        break search
+                    }
                 }
             }
         }
@@ -220,7 +233,7 @@ let vcarveGlyphCells = sizes.flatMap { size in glyphGroups.indices.map { VCarveG
 /// The fonts ship with macOS; a machine that lacks them would otherwise pass by carving nothing.
 @Test func vcarveGlyphFontsAreInstalled() {
     let present = fonts.filter { glyphOutlines("A", font: $0, size: 1) != nil }
-    #expect(present.count >= 4, Comment(rawValue: "only \(present) of \(fonts) are installed"))
+    #expect(present.count >= 4 && present.contains("Helvetica"), Comment(rawValue: "only \(present) of \(fonts) are installed"))
 }
 
 @Test(arguments: fonts, vcarveGlyphCells)
@@ -231,9 +244,13 @@ func vcarveCarvesEveryGlyph(font: String, cell: VCarveGlyphCell) throws {
         guard let paths = glyphOutlines(String(ch), font: font, size: cell.size), !paths.isEmpty else {
             Issue.record(Comment(rawValue: "\(name): no outline")); continue
         }
-        let (tp, context) = try carve(paths)
+        let tp: Toolpath, context: CAMContext
+        do { (tp, context) = try carve(paths) } catch {
+            Issue.record(Comment(rawValue: "\(name): the operation failed: \(error)")); continue
+        }
         let v = judge(tp, paths: paths, context: context, size: cell.size)
         #expect(v.cutLength > 0, Comment(rawValue: "\(name): no cut"))
+        #expect(v.worstOvercut <= cell.size * 0.02, Comment(rawValue: "\(name): a groove is \(v.worstOvercut) in wider than the outline allows"))
         #expect(v.uncutPieces == 0, Comment(rawValue: "\(name): \(v.uncutPieces) of \(v.pieces) glyph piece(s) have no cut in them"))
         #expect(v.worstShortfall <= cell.size * 0.02,
                 Comment(rawValue: "\(name): carve is \(v.worstShortfall) in short near \(v.shortfallAt)"))
@@ -253,7 +270,10 @@ private func permutations<T>(_ items: [T]) -> [[T]] {
 
 /// O, B and 8 have an outline and one or two counters. Each contour as a shape of its own, selected in every
 /// order, with and without "start at the vectors' start points" and "in selection order": the carve is
-/// the same whole letter, one connected cut, every time.
+/// the same whole letter, one connected cut, every time. (The operation carves one region built from all
+/// the selected shapes, so the order cannot change what is cut; this guards against a region built per
+/// shape, which would carve the counters as filled discs, and against strokes lost in the ordering. That the
+/// order is followed is checked by `vcarveSelectionOrderFollowsTheSelectedLetters`.)
 @Test(arguments: ["Times New Roman", "Helvetica"], ["O", "B", "8"])
 func vcarveKeepsAMultiContourGlyphWholeInEveryOrder(font: String, glyph: String) throws {
     guard let paths = glyphOutlines(glyph, font: font, size: 1) else { return }
@@ -266,10 +286,39 @@ func vcarveKeepsAMultiContourGlyphWholeInEveryOrder(font: String, glyph: String)
                 let v = judge(tp, paths: paths, context: context, size: 1)
                 let name = "\(font) '\(glyph)' contours \(order) startPoints=\(startPoints) selectionOrder=\(selectionOrder)"
                 #expect(v.cutLength > 0, Comment(rawValue: "\(name): no cut"))
+                #expect(v.worstOvercut <= 0.02, Comment(rawValue: "\(name): a groove is \(v.worstOvercut) in wider than the outline allows"))
                 #expect(v.worstShortfall <= 0.02, Comment(rawValue: "\(name): carve is \(v.worstShortfall) in short near \(v.shortfallAt)"))
                 #expect(v.worstOutlineGap <= 0.015, Comment(rawValue: "\(name): an outline point is \(v.worstOutlineGap) in from every groove"))
                 #expect(v.cuts == 1 && v.pieces == 1, Comment(rawValue: "\(name): \(v.cuts) connected cut(s) for \(v.pieces) glyph piece(s)"))
             }
         }
     }
+}
+
+/// With "selection order" on, the letters are carved in the order they were selected: all of one, then all of the
+/// other, whichever was selected first.
+@Test(arguments: [[0, 1], [1, 0]])
+func vcarveSelectionOrderFollowsTheSelectedLetters(order: [Int]) throws {
+    guard let o = glyphOutlines("O", font: "Helvetica", size: 1), let b = glyphOutlines("B", font: "Helvetica", size: 1) else { return }
+    let letters = [o, b.map { $0.transformed(.translation(Vec2(2.5, 0))) }]
+    var doc = Document()
+    var ids: [UUID] = []
+    for i in order {
+        let shape = Shape(layerID: doc.defaultLayerID, paths: letters[i])
+        doc.add(shape); ids.append(shape.id)
+    }
+    let context = CAMContext(document: doc, tools: .seeded)
+    let setup = OperationSetup(name: "V", toolID: VCarveFixture.vbit60.id, shapeIDs: ids)
+    let params = VCarveParameters(useSelectionOrder: true)
+    let tp = try #require(try VCarveOperation(setup: setup, params: params).generate(in: context).first)
+    let g = grooves(tp, coords: context.coords, step: 0.05)
+    // The letter each run of cuts is in (the O is left of x = 2.2, the B right of it), in cutting order.
+    var seen: [Int] = []
+    var lastRun = -1
+    for groove in g where groove.run != lastRun {
+        lastRun = groove.run
+        let letter = groove.xy.x < 2.2 ? 0 : 1
+        if seen.last != letter { seen.append(letter) }
+    }
+    #expect(seen == order, Comment(rawValue: "selected \(order) (0 = O, 1 = B) but cut \(seen)"))
 }
