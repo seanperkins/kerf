@@ -28,13 +28,13 @@ extension KerfDocument {
         }
     }
 
-    /// `settings`: the time-estimate settings for the total, one value for the allowance and the
-    /// motion; the export command passes the live store's, which the sidebar shows.
+    /// `settings`: the time-estimate settings for the total; the export command passes the live
+    /// store's, which the sidebar shows.
     func makeJobSheet(settings: TimeEstimateSettings, date: Date = Date()) -> JobSheet {
         var sheet = JobSheet.make(project: outputProject, results: results, profile: postProfile,
                                   groupByTool: UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey),
                                   rapidRate: rapidRateInDocumentUnits, date: date, sheets: JobSheet.sheets(of: project),
-                                  toolChangeSeconds: settings.toolChangeSeconds) { motionSeconds($0, settings: settings) }
+                                  settings: settings)
         // Multi-sheet and two-sided jobs (io): say which material sheet and side this sheet is for.
         sheet.jobName = document.name + (document.isMultiSheet ? " – \(document.currentSheetName)" : "")
             + (isTwoSided ? " (\(activeSide.displayName) side)" : "")

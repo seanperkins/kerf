@@ -175,7 +175,7 @@ import Testing
         #expect(!r.hasErrors)
         #expect(r.issues.contains { $0.severity == .warning && $0.message.contains("with tabs off") })
         let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
-                                  groupByTool: false, rapidRate: 600, toolChangeSeconds: 90, motion: { doc.motionSeconds($0, settings: TimeEstimateSettings()) })
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
         #expect(sheet.warnings.contains { $0.contains("with tabs off") })
     }
 }

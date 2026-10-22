@@ -54,7 +54,9 @@ import Testing
         #expect(s.machiningSeconds > 0)
         #expect(abs(s.totalSeconds - preview) < 1e-6, "\(units) grouped \(groupByTool): \(s.totalSeconds) vs \(preview)")
         // The program's motion is more than the operations' own by the rapids between them.
-        let separate = doc.results.values.map { doc.motionSeconds($0.toolpaths, settings: settings) }.reduce(0, +)
+        let separate = doc.results.values.map {
+            settings.estimate($0.toolpaths, rapidRate: doc.rapidRateInDocumentUnits, units: doc.units, toolChanges: false)
+        }.reduce(0, +)
         #expect(s.machiningSeconds > separate)
         // The job sheet, which reads the grouping from the defaults, prints the same total.
         let defaults = UserDefaults.standard
@@ -69,24 +71,29 @@ import Testing
     @Test func summaryIsRebuiltOnlyWhenItsInputsChange() {
         let doc = makeDoc(units: .inch)
         let memo = JobSummary.Memo()
-        var timed = 0
         func summary(groupByTool: Bool = false, settings: TimeEstimateSettings = TimeEstimateSettings(), rapid: Double = 200) -> JobSummary {
-            let key = JobSummary.Key(operations: doc.outputProject.operations, results: doc.results, groupByTool: groupByTool,
-                                     settings: settings, rapidRate: rapid, units: .inch)
-            return memo.summary(operations: doc.outputProject.operations, results: doc.results, key: key) { timed += 1; return doc.motionSeconds($0, settings: settings) }
+            memo.summary(operations: doc.outputProject.operations, results: doc.results, groupByTool: groupByTool,
+                         settings: settings, rapidRate: rapid, units: .inch)
         }
         let first = summary()
-        #expect(summary() == first && timed == 1)
+        #expect(summary() == first && memo.builds == 1)
         _ = summary(groupByTool: true)
-        #expect(timed == 2)
+        #expect(memo.builds == 2)
         var slower = TimeEstimateSettings(); slower.toolChangeSeconds += 1
         _ = summary(settings: slower)
-        #expect(timed == 3)
+        #expect(memo.builds == 3)
         _ = summary(rapid: 300)
-        #expect(timed == 4)
+        #expect(memo.builds == 4)
         // A recalculation replaces the toolpaths, so the summary is rebuilt.
         doc.calculateNow(doc.project.operations.map(\.id))
         _ = summary()
-        #expect(timed == 5)
+        #expect(memo.builds == 5)
+        // So does a settings refresh, which rewrites the row estimates in place.
+        let id = doc.project.operations[0].id
+        doc.results[id]?.estimatedSeconds += 1
+        _ = summary()
+        #expect(memo.builds == 6)
+        _ = summary()
+        #expect(memo.builds == 6)
     }
 }

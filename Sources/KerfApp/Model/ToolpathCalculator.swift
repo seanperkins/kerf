@@ -10,9 +10,7 @@ struct ToolpathResult: Sendable {
     var operation: AnyOperation
     /// `KerfDocument.designRevision` at calculation time (to detect design/tool edits).
     var designRevision: Int
-    /// The operation's own run time, tool changes inside it included (what its row shows). The
-    /// job total is timed over the whole program instead (`JobSummary`), so it also sees the
-    /// rapids between toolpaths and counts each stop once.
+    /// The operation's own run time, tool changes inside it included (what its row shows).
     var estimatedSeconds: TimeInterval
 
     init(toolpaths: [Toolpath], error: String?, operation: AnyOperation, designRevision: Int,

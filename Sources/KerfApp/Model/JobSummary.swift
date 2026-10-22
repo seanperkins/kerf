@@ -59,12 +59,11 @@ struct JobSummary: Equatable {
 
     static func label(_ tool: Tool) -> String { "T\(tool.number) · \(tool.name)" }
 
-    /// `motion` times a list of toolpaths in order, without tool-change allowance (the user's
-    /// time-estimate settings over the document's rapid rate); it sees the rapids between
-    /// toolpaths that a per-operation estimate cannot, which is why the summary cannot be made
-    /// from the operations' own times.
+    /// The motion is `settings`' estimate of the toolpaths in program order (`rapidRate` in `units`
+    /// per minute), so it sees the rapids between toolpaths that a per-operation estimate cannot;
+    /// the allowance (`settings.toolChangeSeconds`) is added per stop in `totalSeconds`.
     static func make(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool,
-                     toolChangeSeconds: TimeInterval = 0, motion: ([Toolpath]) -> TimeInterval) -> JobSummary {
+                     settings: TimeEstimateSettings, rapidRate: Double, units: LengthUnit) -> JobSummary {
         let rows = operations.map { op -> Row in
             let r = results[op.id]
             var tools: [String] = []
@@ -78,7 +77,7 @@ struct JobSummary: Equatable {
         // A row's own time includes the tool changes inside its operation (a pocket's clearance
         // tool, a V-carve's flat-area tool); the job total counts every stop once, below. The
         // motion is timed over the toolpaths in program order, so the rapids between them count.
-        let total = motion(tps)
+        let total = settings.estimate(tps, rapidRate: rapidRate, units: units, toolChanges: false)
         var pauses: [PauseRow] = []
         var stops = 0
         for (i, tp) in tps.enumerated() where i > 0 {
@@ -86,7 +85,7 @@ struct JobSummary: Equatable {
             if let p = tps[i - 1].pauseAfter { pauses.append(PauseRow(after: tps[i - 1].name, text: p.text(afterToolpath: tps[i - 1].name))) }
         }
         return JobSummary(rows: rows, sequence: sequence(of: tps), pauses: pauses, stops: stops,
-                          machiningSeconds: total, toolChangeSeconds: toolChangeSeconds)
+                          machiningSeconds: total, toolChangeSeconds: settings.toolChangeSeconds)
     }
 
     /// What a summary is made from, so one can be reused while none of it has changed. Results are
@@ -123,13 +122,18 @@ struct JobSummary: Equatable {
     /// when its key changes; keys are compared whole, not by hash.
     final class Memo {
         private var last: (key: Key, summary: JobSummary)?
+        /// How many summaries were built (what the tests count).
+        private(set) var builds = 0
 
-        func summary(operations: [AnyOperation], results: [UUID: ToolpathResult], key: Key,
-                     motion: ([Toolpath]) -> TimeInterval) -> JobSummary {
+        func summary(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool,
+                     settings: TimeEstimateSettings, rapidRate: Double, units: LengthUnit) -> JobSummary {
+            let key = Key(operations: operations, results: results, groupByTool: groupByTool, settings: settings,
+                          rapidRate: rapidRate, units: units)
             if let last, last.key == key { return last.summary }
-            let s = JobSummary.make(operations: operations, results: results, groupByTool: key.groupByTool,
-                                    toolChangeSeconds: key.settings.toolChangeSeconds, motion: motion)
+            let s = JobSummary.make(operations: operations, results: results, groupByTool: groupByTool,
+                                    settings: settings, rapidRate: rapidRate, units: units)
             last = (key, s)
+            builds += 1
             return s
         }
     }

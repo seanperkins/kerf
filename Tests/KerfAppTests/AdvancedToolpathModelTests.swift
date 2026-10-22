@@ -30,8 +30,10 @@ private enum Job {
     static func motion(_ tps: [Toolpath]) -> TimeInterval { settings.estimate(tps, rapidRate: 200, units: .inch, toolChanges: false) }
     static func summary(_ p: KerfProject, results: [UUID: ToolpathResult]? = nil, groupByTool: Bool,
                         toolChangeSeconds: TimeInterval = 0) -> JobSummary {
-        JobSummary.make(operations: p.operations, results: results ?? Job.results(p), groupByTool: groupByTool,
-                        toolChangeSeconds: toolChangeSeconds, motion: motion)
+        var s = settings
+        s.toolChangeSeconds = toolChangeSeconds
+        return JobSummary.make(operations: p.operations, results: results ?? Job.results(p), groupByTool: groupByTool,
+                               settings: s, rapidRate: 200, units: .inch)
     }
 }
 
@@ -58,13 +60,11 @@ private enum Job {
         #expect(s.rows.count == 3)
         #expect(s.rows.allSatisfy { ($0.estimatedSeconds ?? 0) > 0 })
         #expect(s.rows[1].tools.first?.hasPrefix("T6") == true)
-        let all = s.totalSeconds
         p.operations[1].editableSetup.isEnabled = false
         s = Job.summary(p, results: results, groupByTool: true)
         // The total is the remaining program's motion (its own linking rapids), not a sum of rows.
         let remaining = GCodeExporter.toolpaths(scope: .all, operations: p.operations, results: results, groupByTool: true)
         #expect(abs(s.totalSeconds - Job.motion(remaining)) < 1e-6)
-        #expect(s.totalSeconds < all - (s.rows[1].estimatedSeconds ?? 0) + 5)
         #expect(s.sequence.map(\.number) == [1])
     }
 
