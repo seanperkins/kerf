@@ -169,13 +169,15 @@ public struct GCodeValidator: Sendable {
                 }
             }
             var stop: Int?
-            // The remembered hole survives only plain moves (motion, axis and feed words): any other G
-            // code may have moved the tool or changed what the coordinates mean, and a stop, M6, T or
-            // spindle word may mean the bit changed. One rule that fails closed (an unlisted word costs a
-            // warning, never a missed one), applied before the block's motion, because a frame change or
-            // tool word applies to it, and again after, because a controller moves before it stops.
-            let plainMove = b.values("G").allSatisfy { Self.motionG.contains($0) }
-                && b.values("M").isEmpty && b.value("T") == nil && b.value("S") == nil
+            // The remembered hole survives only plain moves: a block of nothing but motion-mode, axis,
+            // arc, feed and line-number words. Any other G code may have moved the tool or changed what
+            // the coordinates mean, a stop, M6 or T word may mean the bit changed, and a letter this
+            // validator does not model is not vouched for. One rule that fails closed (an unlisted word
+            // costs a warning, never a missed one), applied before the block's motion, because a frame
+            // change or tool word applies to it, and again after, because a controller moves before it
+            // stops.
+            let plainMove = b.words.allSatisfy { Self.plainMoveLetters.contains($0.letter) }
+                && b.values("G").allSatisfy { Self.motionG.contains($0) }
             if !plainMove { check.leaveHole() }
             defer { if !plainMove { check.leaveHole() } }
             for m in b.values("M") {
@@ -300,4 +302,6 @@ public struct GCodeValidator: Sendable {
     static let knownM: Set<Double> = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30]
     /// The motion modes: the only G words a block may carry and still be a plain move.
     static let motionG: Set<Double> = [0, 1, 2, 3]
+    /// The word letters a plain move is made of: G, axes, arc centre and radius, feed, line number.
+    static let plainMoveLetters: Set<Character> = ["G", "X", "Y", "Z", "I", "J", "K", "R", "F", "N"]
 }

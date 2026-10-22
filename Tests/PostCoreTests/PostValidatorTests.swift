@@ -289,20 +289,20 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
 }
 
 @Test func anyCodeOtherThanAPlainMoveForgetsTheHole() {
-    // One rule: the hole survives only blocks made of G0–G3 with no M, T or S word. Tool changes and
-    // stops (a different bit may not fit), frame shifts and reference returns (the same XY words
-    // name another place), and codes the rule never heard of (spindle, coolant, dwell, tool length,
-    // distance mode) all forget it, each here on its own line with nothing else between the plunge
-    // and the rapid back down.
+    // One rule: the hole survives only blocks made of G0–G3 with axis, arc, feed and line-number
+    // words. Tool changes and stops (a different bit may not fit), frame shifts and reference returns
+    // (the same XY words name another place), and words the rule never heard of (spindle, coolant,
+    // dwell, tool length, distance mode, a bare H or D offset) all forget it, each here on its own
+    // line with nothing else between the plunge and the rapid back down.
     let codes = ["T2 M6", "M6", "M0", "M1", "T2",
                  "G92 X1 Y1", "G92.1", "G55", "G59", "G10 L2 P1 X0 Y0", "G53 G0 X1 Y1", "G28", "G30 X1 Y1",
-                 "M3 S18000", "S12000", "M8", "G4 P0.5", "G43 H1", "G90"]
+                 "M3 S18000", "S12000", "M8", "G4 P0.5", "G43 H1", "G90", "H2", "G0 Z0.05 D1"]
     for code in codes {
         let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\n\(code)\nG0 Z-0.08"))
         #expect(has(issues, "Rapid plunge", .warning), "after \(code): \(issues)")
     }
-    // A feed rate or a comment on its own line is not a code: the hole stays.
-    #expect(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nF40\n( peck 2 )\nG0 Z-0.08")).isEmpty)
+    // A feed rate, a line number or a comment is part of a plain move: the hole stays.
+    #expect(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nN10 G0 Z0.05\nF40\n( peck 2 )\nN11 G0 Z-0.08")).isEmpty)
     // The motion of a block runs before its stop, so a plunge sharing a line with M0 drills before
     // the tool may change: the hole is forgotten after that block, not only before it.
     let shared = validate(program("G0 X1 Y1\nG1 Z-0.1 F30 M0\nG0 Z0.05\nG0 Z-0.08"))
