@@ -6,7 +6,7 @@ Guidance for coding agents working on Kerf. Read [README.md](README.md) for what
 
 ```sh
 scripts/build.sh                     # debug build (swift build; works in a sandboxed agent shell)
-scripts/test.sh                      # full swift-testing suite (~900 tests, ~20 s)
+scripts/test.sh                      # full swift-testing suite (~1,200 tests, ~70 s)
 scripts/test.sh --filter Ops2D       # subset
 scripts/bundle.sh                    # release build → dist/Kerf.app (ad-hoc signed)
 scripts/run.sh                       # debug bundle + launch
