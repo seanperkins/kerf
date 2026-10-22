@@ -8,11 +8,10 @@ struct DepthForm: View {
     @Binding var depth: DepthSettings
     var units: LengthUnit
     var showFinalPass = true
-    /// The tool's stepdown in document units (for the pass list; nil = unknown).
-    var toolStepdown: Double? = nil
     /// The material thickness, when the form offers to keep the cut depth following it.
     var materialThickness: Double? = nil
-    /// The selected tool in document units, so the form can say when the cut is deeper than its flutes.
+    /// The selected tool in document units: its stepdown for the pass list, its flute length for
+    /// the note under the cut depth (nil = unknown).
     var tool: Tool? = nil
 
     var body: some View {
@@ -34,7 +33,7 @@ struct DepthForm: View {
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
-        PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: toolStepdown)
+        PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: tool?.stepdown)
         if depth.cutDepth <= depth.startDepth {
             Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(Color.warningText)
         }
@@ -45,13 +44,12 @@ struct DepthForm: View {
 struct FluteLengthNote: View {
     var tool: Tool?
     var cutDepth: Double
-    var startDepth: Double = 0
+    var startDepth: Double
     var units: LengthUnit
 
     var body: some View {
         if let problem = OperationHints.fluteLengthProblem(tool: tool, cutDepth: cutDepth, startDepth: startDepth, units: units) {
             Text(problem).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("flute-length-note")
         }
     }
 }
@@ -142,7 +140,6 @@ struct ProfileForm: View {
     /// The operation's vectors (to seed manual tabs).
     var shapes: [Shape] = []
     var isEditingTabs: Binding<Bool> = .constant(false)
-    var toolStepdown: Double? = nil
     /// The material thickness, so the Tabs section can say what a tab really holds.
     var materialThickness: Double? = nil
     /// The selected tool in document units.
@@ -157,7 +154,7 @@ struct ProfileForm: View {
 
     var body: some View {
         InspectorSection(title: "Cutting Depths") {
-            DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown, materialThickness: materialThickness, tool: tool)
+            DepthForm(depth: $params.depth, units: units, materialThickness: materialThickness, tool: tool)
         }
         Divider()
         InspectorSection(title: "Machine Vectors") {
@@ -267,12 +264,11 @@ struct PocketForm: View {
     var units: LengthUnit
     var library: ToolLibrary
     var finishToolID: UUID?
-    var toolStepdown: Double? = nil
     /// The finish tool in document units.
     var tool: Tool? = nil
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown, tool: tool) }
+        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, tool: tool) }
         Divider()
         InspectorSection(title: "Clearing") {
             PocketStrategyForm(strategy: $params.strategy, profileFirst: $params.profilePassFirst)

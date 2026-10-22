@@ -42,6 +42,25 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     }
 
     public var kind: OperationKind { type(of: operation).kind }
+
+    /// Depth below the material top where the operation starts cutting because an earlier operation
+    /// removed the material above it (0 = the top); the flute check measures the cut from there.
+    /// Only a start depth with that meaning counts: moulding's is an offset into solid material,
+    /// the inlay's male start depth a glue-gap offset, and the rest have none.
+    public var startDepth: Double {
+        switch self {
+        case .profile(let o): o.params.depth.startDepth
+        case .pocket(let o): o.params.depth.startDepth
+        case .fluting(let o): o.params.depth.startDepth
+        case .engrave(let o): o.params.depth.startDepth
+        case .drill(let o): o.params.startDepth
+        case .holeMill(let o): o.params.startDepth
+        case .chamfer(let o): o.params.startDepth
+        case .vcarve(let o): o.params.startDepth
+        case .photoVCarve(let o): o.params.startDepth
+        case .inlay, .texture, .relief3D, .prism, .merge, .straightInlay, .moulding: 0
+        }
+    }
     public var setup: OperationSetup { operation.setup }
     public var id: UUID { setup.id }
 
@@ -55,19 +74,20 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         }
         // The material above the operation's start depth is already gone; the flute check
         // measures the cut from there.
-        let cleared = operation.startDepth
+        let cleared = startDepth
         if cleared > 0 { for i in tps.indices { tps[i].clearedDepth = cleared } }
         if let modelID = setup.projectOntoModelID, kind != .relief3D {
             // Projection drops every point to the carved surface, which an earlier operation cut
             // away: what the tool enters is the cut it was given, so the drop counts as cleared.
             let before = tps.map(\.minCutZ)
             tps = try ReliefProjection.project(tps, ontoModel: modelID, in: ctx)
-            for i in tps.indices where i < before.count {
+            for i in tps.indices {
                 if let b = before[i], let a = tps[i].minCutZ, a < b { tps[i].clearedDepth = (tps[i].clearedDepth ?? 0) + (b - a) }
             }
         }
         tps = Self.liftOverKeepOutZones(tps, in: ctx)
-        // A merge's children were noted when they were generated.
+        // A merge's children were noted when they were generated (merges are flattened one level,
+        // so a merge never holds a merge).
         return kind == .merge ? tps : Self.notingCutsBeyondTheFlute(tps, in: ctx)
     }
 

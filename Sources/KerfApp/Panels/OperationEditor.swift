@@ -105,10 +105,10 @@ struct OperationEditor: View {
         case .profile(let o):
             ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units,
                         shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding,
-                        toolStepdown: primaryStepdown, materialThickness: document.document.job.thickness, tool: primaryTool)
+                        materialThickness: document.document.job.thickness, tool: primaryTool)
         case .pocket(let o):
             PocketForm(params: paramsBinding(o.params) { .pocket(PocketOperation(setup: draft.setup, params: $0)) },
-                       units: units, library: library, finishToolID: draft.setup.toolID, toolStepdown: primaryStepdown, tool: primaryTool)
+                       units: units, library: library, finishToolID: draft.setup.toolID, tool: primaryTool)
         case .drill(let o):
             DrillForm(params: paramsBinding(o.params) { .drill(DrillOperation(setup: draft.setup, params: $0)) }, units: units,
                       tool: primaryTool)
@@ -128,13 +128,13 @@ struct OperationEditor: View {
                             units: units, job: document.document.job)
         case .engrave(let o):
             EngraveForm(params: paramsBinding(o.params) { .engrave(EngraveOperation(setup: draft.setup, params: $0)) },
-                        units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+                        units: units, tool: primaryTool)
         case .chamfer(let o):
             ChamferForm(params: paramsBinding(o.params) { .chamfer(ChamferOperation(setup: draft.setup, params: $0)) },
-                        units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+                        units: units, tool: primaryTool)
         case .holeMill(let o):
             HoleMillForm(params: paramsBinding(o.params) { .holeMill(HoleMillOperation(setup: draft.setup, params: $0)) },
-                         units: units, tool: library.tool(id: draft.setup.toolID)?.converted(to: units))
+                         units: units, tool: primaryTool)
         case .prism(let o):
             PrismForm(params: paramsBinding(o.params) { .prism(PrismOperation(setup: draft.setup, params: $0)) },
                       units: units)
@@ -191,8 +191,8 @@ struct OperationEditor: View {
     }
 
     /// The primary tool's stepdown in document units.
+    /// The operation's primary tool in document units.
     private var primaryTool: Tool? { library.tool(id: draft.setup.toolID)?.converted(to: units) }
-    private var primaryStepdown: Double? { primaryTool?.stepdown }
 
     // MARK: Bindings
 

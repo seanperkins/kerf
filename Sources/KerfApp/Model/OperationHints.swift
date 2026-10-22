@@ -17,10 +17,11 @@ enum OperationHints {
     /// its flutes are shorter, so the shank would rub the wall. Nil when the tool is unknown, has
     /// no flute length recorded, or reaches. `tool` is in document units. A preview of the
     /// toolpath's own warning, which also sees projection and array copies.
-    static func fluteLengthProblem(tool: Tool?, cutDepth: Double, startDepth: Double = 0, units: LengthUnit) -> String? {
+    static func fluteLengthProblem(tool: Tool?, cutDepth: Double, startDepth: Double, units: LengthUnit) -> String? {
         guard let tool, let flute = tool.fluteLength, flute > 0 else { return nil }
         guard cutDepth - max(0, startDepth) > flute + CAMContext.defaultTolerance(units) else { return nil }
-        return "Deeper than the \(RulerTicks.label((flute * 1000).rounded() / 1000)) \(units.abbreviation) flutes of \(tool.name); "
+        // The same digits as the toolpath warning and the export error, so one number reads alike.
+        return "Deeper than the \(String(format: units == .inch ? "%.4f" : "%.3f", flute)) \(units.abbreviation) flutes of \(tool.name); "
             + "the shank will rub the wall above them."
     }
 

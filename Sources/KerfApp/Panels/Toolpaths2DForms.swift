@@ -14,7 +14,7 @@ struct EngraveForm: View {
 
     var body: some View {
         InspectorSection(title: "Cutting Depths") {
-            DepthForm(depth: $params.depth, units: units, toolStepdown: tool?.stepdown, tool: tool)
+            DepthForm(depth: $params.depth, units: units, tool: tool)
         }
         Divider()
         InspectorSection(title: "Quick Engrave") {

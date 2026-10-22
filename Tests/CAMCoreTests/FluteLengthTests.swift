@@ -153,6 +153,38 @@ private typealias F = Ops2DFixture
         #expect(deep.metadata["warning"] == "cuts 0.8000 in deeper than the 0.5000 in already cleared with a 0.7500 in flute (\(tool.name)); \(Self.rubs)")
     }
 
+    @Test func everyKindWithAStartDepthRecordsIt() throws {
+        // The kinds whose start depth means the material above is gone carry it on their toolpaths.
+        let circle = ShapeFactory.circle(center: Vec2(3, 3), radius: 0.5)
+        let starting: [(String, Int, [Path], (OperationSetup) -> AnyOperation)] = [
+            ("profile", 0, [F.rect(1, 1, 4, 3)], { .profile(ProfileOperation(setup: $0, params: ProfileParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.5)))) }),
+            ("pocket", 0, [F.rect(1, 1, 4, 3)], { .pocket(PocketOperation(setup: $0, params: PocketParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.5)))) }),
+            ("fluting", 3, [Path(points: [Vec2(1, 1), Vec2(9, 1)], closed: false)], { .fluting(FlutingOperation(setup: $0, params: FlutingParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.5)))) }),
+            ("engrave", 5, [F.rect(1, 1, 4, 3)], { .engrave(EngraveOperation(setup: $0, params: EngraveParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.3)))) }),
+            ("drill", 8, [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.125)], { .drill(DrillOperation(setup: $0, params: DrillParameters(startDepth: 0.2, cutDepth: 0.5))) }),
+            ("holeMill", 0, [circle], { .holeMill(HoleMillOperation(setup: $0, params: HoleMillParameters(startDepth: 0.2, cutDepth: 0.5))) }),
+            ("chamfer", 6, [F.rect(1, 1, 4, 3)], { .chamfer(ChamferOperation(setup: $0, params: ChamferParameters(depth: 0.24, startDepth: 0.2))) }),
+            ("vcarve", 5, [F.rect(1, 1, 4, 4)], { .vcarve(VCarveOperation(setup: $0, params: VCarveParameters(startDepth: 0.2, flatDepth: 0.3))) }),
+        ]
+        for (name, index, paths, make) in starting {
+            let (seeded, ids) = F.document(paths)
+            let tool = Self.tool(index, flute: 2)
+            let ctx = CAMContext(document: seeded.document, tools: ToolLibrary(tools: [tool]))
+            let tp = try #require(try make(OperationSetup(name: name, toolID: tool.id, shapeIDs: ids)).generate(in: ctx).first, "\(name)")
+            #expect(tp.clearedDepth == 0.2, "\(name): \(String(describing: tp.clearedDepth))")
+        }
+        // Moulding's start depth is an offset into solid material, not cleared material.
+        let rail = Path(points: [Vec2(1, 1), Vec2(9, 1)], closed: false)
+        let section = Path(points: [Vec2(20, 10), Vec2(20.5, 10), Vec2(20.5, 9.75), Vec2(21, 9.75)], closed: false)
+        let (seeded, ids) = F.document([rail, section])
+        let tool = Self.tool(0, flute: 2)
+        let ctx = CAMContext(document: seeded.document, tools: ToolLibrary(tools: [tool]))
+        let moulded = try AnyOperation.moulding(MouldingOperation(setup: OperationSetup(name: "M", toolID: tool.id, shapeIDs: ids),
+                                                                  params: MouldingParameters(sectionShapeID: ids[1], side: .left, startDepth: 0.2, stepover: 0.05)))
+            .generate(in: ctx)[0]
+        #expect(moulded.clearedDepth == nil)
+    }
+
     @Test func projectedToolpathsMeasureFromTheCarvedSurface() throws {
         // A 0.05 in flute across the dome, projected onto it: the tool is 1 in below the material
         // top at the centre, but the relief above the surface is gone. A 0.5 in flute says nothing;
@@ -206,6 +238,9 @@ private typealias F = Ops2DFixture
             let mm = Toolpath(name: "t", kind: .profile, tool: tool, moves: [.linear(to: Vec3(0, 0, mmCoords.z(depth: 20)), feed: 30)])
             #expect(mm.cutBeyondFlute(coords: mmCoords, units: .millimeter, tolerance: 0.01)?.flute == 12.7)
             #expect(mm.cutBeyondFlute(coords: mmCoords, units: .millimeter, tolerance: 0.01)?.description.contains("cuts 20.000 mm below the material top with a 12.700 mm flute") == true)
+            // A cut as deep as the flute, with float dust on it, is not an overrun.
+            tool.fluteLength = 0.3
+            #expect(tp(0.1 + 0.2).cutBeyondFlute(coords: coords, units: .inch, tolerance: 0.0005) == nil)
             tool.fluteLength = nil
             #expect(tp(0.6).cutBeyondFlute(coords: coords, units: .inch, tolerance: 0.0005) == nil)
             tool.fluteLength = 0.5
