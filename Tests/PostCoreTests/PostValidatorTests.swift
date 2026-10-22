@@ -183,8 +183,11 @@ func toolpathValidationRefusesCutsDeeperThanTheFlutes(mode: ZZeroMode) {
         ])
     }
     let issues = v.validate(toolpaths: [tp(0.6)])
-    #expect(has(issues, "Toolpath 'deep' cuts 0.6000 in below the material top with a 0.5000 in flute (\(eighth.name)); the shank rubs the wall"))
+    #expect(has(issues, "Toolpath 'deep' cuts 0.6000 in below the material top with a 0.5000 in flute (\(eighth.name)); the shank rubs the wall above the flutes"))
     #expect(!v.validate(toolpaths: [tp(0.5)]).contains { $0.message.contains("flute") })
+    // Material already cleared above the cut counts: a 0.9 in cut from a 0.5 in start depth fits.
+    var cleared = tp(0.9); cleared.clearedDepth = 0.5
+    #expect(!v.validate(toolpaths: [cleared]).contains { $0.message.contains("flute") })
 }
 
 @Test func toolpathValidationChecksRPMAndFeedAndUnits() {
@@ -199,6 +202,12 @@ func toolpathValidationRefusesCutsDeeperThanTheFlutes(mode: ZZeroMode) {
     #expect(has(issues, "S26000"))
     #expect(has(issues, "zero or negative feed"))
     #expect(!has(issues, "allowed depth"))
+    // The tool's 1 in flute is 25.4 mm here: 19.5 mm fits, 30 mm does not.
+    #expect(!has(issues, "flute"))
+    let deep = Toolpath(name: "deep", kind: .profile, tool: PostFixtures.endMill, moves: [
+        .rapid(to: Vec3(0, 0, 5)), .linear(to: Vec3(0, 0, -30), feed: 500), .rapid(to: Vec3(0, 0, 5)),
+    ])
+    #expect(has(mm.validate(toolpaths: [deep]), "cuts 30.000 mm below the material top with a 25.400 mm flute"))
 }
 
 @Test func flagsInlayPocketAndPlugInOneProgram() {

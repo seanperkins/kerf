@@ -18,7 +18,7 @@ struct DepthForm: View {
     var body: some View {
         LengthField("Start depth", value: $depth.startDepth, units: units, help: "Depth below the material top where cutting starts")
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
-        FluteLengthNote(tool: tool, cutDepth: depth.cutDepth, units: units)
+        FluteLengthNote(tool: tool, cutDepth: depth.cutDepth, startDepth: depth.startDepth, units: units)
         if let thickness = materialThickness {
             Toggle("Follow the material thickness", isOn: Binding(get: { depth.followsThickness == true }, set: { on in
                 depth.followsThickness = on ? true : nil
@@ -45,10 +45,11 @@ struct DepthForm: View {
 struct FluteLengthNote: View {
     var tool: Tool?
     var cutDepth: Double
+    var startDepth: Double = 0
     var units: LengthUnit
 
     var body: some View {
-        if let problem = OperationHints.fluteLengthProblem(tool: tool, cutDepth: cutDepth, units: units) {
+        if let problem = OperationHints.fluteLengthProblem(tool: tool, cutDepth: cutDepth, startDepth: startDepth, units: units) {
             Text(problem).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("flute-length-note")
         }
@@ -297,7 +298,7 @@ struct DrillForm: View {
         InspectorSection(title: "Drilling") {
             LengthField("Start depth", value: $params.startDepth, units: units)
             LengthField("Cut depth", value: $params.cutDepth, units: units)
-            FluteLengthNote(tool: tool, cutDepth: params.cutDepth, units: units)
+            FluteLengthNote(tool: tool, cutDepth: params.cutDepth, startDepth: params.startDepth, units: units)
             Toggle("Peck drilling", isOn: Binding(get: { params.peckDepth > 0 }, set: { on in
                 params.peckDepth = on ? (units == .inch ? 0.125 : 3) : 0
             }))

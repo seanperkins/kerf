@@ -396,6 +396,9 @@ private enum Job {
         #expect(OperationHints.fluteLengthProblem(tool: unknown, cutDepth: 0.75, units: .inch) == nil)
         let mm = eighth.converted(to: .millimeter)
         #expect(OperationHints.fluteLengthProblem(tool: mm, cutDepth: 20, units: .millimeter)?.contains("12.7 mm flutes") == true)
+        // Material above the start depth is already gone.
+        #expect(OperationHints.fluteLengthProblem(tool: eighth, cutDepth: 0.9, startDepth: 0.5, units: .inch) == nil)
+        #expect(OperationHints.fluteLengthProblem(tool: eighth, cutDepth: 1.1, startDepth: 0.5, units: .inch) != nil)
     }
 
     @Test func clearanceToolMustBeLargerThanFinishTool() {

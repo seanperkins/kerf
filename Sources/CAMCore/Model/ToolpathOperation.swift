@@ -73,8 +73,12 @@ public struct CAMContext: Sendable {
     public init(document: Document, tools: ToolLibrary, tolerance: Double? = nil) {
         self.document = document
         self.tools = tools
-        self.tolerance = tolerance ?? (document.units == .inch ? 0.0005 : 0.01)
+        self.tolerance = tolerance ?? Self.defaultTolerance(document.units)
     }
+
+    /// The chordal tolerance a context uses unless told otherwise; also the slack the design-time
+    /// checks allow, so a form and the toolpath agree at the margin.
+    public static func defaultTolerance(_ units: LengthUnit) -> Double { units == .inch ? 0.0005 : 0.01 }
 
     public var coords: MachineCoordinates { MachineCoordinates(job: document.job) }
     public var units: LengthUnit { document.units }
@@ -102,4 +106,12 @@ public protocol ToolpathOperation: Codable, Hashable, Sendable {
     var setup: OperationSetup { get set }
     /// Generate toolpaths (one per tool used, in cutting order).
     func generate(in context: CAMContext) throws -> [Toolpath]
+    /// Depth below the material top where this operation starts cutting because an earlier
+    /// operation removed the material above it (0 = the top). Only a start depth with that
+    /// meaning: an offset that pushes a shape deeper into solid material is not one.
+    var startDepth: Double { get }
+}
+
+extension ToolpathOperation {
+    public var startDepth: Double { 0 }
 }

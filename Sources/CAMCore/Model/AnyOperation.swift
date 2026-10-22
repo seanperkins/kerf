@@ -53,30 +53,37 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         if let array = setup.arrayCopy {
             tps = ToolpathArray.apply(array, to: tps, coords: ctx.coords, tolerance: ctx.tolerance)
         }
+        // The material above the operation's start depth is already gone; the flute check
+        // measures the cut from there.
+        let cleared = operation.startDepth
+        if cleared > 0 { for i in tps.indices { tps[i].clearedDepth = cleared } }
         if let modelID = setup.projectOntoModelID, kind != .relief3D {
+            // Projection drops every point to the carved surface, which an earlier operation cut
+            // away: what the tool enters is the cut it was given, so the drop counts as cleared.
+            let before = tps.map(\.minCutZ)
             tps = try ReliefProjection.project(tps, ontoModel: modelID, in: ctx)
+            for i in tps.indices where i < before.count {
+                if let b = before[i], let a = tps[i].minCutZ, a < b { tps[i].clearedDepth = (tps[i].clearedDepth ?? 0) + (b - a) }
+            }
         }
-        return Self.notingCutsBeyondTheFlute(Self.liftOverKeepOutZones(tps, in: ctx), in: ctx)
+        tps = Self.liftOverKeepOutZones(tps, in: ctx)
+        // A merge's children were noted when they were generated.
+        return kind == .merge ? tps : Self.notingCutsBeyondTheFlute(tps, in: ctx)
     }
 
-    /// Adds a warning to every toolpath that cuts deeper below the material top than its tool's
-    /// flute length (last, so it sees the final Z of array copies and projection). The export
-    /// check refuses the same cut; this tells the operator at design time, with both numbers.
+    /// Adds a warning to every toolpath that cuts deeper than its tool's flute length (last, so it
+    /// sees the final Z of array copies and projection). The export check flags the same cut as
+    /// an error; this tells the operator at design time, with both numbers.
     static func notingCutsBeyondTheFlute(_ tps: [Toolpath], in ctx: CAMContext) -> [Toolpath] {
         tps.map { tp in
-            guard let over = tp.cutBeyondFlute(coords: ctx.coords, tolerance: ctx.tolerance) else { return tp }
-            let u = ctx.units.abbreviation
-            let w = "cuts \(Self.length(over.depth)) \(u) deep with a \(Self.length(over.flute)) \(u) flute (\(tp.tool.name)); "
-                + "the shank rubs the wall above the flutes"
+            guard let over = tp.cutBeyondFlute(coords: ctx.coords, units: ctx.units, tolerance: ctx.tolerance) else { return tp }
             var out = tp
-            out.metadata["warning"] = out.metadata["warning"].map { "\($0); \(w)" } ?? w
+            out.metadata["warning"] = out.metadata["warning"].map { "\($0); \(over.description)" } ?? over.description
             return out
         }
     }
 
-    private static func length(_ v: Double) -> String { String(format: "%.4g", v) }
-
-    /// Re-routes over keep-out zones marked "lift over" (last, so it sees the final Z).
+    /// Re-routes over keep-out zones marked "lift over" (after projection, so it sees the final Z).
     static func liftOverKeepOutZones(_ tps: [Toolpath], in ctx: CAMContext) -> [Toolpath] {
         guard let zones = ctx.document.keepOutZones, zones.contains(where: { $0.liftOver == true }) else { return tps }
         let margin = ctx.units == .inch ? 0.05 : 1.0 // same clearance the export check uses

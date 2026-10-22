@@ -13,13 +13,13 @@ enum OperationHints {
         return "\(depths.count) pecks per hole: \(list) \(units.abbreviation)."
     }
 
-    /// Why a cut to `cutDepth` (document units) is deeper than `tool` can reach: its flutes are
-    /// shorter, so the shank would rub the wall. Nil when the tool is unknown, has no flute length
-    /// recorded, or reaches. `tool` is in document units.
-    static func fluteLengthProblem(tool: Tool?, cutDepth: Double, units: LengthUnit) -> String? {
+    /// Why a cut from `startDepth` to `cutDepth` (document units) is deeper than `tool` can reach:
+    /// its flutes are shorter, so the shank would rub the wall. Nil when the tool is unknown, has
+    /// no flute length recorded, or reaches. `tool` is in document units. A preview of the
+    /// toolpath's own warning, which also sees projection and array copies.
+    static func fluteLengthProblem(tool: Tool?, cutDepth: Double, startDepth: Double = 0, units: LengthUnit) -> String? {
         guard let tool, let flute = tool.fluteLength, flute > 0 else { return nil }
-        let tol = units == .inch ? 0.0005 : 0.01
-        guard cutDepth > flute + tol else { return nil }
+        guard cutDepth - max(0, startDepth) > flute + CAMContext.defaultTolerance(units) else { return nil }
         return "Deeper than the \(RulerTicks.label((flute * 1000).rounded() / 1000)) \(units.abbreviation) flutes of \(tool.name); "
             + "the shank will rub the wall above them."
     }

@@ -192,7 +192,7 @@ struct HoleMillForm: View {
                 .fieldHelp("Mode")
             LengthField("Start depth", value: $params.startDepth, units: units)
             LengthField("Cut depth", value: $params.cutDepth, units: units)
-            FluteLengthNote(tool: tool, cutDepth: params.cutDepth, units: units)
+            FluteLengthNote(tool: tool, cutDepth: params.cutDepth, startDepth: params.startDepth, units: units)
             OptionalLengthField(label: params.mode == .thread ? "Major diameter" : "Hole diameter",
                                 value: $params.holeDiameter, units: units, defaultValue: units == .inch ? 0.5 : 12)
             if params.mode == .helical {

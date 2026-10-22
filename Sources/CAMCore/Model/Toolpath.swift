@@ -23,6 +23,11 @@ public struct Toolpath: Codable, Hashable, Identifiable, Sendable {
     /// The operator stop that follows this toolpath in the program. Set when toolpaths are collected
     /// for export, from the operation's `pauseAfter`; generators leave it nil.
     public var pauseAfter: PauseStep?
+    /// Depth below the material top (document units) above which the material is already gone
+    /// where this toolpath cuts: an operation's start depth, or the carved surface a projected
+    /// toolpath follows. The flute check measures the cut from there. Nil = from the top. Set by
+    /// `AnyOperation.generate`; generators leave it nil.
+    public var clearedDepth: Double?
 
     public init(id: UUID = UUID(), name: String, operationID: UUID? = nil, kind: OperationKind,
                 tool: Tool, spindleRPM: Double? = nil, moves: [Move] = [], metadata: [String: String] = [:]) {
@@ -34,13 +39,44 @@ public struct Toolpath: Codable, Hashable, Identifiable, Sendable {
     /// Lowest Z reached by any move (most negative = deepest).
     public var minZ: Double? { moves.compactMap { $0.target?.z }.min() }
 
-    /// The deepest cut below the material top and the tool's flute length, when the cut goes
-    /// past the flutes: the shank then rubs the wall above them, which burns the material and
-    /// can snap the bit. Nil when the tool's flute length is unknown or long enough.
-    public func cutBeyondFlute(coords: MachineCoordinates, tolerance: Double) -> (depth: Double, flute: Double)? {
-        guard let flute = tool.fluteLength, flute > 0, let z = minZ else { return nil }
+    /// Lowest Z any cutting move (feed or arc) ends at; rapids do not count.
+    public var minCutZ: Double? {
+        moves.compactMap { m -> Double? in if case .rapid = m { return nil }; return m.target?.z }.min()
+    }
+
+    /// A cut that goes deeper than the tool's flutes: the shank then rubs the wall above them,
+    /// which burns the material and can snap the bit. `depth` is the deepest cut below the
+    /// material top, `cleared` how much of that was already gone (`clearedDepth`), `flute` the
+    /// flute length; all in `units`.
+    public struct FluteOverrun: Hashable, Sendable {
+        public var depth: Double
+        public var cleared: Double
+        public var flute: Double
+        public var toolName: String
+        public var units: LengthUnit
+
+        /// The one description every surface shows, with both numbers and the tool.
+        public var description: String {
+            let u = units.abbreviation
+            let cut = cleared > 0
+                ? "cuts \(f(depth - cleared)) \(u) deeper than the \(f(cleared)) \(u) already cleared"
+                : "cuts \(f(depth)) \(u) below the material top"
+            return "\(cut) with a \(f(flute)) \(u) flute (\(toolName)); the shank rubs the wall above the flutes"
+        }
+
+        private func f(_ v: Double) -> String { String(format: units == .inch ? "%.4f" : "%.3f", v) }
+    }
+
+    /// The overrun when the deepest cutting move, measured from `clearedDepth` (or the material
+    /// top), is more than the tool's flute length below it; nil when the flute length is unknown
+    /// or long enough. `coords` and `units` are the frame the moves are in; the tool's flute
+    /// length is converted to `units` before comparing.
+    public func cutBeyondFlute(coords: MachineCoordinates, units: LengthUnit, tolerance: Double) -> FluteOverrun? {
+        guard let flute = tool.converted(to: units).fluteLength, flute > 0, let z = minCutZ else { return nil }
         let depth = coords.depth(ofMachineZ: z)
-        return depth > flute + tolerance ? (depth, flute) : nil
+        let cleared = max(0, clearedDepth ?? 0)
+        guard depth - cleared > flute + tolerance else { return nil }
+        return FluteOverrun(depth: depth, cleared: cleared, flute: flute, toolName: tool.name, units: units)
     }
 
     /// XY bounds of everything the moves reach, including the bulge of arcs (the quadrant points

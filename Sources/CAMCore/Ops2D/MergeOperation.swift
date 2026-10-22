@@ -27,6 +27,8 @@ public struct MergeOperation: ToolpathOperation {
         for tp in pieces {
             if var last = out.last, last.tool.id == tp.tool.id, last.spindleRPM == tp.spindleRPM {
                 last.moves += tp.moves
+                // Cleared material is per piece; the joined toolpath can only claim what both had.
+                last.clearedDepth = min(last.clearedDepth ?? 0, tp.clearedDepth ?? 0) > 0 ? min(last.clearedDepth!, tp.clearedDepth!) : nil
                 // A profile inside the merge keeps the "cut last" ordering protection.
                 if tp.kind == .profile { last.kind = .profile }
                 for (k, v) in tp.metadata where k == "warning" {
