@@ -416,8 +416,15 @@ func pocketPlannerChainsRunTheRequestedDirectionIncludingRestPieces(direction: C
     // The planner's own chains, before emission. Rest machining cuts the rings into open pieces,
     // which must keep the direction of the ring they came from whatever order they are cut in.
     let sources = sourceLoops(pocketPaths, tolerance: 1e-4)
-    let planner = PocketPlanner(region: sources, toolRadius: F.endMill.radius, stepover: F.endMill.stepover,
+    // The tool's own stepover (40%) and 95% of the diameter, which adds the cleanup fragments at the
+    // corners: pieces of rings halfway between the rings.
+    for stepover in [F.endMill.stepover, F.endMill.diameter * 0.95] {
+    let planner = PocketPlanner(region: sources, toolRadius: F.endMill.radius, stepover: stepover,
                                 allowance: 0, tolerance: 1e-4, direction: direction)
+    if stepover > F.endMill.stepover {
+        let fragments = planner.offsetClearing(from: Vec2(0, 0)).flatMap { $0 }.filter { !$0.isClosed }
+        #expect(fragments.count >= 4, "\(direction): the cleanup should add a piece at each corner, got \(fragments.count)")
+    }
     for start in [Vec2(0, 0), Vec2(6, 4), Vec2(3, 0), Vec2(0, 2), Vec2(3, 2)] {
         var chains: [(Chain2D, String)] = planner.offsetClearing(from: start).flatMap { $0 }.map { ($0, "offset") }
         for angle in [0.0, 45] {
@@ -438,5 +445,6 @@ func pocketPlannerChainsRunTheRequestedDirectionIncludingRestPieces(direction: C
             #expect(observedDirection == direction,
                     "\(direction) \(label) from \(start): \(chain.isClosed ? "loop" : "piece") along vector \(loop) near \(chain.start) runs \(observedDirection.map { "\($0)" } ?? "nowhere")")
         }
+    }
     }
 }

@@ -6,25 +6,18 @@ import Testing
 /// Pocket coverage: sweep the tool footprint along the cutting moves and measure the floor area the
 /// tool could have reached but did not touch. The reachable area is what a round tool of the pocket's
 /// radius can cut at all: the region shrunk by the tool radius and grown back (a morphological opening),
-/// so the unreachable sliver in a sharp inside corner is not counted.
+/// so the unreachable sliver in a sharp inside corner is not counted. A point counts as uncut when it is
+/// farther than the radius plus `PocketPlanner.coverageSlackFraction` of the diameter from every cut.
 
-private struct SplitMix {
-    var state: UInt64
-    mutating func next() -> UInt64 {
-        state &+= 0x9E37_79B9_7F4A_7C15
-        var z = state
-        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-        return z ^ (z >> 31)
-    }
-    mutating func uniform(_ lo: Double, _ hi: Double) -> Double {
-        lo + (hi - lo) * Double(next() >> 11) / Double(1 << 53)
-    }
+private let diameter = 0.25
+
+extension SplitMix64 {
+    mutating func uniform(_ lo: Double, _ hi: Double) -> Double { lo + (hi - lo) * next() }
 }
 
 /// A star-shaped polygon: radii drawn at evenly spaced angles, so it has reflex corners and acute wedges
 /// but never crosses itself.
-private func starShape(_ rng: inout SplitMix, center: Vec2, minRadius: Double, maxRadius: Double, vertices: Int) -> Path {
+private func starShape(_ rng: inout SplitMix64, center: Vec2, minRadius: Double, maxRadius: Double, vertices: Int) -> Path {
     var pts: [Vec2] = []
     for i in 0..<vertices {
         let a = 2 * Double.pi * (Double(i) + rng.uniform(-0.2, 0.2)) / Double(vertices)
@@ -34,8 +27,8 @@ private func starShape(_ rng: inout SplitMix, center: Vec2, minRadius: Double, m
     return Path(points: pts, closed: true)
 }
 
-/// A sharp triangle (acute at one corner).
-private func wedge(_ rng: inout SplitMix, origin: Vec2, length: Double, halfAngleDegrees: Double) -> Path {
+/// A sharp triangle with its apex at `origin`.
+private func wedge(origin: Vec2, length: Double, halfAngleDegrees: Double) -> Path {
     let h = halfAngleDegrees * .pi / 180
     return Path(points: [origin, origin + Vec2(cos(h), sin(h)) * length, origin + Vec2(cos(-h), sin(-h)) * length], closed: true)
 }
@@ -50,6 +43,7 @@ private func inside(_ loops: [[Vec2]], _ p: Vec2) -> Bool {
     loops.reduce(0) { $0 + (Polygon2D.contains($1, p) ? 1 : 0) } % 2 == 1
 }
 
+/// Segments bucketed on a grid, for nearest-cut queries.
 private struct Sweep {
     var segments: [(Vec2, Vec2)]
     let cell: Double
@@ -69,7 +63,7 @@ private struct Sweep {
 
     static func key(_ x: Int, _ y: Int) -> Int64 { Int64(x) &* 1_000_003 &+ Int64(y) }
 
-    /// Distance from `p` to the nearest segment within `limit` of it, or `limit` + something when none.
+    /// Distance from `p` to the nearest segment within `limit` of it; infinity when there is none.
     func distance(from p: Vec2, limit: Double) -> Double {
         var best = Double.infinity
         let span = Int(ceil(limit / cell))
@@ -95,18 +89,15 @@ private func cutSegments(_ tp: Toolpath, z: Double) -> [(Vec2, Vec2)] {
     return out
 }
 
-private struct CoverageResult {
-    var uncutArea: Double
-    var worstDistance: Double
-    var reachableArea: Double
-    var warning: String?
-}
+private let cutDepth = 0.1
 
-private func coverage(_ c: Case, stepoverFraction: Double, strategy: PocketStrategy, allowance: Double = 0,
-                      diameter: Double = 0.25) throws -> CoverageResult {
+/// The pocket of `c` as the operation generates it, with the context and the operation.
+private func program(_ c: Case, stepoverFraction: Double, strategy: PocketStrategy, allowance: Double = 0,
+                     zZero: ZZeroMode = .materialTop) throws -> (tp: Toolpath, ctx: CAMContext, op: PocketOperation) {
     let tool = Tool(name: "EM", kind: .endMill, diameter: diameter, flutes: 2, stepdown: 0.2,
                     stepover: diameter * stepoverFraction, feedRate: 100, plungeRate: 30)
     var doc = Document()
+    doc.job.zZero = zZero
     var ids: [UUID] = []
     for p in [c.outer] + c.islands {
         let s = Shape(layerID: doc.defaultLayerID, paths: [p])
@@ -114,24 +105,34 @@ private func coverage(_ c: Case, stepoverFraction: Double, strategy: PocketStrat
         ids.append(s.id)
     }
     let ctx = CAMContext(document: doc, tools: ToolLibrary(tools: [tool]))
-    var params = PocketParameters(depth: DepthSettings(cutDepth: 0.1), strategy: strategy, allowance: allowance)
-    params.ramp = RampSettings()
+    let params = PocketParameters(depth: DepthSettings(cutDepth: cutDepth), strategy: strategy, allowance: allowance)
     let op = PocketOperation(setup: OperationSetup(name: "Pocket", toolID: tool.id, shapeIDs: ids), params: params)
-    let tps = try op.generate(in: ctx)
-    let tp = try #require(tps.last)
+    return (try #require(try op.generate(in: ctx).last), ctx, op)
+}
+
+private struct CoverageResult {
+    var uncutArea: Double
+    var worstDistance: Double
+}
+
+/// `gridDivisor` points per tool radius, for the sampling of the reachable floor.
+private func coverage(_ c: Case, stepoverFraction: Double, strategy: PocketStrategy, allowance: Double = 0,
+                      gridDivisor: Double = 6) throws -> CoverageResult {
+    let (tp, ctx, op) = try program(c, stepoverFraction: stepoverFraction, strategy: strategy, allowance: allowance)
     let r = diameter / 2
     let tol = ctx.tolerance
-
     let loops = ShapeGeometry.loops(of: ctx.shapes(for: op.setup), tolerance: tol).closed
     let region = Polygon2D.region(fromLoops: loops)
     let shrunk = GeomKernel.offset(region, by: -(r + allowance), join: .round, arcTolerance: tol)
     let reachable = GeomKernel.offset(shrunk, by: r, join: .round, arcTolerance: tol)
 
-    let segs = cutSegments(tp, z: ctx.coords.z(depth: 0.1))
-    let sweep = Sweep(segs, cell: r)
+    let sweep = Sweep(cutSegments(tp, z: ctx.coords.z(depth: cutDepth)), cell: r)
     let b = Rect2(points: reachable.flatMap { $0 })
-    let h = r / 6
-    var uncut = 0, reach = 0
+    let h = r / gridDivisor
+    // The planner leaves up to the slack; the tool-centre outline is an arc-flattened polygon, so allow
+    // a couple of tolerances more.
+    let limit = r + diameter * PocketPlanner.coverageSlackFraction + 2 * tol
+    var uncut = 0
     var worst = 0.0
     var y = b.min.y + h / 2
     while y < b.max.y {
@@ -139,11 +140,8 @@ private func coverage(_ c: Case, stepoverFraction: Double, strategy: PocketStrat
         while x < b.max.x {
             let p = Vec2(x, y)
             if inside(reachable, p) {
-                reach += 1
                 let d = sweep.distance(from: p, limit: r + 4 * tol)
-                // The planner leaves up to 2% of the diameter (`PocketPlanner.coverageSlack`); the tool-centre
-                // outline is an arc-flattened polygon, so allow a couple of tolerances more.
-                if d > r + diameter * 0.02 + 2 * tol {
+                if d > limit {
                     uncut += 1
                     worst = max(worst, d - r)
                 }
@@ -152,30 +150,31 @@ private func coverage(_ c: Case, stepoverFraction: Double, strategy: PocketStrat
         }
         y += h
     }
-    return CoverageResult(uncutArea: Double(uncut) * h * h, worstDistance: worst, reachableArea: Double(reach) * h * h,
-                          warning: tp.metadata["warning"])
+    return CoverageResult(uncutArea: Double(uncut) * h * h, worstDistance: worst)
 }
 
 private func cases(count: Int, seed: UInt64, withIslands: Bool) -> [Case] {
-    var rng = SplitMix(state: seed)
+    var rng = SplitMix64(seed: seed)
     var out: [Case] = []
     for i in 0..<count {
         let center = Vec2(3, 3)
         switch i % 3 {
         case 0:
-            var c = Case(name: "star \(i)", outer: starShape(&rng, center: center, minRadius: 0.5, maxRadius: 1.6, vertices: Int(rng.uniform(5, 11))))
+            let vertices = Int(rng.uniform(5, 11))
+            var c = Case(name: "star \(i)", outer: starShape(&rng, center: center, minRadius: 0.5, maxRadius: 1.6, vertices: vertices))
             if withIslands {
                 c.islands = [ShapeFactory.rectangle(Rect2(x: 2.85, y: 2.85, width: rng.uniform(0.1, 0.3), height: rng.uniform(0.1, 0.3)))]
             }
             out.append(c)
         case 1:
-            var c = Case(name: "wedge \(i)", outer: wedge(&rng, origin: Vec2(1, 3), length: rng.uniform(2, 3.5), halfAngleDegrees: rng.uniform(8, 35)))
+            var c = Case(name: "wedge \(i)", outer: wedge(origin: Vec2(1, 3), length: rng.uniform(2, 3.5), halfAngleDegrees: rng.uniform(8, 35)))
             if withIslands {
                 c.islands = [ShapeFactory.circle(center: Vec2(2.6, 3), radius: rng.uniform(0.05, 0.12))]
             }
             out.append(c)
         default:
-            var c = Case(name: "rect \(i)", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: rng.uniform(0.6, 3), height: rng.uniform(0.6, 3))))
+            let w = rng.uniform(0.6, 3), h = rng.uniform(0.6, 3)
+            var c = Case(name: "rect \(i)", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: w, height: h)))
             if withIslands {
                 c.islands = [ShapeFactory.rectangle(Rect2(x: 1.3, y: 1.3, width: rng.uniform(0.1, 0.25), height: rng.uniform(0.1, 0.25)))]
             }
@@ -185,9 +184,9 @@ private func cases(count: Int, seed: UInt64, withIslands: Bool) -> [Case] {
     return out
 }
 
-
-private func expectCovered(_ c: Case, fraction: Double, strategy: PocketStrategy, comment: String) throws {
-    let r = try coverage(c, stepoverFraction: fraction, strategy: strategy)
+private func expectCovered(_ c: Case, fraction: Double, strategy: PocketStrategy, allowance: Double = 0, gridDivisor: Double = 6,
+                           comment: String) throws {
+    let r = try coverage(c, stepoverFraction: fraction, strategy: strategy, allowance: allowance, gridDivisor: gridDivisor)
     #expect(r.uncutArea == 0, Comment(rawValue: "\(comment): \(c.name) leaves \(r.uncutArea) sq in uncut, up to \(r.worstDistance) in beyond the tool's reach"))
 }
 
@@ -197,6 +196,13 @@ func ops2DPocketOffsetCoversEverythingTheToolCanReach(fraction: Double) throws {
         for c in cases(count: 6, seed: 7, withIslands: islands) {
             try expectCovered(c, fraction: fraction, strategy: .offset, comment: "offset \(Int(fraction * 100))%")
         }
+    }
+}
+
+@Test(arguments: [0.9, 1.0])
+func ops2DPocketOffsetCoversWithAnAllowance(fraction: Double) throws {
+    for c in cases(count: 3, seed: 5, withIslands: true) {
+        try expectCovered(c, fraction: fraction, strategy: .offset, allowance: 0.02, comment: "offset \(Int(fraction * 100))% with allowance")
     }
 }
 
@@ -210,21 +216,29 @@ func ops2DPocketRasterWithAProfilePassCoversEverythingTheToolCanReach(fraction: 
     }
 }
 
+/// Sampling is a sixth of a radius; the scallop at a square corner is a few thousandths wide, so look at
+/// it with a much finer grid on a pocket that is only corners.
+@Test(arguments: [0.9, 0.95, 1.0])
+func ops2DPocketCoversTheScallopAtASquareCorner(fraction: Double) throws {
+    let square = Case(name: "square", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 0.9, height: 0.9)))
+    try expectCovered(square, fraction: fraction, strategy: .offset, gridDivisor: 40, comment: "offset \(Int(fraction * 100))%")
+}
+
 /// The tracker cases: a wide pocket a little more than two tools across (a stud left in the middle), a
-/// hole 1.1 tool diameters across, a channel 1.1 diameters wide, and the sharpest wedges.
+/// hole 1.1 tool diameters across, a channel 1.1 diameters wide, the sharpest wedge, and islands.
 private func trackerCases() -> [Case] {
-    let d = 0.25
-    var rng = SplitMix(state: 3)
+    let d = diameter
     return [
         Case(name: "8 mm pocket, 3 mm bit", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: d * 8 / 3, height: 1.5))),
         Case(name: "round hole 1.1 D", outer: ShapeFactory.circle(center: Vec2(2, 2), radius: 0.55 * d)),
         Case(name: "square hole 1.1 D", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 1.1 * d, height: 1.1 * d))),
         Case(name: "channel 1.1 D", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 1.1 * d, height: 2))),
-        Case(name: "8 degree wedge", outer: wedge(&rng, origin: Vec2(1, 3), length: 3, halfAngleDegrees: 8)),
+        Case(name: "8 degree wedge", outer: wedge(origin: Vec2(1, 3), length: 3, halfAngleDegrees: 8)),
         Case(name: "square with a square island", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 2, height: 2)),
              islands: [ShapeFactory.rectangle(Rect2(x: 1.9, y: 1.9, width: 0.2, height: 0.2))]),
-        Case(name: "hole 1.1 D around an island", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 1.6, height: 1.6)),
-             islands: [ShapeFactory.circle(center: Vec2(1.8, 1.8), radius: 0.55 * d + 0.55 * d)]),
+        // A ring 1.1 diameters wide around an island: a 2 in square with a round island that leaves 1.1 D to the walls.
+        Case(name: "ring 1.1 D around an island", outer: ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 2, height: 2)),
+             islands: [ShapeFactory.circle(center: Vec2(2, 2), radius: 1 - 1.1 * d)]),
     ]
 }
 
@@ -239,16 +253,28 @@ func ops2DPocketCoversTheTrackerCases(fraction: Double) throws {
 @Test func ops2DPocketReachesAHoleJustLargerThanTheTool() throws {
     // A circle 1.1 tool diameters across: the centre can move only 0.05 diameters, but the pocket is
     // not empty and not reported too small.
-    let hole = Case(name: "round hole 1.1 D", outer: ShapeFactory.circle(center: Vec2(2, 2), radius: 0.55 * 0.25))
-    let tool = Tool(name: "EM", kind: .endMill, diameter: 0.25, flutes: 2, stepdown: 0.2, stepover: 0.1, feedRate: 100, plungeRate: 30)
-    var doc = Document()
-    let s = Shape(layerID: doc.defaultLayerID, paths: [hole.outer])
-    doc.add(s)
-    let ctx = CAMContext(document: doc, tools: ToolLibrary(tools: [tool]))
-    let op = PocketOperation(setup: OperationSetup(name: "Pocket", toolID: tool.id, shapeIDs: [s.id]),
-                             params: PocketParameters(depth: DepthSettings(cutDepth: 0.1)))
-    let tps = try op.generate(in: ctx)
-    #expect(tps.count == 1)
-    #expect(tps[0].metadata["warning"] == nil)
-    #expect(!cutSegments(tps[0], z: ctx.coords.z(depth: 0.1)).isEmpty)
+    let hole = Case(name: "round hole 1.1 D", outer: ShapeFactory.circle(center: Vec2(2, 2), radius: 0.55 * diameter))
+    let (tp, ctx, _) = try program(hole, stepoverFraction: 0.4, strategy: .offset)
+    #expect(tp.metadata["warning"] == nil)
+    #expect(!cutSegments(tp, z: ctx.coords.z(depth: cutDepth)).isEmpty)
+}
+
+/// The extra cuts are real G-code: they follow the conventions in both Z-zero modes and stay a tool
+/// radius from the walls.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DPocketCleanupCutsStayInsideAndFollowTheConventions(mode: ZZeroMode) throws {
+    for c in trackerCases() + cases(count: 3, seed: 5, withIslands: true) {
+        let (tp, ctx, op) = try program(c, stepoverFraction: 0.95, strategy: .offset, zZero: mode)
+        #expect(Ops2DFixture.conventionViolations(tp, coords: ctx.coords).isEmpty, Comment(rawValue: c.name))
+        #expect(tp.metadata["warning"] == nil, Comment(rawValue: "\(c.name): \(tp.metadata["warning"] ?? "")"))
+        let tol = ctx.tolerance
+        let loops = ShapeGeometry.loops(of: ctx.shapes(for: op.setup), tolerance: tol).closed
+        let region = Polygon2D.region(fromLoops: loops)
+        for p in Ops2DFixture.densePoints(tp.moves) where p.z < ctx.coords.materialTopZ - 1e-9 {
+            let q = ctx.coords.materialXY(fromMachine: p.xy)
+            #expect(inside(region, q), Comment(rawValue: "\(c.name): cut point \(q) outside the pocket"))
+            let wall = region.map { Polygon2D.distance(from: q, toLoop: $0) }.min() ?? 0
+            #expect(wall >= diameter / 2 - 4 * tol, Comment(rawValue: "\(c.name): cut point \(q) is \(wall) from a wall"))
+        }
+    }
 }

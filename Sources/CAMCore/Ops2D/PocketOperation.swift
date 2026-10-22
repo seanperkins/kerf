@@ -27,18 +27,20 @@ public struct PocketOperation: ToolpathOperation {
 
         var toolpaths: [Toolpath] = []
         var restAfter: Double?
+        var uncoveredArea = 0.0
         for (i, big) in clearanceTools.enumerated() {
             let planner = try makePlanner(region: region, tool: big, tolerance: tol)
             // The first tool clears everything; each later one only what the previous could not reach.
             let groups = restAfter.map { planner.restClearing(clearanceRadius: $0, from: start, fullWalls: false) }
-                ?? clearing(planner, from: start)
+                ?? clearing(planner, from: start, uncovered: &uncoveredArea)
             guard !groups.isEmpty else { continue }
             let label = clearanceTools.count == 1 ? "clearance" : "clearance \(i + 1)"
             toolpaths.append(try emit(groups, planner: planner, tool: big, context: context, name: "\(setup.name) (\(label))"))
             restAfter = big.radius
         }
         let planner = try makePlanner(region: region, tool: tool, tolerance: tol)
-        let groups = restAfter.map { planner.restClearing(clearanceRadius: $0, from: start) } ?? clearing(planner, from: start)
+        let groups = restAfter.map { planner.restClearing(clearanceRadius: $0, from: start) }
+            ?? clearing(planner, from: start, uncovered: &uncoveredArea)
         guard !groups.isEmpty else {
             throw CAMError.invalidGeometry("The tool does not fit inside the selected vectors")
         }
@@ -46,6 +48,9 @@ public struct PocketOperation: ToolpathOperation {
         var warnings: [String] = []
         let missed = planner.unreachableComponents
         if missed > 0 { warnings.append("\(missed) region(s) too small for the tool") }
+        if uncoveredArea > tol * tol * 4 {
+            warnings.append("floor the tool can reach is left uncut at this stepover; use a smaller stepover")
+        }
         if skipped > 0 { warnings.append("\(skipped) clearance tool(s) ignored (each must be smaller than the one before and larger than the finish tool)") }
         if !warnings.isEmpty { finish.metadata["warning"] = warnings.joined(separator: "; ") }
         toolpaths.append(finish)
@@ -78,9 +83,14 @@ public struct PocketOperation: ToolpathOperation {
                              tolerance: tolerance, direction: params.direction)
     }
 
-    private func clearing(_ planner: PocketPlanner, from start: Vec2) -> [[Chain2D]] {
+    /// The cutting order for `planner`'s region; `uncovered` gains the area of floor an offset pocket could not
+    /// finish covering.
+    private func clearing(_ planner: PocketPlanner, from start: Vec2, uncovered: inout Double) -> [[Chain2D]] {
         switch params.strategy {
-        case .offset: return planner.offsetClearing(from: start, closeGaps: true)
+        case .offset:
+            let report = planner.offsetClearingReport(from: start)
+            uncovered += report.uncoveredArea
+            return report.groups
         case .raster(let angle, let profilePass):
             return planner.rasterClearing(angle: angle, profilePass: profilePass,
                                           profileFirst: params.profilePassFirst == true, from: start)
