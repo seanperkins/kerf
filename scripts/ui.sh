@@ -12,6 +12,8 @@
 # Accessibility permission is needed: the app draws its own window into the PNG. Debug builds only.
 #
 # --active   make the app active so the window is drawn as the key window (it steals focus briefly)
+# --key      draw the window as key without activating the app (your focus stays put; buttons take clicks, table rows do not)
+# --offscreen park the window just past the edge of its screen for the run
 # --no-build reuse the last build
 # Works inside a sandboxed agent shell (see swiftpm-env.sh); KERF_BUILD_FLAGS adds extra swift build flags.
 set -euo pipefail
@@ -26,6 +28,8 @@ while (( $# )); do
     --dark) extra+=(--ui-appearance dark); shift ;;
     --size) extra+=(--ui-size "$2"); shift 2 ;;
     --active) extra+=(--ui-active 1); shift ;;
+    --key) extra+=(--ui-key 1); shift ;;
+    --offscreen) extra+=(--ui-offscreen 1); shift ;;
     --no-build) build=0; shift ;;
     -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) scenario="$1"; shift ;;

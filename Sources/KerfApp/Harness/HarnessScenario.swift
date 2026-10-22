@@ -7,20 +7,22 @@ struct HarnessError: Error, CustomStringConvertible {
 }
 
 /// A scripted run of the UI harness: an appearance, a window size and a list of steps, ending in
-/// `capture` steps that write PNGs and text dumps. Debug builds only. See `UIHarness` and
-/// `docs/UI-HARNESS.md`.
+/// `capture` steps that write PNGs and text dumps, or wrapped in `record` / `endRecord` to write the
+/// frames of a clip. Debug builds only. See `UIHarness` and `docs/UI-HARNESS.md`.
 struct HarnessScenario: Decodable {
     struct Step: Decodable {
         var op: String
-        /// A file stem (capture, captureSheet, menus), a sample name, or a shape / toolpath name.
+        /// A file stem (capture, captureSheet, menus, record), a sample name, or a shape / toolpath / control name.
         var name: String?
-        /// An enumerated value: a mode, tab, sheet, tool or appearance.
+        /// An enumerated value: a mode, tab, sheet, tool, appearance, key, view direction; or text to type or show.
         var value: String?
         /// Shape names to select.
         var names: [String]?
-        /// Width and height in points.
+        /// Width and height in points (size), or a window point with the origin top left (pointer).
         var size: [Double]?
         var seconds: Double?
+        /// Frames per second for `record`.
+        var fps: Double?
     }
 
     var name: String?
@@ -34,8 +36,10 @@ struct HarnessScenario: Decodable {
     static let tabs: Set<String> = ["design", "toolpaths"]
     static let appearances: Set<String> = ["light", "dark", "system"]
     static let samples: Set<String> = ["sign"]
-    static let keys: [String: (code: UInt16, chars: String)] = [
-        "escape": (53, "\u{1b}"), "return": (36, "\r"), "tab": (48, "\t"), "space": (49, " "),
+    static let views: Set<String> = ["threeQuarter", "iso", "top", "front", "back", "left", "right", "bottom"]
+    static let keys: [String: (code: UInt16, chars: String, command: Bool)] = [
+        "escape": (53, "\u{1b}", false), "return": (36, "\r", false), "tab": (48, "\t", false), "space": (49, " ", false),
+        "delete": (51, "\u{7f}", false), "selectAll": (0, "a", true),
     ]
     static let sheets: Set<String> = [
         "jobSetup", "exportGCode", "saveAllToolpaths", "validation", "keepOutZones", "nesting", "fixtures",
@@ -49,6 +53,7 @@ struct HarnessScenario: Decodable {
         "appearance": "value: light | dark | system",
         "size": "size: [w, h] content size of the window",
         "mode": "value: 2d | split | 3d",
+        "fit": "zoom the 2D canvas to the material, or to the selection with value: selection",
         "tab": "value: design | toolpaths",
         "tool": "value: a canvas tool such as select, rectangle, nodeEdit",
         "select": "names: shapes to select by name",
@@ -58,12 +63,22 @@ struct HarnessScenario: Decodable {
         "closeSheet": "close the open sheet or alert",
         "import": "name: a file to import as File > Import does, relative to the repo root (scripts/ui.sh runs from there). An import alert stays open until a closeSheet step",
         "press": "name: click the first control whose label, title, help or id contains this text; value: optional role such as AXButton. Does not toggle disclosure groups: use expand",
-        "key": "value: escape | return | tab | space, sent to the open sheet (or the window)",
+        "move": "name: move the pointer onto a control without clicking (value: optional role); shows in recordings",
+        "pointer": "size: [x, y] a point from the window's top left to move the pointer to (a negative x or y counts from the right or bottom edge); value: click to click there, sheet / sheetClick to measure from the open sheet instead",
+        "type": "value: text typed one key at a time into the focused field (press the field first)",
+        "scroll": "name: scroll the enclosing scroll view so this control sits in the middle (value: optional role)",
+        "key": "value: " + keys.keys.sorted().joined(separator: " | ") + ", sent to the open sheet (or the window)",
         "expand": "name: open a collapsible inspector section by its title (Last Pass, Ramps, Array Copies...)",
         "wait": "seconds: let the UI settle",
         "capture": "name: the window as <name>.png, its accessibility tree as <name>.ax.txt",
+        "still": "name: one composed frame (window with its sheet, pointer and caption) as <name>.png, no tree",
         "captureSheet": "name: the open sheet as <name>.png and <name>.ax.txt",
         "menus": "name: the menu bar (titles, enabled state, key equivalents) as <name>.menus.txt",
+        "record": "name: start recording the window (sheet, pointer and caption included) as <name>.frames/ and <name>.ffconcat; fps: frames per second (default 10)",
+        "endRecord": "stop the recording and write its frame list",
+        "caption": "value: text shown along the bottom of recorded frames (empty to clear)",
+        "simulate": "seconds: scrub the 3D simulation from start to end over this many seconds (default 6); value: a fraction such as 0.6 jumps straight to that point of the job instead; needs mode 3d or split",
+        "view": "value: a 3D view direction: " + views.sorted().joined(separator: " | "),
     ]
 
     static func parse(_ data: Data) throws -> HarnessScenario {
@@ -95,6 +110,8 @@ struct HarnessScenario: Decodable {
             guard let v = step.value, appearances.contains(v) else { throw fail("value must be light, dark or system") }
         case "size":
             guard let s = step.size, s.count == 2, s.allSatisfy({ $0 > 0 }) else { throw fail("size must be [width, height]") }
+        case "pointer":
+            guard let s = step.size, s.count == 2 else { throw fail("size must be [x, y] in window points") }
         case "mode":
             guard let v = step.value, modes.contains(v) else { throw fail("value must be 2d, split or 3d") }
         case "tab":
@@ -107,8 +124,10 @@ struct HarnessScenario: Decodable {
             guard step.name?.isEmpty == false else { throw fail("name must name a toolpath") }
         case "sheet":
             guard let v = step.value, sheets.contains(v) else { throw fail("value must be one of \(sheets.sorted())") }
-        case "press":
-            guard step.name?.isEmpty == false else { throw fail("name must say which control to press") }
+        case "press", "move", "scroll":
+            guard step.name?.isEmpty == false else { throw fail("name must say which control to \(step.op)") }
+        case "type":
+            guard step.value?.isEmpty == false else { throw fail("value must be the text to type") }
         case "key":
             guard let v = step.value, keys[v] != nil else { throw fail("value must be one of \(keys.keys.sorted())") }
         case "expand":
@@ -119,8 +138,13 @@ struct HarnessScenario: Decodable {
             guard step.name?.isEmpty == false else { throw fail("name must be the path of a .kerf file") }
         case "wait":
             guard let s = step.seconds, s >= 0 else { throw fail("seconds is required") }
-        case "capture", "captureSheet", "menus":
+        case "capture", "captureSheet", "menus", "record", "still":
             guard step.name?.isEmpty == false else { throw fail("name is required (the output file name)") }
+            if step.op == "record", let f = step.fps, f <= 0 || f > 30 { throw fail("fps must be between 1 and 30") }
+        case "view":
+            guard let v = step.value, views.contains(v) else { throw fail("value must be one of \(views.sorted())") }
+        case "simulate":
+            if let s = step.seconds, s <= 0 { throw fail("seconds must be positive") }
         default:
             break
         }

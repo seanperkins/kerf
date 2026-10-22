@@ -1,0 +1,25 @@
+{
+  "name": "clip: the 3D material-removal simulation, then the 2D design beside it",
+  "appearance": "dark",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "project", "name": "harness/projects/reel-sign.kerf"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "calculate"},
+    {"op": "record", "name": "preview", "fps": 12},
+    {"op": "wait", "seconds": 0.6},
+    {"op": "caption", "value": "Watch the cut before the machine does"},
+    {"op": "press", "name": "3D", "value": "AXRadioButton"},
+    {"op": "wait", "seconds": 3},
+    {"op": "simulate", "seconds": 7},
+    {"op": "wait", "seconds": 1},
+    {"op": "caption", "value": "Design and simulation side by side"},
+    {"op": "press", "name": "2D | 3D", "value": "AXRadioButton"},
+    {"op": "wait", "seconds": 1},
+    {"op": "fit"},
+    {"op": "view", "value": "threeQuarter"},
+    {"op": "wait", "seconds": 3},
+    {"op": "endRecord"},
+    {"op": "capture", "name": "end"}
+  ]
+}

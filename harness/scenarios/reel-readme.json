@@ -1,0 +1,128 @@
+{
+  "name": "stills for the README: hero in light and dark, and the four design-to-G-code steps",
+  "appearance": "light",
+  "window": [
+    1440,
+    820
+  ],
+  "steps": [
+    {
+      "op": "project",
+      "name": "harness/projects/reel-sign.kerf"
+    },
+    {
+      "op": "select",
+      "names": [
+        "KERF"
+      ]
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "capture",
+      "name": "step-1"
+    },
+    {
+      "op": "select",
+      "names": [
+        "Panel"
+      ]
+    },
+    {
+      "op": "tab",
+      "value": "toolpaths"
+    },
+    {
+      "op": "calculate"
+    },
+    {
+      "op": "selectToolpath",
+      "name": "V-Carve 1"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "capture",
+      "name": "step-2"
+    },
+    {
+      "op": "mode",
+      "value": "3d"
+    },
+    {
+      "op": "wait",
+      "seconds": 3
+    },
+    {
+      "op": "simulate",
+      "value": "0.55"
+    },
+    {
+      "op": "capture",
+      "name": "step-3"
+    },
+    {
+      "op": "mode",
+      "value": "split"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "fit"
+    },
+    {
+      "op": "view",
+      "value": "threeQuarter"
+    },
+    {
+      "op": "simulate",
+      "value": "1"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "capture",
+      "name": "hero-light"
+    },
+    {
+      "op": "appearance",
+      "value": "dark"
+    },
+    {
+      "op": "wait",
+      "seconds": 1.5
+    },
+    {
+      "op": "capture",
+      "name": "hero-dark"
+    },
+    {
+      "op": "appearance",
+      "value": "light"
+    },
+    {
+      "op": "mode",
+      "value": "2d"
+    },
+    {
+      "op": "sheet",
+      "value": "exportGCode"
+    },
+    {
+      "op": "wait",
+      "seconds": 2
+    },
+    {
+      "op": "still",
+      "name": "step-4"
+    }
+  ]
+}
