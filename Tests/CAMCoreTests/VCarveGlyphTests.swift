@@ -340,6 +340,22 @@ func vcarveCarvesEveryGlyph(font: String, cell: VCarveGlyphCell) throws {
     }
 }
 
+/// The judge sees a groove that is too deep at the end of a plunge, not only along sideways moves: a good carve
+/// with one extra feed plunge at its last point (no sideways move, so neither coverage nor connection changes)
+/// is overcut.
+@Test func vcarveGlyphJudgeCatchesAnExtraDeepPlunge() throws {
+    let paths = try #require(glyphOutlines("O", font: "Helvetica", size: 1))
+    let (tp, context) = try carve(paths)
+    #expect(judge(tp, paths: paths, context: context, size: 1).worstOvercut <= 0)
+    var bad = tp
+    let at = try #require(bad.moves.lastIndex { !$0.isRapid && $0.target != nil })
+    let end = try #require(bad.moves[at].target)
+    let spot = context.coords.material(fromMachine: end)
+    let deeper = context.coords.machine(spot.xy, depth: spot.depth + 0.1)
+    bad.moves.insert(contentsOf: [.linear(to: deeper, feed: 30), .linear(to: end, feed: 30)], at: at + 1)
+    #expect(judge(bad, paths: paths, context: context, size: 1).worstOvercut > 0.03)
+}
+
 private func permutations<T>(_ items: [T]) -> [[T]] {
     guard items.count > 1 else { return [items] }
     return items.indices.flatMap { i -> [[T]] in
