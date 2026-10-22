@@ -44,13 +44,16 @@ public enum TabAnchors {
 
     /// What a manual anchor is judged against. `outline` is the anchor's part as drawn (its vector
     /// and whatever selected vectors the offset joins it to, as the even-odd region the toolpath
-    /// offsets), `part` what the toolpath cuts for it (the outline offset by `offset`).
+    /// offsets), `part` what the toolpath cuts for it (the outline offset by `offset`), and `cut`
+    /// whether this pass cuts the anchor's vector at all: its part has a loop and the vector's own
+    /// offset survives (a hole smaller than this pass's offset is not cut by it).
     public struct OwnLoops {
         public var outline: [ArcLengthChain]
         public var part: [ArcLengthChain]
         public var offset: Double
-        public init(outline: [ArcLengthChain], part: [ArcLengthChain], offset: Double) {
-            self.outline = outline; self.part = part; self.offset = offset
+        public var cut: Bool
+        public init(outline: [ArcLengthChain], part: [ArcLengthChain], offset: Double, cut: Bool) {
+            self.outline = outline; self.part = part; self.offset = offset; self.cut = cut
         }
     }
 
@@ -81,7 +84,7 @@ public enum TabAnchors {
                 own[a.shapeID, default: [:]][a.pathIndex] = l
                 return l
             }()
-            cut[n] = !mine.part.isEmpty
+            cut[n] = mine.cut
             let slack = 8 * tolerance + 1e-6
             guard (nearest(p, on: mine.outline)?.distance ?? .infinity) <= slack,
                   let site = nearest(p, on: mine.part), site.distance <= ProfileGeometry.sharpMiterLimit * mine.offset + slack,
@@ -100,8 +103,8 @@ public enum TabAnchors {
     }
 
     /// What became of each anchor on one pass: `centers` per loop, and per anchor whether it was
-    /// `placed` and whether its part was `cut` on this pass at all (false for a vector that is gone,
-    /// not selected, open, or whose whole part the offset swallowed).
+    /// `placed` and whether its vector was `cut` on this pass at all (false for a vector that is gone,
+    /// not selected, open, or whose loop this pass's offset swallowed).
     public struct Resolution {
         public var centers: [[Double]]
         public var placed: [Bool]

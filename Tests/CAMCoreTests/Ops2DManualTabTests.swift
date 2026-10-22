@@ -299,7 +299,7 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     }
     // Each shape here is a part of its own.
     func alone(_ a: TabAnchor, _ l: [ArcLengthChain], offset: Double) -> TabAnchors.OwnLoops {
-        TabAnchors.OwnLoops(outline: [TabAnchors.chain(for: a, in: doc, tolerance: 0.001)!], part: l, offset: offset)
+        TabAnchors.OwnLoops(outline: [TabAnchors.chain(for: a, in: doc, tolerance: 0.001)!], part: l, offset: offset, cut: !l.isEmpty)
     }
     let gone = TabAnchor(shapeID: UUID(), fraction: 0.25)
     let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: other.id, fraction: 0.25),
@@ -416,6 +416,13 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
             #expect((tiny.metadata["warning"]?.contains("1 \(ignoredAnchors)") ?? false) == (side == .outside), "\(side) \(String(describing: lastPass))")
         }
     }
+    // A hole only the last pass enters (0.4 in, between the roughing and last-pass tool widths),
+    // drawn as its own shape: its anchor holds on the last pass alone, and since the roughing pass
+    // never cut that hole, nothing is said.
+    let (lateHole, ctxH) = try tabbedProfile([outer, F.rect(2.8, 1.8, 0.4, 0.4)], select: [1], lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[1], fraction: 0.25)])
+    }
+    #expect(tabCount(lateHole, ctxH) >= 1 && lateHole.metadata["warning"] == nil)   // the 0.15 in loop rises more than once per tab
     // Within one shape each path is its own vector: an anchor on a second path 0.001 in beyond
     // the first, swallowed by an inside cut, is not lent the first path's loop.
     let (two, ctx2) = try tabbedProfile([outer, F.rect(6.001, 0, 0.2, 1)], side: .inside, asOneShape: true) { ids in

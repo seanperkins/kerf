@@ -73,7 +73,7 @@ public struct ProfileOperation: ToolpathOperation {
             // The offset the part's loops stand off by: none for a cut on the line, and none for a
             // negative allowance beyond the tool radius (ProfileGeometry clamps it the same way).
             let offset = params.side == .on ? 0 : max(offset, 0)
-            let none = TabAnchors.OwnLoops(outline: [], part: [], offset: 0)
+            let none = TabAnchors.OwnLoops(outline: [], part: [], offset: 0, cut: false)
             guard manual else { return { _ in none } }
             let grow: Double = params.side == .outside ? offset : params.side == .inside ? -offset : 0
             let parts = Polygon2D.parts(of: closed, offsets: holes.map { $0 ? -grow : grow }, join: join, tolerance: tol)
@@ -84,8 +84,9 @@ public struct ProfileOperation: ToolpathOperation {
                                                   tolerance: tol, join: join).chains
                 // A cut on the line follows each vector as drawn; the others cut the even-odd region.
                 let outline = params.side == .on ? part : Polygon2D.region(fromLoops: part)
+                let survives = grow == 0 || !GeomKernel.offset([closed[k]], by: holes[k] ? -grow : grow, join: join, arcTolerance: tol).isEmpty
                 return TabAnchors.OwnLoops(outline: outline.map { ArcLengthChain(Chain2D(points: $0, isClosed: true)) },
-                                           part: loops.map { ArcLengthChain($0) }, offset: offset)
+                                           part: loops.map { ArcLengthChain($0) }, offset: offset, cut: !loops.isEmpty && survives)
             }
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
