@@ -101,10 +101,11 @@ extension KerfDocument {
         TimeEstimateSettings.load().estimate(toolpaths, rapidRate: rapidRateInDocumentUnits, units: units)
     }
 
-    /// The same for the motion alone: cutting, rapids (including those between toolpaths) and
-    /// dwell, with no tool-change allowance.
-    func motionSeconds(_ toolpaths: [Toolpath]) -> TimeInterval {
-        TimeEstimateSettings.load().estimate(toolpaths, rapidRate: rapidRateInDocumentUnits, units: units, toolChanges: false)
+    /// The motion alone of `toolpaths` in order, with `settings`: cutting, rapids (including those
+    /// between toolpaths) and dwell, with no tool-change allowance. The settings are passed in so a
+    /// total and its allowance always come from one value.
+    func motionSeconds(_ toolpaths: [Toolpath], settings: TimeEstimateSettings) -> TimeInterval {
+        settings.estimate(toolpaths, rapidRate: rapidRateInDocumentUnits, units: units, toolChanges: false)
     }
 
     /// The job summary of the output project with `settings` (the live store's, so the sidebar and
@@ -114,7 +115,7 @@ extension KerfDocument {
         let operations = outputProject.operations
         let key = JobSummary.Key(operations: operations, results: results, groupByTool: groupByTool, settings: settings,
                                  rapidRate: rapidRateInDocumentUnits, units: units)
-        return jobSummaryMemo.summary(operations: operations, results: results, key: key, motion: motionSeconds)
+        return jobSummaryMemo.summary(operations: operations, results: results, key: key) { motionSeconds($0, settings: settings) }
     }
 
     /// Recomputes the stored per-operation estimates (after the settings or machine change).
