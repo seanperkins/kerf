@@ -42,20 +42,83 @@ public enum TabAnchors {
         return best?.anchor
     }
 
-    /// Tab centre parameters for each closed loop: every anchor goes to the loop nearest to its
-    /// position, at that loop's closest parameter. Anchors on missing vectors are ignored.
-    public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], document: Document,
-                               tolerance: Double) -> [[Double]] {
+    /// What a manual anchor is judged against. `outline` is the anchor's part as drawn (its vector
+    /// and whatever selected vectors the offset joins it to, as the even-odd region the toolpath
+    /// offsets), `part` what the toolpath cuts for it (the outline offset by `offset`), and `cut`
+    /// whether this pass cuts the anchor's vector at all: its part has a loop and the vector's own
+    /// offset survives (a hole smaller than this pass's offset is not cut by it).
+    public struct OwnLoops {
+        public var outline: [ArcLengthChain]
+        public var part: [ArcLengthChain]
+        public var offset: Double
+        public var cut: Bool
+        public init(outline: [ArcLengthChain], part: [ArcLengthChain], offset: Double, cut: Bool) {
+            self.outline = outline; self.part = part; self.offset = offset; self.cut = cut
+        }
+    }
+
+    /// Tab centre parameters for each closed loop. An anchor travels with its vector, so it is used
+    /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
+    /// cuts), the anchor lies on its part's outline (`ownLoops`; an edge two vectors share is inside
+    /// the part), the part's loop runs nearest it at a point one offset from the anchor's own vector
+    /// (straight across from its stretch, or at the corner that trims or extends it, within the miter
+    /// limit's reach), and one of `loops` runs through that point; it goes onto that loop there. One
+    /// on another part however near, on an open vector, on a vector that no longer exists, on a
+    /// stretch the toolpath does not cut, or whose own loop the offset swallowed (a hole smaller than
+    /// the tool, in a part whose other loops survive) is never attached to whatever loop happens to
+    /// be nearest; the result says which anchors were placed, so the operation can say so.
+    public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
+                               ownLoops: (TabAnchor) -> OwnLoops, document: Document,
+                               tolerance: Double) -> Resolution {
         var out = Array(repeating: [Double](), count: loops.count)
-        for a in anchors {
-            guard let p = point(of: a, in: document, tolerance: tolerance) else { continue }
+        var placed = Array(repeating: false, count: anchors.count), cut = placed
+        var own: [UUID: [Int: OwnLoops]] = [:]
+        for (n, a) in anchors.enumerated() {
+            guard shapeIDs.contains(a.shapeID), let shape = document.shape(id: a.shapeID),
+                  shape.paths.indices.contains(a.pathIndex), shape.paths[a.pathIndex].isClosed,
+                  let vector = chain(for: a, in: document, tolerance: tolerance) else { continue }
+            let p = vector.point(at: min(max(a.fraction, 0), 1) * vector.length)
+            // Where the tab would sit on the part's own loop, then the toolpath loop through there.
+            let mine = own[a.shapeID]?[a.pathIndex] ?? {
+                let l = ownLoops(a)
+                own[a.shapeID, default: [:]][a.pathIndex] = l
+                return l
+            }()
+            cut[n] = mine.cut
+            let slack = 8 * tolerance + 1e-6
+            guard (nearest(p, on: mine.outline)?.distance ?? .infinity) <= slack,
+                  let site = nearest(p, on: mine.part), site.distance <= ProfileGeometry.sharpMiterLimit * mine.offset + slack,
+                  abs(vector.project(site.point).distance - mine.offset) <= slack else { continue }
             var best: (index: Int, s: Double, d: Double)?
             for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
-                let pr = loop.project(p)
-                if pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
+                let pr = loop.project(site.point)
+                if pr.distance <= slack, pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
             }
-            if let b = best { out[b.index].append(b.s) }
+            if let b = best {
+                out[b.index].append(b.s)
+                placed[n] = true
+            }
         }
-        return out.map { $0.sorted() }
+        return Resolution(centers: out.map { $0.sorted() }, placed: placed, cut: cut)
+    }
+
+    /// What became of each anchor on one pass: `centers` per loop, and per anchor whether it was
+    /// `placed` and whether its vector was `cut` on this pass at all (false for a vector that is gone,
+    /// not selected, open, or whose loop this pass's offset swallowed).
+    public struct Resolution {
+        public var centers: [[Double]]
+        public var placed: [Bool]
+        public var cut: [Bool]
+        /// Anchors that got no tab.
+        public var ignored: Int { placed.filter { !$0 }.count }
+    }
+
+    private static func nearest(_ p: Vec2, on loops: [ArcLengthChain]) -> (point: Vec2, distance: Double)? {
+        var best: (point: Vec2, distance: Double)?
+        for l in loops where l.isClosed && l.length > 0 {
+            let pr = l.project(p)
+            if pr.distance < (best?.distance ?? .infinity) { best = (l.point(at: pr.s), pr.distance) }
+        }
+        return best
     }
 }

@@ -103,6 +103,34 @@ public enum Polygon2D {
         GeomKernel.boolean(.union, subject: loops.filter { $0.count > 2 }, clip: [], fillRule: .evenOdd)
     }
 
+    /// Which part each of `loops` belongs to: two loops that overlap or nest as drawn (their
+    /// intersection has area), or whose offsets do once each is offset alone by its entry in
+    /// `offsets` (outward when positive, inward when negative, none at zero), are one part, and so is
+    /// anything joined to either through further loops; loops that only touch or stay apart, however
+    /// close, are not. Returns a part index per loop.
+    public static func parts(of loops: [[Vec2]], offsets: [Double], join: GeomKernel.Join, tolerance: Double) -> [Int] {
+        precondition(offsets.count == loops.count)
+        var parent = Array(loops.indices)
+        func root(_ i: Int) -> Int { var i = i; while parent[i] != i { i = parent[i] }; return i }
+        let grown = zip(loops, offsets).map { loop, d in d == 0 ? [loop] : GeomKernel.offset([loop], by: d, join: join, arcTolerance: tolerance) }
+        let boxes = zip(loops, grown).map { Rect2(points: $0).union(Rect2(points: $1.joined())) }
+        func overlap(_ a: [[Vec2]], _ b: [[Vec2]]) -> Bool {
+            !GeomKernel.boolean(.intersection, subject: a, clip: b, fillRule: .evenOdd).isEmpty
+        }
+        for i in loops.indices {
+            for j in loops.indices where j > i && boxes[i].intersects(boxes[j]) && root(i) != root(j) {
+                if overlap([loops[i]], [loops[j]]) || overlap(grown[i], grown[j]) { parent[root(j)] = root(i) }
+            }
+        }
+        var label: [Int: Int] = [:]
+        return loops.indices.map { i in
+            let r = root(i)
+            if let l = label[r] { return l }
+            label[r] = label.count
+            return label.count - 1
+        }
+    }
+
     /// Which of `loops` are holes: the loops within an odd number of other distinct loops. Containment
     /// is judged by area rather than by vertices (unlike `PathGeometry.nestingDepths`, which probes one
     /// vertex and is right for well-formed drawings): loop i is within loop j when the part of i outside

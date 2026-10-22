@@ -21,11 +21,13 @@ public struct ProfileOperation: ToolpathOperation {
         guard !passes.isEmpty else { throw CAMError.invalidParameter("Cut depth must be deeper than start depth") }
         let tol = context.tolerance
 
-        let (closed, open) = ShapeGeometry.loops(of: shapes, tolerance: tol)
+        let flat = ShapeGeometry.flattened(shapes, tolerance: tol)
+        let vectors = flat.filter(\.isClosed)
+        let closed = vectors.map(\.points), open = flat.filter { !$0.isClosed }.map(\.points)
         let lastPass = effectiveLastPass(tolerance: tol)
         let finalOffset = tool.radius + params.allowance
-        let join: GeomKernel.Join = params.sharpCorners == true ? .miter(limit: ProfileGeometry.sharpMiterLimit) : .round
-        let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset + (lastPass?.allowance ?? 0),
+        let roughOffset = finalOffset + (lastPass?.allowance ?? 0)
+        let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: roughOffset,
                                          direction: params.direction, tolerance: tol, join: join)
         let finishPlan = lastPass.map {
             ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset,
@@ -55,21 +57,84 @@ public struct ProfileOperation: ToolpathOperation {
                                       fitArcs: params.preferArcs)
         let sourceStarts = closed.compactMap(\.first)
         let shapeLoops = shapes.map { s in s.paths.map { $0.flattened(tolerance: tol) } }
-        let roughTabs = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
-                                 sourceStarts: sourceStarts, shapeLoops: shapeLoops, context: context,
-                                 builder: &builder)
+        var tabNotes = TabNotes()
+        // Each pass resolves manual anchors against its own loops: an anchor's tab sits where the
+        // loop this toolpath would cut for the anchor's part passes it, at this pass's offset. The
+        // part is the anchor's vector with every selected closed vector whose offset at that pass
+        // joins it (a hole drawn as its own shape, two shapes that overlap, two parts closer than
+        // the tool), offset together, so the loop is the one the toolpath cuts. For the grouping
+        // each vector offsets alone on the side its nesting in the selection puts it, as the
+        // even-odd plan does.
+        let manual = params.tabs.isEnabled && !(params.tabs.manualTabs ?? []).isEmpty
+        let holes = manual ? Polygon2D.holes(in: closed, tolerance: tol) : []
+        var vectorIndex: [UUID: [Int: Int]] = [:]
+        for (i, v) in vectors.enumerated() { vectorIndex[v.shapeID, default: [:]][v.pathIndex] = i }
+        func ownLoops(at offset: Double) -> (TabAnchor) -> TabAnchors.OwnLoops {
+            // The offset the part's loops stand off by: none for a cut on the line, and none for a
+            // negative allowance beyond the tool radius (ProfileGeometry clamps it the same way).
+            let offset = params.side == .on ? 0 : max(offset, 0)
+            let none = TabAnchors.OwnLoops(outline: [], part: [], offset: 0, cut: false)
+            guard manual else { return { _ in none } }
+            let grow: Double = params.side == .outside ? offset : params.side == .inside ? -offset : 0
+            let parts = Polygon2D.parts(of: closed, offsets: holes.map { $0 ? -grow : grow }, join: join, tolerance: tol)
+            return { anchor in
+                guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex] else { return none }
+                let part = closed.indices.filter { parts[$0] == parts[k] }.map { closed[$0] }
+                let loops = ProfileGeometry.loops(closed: part, side: params.side, offset: offset, direction: params.direction,
+                                                  tolerance: tol, join: join).chains
+                // A cut on the line follows each vector as drawn; the others cut the even-odd region.
+                let outline = params.side == .on ? part : Polygon2D.region(fromLoops: part)
+                let survives = grow == 0 || !GeomKernel.offset([closed[k]], by: holes[k] ? -grow : grow, join: join, arcTolerance: tol).isEmpty
+                return TabAnchors.OwnLoops(outline: outline.map { ArcLengthChain(Chain2D(points: $0, isClosed: true)) },
+                                           part: loops.map { ArcLengthChain($0) }, offset: offset, cut: !loops.isEmpty && survives)
+            }
+        }
+        let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
+                             sourceStarts: sourceStarts, shapeLoops: shapeLoops, ownLoops: ownLoops(at: roughOffset),
+                             context: context, builder: &builder, tabNotes: &tabNotes)
+        var ignoredAnchors = rough.anchors?.ignored ?? 0
+        var unheldOnRoughing = 0
         if let lastPass, let finishPlan {
             // Last pass: removes the side allowance the roughing passes left on the wall. Its loops
             // start wherever the roughing ended, so automatic tabs would land elsewhere and the lap
-            // would cut the roughing tabs away; the roughing tab positions are reused instead.
+            // would cut the roughing tabs away; the roughing tab positions are reused instead. A
+            // loop the roughing offset swallowed has none to inherit and lays out its own. The last
+            // pass sees every loop the roughing pass saw and more, so it decides which anchors
+            // were ignored.
             let finishPasses = lastPass.fullDepth ? [params.depth.cutDepth] : passes
-            _ = cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
-                         wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
-                         inheritedTabs: (points: roughTabs, within: lastPass.allowance + 4 * tol + 1e-6),
-                         context: context, builder: &builder)
+            let finish = cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
+                                  wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
+                                  ownLoops: ownLoops(at: finalOffset),
+                                  // The allowance the roughing loops actually stand off by: a negative
+                                  // allowance beyond the tool radius clamps either offset at zero.
+                                  roughing: (tabs: rough.placed, loops: plan.chains.map { ArcLengthChain($0) },
+                                             allowance: max(roughOffset, 0) - max(finalOffset, 0)),
+                                  context: context, builder: &builder, tabNotes: &tabNotes)
+            ignoredAnchors = finish.anchors?.ignored ?? 0
+            // An anchor the roughing pass could not place while the loop of its own vector was in
+            // that pass's toolpath (its stretch filled by the larger offset while the loop survives
+            // elsewhere, or trimmed beyond reach) leaves the part cut through there before the last
+            // pass holds it. A vector the roughing offset swallowed whole was not cut by it.
+            if let r = rough.anchors, let f = finish.anchors {
+                unheldOnRoughing = zip(zip(r.placed, r.cut), f.placed).filter { !$0.0 && $0.1 && $1 }.count
+            }
         }
         var meta: [String: String] = [:]
         var warnings: [String] = []
+        if tabNotes.shortLoops > 0 {
+            warnings.append("\(tabNotes.shortLoops) loop(s) got fewer tabs than asked (too short, or anchors too close; "
+                + "fewest placed: \(tabNotes.fewest)); the part may come free")
+        }
+        if tabNotes.lostOnLastPass > 0 {
+            warnings.append("tabs did not carry to the last pass on \(tabNotes.lostOnLastPass) loop(s); the part may come free")
+        }
+        if unheldOnRoughing > 0 {
+            warnings.append("\(unheldOnRoughing) tab anchor(s) hold only on the last pass; the roughing passes cut through there and the part may come free")
+        }
+        if ignoredAnchors > 0 {
+            warnings.append("\(ignoredAnchors) tab anchor(s) ignored: not on a stretch of a closed vector this toolpath cuts, "
+                + "or the vector is gone; no tab placed for them")
+        }
         let dropped = finishPlan?.droppedLoops ?? plan.droppedLoops
         if dropped > 0 { warnings.append("\(dropped) vector(s) too small for the tool") }
         if openOffsetFailures > 0 {
@@ -83,51 +148,100 @@ public struct ProfileOperation: ToolpathOperation {
                          moves: builder.finish(), metadata: meta)]
     }
 
+    /// Corner treatment of the offset loops: squared off when sharp corners are asked for.
+    private var join: GeomKernel.Join { params.sharpCorners == true ? .miter(limit: ProfileGeometry.sharpMiterLimit) : .round }
+
     /// The last-pass settings when they apply (closed vectors cut outside/inside, allowance > 0).
     func effectiveLastPass(tolerance: Double) -> ProfileLastPass? {
         guard let lp = params.lastPass, params.side != .on, lp.allowance > tolerance else { return nil }
         return lp
     }
 
-    /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`. Returns the
-    /// material-frame centre of every tab it placed. `inheritedTabs` puts tabs at those centres
-    /// (each projected onto the loop within `within`) instead of laying them out afresh.
-    @discardableResult
+    /// What the tab layout could not do as asked: loops that got fewer tabs than asked (too short
+    /// to hold them apart, or manual anchors that overlapped) and the fewest any of them got, and
+    /// last-pass loops whose roughing loop had tabs that did not reach them.
+    private struct TabNotes {
+        var shortLoops = 0, fewest = Int.max, lostOnLastPass = 0
+    }
+
+    /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`, resolving
+    /// manual anchors against these loops through `ownLoops` (what this pass would cut for the
+    /// anchor's part). Returns the material-frame centre of every tab it placed and what became of
+    /// each anchor (nil with no manual anchors). On the last pass, `roughing` gives the roughing pass's tabs and loops: a
+    /// loop whose roughing loop (the one `allowance` farther out) had tabs takes those that project
+    /// onto it, and is reported when none do, since the roughing pass has already cut through
+    /// beside them; a loop the roughing offset swallowed lays out its own tabs and counts what it
+    /// could not do, which the roughing pass did for every loop it had.
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
-                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]],
-                          inheritedTabs: (points: [Vec2], within: Double)? = nil, context: CAMContext,
-                          builder: inout ToolpathBuilder) -> [Vec2] {
-        guard !chains.isEmpty else { return [] }
+                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], ownLoops: (TabAnchor) -> TabAnchors.OwnLoops,
+                          roughing: (tabs: [Vec2], loops: [ArcLengthChain], allowance: Double)? = nil, context: CAMContext,
+                          builder: inout ToolpathBuilder, tabNotes: inout TabNotes) -> (placed: [Vec2], anchors: TabAnchors.Resolution?) {
         let tol = context.tolerance
         let startPoint = params.startPoint ?? .nearest
         var ordered = ProfileOrdering.ordered(chains, by: params.order ?? .nearest, from: start, shapeLoops: shapeLoops,
                                               allowReverse: startPoint != .vectorStart, tolerance: tol)
         ordered = ordered.map { StartPoints.rotate($0, to: startPoint, sourceStarts: sourceStarts, tolerance: tol) }
         var manualCenters: [[Double]]?
+        var resolved: TabAnchors.Resolution?
         if params.tabs.isEnabled, let anchors = params.tabs.manualTabs {
-            manualCenters = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) },
-                                               document: context.document, tolerance: tol)
+            resolved = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) }, shapeIDs: Set(setup.shapeIDs),
+                                          ownLoops: ownLoops, document: context.document, tolerance: tol)
+            manualCenters = resolved?.centers
+        }
+        // Which roughing loop is each last-pass loop's: offsetting all the last-pass loops together by
+        // the allowance rebuilds the roughing loops (merged where the roughing offset merged them),
+        // and the roughing loop that runs through the rebuilt point one allowance across from a
+        // loop's edge is its own. Only with tabs on, which is all it serves: it walks every loop.
+        var rebuilt: [ArcLengthChain] = [], boxes: [Rect2] = []
+        if params.tabs.isEnabled, let roughing {
+            rebuilt = ProfileGeometry.loops(closed: ordered.filter(\.isClosed).map(\.points), side: params.side,
+                                            offset: roughing.allowance, direction: params.direction, tolerance: tol, join: join)
+                .chains.map { ArcLengthChain($0) }
+            boxes = rebuilt.map { Rect2(points: $0.chain.points).insetBy(-(roughing.allowance + 4 * tol + 1e-6)) }
         }
         var placed: [Vec2] = []
         for (i, chain) in ordered.enumerated() {
             var centers = manualCenters?[i]
-            if centers == nil, let inherited = inheritedTabs, chain.isClosed {
+            var counts = true
+            if params.tabs.isEnabled, let roughing, chain.isClosed {
                 let alc = ArcLengthChain(chain)
-                centers = inherited.points.compactMap { p in
-                    let pr = alc.project(p)
-                    return pr.distance <= inherited.within ? pr.s : nil
+                let within = roughing.allowance + 4 * tol + 1e-6
+                // The rebuilt point across from the first edge midpoint that has one: a stretch the
+                // roughing offset swallowed (a merge, a collapse) has nothing within an allowance.
+                var across: Vec2?
+                let walk = chain.walk
+                probes: for (a, b) in zip(walk, walk.dropFirst()) {
+                    let m = (a + b) * 0.5
+                    for (l, box) in zip(rebuilt, boxes) where box.contains(m) {
+                        let pr = l.project(m)
+                        if pr.distance <= within { across = l.point(at: pr.s); break probes }
+                    }
+                }
+                let roughLoops = across.map { q in roughing.loops.filter { $0.project(q).distance <= 8 * tol + 1e-6 } } ?? []
+                counts = roughLoops.isEmpty
+                if centers == nil, !roughLoops.isEmpty {
+                    let inherited = roughing.tabs.compactMap { p -> Double? in
+                        let pr = alc.project(p)
+                        return pr.distance <= within ? pr.s : nil
+                    }
+                    centers = inherited
+                    if inherited.isEmpty, roughing.tabs.contains(where: { p in roughLoops.contains { $0.project(p).distance <= within } }) {
+                        tabNotes.lostOnLastPass += 1
+                    }
                 }
             }
             placed += cut(chain, passes: passes, tool: tool, wasteRegion: wasteRegion, manualTabs: centers,
-                          builder: &builder, tolerance: tol)
+                          layingOut: counts, builder: &builder, tolerance: tol, tabNotes: &tabNotes)
         }
-        return placed
+        return (placed, resolved)
     }
 
-    /// `manualTabs`: tab centres (loop parameters) for this loop (nil = automatic layout).
-    /// Returns the material-frame centre of each tab used.
+    /// `manualTabs`: tab centres (loop parameters) for this loop (nil = automatic layout);
+    /// `layingOut` is false for a last-pass loop whose roughing loop was counted already, so no
+    /// loop is counted twice. Returns the material-frame centre of each tab used.
     private func cut(_ chain: Chain2D, passes: [Double], tool: Tool, wasteRegion: WasteSide, manualTabs: [Double]?,
-                     builder: inout ToolpathBuilder, tolerance tol: Double) -> [Vec2] {
+                     layingOut: Bool, builder: inout ToolpathBuilder, tolerance tol: Double,
+                     tabNotes: inout TabNotes) -> [Vec2] {
         let alc = ArcLengthChain(chain)
         guard alc.length > tol else { return [] }
         let start = params.depth.startDepth
@@ -148,13 +262,15 @@ public struct ProfileOperation: ToolpathOperation {
 
         var tabs: TabLayout?
         if params.tabs.isEnabled {
-            if let manual = manualTabs {
-                tabs = TabLayout(loopLength: alc.length, centers: manual, settings: params.tabs,
-                                 toolDiameter: tool.diameter, cutDepth: params.depth.cutDepth)
-            } else {
-                tabs = TabLayout(loopLength: alc.length, settings: params.tabs, toolDiameter: tool.diameter,
-                                 cutDepth: params.depth.cutDepth)
+            let layout = manualTabs.map {
+                TabLayout(loopLength: alc.length, centers: $0, settings: params.tabs, toolDiameter: tool.diameter,
+                          cutDepth: params.depth.cutDepth)
+            } ?? TabLayout(loopLength: alc.length, settings: params.tabs, toolDiameter: tool.diameter, cutDepth: params.depth.cutDepth)
+            if layingOut, layout.centers.count < layout.requestedCount {
+                tabNotes.shortLoops += 1
+                tabNotes.fewest = min(tabNotes.fewest, layout.centers.count)
             }
+            tabs = layout
         }
         let useLeads = params.lead.type != .none && params.lead.distance > 0
         var ramp = params.ramp
