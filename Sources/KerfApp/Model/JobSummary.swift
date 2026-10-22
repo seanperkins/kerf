@@ -90,12 +90,12 @@ struct JobSummary: Equatable {
 
     /// What a summary is made from, so one can be reused while none of it has changed. Results are
     /// replaced whole (a recalculation makes new toolpath objects; a settings change rewrites the
-    /// estimates), so a result is known by its toolpath ids, pauses, estimate and error.
+    /// estimates), so a result is known by its toolpath ids, estimate and error; an operator pause
+    /// lives on the operation, which the key holds in full.
     struct Key: Hashable {
         struct Result: Hashable {
             var id: UUID
             var toolpathIDs: [UUID]
-            var pauses: [PauseStep?]
             var estimatedSeconds: TimeInterval
             var error: String?
         }
@@ -110,8 +110,7 @@ struct JobSummary: Equatable {
              rapidRate: Double, units: LengthUnit) {
             self.operations = operations
             self.results = results.sorted { $0.key.uuidString < $1.key.uuidString }.map { id, r in
-                Result(id: id, toolpathIDs: r.toolpaths.map(\.id), pauses: r.toolpaths.map(\.pauseAfter),
-                       estimatedSeconds: r.estimatedSeconds, error: r.error)
+                Result(id: id, toolpathIDs: r.toolpaths.map(\.id), estimatedSeconds: r.estimatedSeconds, error: r.error)
             }
             self.groupByTool = groupByTool; self.settings = settings; self.rapidRate = rapidRate; self.units = units
         }
