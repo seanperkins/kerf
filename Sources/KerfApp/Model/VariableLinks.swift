@@ -6,14 +6,16 @@ import Foundation
 /// The field's parse strategy notes each expression that uses a variable; the next project
 /// change finds the parameter(s) that took that value and links them (`VariableLinks.reconcile`).
 final class ExpressionRecorder {
-    struct Entry: Equatable { var text: String; var value: Double }
+    /// An expression and the value it gave, in `units` (nil for a unitless field), so the value
+    /// can be matched after a unit change (Job Setup lets the units change after the typing).
+    struct Entry: Equatable { var text: String; var value: Double; var units: LengthUnit? }
     private(set) var pending: [Entry] = []
     /// The last noted value, until the field writes it (see `nudge`).
     private var unwritten: Double?
 
     func note(_ text: String, value: Double, units: LengthUnit?) {
         guard VariableLink.usesVariables(text, units: units) else { return }
-        pending.append(Entry(text: text.trimmingCharacters(in: .whitespaces), value: value))
+        pending.append(Entry(text: text.trimmingCharacters(in: .whitespaces), value: value, units: units))
         if pending.count > 32 { pending.removeFirst() }
         unwritten = value
     }
@@ -88,7 +90,13 @@ enum VariableLinks {
             leaves(newTree, prefix: [], into: &newLeaves)
             for (path, v) in newLeaves.sorted(by: { $0.key.lexicographicallyPrecedes($1.key) }) {
                 if let o = oldTree, same(number(at: path, in: o), v) { continue }
-                guard let e = pending.last(where: { abs($0.value - v) <= 1e-9 * max(1, abs($0.value)) }) else { continue }
+                // A value typed in other units than the project now has (the form's units were
+                // switched after the typing) is matched after the same conversion.
+                func matches(_ e: ExpressionRecorder.Entry) -> Bool {
+                    let value = e.units.map { $0 != p.document.units ? e.value * $0.factor(to: p.document.units) : e.value } ?? e.value
+                    return abs(value - v) <= 1e-9 * max(1, abs(value))
+                }
+                guard let e = pending.last(where: matches) else { continue }
                 let link = VariableLink(target: t, path: path, expression: e.text)
                 let others = links.filter { !($0.target == t && $0.path == path) }
                 guard !closesCycle(link, among: others, in: p) else { continue }

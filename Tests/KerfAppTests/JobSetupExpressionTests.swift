@@ -59,6 +59,35 @@ import Testing
         #expect(abs(doc.document.job.height - 200.1) < 1e-9)
     }
 
+    @Test func anExpressionTypedBeforeTheUnitsAreSwitchedStillLinks() throws {
+        // Type =width/2 (12 in) into Height, then switch the form to millimetres (the draft height
+        // becomes 304.8), then Apply: the noted value is matched in millimetres and the link is made.
+        let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
+        var form = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        form.job.height = try Self.type("=width/2", into: form, document: doc, current: form.job.height)
+        #expect(form.job.height == 12)
+        form.setUnits(.millimeter)
+        #expect(abs(form.job.height - 304.8) < 1e-9)
+        doc.applyJobSetup(form)
+        #expect(doc.document.linkedValues.map { ($0.path, $0.expression) }.contains { $0 == ["height"] && $1 == "=width/2" })
+        doc.perform("Wider") { $0.document.job.width = 400 }
+        #expect(doc.document.job.height == 200)
+    }
+
+    @Test func anUnknownNameCannotHideASelfReference() throws {
+        // "=zzz + thickness/2" in Thickness fails on zzz first; the guard still sees the thickness.
+        let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
+        #expect(VariableLink.references("thickness", in: "=zzz + thickness/2", variables: doc.document.variableTable, units: .inch))
+        #expect(!VariableLink.references("width", in: "=zzz + thickness/2", variables: doc.document.variableTable, units: .inch))
+        let thickness = doc.document.job.thickness
+        doc.perform("Stale") {
+            $0.document.linkedValues = [VariableLink(target: .job(sheetID: $0.document.currentSheetID), path: ["thickness"], expression: "=zzz + thickness/2")]
+        }
+        #expect(doc.document.linkedValues.isEmpty)
+        doc.perform("Define") { $0.document.userVariables = [DocumentVariable(name: "zzz", value: 0)] }
+        #expect(doc.document.linkedValues.isEmpty && doc.document.job.thickness == thickness)
+    }
+
     @Test func aUnitChangeLinksOnlyTheTypedField() throws {
         // A profile cut 0.375 in deep by hand, and a pocket whose depth is linked to the thickness
         // with an inch literal, which cannot mean the same in millimetres.
