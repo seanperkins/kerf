@@ -84,14 +84,12 @@ private struct OutlineGrid {
 
     init(loops: [[Vec2]], cell: Double) {
         self.cell = cell
-        var maxCells = 1
         for loop in loops {
             for i in loop.indices {
                 let a = loop[i], b = loop[(i + 1) % loop.count]
                 let x0 = Int(floor(min(a.x, b.x) / cell)), x1 = Int(floor(max(a.x, b.x) / cell))
                 let y0 = Int(floor(min(a.y, b.y) / cell)), y1 = Int(floor(max(a.y, b.y) / cell))
                 for ix in x0...x1 { for iy in y0...y1 { buckets[GrooveGrid.key(ix, iy), default: []].append((a, b)) } }
-                maxCells = max(maxCells, x1 - x0 + 1, y1 - y0 + 1)
             }
         }
         let all = loops.flatMap { $0 }
