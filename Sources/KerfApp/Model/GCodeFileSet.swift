@@ -73,7 +73,6 @@ struct GCodeFileSet {
 
         fileprivate static func posixError(_ code: Int32, _ path: String) -> NSError {
             NSError(domain: NSPOSIXErrorDomain, code: Int(code), userInfo: [
-                NSFilePathErrorKey: path,
                 NSLocalizedDescriptionKey: "\(String(cString: strerror(code))) (\((path as NSString).lastPathComponent)).",
             ])
         }
