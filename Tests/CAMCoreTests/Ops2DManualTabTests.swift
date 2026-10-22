@@ -75,11 +75,12 @@ private let quarterTabs = TabSettings(isEnabled: true, length: 0.25, thickness: 
 
 /// A profile over `paths` (the first is always selected; `select` adds more by index), 0.5 in
 /// deep with the 1/4 in end mill. Returns the toolpath and its context.
-private func tabbedProfile(_ paths: [Path], select: [Int] = [], side: ProfileSide = .outside,
+private func tabbedProfile(_ paths: [Path], select: [Int] = [], side: ProfileSide = .outside, allowance: Double = 0,
                            lastPass: ProfileLastPass? = nil, tabs: ([UUID]) -> TabSettings) throws -> (Toolpath, CAMContext) {
     let (ctx, ids) = F.document(paths)
     var p = ProfileParameters(depth: DepthSettings(cutDepth: 0.5), side: side)
     p.tabs = tabs(ids)
+    p.allowance = allowance
     p.lastPass = lastPass
     let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: [ids[0]] + select.map { ids[$0] }), params: p)
     return (try op.generate(in: ctx)[0], ctx)
@@ -124,6 +125,7 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         ("deleted", [F.rect(0, 0, 6, 4)], [], .outside, { _ in [TabAnchor(shapeID: UUID(), fraction: 0.5)] }),
         ("open vector", [F.rect(0, 0, 6, 4), line], [1], .outside, { [TabAnchor(shapeID: $0[1], fraction: 0.5)] }),
         ("swallowed vector", [F.rect(0, 0, 6, 4), F.rect(7, 0, 0.2, 1)], [1], .inside, { [TabAnchor(shapeID: $0[1], fraction: 0.25)] }),
+        ("swallowed vector beside", [F.rect(0, 0, 6, 4), F.rect(6.05, 0, 0.2, 1)], [1], .inside, { [TabAnchor(shapeID: $0[1], fraction: 0.6)] }),
     ]
     for (name, paths, select, side, anchors) in cases {
         let (tp, ctx) = try tabbedProfile(paths, select: select, side: side) { ids in
@@ -145,6 +147,34 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[1], fraction: 0.25)])
     }
     #expect(tp3.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true)
+    // The anchor's loop is found by the offset the toolpath applied, however large: a 0.5 in side
+    // allowance, and an anchor beside the acute corner of a 30 degree triangle cut inside, where
+    // the loop is trimmed far back from the tip.
+    let (wide, ctxW) = try tabbedProfile([F.rect(0, 0, 6, 4)], allowance: 0.5, lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.15)])
+    }
+    #expect(tabCount(wide, ctxW) == 2 && wide.metadata["warning"] == nil)
+    let triangle = Path(points: [Vec2(0, 0), Vec2(6, 0), Vec2(0, 6 * tan(Double.pi / 6))], closed: true)
+    let (acute, ctxA) = try tabbedProfile([triangle], side: .inside, lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.35)])
+    }
+    #expect(tabCount(acute, ctxA) == 2 && acute.metadata["warning"] == nil)
+}
+
+@Test func ops2DProfileReportsRoughingTabsThatDoNotReachTheLastPass() throws {
+    // Two parts 0.27 in apart cut outside: the roughing offset merges them into one loop and both
+    // automatic tabs land on the big part. The last pass cuts two loops; the small part's gets no
+    // tab, and laying out fresh ones there would bridge nothing, since the roughing pass has cut
+    // through beside them. It is reported instead.
+    let (tp, ctx) = try tabbedProfile([F.rect(0, 0, 4, 2), F.rect(4.27, 0, 1, 2)], select: [1],
+                                      lastPass: ProfileLastPass(allowance: 0.02)) { _ in quarterTabs }
+    #expect(tabCount(tp, ctx) == 4)   // the big part's two, on both passes
+    #expect(tp.metadata["warning"] == "tabs did not carry to the last pass on 1 loop(s); the part may come free")
+    // A loop too short for any tab on the roughing pass is reported once, as short, not again as
+    // lost: a 0.6 in square cut inside with a 0.1 in allowance.
+    let (short, ctx2) = try tabbedProfile([F.rect(0, 0, 0.6, 0.6)], side: .inside, lastPass: ProfileLastPass(allowance: 0.1)) { _ in quarterTabs }
+    #expect(tabCount(short, ctx2) == 0)
+    #expect(short.metadata["warning"] == "1 \(fewerTabs) (too short, or anchors too close; fewest placed: 0); the part may come free")
 }
 
 @Test func ops2DProfileOverlappingManualAnchorsAreReportedOnce() throws {
@@ -181,23 +211,36 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: UUID(), fraction: 0.5)])
     }
     #expect(gone.metadata["warning"]?.contains("1 \(ignoredAnchors): not on a closed vector this toolpath cuts, or the vector is gone; no tab placed for them") == true)
+    // Overlapping anchors on the swallowed slot are reported even beside a surviving loop.
+    let (merged, ctx5) = try tabbedProfile([slot, wide], select: [1], side: .inside, lastPass: last) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1,
+                    manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.3), TabAnchor(shapeID: ids[0], fraction: 0.31)])
+    }
+    #expect(tabCount(merged, ctx5) == 1)
+    #expect(merged.metadata["warning"]?.contains("1 \(fewerTabs)") == true)
 }
 
-@Test func tabAnchorsOffTheToolpathsClosedShapesOrBeyondReachAreReturnedNotAttached() throws {
+@Test func tabAnchorsAttachOnlyToTheirOwnVectorsLoop() throws {
     var doc = Document()
     let near = Shape(layerID: doc.defaultLayerID, paths: [F.rect(0, 0, 4, 2)])
-    let far = Shape(layerID: doc.defaultLayerID, paths: [F.rect(10, 0, 4, 2)])
+    let other = Shape(layerID: doc.defaultLayerID, paths: [F.rect(4.3, 0, 1, 2)])
     let line = Shape(layerID: doc.defaultLayerID, paths: [Path(points: [Vec2(0, 2.1), Vec2(4, 2.1)], closed: false)])
-    doc.add(near); doc.add(far); doc.add(line)
-    let loop = try #require(TabAnchors.chain(near.paths[0], tolerance: 0.001))
+    doc.add(near); doc.add(other); doc.add(line)
+    // The near rectangle's loop offset 0.125 outward (rounded corners): its own vector's loop.
+    let loop = ArcLengthChain(ProfileGeometry.loops(closed: [near.paths[0].flattened(tolerance: 0.001)], side: .outside, offset: 0.125,
+                                                     direction: .climb, tolerance: 0.001).chains[0])
     let gone = TabAnchor(shapeID: UUID(), fraction: 0.25)
-    let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: far.id, fraction: 0.25),
+    let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: other.id, fraction: 0.25),
                    TabAnchor(shapeID: line.id, fraction: 0.5), gone]
-    let all: Set<UUID> = [near.id, far.id, line.id]
-    let r = TabAnchors.centers(for: anchors, loops: [loop], shapeIDs: [near.id], maxDistance: 0.5, document: doc, tolerance: 0.001)
-    #expect(r.centers == [[3]] && r.ignored == Array(anchors[1...]))
-    // Selected but beyond reach (its own loop is gone) or on an open path: still not attached.
-    #expect(TabAnchors.centers(for: anchors, loops: [loop], shapeIDs: all, maxDistance: 0.5, document: doc, tolerance: 0.001).ignored == Array(anchors[1...]))
-    // Within reach and selected: the far shape's anchor lands on the only loop.
-    #expect(TabAnchors.centers(for: anchors, loops: [loop], shapeIDs: all, maxDistance: 100, document: doc, tolerance: 0.001).ignored == [anchors[2], gone])
+    let all: Set<UUID> = [near.id, other.id, line.id]
+    // Only the near anchor: the other rectangle is 0.3 in away but this loop is not its offset,
+    // the line is open, the last vector is gone. Selection alone is not enough.
+    let r = TabAnchors.centers(for: anchors, loops: [loop], shapeIDs: all, offset: 0.125, document: doc, tolerance: 0.001)
+    #expect(r.centers.map(\.count) == [1] && r.ignored == 3)
+    #expect(abs(r.centers[0][0] - loop.project(Vec2(3, 0)).s) < 1e-6)
+    // With the wrong offset nothing matches; a loop that two vectors merged into is both vectors' offset.
+    #expect(TabAnchors.centers(for: anchors, loops: [loop], shapeIDs: all, offset: 0.25, document: doc, tolerance: 0.001).ignored == 4)
+    let merged = ArcLengthChain(ProfileGeometry.loops(closed: [near.paths[0], other.paths[0]].map { $0.flattened(tolerance: 0.001) },
+                                                       side: .outside, offset: 0.2, direction: .climb, tolerance: 0.001).chains[0])
+    #expect(TabAnchors.centers(for: anchors, loops: [merged], shapeIDs: all, offset: 0.2, document: doc, tolerance: 0.001).ignored == 2)
 }

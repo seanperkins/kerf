@@ -17,7 +17,8 @@ public struct TabSettings: Codable, Hashable, Sendable {
     /// Optional distance between tabs; when set it overrides `countPerPath` (cam-2d addition).
     public var spacing: Double?
     /// User-placed tabs (the tab editor). When non-nil the automatic layout is skipped and each
-    /// anchor puts one tab on the toolpath loop nearest to it; loops with no anchor get none.
+    /// anchor puts one tab on the toolpath loop its own vector produced; loops with no anchor get
+    /// none, and an anchor whose vector is not cut by the toolpath is reported, not moved.
     public var manualTabs: [TabAnchor]?
 
     public init(isEnabled: Bool = false, length: Double = 0.25, thickness: Double = 0.125,

@@ -42,30 +42,42 @@ public enum TabAnchors {
         return best?.anchor
     }
 
-    /// Tab centre parameters for each closed loop: every anchor goes to the loop nearest to its
-    /// position, at that loop's closest parameter. An anchor travels with its vector, so it is used
+    /// True when `loop` is `source` offset by `offset`: an offset loop is never nearer than its
+    /// offset to the vector it came from and runs exactly that far along every untrimmed stretch,
+    /// so its nearest vertex is one offset away. A loop that two vectors merged into is the offset
+    /// of each; a loop of some other vector, or one the offset swallowed, is not.
+    public static func isOffset(_ loop: ArcLengthChain, of source: ArcLengthChain, by offset: Double, tolerance: Double) -> Bool {
+        var nearest = Double.infinity
+        for v in loop.chain.points { nearest = min(nearest, source.project(v).distance) }
+        return abs(nearest - offset) <= 4 * tolerance + 1e-6
+    }
+
+    /// Tab centre parameters for each closed loop. An anchor travels with its vector, so it is used
     /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
-    /// cuts) and a loop lies within `maxDistance` of it, the offset the toolpath actually applied
-    /// plus some slack. One on another part however near, on an open vector, on a vector that no
-    /// longer exists, or whose own loop the offset swallowed is not attached to whatever loop
-    /// happens to be nearest: it comes back in `ignored` so the operation can say so.
+    /// cuts) and one of `loops` is that vector offset by `offset` (what the toolpath applied); it
+    /// goes onto that loop at the parameter nearest its position. One on another part however
+    /// near, on an open vector, on a vector that no longer exists, or whose own loop the offset
+    /// swallowed is never attached to whatever loop happens to be nearest; `ignored` counts them so
+    /// the operation can say so.
     public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
-                               maxDistance: Double, document: Document, tolerance: Double) -> (centers: [[Double]], ignored: [TabAnchor]) {
+                               offset: Double, document: Document, tolerance: Double) -> (centers: [[Double]], ignored: Int) {
         var out = Array(repeating: [Double](), count: loops.count)
-        var ignored: [TabAnchor] = []
+        var ignored = 0
         for a in anchors {
             guard shapeIDs.contains(a.shapeID), let shape = document.shape(id: a.shapeID),
                   shape.paths.indices.contains(a.pathIndex), shape.paths[a.pathIndex].isClosed,
-                  let p = point(of: a, in: document, tolerance: tolerance) else {
-                ignored.append(a)
+                  let own = chain(for: a, in: document, tolerance: tolerance) else {
+                ignored += 1
                 continue
             }
+            let p = own.point(at: min(max(a.fraction, 0), 1) * own.length)
             var best: (index: Int, s: Double, d: Double)?
-            for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
+            for (i, loop) in loops.enumerated()
+            where loop.isClosed && loop.length > 0 && isOffset(loop, of: own, by: offset, tolerance: tolerance) {
                 let pr = loop.project(p)
                 if pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
             }
-            if let b = best, b.d <= maxDistance { out[b.index].append(b.s) } else { ignored.append(a) }
+            if let b = best { out[b.index].append(b.s) } else { ignored += 1 }
         }
         return (out.map { $0.sorted() }, ignored)
     }
