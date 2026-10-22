@@ -24,18 +24,13 @@ public struct MergeOperation: ToolpathOperation {
             }
         }
         var out: [Toolpath] = []
-        let coords = context.coords
         for tp in pieces {
-            if var last = out.last, last.tool.id == tp.tool.id, last.spindleRPM == tp.spindleRPM {
-                // Cleared material is per piece: the joined toolpath keeps the longest flute reach
-                // any piece needed, so a deep pocket that started below cleared material is not
-                // judged from the top because a shallow profile joined it.
-                let needed = [last, tp].compactMap { $0.fluteReach(coords: coords) }.max()
+            // Pieces join only when the material cleared above them is the same: a joined toolpath
+            // carries one cleared depth, and a tiled export may later keep only some of its moves,
+            // so a value true of the whole but of no one piece would misjudge the tiles.
+            if var last = out.last, last.tool.id == tp.tool.id, last.spindleRPM == tp.spindleRPM,
+               abs((last.clearedDepth ?? 0) - (tp.clearedDepth ?? 0)) < 1e-9 {
                 last.moves += tp.moves
-                if let needed, let z = last.minCutZ {
-                    let cleared = coords.depth(ofMachineZ: z) - needed
-                    last.clearedDepth = cleared > 0 ? cleared : nil
-                }
                 // A profile inside the merge keeps the "cut last" ordering protection.
                 if tp.kind == .profile { last.kind = .profile }
                 for (k, v) in tp.metadata where k == "warning" {

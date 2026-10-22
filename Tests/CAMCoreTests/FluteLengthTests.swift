@@ -87,31 +87,38 @@ private typealias F = Ops2DFixture
     }
 
     @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
-    func mergeKeepsEachPiecesClearedMaterial(mode: ZZeroMode) throws {
-        // A pocket from 0.5 to 0.9 in joined with a profile to 0.3 in, both with a 0.75 in flute:
-        // neither piece overruns, and nor does the joined toolpath, in either order.
+    func mergeJoinsOnlyPiecesWithTheSameClearedMaterial(mode: ZZeroMode) throws {
+        // A pocket from 0.5 to 0.9 in and a profile to 0.3 in, both with a 0.75 in flute: neither
+        // overruns. Merged, they stay two toolpaths, each with its own cleared depth, so a tiled
+        // export that keeps only some moves still judges every cut by what was cleared above it.
+        // Two pockets from the same start depth join into one.
         let (seeded, ids) = F.document([F.rect(1, 1, 4, 3), F.rect(6, 1, 2, 2)], zZero: mode)
         let tool = Self.tool(0, flute: 0.75)
         let ctx = CAMContext(document: seeded.document, tools: ToolLibrary(tools: [tool]))
-        let pocket = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "Deep", toolID: tool.id, shapeIDs: [ids[0]]),
-                                                         params: PocketParameters(depth: DepthSettings(startDepth: 0.5, cutDepth: 0.9))))
+        func pocket(_ name: String, on i: Int, to depth: Double) -> AnyOperation {
+            .pocket(PocketOperation(setup: OperationSetup(name: name, toolID: tool.id, shapeIDs: [ids[i]]),
+                                    params: PocketParameters(depth: DepthSettings(startDepth: 0.5, cutDepth: depth))))
+        }
         let profile = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "Edge", toolID: tool.id, shapeIDs: [ids[1]]),
                                                             params: ProfileParameters(depth: DepthSettings(cutDepth: 0.3))))
-        for children in [[pocket, profile], [profile, pocket]] {
-            let merged = try AnyOperation.merge(MergeOperation(setup: OperationSetup(name: "M", toolID: tool.id), params: MergeParameters(children: children)))
-                .generate(in: ctx)
-            #expect(merged.count == 1)
-            let tp = try #require(merged.first)
-            #expect(tp.metadata["warning"] == nil)
-            #expect(tp.cutBeyondFlute(coords: ctx.coords, units: .inch, tolerance: 0.0005) == nil)
-            #expect(abs((tp.clearedDepth ?? 0) - 0.5) < 1e-9)
+        func merge(_ children: [AnyOperation]) throws -> [Toolpath] {
+            try AnyOperation.merge(MergeOperation(setup: OperationSetup(name: "M", toolID: tool.id), params: MergeParameters(children: children))).generate(in: ctx)
         }
+        for children in [[pocket("Deep", on: 0, to: 0.9), profile], [profile, pocket("Deep", on: 0, to: 0.9)]] {
+            let merged = try merge(children)
+            #expect(merged.count == 2)
+            #expect(Set(merged.map { $0.clearedDepth ?? 0 }) == [0.5, 0])
+            for tp in merged {
+                #expect(tp.metadata["warning"] == nil)
+                #expect(tp.cutBeyondFlute(coords: ctx.coords, units: .inch, tolerance: 0.0005) == nil)
+            }
+        }
+        let joined = try merge([pocket("A", on: 0, to: 0.9), pocket("B", on: 1, to: 0.7)])
+        #expect(joined.count == 1 && joined[0].clearedDepth == 0.5)
         // A piece that overruns on its own still shows through the join.
-        let deeper = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "Deeper", toolID: tool.id, shapeIDs: [ids[0]]),
-                                                         params: PocketParameters(depth: DepthSettings(startDepth: 0.5, cutDepth: 1.3))))
-        let bad = try AnyOperation.merge(MergeOperation(setup: OperationSetup(name: "M", toolID: tool.id), params: MergeParameters(children: [profile, deeper])))
-            .generate(in: ctx)[0]
-        #expect(bad.cutBeyondFlute(coords: ctx.coords, units: .inch, tolerance: 0.0005).map { abs($0.depth - $0.cleared - 0.8) < 1e-9 } == true)
+        let bad = try merge([pocket("A", on: 0, to: 1.3), pocket("B", on: 1, to: 0.7)])
+        #expect(bad.count == 1)
+        #expect(bad[0].cutBeyondFlute(coords: ctx.coords, units: .inch, tolerance: 0.0005).map { abs($0.depth - $0.cleared - 0.8) < 1e-9 } == true)
     }
 
     @Test func photoVCarveIsJudgedBelowItsStartDepth() throws {
@@ -154,25 +161,35 @@ private typealias F = Ops2DFixture
     }
 
     @Test func everyKindWithAStartDepthRecordsIt() throws {
-        // The kinds whose start depth means the material above is gone carry it on their toolpaths.
+        // The kinds whose start depth means the material above is gone carry it on their toolpaths,
+        // and with a 0.1 in flute each is told the cut below that depth, not the depth from the top.
         let circle = ShapeFactory.circle(center: Vec2(3, 3), radius: 0.5)
         let starting: [(String, Int, [Path], (OperationSetup) -> AnyOperation)] = [
             ("profile", 0, [F.rect(1, 1, 4, 3)], { .profile(ProfileOperation(setup: $0, params: ProfileParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.5)))) }),
             ("pocket", 0, [F.rect(1, 1, 4, 3)], { .pocket(PocketOperation(setup: $0, params: PocketParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.5)))) }),
             ("fluting", 3, [Path(points: [Vec2(1, 1), Vec2(9, 1)], closed: false)], { .fluting(FlutingOperation(setup: $0, params: FlutingParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.5)))) }),
-            ("engrave", 5, [F.rect(1, 1, 4, 3)], { .engrave(EngraveOperation(setup: $0, params: EngraveParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.3)))) }),
+            ("engrave", 5, [F.rect(1, 1, 4, 3)], { .engrave(EngraveOperation(setup: $0, params: EngraveParameters(depth: DepthSettings(startDepth: 0.2, cutDepth: 0.4)))) }),
             ("drill", 8, [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.125)], { .drill(DrillOperation(setup: $0, params: DrillParameters(startDepth: 0.2, cutDepth: 0.5))) }),
             ("holeMill", 0, [circle], { .holeMill(HoleMillOperation(setup: $0, params: HoleMillParameters(startDepth: 0.2, cutDepth: 0.5))) }),
-            ("chamfer", 6, [F.rect(1, 1, 4, 3)], { .chamfer(ChamferOperation(setup: $0, params: ChamferParameters(depth: 0.24, startDepth: 0.2))) }),
             ("vcarve", 5, [F.rect(1, 1, 4, 4)], { .vcarve(VCarveOperation(setup: $0, params: VCarveParameters(startDepth: 0.2, flatDepth: 0.3))) }),
         ]
         for (name, index, paths, make) in starting {
             let (seeded, ids) = F.document(paths)
-            let tool = Self.tool(index, flute: 2)
+            let tool = Self.tool(index, flute: 0.1)
             let ctx = CAMContext(document: seeded.document, tools: ToolLibrary(tools: [tool]))
             let tp = try #require(try make(OperationSetup(name: name, toolID: tool.id, shapeIDs: ids)).generate(in: ctx).first, "\(name)")
             #expect(tp.clearedDepth == 0.2, "\(name): \(String(describing: tp.clearedDepth))")
+            let depth = ctx.coords.depth(ofMachineZ: try #require(tp.minCutZ))
+            let w = tp.metadata["warning"] ?? ""
+            #expect(w.contains("cuts \(String(format: "%.4f", depth - 0.2)) in deeper than the 0.2000 in already cleared with a 0.1000 in flute"), "\(name): \(w)")
         }
+        // The chamfer's start depth is not credited until its depth and width share a basis.
+        let (chamfered, chamferIDs) = F.document([F.rect(1, 1, 4, 3)])
+        let vbit = Self.tool(6, flute: 2)
+        let chamfer = try AnyOperation.chamfer(ChamferOperation(setup: OperationSetup(name: "C", toolID: vbit.id, shapeIDs: chamferIDs),
+                                                                params: ChamferParameters(depth: 0.24, startDepth: 0.2)))
+            .generate(in: CAMContext(document: chamfered.document, tools: ToolLibrary(tools: [vbit])))[0]
+        #expect(chamfer.clearedDepth == nil)
         // Moulding's start depth is an offset into solid material, not cleared material.
         let rail = Path(points: [Vec2(1, 1), Vec2(9, 1)], closed: false)
         let section = Path(points: [Vec2(20, 10), Vec2(20.5, 10), Vec2(20.5, 9.75), Vec2(21, 9.75)], closed: false)
