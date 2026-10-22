@@ -23,6 +23,7 @@ struct SheetErrorRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .background(GeometryReader { Color.clear.preference(key: HeightKey.self, value: $0.size.height) })
             }
+            .scrollIndicators(.visible)
             .onPreferenceChange(HeightKey.self) { textHeight = $0 }
             .frame(height: min(max(textHeight, 20), 110))
         }

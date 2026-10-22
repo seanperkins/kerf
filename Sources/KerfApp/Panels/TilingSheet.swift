@@ -100,7 +100,6 @@ struct TilingSheet: View {
     }
 
     private func run() {
-        failure = nil
         calcTask?.cancel()
         calcTask = nil
         let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
@@ -124,7 +123,7 @@ struct TilingSheet: View {
 
     private func save() {
         failure = nil
-        let panel = NSOpenPanel()
+        let panel = PanelRunner.makeOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true

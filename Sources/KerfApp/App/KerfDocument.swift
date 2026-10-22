@@ -689,21 +689,27 @@ final class KerfDocument: ReferenceFileDocument {
         if !newShapes.isEmpty { setSelection(newShapes); sidebarTab = .design; requestCanvas(.fit) }
         let message = messages.isEmpty ? nil : AlertMessage(title: "Import", message: messages.joined(separator: "\n"))
         if pendingPlacements.isEmpty {
-            alert = message
+            if let message { report(message) }
         } else {
             // A sheet and an alert cannot show together: report after the placement dialogs.
-            deferredAlert = message
+            hold(message)
             showDesignCanvas()
             showNextPlacement()
         }
     }
 
     /// Reports a result to the user: at once, or after the open sheet closes (`sheetDismissed()` shows
-    /// it), because an alert cannot show over a sheet. Reports made while a sheet is up are joined.
+    /// it), because an alert cannot show over a sheet.
     func report(_ message: AlertMessage) {
-        guard sheet != nil else { alert = message; return }
+        if sheet == nil { alert = message } else { hold(message) }
+    }
+
+    /// Keeps a report for `sheetDismissed()`. Reports held together are joined, each under its own
+    /// title after the first, so none is lost.
+    func hold(_ message: AlertMessage?) {
+        guard let message else { return }
         if var held = deferredAlert {
-            held.message += "\n\n" + message.message
+            held.message += "\n\n\(message.title): \(message.message)"
             deferredAlert = held
         } else {
             deferredAlert = message

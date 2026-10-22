@@ -36,6 +36,19 @@ import Testing
         doc.sheet = nil
         doc.sheetDismissed()
         #expect(doc.alert?.title == "First")
-        #expect(doc.alert?.message == "one\n\ntwo")
+        #expect(doc.alert?.message == "one\n\nSecond: two")
+    }
+
+    @Test func anImportReportUnderASheetIsHeldNotDropped() {
+        let doc = document()
+        doc.sheet = .jobSetup
+        doc.report(AlertMessage(title: "Plates", message: "Held first"))
+        doc.importFiles([URL(fileURLWithPath: "/nonexistent/kerf-missing.dxf")])
+        #expect(doc.alert == nil)
+        doc.sheet = nil
+        doc.sheetDismissed()
+        #expect(doc.alert?.title == "Plates")
+        #expect(doc.alert?.message.contains("Held first") == true)
+        #expect(doc.alert?.message.contains("Import: kerf-missing.dxf") == true)
     }
 }

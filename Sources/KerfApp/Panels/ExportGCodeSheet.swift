@@ -161,7 +161,7 @@ struct ExportGCodeSheet: View {
     private func save() {
         guard let text = result?.text else { return }
         failure = nil
-        let panel = NSSavePanel()
+        let panel = PanelRunner.makeSavePanel()
         var opName: String?
         if case .operation(let id) = scope { opName = document.operation(id)?.setup.name }
         panel.nameFieldStringValue = SavePanelName.suggested(

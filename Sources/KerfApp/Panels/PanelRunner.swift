@@ -10,7 +10,33 @@ enum PanelRunner {
         return window?.isVisible == true ? window : nil
     }
 
+    /// A save panel; under the UI harness (debug builds) one that answers with the scenario's file target.
+    static func makeSavePanel() -> NSSavePanel {
+        #if DEBUG
+        if let url = harnessTarget { return HarnessSavePanel(answering: url) }
+        #endif
+        return NSSavePanel()
+    }
+
+    /// An open panel (for choosing a folder); see `makeSavePanel`.
+    static func makeOpenPanel() -> NSOpenPanel {
+        #if DEBUG
+        if let url = harnessTarget { return HarnessOpenPanel(answering: url) }
+        #endif
+        return NSOpenPanel()
+    }
+
+    #if DEBUG
+    /// The UI harness cannot drive the system file panel. A scenario's `fileTarget` step sets this, and
+    /// the next save or folder panel made by `makeSavePanel`/`makeOpenPanel` answers OK with it at once,
+    /// so the sheet's real save (and failure) path runs.
+    nonisolated(unsafe) static var harnessTarget: URL?
+    #endif
+
     static func present(_ panel: NSSavePanel, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        #if DEBUG
+        if panel is HarnessSavePanel || panel is HarnessOpenPanel { completion(.OK); return }
+        #endif
         if let host {
             panel.beginSheetModal(for: host, completionHandler: completion)
         } else {
@@ -69,3 +95,18 @@ enum SavePanelName {
         return name.pathExtension.lowercased() == allowedExtension.lowercased() ? name.deletingPathExtension : fileName
     }
 }
+
+#if DEBUG
+/// Answers OK with a fixed URL instead of opening (see `PanelRunner.harnessTarget`).
+final class HarnessSavePanel: NSSavePanel {
+    private let target: URL
+    init(answering url: URL) { target = url; super.init(contentRect: .zero, styleMask: [], backing: .buffered, defer: true) }
+    override var url: URL? { target }
+}
+
+final class HarnessOpenPanel: NSOpenPanel {
+    private let target: URL
+    init(answering url: URL) { target = url; super.init(contentRect: .zero, styleMask: [], backing: .buffered, defer: true) }
+    override var url: URL? { target }
+}
+#endif

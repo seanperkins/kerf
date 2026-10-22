@@ -150,7 +150,7 @@ struct SaveAllToolpathsSheet: View {
         failure = nil
         if mode.isSingleFile {
             guard let item = posted.first, let text = item.result.text else { return }
-            let panel = NSSavePanel()
+            let panel = PanelRunner.makeSavePanel()
             panel.nameFieldStringValue = SavePanelName.suggested(item.file.fileName, allowedExtension: profile.fileExtension)
             if let t = UTType(filenameExtension: profile.fileExtension) { panel.allowedContentTypes = [t] }
             panel.allowsOtherFileTypes = true
@@ -160,7 +160,7 @@ struct SaveAllToolpathsSheet: View {
                 finishSaving { try text.write(to: url, atomically: true, encoding: .utf8) }
             }
         } else {
-            let panel = NSOpenPanel()
+            let panel = PanelRunner.makeOpenPanel()
             panel.canChooseDirectories = true
             panel.canChooseFiles = false
             panel.canCreateDirectories = true
