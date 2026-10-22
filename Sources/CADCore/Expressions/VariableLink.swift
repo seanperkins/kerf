@@ -21,6 +21,21 @@ public struct VariableLink: Codable, Hashable, Identifiable, Sendable {
         self.id = id; self.target = target; self.path = path; self.expression = expression
     }
 
+    /// True when the expression uses the variable `name` (case-insensitive): evaluated without it,
+    /// the expression fails on that name.
+    public static func references(_ name: String, in expression: String, variables: [String: Double], units: LengthUnit?) -> Bool {
+        var table = variables
+        table[name.lowercased()] = nil
+        do {
+            _ = try ExpressionEvaluator.evaluate(expression, variables: table, units: units)
+            return false
+        } catch ExpressionEvaluator.ExpressionError.unknownVariable(let n) {
+            return n.lowercased() == name.lowercased()
+        } catch {
+            return false
+        }
+    }
+
     /// True when the expression uses a name (a variable), not just numbers and units.
     public static func usesVariables(_ expression: String, units: LengthUnit?) -> Bool {
         do {

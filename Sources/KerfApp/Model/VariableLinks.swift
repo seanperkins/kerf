@@ -54,6 +54,9 @@ enum VariableLinks {
             case .operation(let id): return !opIDs.contains(id)
             }
         }
+        // A job field linked to an expression of itself (`=thickness/2` typed into Thickness) would
+        // move every time the links are re-evaluated; such a link is never made and never kept.
+        links.removeAll { isSelfReferencing($0, in: p) }
         var targets = Set(links.map(\.target))
         if !pending.isEmpty {
             targets.formUnion(p.document.allSheets.map { VariableLink.Target.job(sheetID: $0.id) })
@@ -69,14 +72,18 @@ enum VariableLinks {
                 guard let o = oldTree else { return false }
                 return number(at: l.path, in: o) != number(at: l.path, in: newTree)
             }
-            guard !pending.isEmpty, !unitsChanged else { continue }
+            guard !pending.isEmpty else { continue }
             var newLeaves: [[String]: Double] = [:]
             leaves(newTree, prefix: [], into: &newLeaves)
             for (path, v) in newLeaves.sorted(by: { $0.key.lexicographicallyPrecedes($1.key) }) {
-                if let o = oldTree, number(at: path, in: o) == v { continue }
+                // After a unit change every leaf is rescaled, so none can be told unchanged; an
+                // expression typed in the new units (Job Setup's form) still finds its value.
+                if !unitsChanged, let o = oldTree, number(at: path, in: o) == v { continue }
                 guard let e = pending.last(where: { abs($0.value - v) <= 1e-9 * max(1, abs($0.value)) }) else { continue }
+                let link = VariableLink(target: t, path: path, expression: e.text)
+                guard !isSelfReferencing(link, in: p) else { continue }
                 links.removeAll { $0.target == t && $0.path == path }
-                links.append(VariableLink(target: t, path: path, expression: e.text))
+                links.append(link)
             }
         }
         p.document.linkedValues = links
@@ -105,6 +112,14 @@ enum VariableLinks {
             if !changed { break }
         }
         return failed
+    }
+
+    /// A link on a job field whose expression uses that field's own name (`width`, `height`,
+    /// `thickness`, `safez`).
+    static func isSelfReferencing(_ l: VariableLink, in p: KerfProject) -> Bool {
+        guard case .job(let sheet) = l.target, let field = l.path.last else { return false }
+        return VariableLink.references(field, in: l.expression, variables: p.document.variableTable(forSheet: sheet),
+                                       units: p.document.units)
     }
 
     static func evaluate(_ l: VariableLink, in p: KerfProject) -> Double? {

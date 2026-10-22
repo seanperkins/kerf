@@ -115,7 +115,7 @@ struct JobSetupSheet: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)   // sheetDismissed drops typed expressions
                 Button("Apply") { document.applyJobSetup(form); dismiss() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!form.problems.isEmpty)

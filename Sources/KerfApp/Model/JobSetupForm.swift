@@ -45,11 +45,11 @@ struct JobSetupForm: Equatable {
     }
 
     /// The names an expression typed into this form can use: the material as the form shows it
-    /// (the draft job, in the form's units), with `document`'s user variables, so `=thickness/2`
-    /// sees the thickness on screen rather than the saved one. Applying re-evaluates the links
-    /// against the committed job, so the value stays right afterwards.
+    /// (the draft job) with `document`'s user variables, all in the form's units, so `=thickness/2`
+    /// sees the thickness on screen rather than the saved one. Applying links the expression to
+    /// the committed job and evaluates it there, so the value stays right afterwards.
     func variableTable(in document: Document) -> [String: Double] {
-        var d = document
+        var d = document.converted(to: units)
         d.job = job
         return d.variableTable
     }

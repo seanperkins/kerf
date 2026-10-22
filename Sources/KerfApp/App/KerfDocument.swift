@@ -686,8 +686,12 @@ final class KerfDocument: ReferenceFileDocument {
         }
     }
 
-    /// Called when any sheet closes: next queued placement, then any deferred import report.
+    /// Called when any sheet closes: expressions typed into the sheet but never applied are
+    /// dropped (an applied sheet consumed them in its edit), so they cannot latch onto whatever
+    /// parameter next takes their value; then the next queued placement, then any deferred
+    /// import report.
     func sheetDismissed() {
+        _ = expressionRecorder.take()
         if !pendingPlacements.isEmpty {
             showNextPlacement()
         } else if let a = deferredAlert {
