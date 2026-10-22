@@ -6,12 +6,13 @@ import SwiftUI
 /// program (grouped by tool, as "Save All Toolpaths" does by default).
 struct ToolChangeSummaryView: View {
     @ObservedObject var document: KerfDocument
+    /// The live settings, so a changed tool-change allowance redraws the total at once.
+    @ObservedObject private var timeStore = TimeEstimateStore.shared
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var expanded = false
 
     var body: some View {
-        let s = JobSummary.make(operations: document.outputProject.operations, results: document.results,
-                                groupByTool: groupByTool, toolChangeSeconds: TimeEstimateSettings.load().toolChangeSeconds)
+        let s = document.jobSummary(groupByTool: groupByTool, settings: timeStore.settings)
         VStack(alignment: .leading, spacing: 4) {
             if s.hasEstimate {
                 // Longest wording that fits the sidebar; "4 tools · 3 changes" shortens before the time does.

@@ -26,7 +26,7 @@ import Testing
     @Test func theJobSheetStatesTheDeepestCut() {
         let doc = calculatedDoc()
         let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
-                                  groupByTool: false, rapidRate: 600)
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
         #expect(sheet.deepestCut == "Z -0.75 in (at the material bottom)")
         #expect(JobSheetHTML.render(sheet).contains("<tr><td>Deepest cut</td><td>Z -0.75 in (at the material bottom)</td></tr>"))
     }
@@ -38,7 +38,7 @@ import Testing
         let spoil = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
         spoil.calculateNow(spoil.project.operations.map(\.id))
         let sheet = JobSheet.make(project: spoil.project, results: spoil.results, profile: BuiltInPosts.avidMach4Inch,
-                                  groupByTool: false, rapidRate: 600)
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
         #expect(sheet.deepestCut == "Z 0 in (at the material bottom)")
         // The same number the Export sheet reads back out of the posted program.
         let tps = GCodeExporter.toolpaths(scope: .all, operations: spoil.project.operations, results: spoil.results, groupByTool: false)
@@ -58,7 +58,8 @@ import Testing
 
     @Test func anEmptyJobHasNoDeepestCut() {
         let p = AppTestSupport.project()
-        let sheet = JobSheet.make(project: p, results: [:], profile: BuiltInPosts.avidMach4Inch, groupByTool: false, rapidRate: 600)
+        let sheet = JobSheet.make(project: p, results: [:], profile: BuiltInPosts.avidMach4Inch, groupByTool: false, rapidRate: 600,
+                                  settings: TimeEstimateSettings())
         #expect(sheet.deepestCut.isEmpty)
         #expect(!JobSheetHTML.render(sheet).contains("Deepest cut"))
     }

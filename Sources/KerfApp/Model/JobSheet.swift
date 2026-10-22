@@ -101,9 +101,10 @@ struct JobSheet: Equatable {
 
     /// - Parameters:
     ///   - sheets: one entry per piece of material; nil = one sheet with every visible shape.
+    ///   - settings: the user's time-estimate settings, so the total is the sidebar's and the preview's.
     static func make(project: KerfProject, results: [UUID: ToolpathResult], profile: PostProfile,
                      groupByTool: Bool, rapidRate: Double, date: Date = Date(),
-                     sheets: [Sheet]? = nil) -> JobSheet {
+                     sheets: [Sheet]? = nil, settings: TimeEstimateSettings) -> JobSheet {
         let doc = project.document
         let job = doc.job
         let u = doc.units
@@ -167,7 +168,7 @@ struct JobSheet: Equatable {
         let defaultParts = partList(visible, in: doc)
         let defaultSheet = Sheet(title: "Sheet 1", shapes: visible, partNames: defaultParts.map(\.name),
                                  partCentres: defaultParts.map(\.centre))
-        let total = ToolpathStats.estimatedSeconds(toolpaths, rapidRate: rapidRate, toolChangeSeconds: 90)
+        let total = settings.estimate(toolpaths, rapidRate: rapidRate, units: u)
         let deepest = toolpaths.compactMap(\.minZ).min().map { z -> String in
             let depth = coords.depth(ofMachineZ: z)
             return DeepestCut(machineZ: z, depthBelowTop: depth, belowBottom: depth - job.thickness).text(units: u)

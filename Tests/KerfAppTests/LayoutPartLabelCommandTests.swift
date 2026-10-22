@@ -54,7 +54,7 @@ import Testing
         var (p, ids) = project()
         _ = try PartLabelCommands.label(ids, options: .defaults(for: .inch), library: .seeded, in: &p)
         let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
-        let js = doc.makeJobSheet()
+        let js = doc.makeJobSheet(settings: TimeEstimateSettings())
         #expect(js.sheets[0].partNames.contains("Part 1"))
         #expect(js.sheets[0].partNames.contains("Shelf"))
         #expect(js.sheets[0].partNames.count == 3)  // labels are not parts

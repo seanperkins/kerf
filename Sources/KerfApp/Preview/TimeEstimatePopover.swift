@@ -26,8 +26,9 @@ struct TimeEstimatePopover: View {
             NumberField("Acceleration", value: accelBinding, unit: units.abbreviation + "/s²",
                         help: "How fast the machine speeds up and slows down")
                 .disabled(!store.settings.useAcceleration)
-            NumberField("Tool change", value: $store.settings.toolChangeSeconds, unit: "s",
-                        help: "Time allowed for each manual tool change")
+            NumberField("Tool change", value: Binding(get: { store.settings.toolChangeSeconds },
+                                                      set: { store.settings.toolChangeSeconds = max(0, $0) }),
+                        unit: "s", help: "Time allowed for each manual tool change")
             NumberField("Scale factor", value: Binding(get: { store.settings.scale },
                                                       set: { store.settings.scale = TimeEstimateSettings.clampScale($0) }),
                         unit: "×", help: "Multiplies motion time; calibrate it against a real run")

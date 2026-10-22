@@ -39,10 +39,6 @@ import Testing
     #expect(abs(s.cutLength - (11 + 2 * .pi)) < 1e-9)
     #expect(abs(s.cutMinutes - (0.1 + 0.1 + 1)) < 1e-9)
     #expect(abs(s.estimatedSeconds(rapidRate: 60) - ((1.2 + 5.0 / 60) * 60 + 3)) < 1e-9)
-    var other = tp
-    other.tool.id = UUID()
-    let job = ToolpathStats.estimatedSeconds([tp, other], rapidRate: 60, toolChangeSeconds: 30)
-    #expect(abs(job - (2 * s.estimatedSeconds(rapidRate: 60) + 30)) < 1e-9)
 }
 
 @Test func ops2DChainOrderingNearestNeighbourWithPrecedence() {

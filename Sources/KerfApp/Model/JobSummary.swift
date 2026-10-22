@@ -38,8 +38,10 @@ struct JobSummary: Equatable {
     var pauses: [PauseRow] = []
     /// Stops at the machine: tool changes plus pauses, a pause that ends in a tool change counted once.
     var stops: Int = 0
-    /// Cutting, rapids and dwell of the enabled toolpaths, summed one by one. No tool-change
-    /// allowance, not even for a change inside one operation: those are all in `toolChangeAllowance`.
+    /// Cutting, rapids and dwell of the enabled toolpaths in program order, including the rapids
+    /// that carry the tool from the end of one toolpath to the start of the next (the motion the
+    /// 3D preview times). No tool-change allowance, not even for a change inside one operation:
+    /// those are all in `toolChangeAllowance`.
     var machiningSeconds: TimeInterval
     /// Allowance for one manual tool change (the user's time-estimate setting).
     var toolChangeSeconds: TimeInterval = 0
@@ -57,8 +59,11 @@ struct JobSummary: Equatable {
 
     static func label(_ tool: Tool) -> String { "T\(tool.number) · \(tool.name)" }
 
+    /// The motion is `settings`' estimate of the toolpaths in program order (`rapidRate` in `units`
+    /// per minute), so it sees the rapids between toolpaths that a per-operation estimate cannot;
+    /// the allowance (`settings.toolChangeSeconds`) is added per stop in `totalSeconds`.
     static func make(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool,
-                     toolChangeSeconds: TimeInterval = 0) -> JobSummary {
+                     settings: TimeEstimateSettings, rapidRate: Double, units: LengthUnit) -> JobSummary {
         let rows = operations.map { op -> Row in
             let r = results[op.id]
             var tools: [String] = []
@@ -70,11 +75,9 @@ struct JobSummary: Equatable {
         }
         let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: groupByTool)
         // A row's own time includes the tool changes inside its operation (a pocket's clearance
-        // tool, a V-carve's flat-area tool); the job total counts every stop once, below.
-        let total = operations.filter(\.setup.isEnabled).compactMap { op -> TimeInterval? in
-            guard let r = results[op.id], r.error == nil else { return nil }
-            return r.machiningSeconds
-        }.reduce(0, +)
+        // tool, a V-carve's flat-area tool); the job total counts every stop once, below. The
+        // motion is timed over the toolpaths in program order, so the rapids between them count.
+        let total = settings.estimate(tps, rapidRate: rapidRate, units: units, toolChanges: false)
         var pauses: [PauseRow] = []
         var stops = 0
         for (i, tp) in tps.enumerated() where i > 0 {
@@ -82,7 +85,56 @@ struct JobSummary: Equatable {
             if let p = tps[i - 1].pauseAfter { pauses.append(PauseRow(after: tps[i - 1].name, text: p.text(afterToolpath: tps[i - 1].name))) }
         }
         return JobSummary(rows: rows, sequence: sequence(of: tps), pauses: pauses, stops: stops,
-                          machiningSeconds: total, toolChangeSeconds: toolChangeSeconds)
+                          machiningSeconds: total, toolChangeSeconds: settings.toolChangeSeconds)
+    }
+
+    /// What a summary is made from, so one can be reused while none of it has changed. Results are
+    /// replaced whole (a recalculation makes new toolpath objects; a settings change rewrites the
+    /// estimates), so a result is known by its toolpath ids, estimate and error; an operator pause
+    /// lives on the operation, which the key holds in full.
+    struct Key: Hashable {
+        struct Result: Hashable {
+            var id: UUID
+            var toolpathIDs: [UUID]
+            var estimatedSeconds: TimeInterval
+            var error: String?
+        }
+        var operations: [AnyOperation]
+        var results: [Result]
+        var groupByTool: Bool
+        var settings: TimeEstimateSettings
+        var rapidRate: Double
+        var units: LengthUnit
+
+        init(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool, settings: TimeEstimateSettings,
+             rapidRate: Double, units: LengthUnit) {
+            self.operations = operations
+            self.results = results.sorted { $0.key.uuidString < $1.key.uuidString }.map { id, r in
+                Result(id: id, toolpathIDs: r.toolpaths.map(\.id), estimatedSeconds: r.estimatedSeconds, error: r.error)
+            }
+            self.groupByTool = groupByTool; self.settings = settings; self.rapidRate = rapidRate; self.units = units
+        }
+    }
+
+    /// The last summary and the key it was made from. Timing the program is a motion solve over
+    /// every move, and the sidebar redraws with every document change, so a summary is rebuilt only
+    /// when its key changes; keys are compared whole, not by hash.
+    final class Memo {
+        private var last: (key: Key, summary: JobSummary)?
+        /// How many summaries were built (what the tests count).
+        private(set) var builds = 0
+
+        func summary(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool,
+                     settings: TimeEstimateSettings, rapidRate: Double, units: LengthUnit) -> JobSummary {
+            let key = Key(operations: operations, results: results, groupByTool: groupByTool, settings: settings,
+                          rapidRate: rapidRate, units: units)
+            if let last, last.key == key { return last.summary }
+            let s = JobSummary.make(operations: operations, results: results, groupByTool: groupByTool,
+                                    settings: settings, rapidRate: rapidRate, units: units)
+            last = (key, s)
+            builds += 1
+            return s
+        }
     }
 
     /// Consecutive toolpaths sharing a tool form one load.

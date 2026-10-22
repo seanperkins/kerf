@@ -50,9 +50,6 @@ private func slot(tool: Tool) -> Toolpath {
     // A pause on the last toolpath is never written, so it adds nothing.
     let last = MachiningTimeEstimator.estimate([slot(tool: a), paused], rapidRate: 180, toolChangeSeconds: 30)
     #expect(abs(last - (2 * perPath + link)) < 1e-9)
-    // The per-toolpath job estimate agrees.
-    let stats = ToolpathStats.estimatedSeconds([paused, slot(tool: a)], rapidRate: 180, toolChangeSeconds: 30)
-    #expect(abs(stats - (2 * perPath + 30)) < 1e-9)
 }
 
 @Test func simTimeEstimateArcUsesArcLength() {

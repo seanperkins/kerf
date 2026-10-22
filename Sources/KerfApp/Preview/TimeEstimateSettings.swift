@@ -6,7 +6,7 @@ import CAMCore
 import Combine
 import Foundation
 
-struct TimeEstimateSettings: Equatable, Sendable {
+struct TimeEstimateSettings: Hashable, Sendable {
     /// Model acceleration and cornering (off = length / feed).
     var useAcceleration = true
     /// Machine acceleration in inches per second² (converted for mm documents).
@@ -101,6 +101,14 @@ extension KerfDocument {
         TimeEstimateSettings.load().estimate(toolpaths, rapidRate: rapidRateInDocumentUnits, units: units)
     }
 
+    /// The job summary of the output project with `settings` (the live store's, so the sidebar and
+    /// the preview agree), timed over the toolpaths in program order and reused until something it
+    /// is made from changes.
+    func jobSummary(groupByTool: Bool, settings: TimeEstimateSettings) -> JobSummary {
+        jobSummaryMemo.summary(operations: outputProject.operations, results: results, groupByTool: groupByTool,
+                               settings: settings, rapidRate: rapidRateInDocumentUnits, units: units)
+    }
+
     /// Recomputes the stored per-operation estimates (after the settings or machine change).
     func refreshTimeEstimates() {
         let s = TimeEstimateSettings.load()
@@ -108,10 +116,8 @@ extension KerfDocument {
         var changed = results
         for (id, r) in results where r.isOK {
             changed[id]?.estimatedSeconds = s.estimate(r.toolpaths, rapidRate: rapid, units: units)
-            changed[id]?.machiningSeconds = s.estimate(r.toolpaths, rapidRate: rapid, units: units, toolChanges: false)
         }
-        if changed.contains(where: { results[$0.key]?.estimatedSeconds != $0.value.estimatedSeconds
-                                        || results[$0.key]?.machiningSeconds != $0.value.machiningSeconds }) {
+        if changed.contains(where: { results[$0.key]?.estimatedSeconds != $0.value.estimatedSeconds }) {
             results = changed
         }
     }

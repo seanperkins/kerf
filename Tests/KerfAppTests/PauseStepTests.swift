@@ -77,7 +77,7 @@ import Testing
         setPause(doc, ids[0], PauseStep(message: "Flip the part"))
         setPause(doc, ids[1], PauseStep(message: "Never written", isOptionalStop: true))
         let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
-                                  groupByTool: false, rapidRate: 600)
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
         #expect(sheet.steps.map(\.pauseAfter) == ["Flip the part", nil])
         #expect(sheet.pauses == 1)
         let html = JobSheetHTML.render(sheet)
@@ -90,7 +90,7 @@ import Testing
         let (doc, _, ids) = makeDoc()
         setPause(doc, ids[0], PauseStep(isOptionalStop: true))
         let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
-                                  groupByTool: false, rapidRate: 600)
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
         #expect(sheet.steps[0].pauseAfter == "Paused after Profile 1 (optional stop, M1)")
     }
 
@@ -147,7 +147,8 @@ import Testing
         let (doc, _, ids) = makeDoc()
         setPause(doc, ids[0], PauseStep(message: "Flip the part"))
         setPause(doc, ids[1], PauseStep(message: "Never written"))
-        let s = JobSummary.make(operations: doc.project.operations, results: doc.results, groupByTool: false, toolChangeSeconds: 90)
+        let s = JobSummary.make(operations: doc.project.operations, results: doc.results, groupByTool: false,
+                                settings: TimeEstimateSettings(), rapidRate: doc.rapidRateInDocumentUnits, units: doc.units)
         #expect(s.pauses == [JobSummary.PauseRow(after: "Profile 1", text: "Flip the part")])
         #expect(s.toolChanges == 0)
         #expect(s.stops == 1)

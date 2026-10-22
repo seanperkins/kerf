@@ -75,8 +75,8 @@ import Testing
         #expect(doc.outputProject.operations.map(\.id) == [bottom.id])
         #expect(doc.outputProject(for: .operation(top.id)).document.job.zZero == .materialTop)
         doc.calculateNow([bottom.id])
-        #expect(doc.makeJobSheet().jobName.contains("Bottom side"))
-        #expect(doc.makeJobSheet().steps.map(\.name) == ["Bottom profile"])
+        #expect(doc.makeJobSheet(settings: TimeEstimateSettings()).jobName.contains("Bottom side"))
+        #expect(doc.makeJobSheet(settings: TimeEstimateSettings()).steps.map(\.name) == ["Bottom profile"])
         // Turning two-sided off shows everything again.
         var form = JobSetupForm(document: doc.document)
         form.job.twoSided = nil

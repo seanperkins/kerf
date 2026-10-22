@@ -18,7 +18,7 @@ extension KerfDocument {
         Task { @MainActor in
             let stale = project.operations.filter { $0.setup.isEnabled && isStale($0.id) }.map(\.id)
             if !stale.isEmpty { _ = await calculateAndWait(stale) }
-            let html = JobSheetHTML.render(makeJobSheet())
+            let html = JobSheetHTML.render(makeJobSheet(settings: TimeEstimateStore.shared.settings))
             do {
                 try html.write(to: url, atomically: true, encoding: .utf8)
                 NSWorkspace.shared.open(url)
@@ -28,10 +28,13 @@ extension KerfDocument {
         }
     }
 
-    func makeJobSheet(date: Date = Date()) -> JobSheet {
+    /// `settings`: the time-estimate settings for the total; the export command passes the live
+    /// store's, which the sidebar shows.
+    func makeJobSheet(settings: TimeEstimateSettings, date: Date = Date()) -> JobSheet {
         var sheet = JobSheet.make(project: outputProject, results: results, profile: postProfile,
                                   groupByTool: UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey),
-                                  rapidRate: rapidRateInDocumentUnits, date: date, sheets: JobSheet.sheets(of: project))
+                                  rapidRate: rapidRateInDocumentUnits, date: date, sheets: JobSheet.sheets(of: project),
+                                  settings: settings)
         // Multi-sheet and two-sided jobs (io): say which material sheet and side this sheet is for.
         sheet.jobName = document.name + (document.isMultiSheet ? " – \(document.currentSheetName)" : "")
             + (isTwoSided ? " (\(activeSide.displayName) side)" : "")
