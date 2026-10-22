@@ -111,9 +111,10 @@ public struct ProfileOperation: ToolpathOperation {
                                              allowance: max(roughOffset, 0) - max(finalOffset, 0)),
                                   context: context, builder: &builder, tabNotes: &tabNotes)
             ignoredAnchors = finish.anchors?.ignored ?? 0
-            // An anchor the roughing pass could not place while it cut the anchor's part (its
-            // stretch swallowed by the larger offset, or trimmed beyond reach) leaves the part cut
-            // through there before the last pass holds it.
+            // An anchor the roughing pass could not place while the loop of its own vector was in
+            // that pass's toolpath (its stretch filled by the larger offset while the loop survives
+            // elsewhere, or trimmed beyond reach) leaves the part cut through there before the last
+            // pass holds it. A vector the roughing offset swallowed whole was not cut by it.
             if let r = rough.anchors, let f = finish.anchors {
                 unheldOnRoughing = zip(zip(r.placed, r.cut), f.placed).filter { !$0.0 && $0.1 && $1 }.count
             }
