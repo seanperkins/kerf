@@ -132,19 +132,18 @@ public struct PocketPlanner: Sendable {
     public func offsetClearingReport(from start: Vec2) -> (groups: [[Chain2D]], uncoveredArea: Double) {
         let levels = offsetLevels()
         guard let outers0 = levels.first?.filter({ Polygon2D.signedArea($0) > 0 }), !outers0.isEmpty else { return ([], 0) }
-        // Ranks count in twos, so a cleanup fragment can sit between the ring just inside (cut first)
-        // and the ring just outside (cut after it).
         var items: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
         for (k, lv) in levels.enumerated() {
-            for loop in lv { items.append((chain(loop), 2 * (levels.count - 1 - k), loop[0])) }
+            for loop in lv { items.append((chain(loop), levels.count - 1 - k, loop[0])) }
         }
         let cleanup = coverageCleanup(levels: levels, rings: items.map(\.chain))
         items += cleanup.fragments
-        // A ring waits only for the deeper rings (and fragments) right next to it, so separate lobes and
-        // the rings around islands are each cleared inside-out and linked at depth.
+        // A ring waits only for the deeper rings right next to it, so separate lobes and the rings around
+        // islands are each cleared inside-out and linked at depth. A cleanup fragment has the rank of the ring
+        // just outside it, so it waits for the ring just inside it.
         let reach = stepover * 1.5 + tolerance
         let groups = order(items, outers: outers0, from: start, allowReverse: false) { a, ra, b, rb in
-            rb - ra <= 2 && Self.loopsWithin(a.points, b.points, reach)
+            rb == ra + 1 && Self.loopsWithin(a.points, b.points, reach)
         }
         return (groups, cleanup.uncoveredArea)
     }
@@ -155,19 +154,19 @@ public struct PocketPlanner: Sendable {
     /// diameter. This is the coverage promise of offset pocketing (the coverage test asserts it), apart
     /// from `allowance`, which is left on the walls on purpose.
     public static let coverageSlackFraction = 0.02
-    var coverageSlack: Double { 2 * toolRadius * Self.coverageSlackFraction }
+    var coverageSlack: Double { max(2 * toolRadius * Self.coverageSlackFraction, 2 * tolerance) }
 
     /// Cuts that cover the floor the rings leave behind. Rings a stepover apart leave floor uncut where
     /// the next ring is farther than the tool's reach: at a sharp corner the worst point on the diagonal
     /// is 0.59 stepovers from the nearest ring (the scallop shows from a stepover of 85% of the diameter),
     /// and at the narrow tip of a wedge or lobe the last ring ends well short of the point the tool can
     /// reach (a stud up to a stepover minus the radius wide). Floor the tool could reach but the rings
-    /// leave more than `coverageSlack` from every cut is covered by fragments of the ring halfway between
-    /// the rings, clipped to the zone around that floor. A stepover under the diameter needs only that
-    /// halving (every point is then within half a stepover of the half ring); a second round takes up
-    /// what arc flattening leaves. The old half-step ring `offsetLevels` adds past the last full ring is
-    /// the same idea for the middle of the pocket. Returns the fragments and the area still uncut at the
-    /// end, normally zero.
+    /// leave more than `coverageSlack` from every cut is covered by the pieces of the ring halfway
+    /// between the rings that lie in the zone around that floor: with a stepover under the diameter every
+    /// point is within half a stepover of the half ring, so one halving suffices. (The half-step ring
+    /// `offsetLevels` adds past the last full ring is the same idea for the middle of the pocket.) Returns
+    /// the pieces and the area still farther than the slack from every cut afterwards, which is zero unless
+    /// that argument fails.
     func coverageCleanup(levels: [[[Vec2]]], rings: [Chain2D])
         -> (fragments: [(chain: Chain2D, rank: Int, probe: Vec2)], uncoveredArea: Double) {
         // Every floor point inside the tool-centre region is within one stepover of a ring (walk from it
@@ -178,50 +177,27 @@ public struct PocketPlanner: Sendable {
         guard toolRadius > 0, stepover > toolRadius + coverageSlack else { return ([], 0) }
         let reachable = GeomKernel.offset(centerRegion, by: toolRadius, join: .round, arcTolerance: tolerance)
         guard !reachable.isEmpty else { return ([], 0) }
-        var walks = rings.map(\.walk)
-        func uncovered() -> [[Vec2]] {
+        func uncovered(_ walks: [[Vec2]]) -> [[Vec2]] {
             let covered = GeomKernel.offset(walks, by: toolRadius + coverageSlack, join: .round, end: .openRound,
                                             arcTolerance: tolerance)
             return withoutSlivers(GeomKernel.boolean(.difference, subject: reachable, clip: covered, fillRule: .nonZero),
                                   by: max(tolerance, 1e-5))
         }
         func area(_ loops: [[Vec2]]) -> Double { max(loops.reduce(0) { $0 + Polygon2D.signedArea($1) }, 0) }
-        var rest = uncovered()
+        var walks = rings.map(\.walk)
+        let rest = uncovered(walks)
+        guard !rest.isEmpty else { return ([], 0) }
+        let zone = GeomKernel.offset(rest, by: toolRadius, join: .round, arcTolerance: tolerance)
         var out: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
-        let base = toolRadius + allowance
-        var m = 1
-        while !rest.isEmpty, m <= 2 {
-            let zone = GeomKernel.offset(rest, by: toolRadius, join: .round, arcTolerance: tolerance)
-            // A ring fragment inside the zone lies at a wall distance within the zone's span (plus the
-            // radius, for a zone wider than its outline suggests), so other levels are skipped.
-            var nearest = Double.infinity, farthest = 0.0
-            for loop in zone {
-                for p in loop {
-                    let d = region.map { Polygon2D.distance(from: p, toLoop: $0) }.min() ?? 0
-                    nearest = min(nearest, d); farthest = max(farthest, d)
-                }
+        for k in levels.indices {
+            // The half ring between ring k and ring k + 1 is cut with ring k.
+            let half = inset(toolRadius + allowance + (Double(k) + 0.5) * stepover)
+            for piece in ringPieces(half.map { chain($0).walk }, inside: zone, longerThan: max(tolerance * 4, coverageSlack)) {
+                out.append((piece.chain, levels.count - 1 - k, piece.probe))
+                walks.append(piece.chain.walk)
             }
-            let steps = 1 << m
-            var added: [[Vec2]] = []
-            for k in levels.indices {
-                for odd in stride(from: 1, to: steps, by: 2) {
-                    let distance = base + (Double(k) + Double(odd) / Double(steps)) * stepover
-                    guard distance >= nearest - tolerance, distance <= farthest + toolRadius else { continue }
-                    let pieces = ringPieces(inset(distance).map { chain($0).walk }, inside: zone,
-                                            longerThan: max(tolerance * 4, coverageSlack))
-                    for piece in pieces {
-                        // Between the ring just inside (rank 2 (n - 2 - k)) and the ring just outside.
-                        out.append((piece.chain, 2 * (levels.count - 2 - k) + 1, piece.probe))
-                        added.append(piece.chain.walk)
-                    }
-                }
-            }
-            if added.isEmpty { break }
-            walks += added
-            rest = uncovered()
-            m += 1
         }
-        return (out, area(rest))
+        return (out, area(uncovered(walks)))
     }
 
     /// `loops` without the slivers a boolean leaves along arcs: opened and closed again by `eps`.

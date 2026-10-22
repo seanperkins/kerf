@@ -278,3 +278,17 @@ func ops2DPocketCleanupCutsStayInsideAndFollowTheConventions(mode: ZZeroMode) th
         }
     }
 }
+
+/// One halving covers a stepover under the diameter. The operation never asks for more (it clamps the
+/// stepover to 95% of the diameter), but a planner given a stepover of 3 diameters cannot be covered by
+/// it, and says so: the area it reports is what makes the operation warn and keep a clearance tool from
+/// handing over.
+@Test func ops2DPocketPlannerReportsFloorItCouldNotCover() {
+    let square = Polygon2D.region(fromLoops: [ShapeFactory.rectangle(Rect2(x: 0, y: 0, width: 2, height: 2)).flattened()])
+    func report(stepover: Double) -> Double {
+        PocketPlanner(region: square, toolRadius: diameter / 2, stepover: stepover, allowance: 0, tolerance: 0.0005,
+                      direction: .climb).offsetClearingReport(from: Vec2(0, 0)).uncoveredArea
+    }
+    #expect(report(stepover: diameter * 0.95) == 0)
+    #expect(report(stepover: diameter * 3) > 0.001)
+}
