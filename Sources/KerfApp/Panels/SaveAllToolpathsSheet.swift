@@ -24,7 +24,8 @@ struct SaveAllToolpathsSheet: View {
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
-    private var hasErrors: Bool { posted.contains { $0.result.hasErrors || $0.result.text == nil } }
+    /// Validator errors, which "Save Anyway" may override.
+    private var hasErrors: Bool { posted.contains { $0.result.hasErrors } }
     /// A set with a program missing is never written (see `GCodeFileSet`), so the save waits.
     private var hasUnposted: Bool { posted.contains { $0.result.text == nil } }
 
@@ -64,13 +65,7 @@ struct SaveAllToolpathsSheet: View {
         }
         .padding(20)
         .frame(width: 620, height: 600)
-        .alert(replaceRequest.map { "Replace \($0.names.count) file\($0.names.count == 1 ? "" : "s")?" } ?? "",
-               isPresented: Binding(get: { replaceRequest != nil }, set: { if !$0 { replaceRequest = nil } })) {
-            Button("Replace", role: .destructive) { if let r = replaceRequest { finishSaving { try r.set.write(to: r.directory) } } }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The folder already has \(replaceRequest?.names.joined(separator: ", ") ?? ""). Saving writes the whole set over them.")
-        }
+        .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
         .onAppear {
             profileID = document.postProfile.id
             initialProfileID = profileID
@@ -83,7 +78,7 @@ struct SaveAllToolpathsSheet: View {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Some programs have errors or could not be generated. Running them may damage the machine or the work.")
+            Text("Some programs have validator errors. Running them may damage the machine or the work.")
         }
     }
 
@@ -168,31 +163,26 @@ struct SaveAllToolpathsSheet: View {
             let set = GCodeFileSet(posted: posted)
             PanelRunner.present(panel) { response in
                 guard response == .OK, let dir = panel.url else { return }
-                let names = set.existing(in: dir)
-                if names.isEmpty {
-                    finishSaving { try set.write(to: dir) }
+                if set.needsReplaceConfirmation(in: dir) {
+                    replaceRequest = ReplaceRequest(set: set, directory: dir)
                 } else {
-                    replaceRequest = ReplaceRequest(set: set, directory: dir, names: names)
+                    finishSaving { try set.write(to: dir) }
                 }
             }
         }
     }
 
-    /// Runs the write chosen in the panel, then remembers the post and closes the sheet.
+    /// Runs the write chosen in the panel, then remembers the post and closes the sheet. A failure
+    /// closes the sheet too, so the alert that names the file is seen (an alert under an open sheet
+    /// is not).
     private func finishSaving(_ write: () throws -> Void) {
         do {
             try write()
             if profileID != initialProfileID { document.setPostProfile(profileID) }
             dismiss()
         } catch {
+            dismiss()
             document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
         }
     }
-}
-
-/// A folder save held until the user agrees to replace the files already there.
-struct ReplaceRequest {
-    var set: GCodeFileSet
-    var directory: URL
-    var names: [String]
 }

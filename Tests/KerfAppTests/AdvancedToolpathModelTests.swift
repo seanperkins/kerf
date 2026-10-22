@@ -150,7 +150,7 @@ private enum Job {
         for f in files { #expect(Set(f.toolpaths.map(\.tool.id)).count == 1) }
         let posted = GCodeBatchExport.post(files, project: p, profile: Job.post, jobName: "Sign")
         let dir = AppTestSupport.tempDir()
-        let urls = try GCodeBatchExport.write(posted, to: dir)
+        let urls = try GCodeFileSet(posted: posted).write(to: dir)
         #expect(urls.count == 3)
         let text = try String(contentsOf: urls[1], encoding: .utf8)
         #expect(text.contains("M30"))

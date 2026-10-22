@@ -1,0 +1,39 @@
+import SwiftUI
+
+/// A folder save held until the user agrees to replace the files already there.
+struct ReplaceRequest {
+    var set: GCodeFileSet
+    var directory: URL
+    /// The planned names already in the folder, which the user is asked about and which the write
+    /// is then allowed to replace.
+    var names: [String]
+
+    init(set: GCodeFileSet, directory: URL) {
+        self.set = set
+        self.directory = directory
+        names = set.existing(in: directory)
+    }
+
+    /// The names for the alert: the first few, then a count.
+    var summary: String {
+        let shown = names.prefix(5).joined(separator: ", ")
+        let more = names.count - min(names.count, 5)
+        return more > 0 ? "\(shown) and \(more) more" : shown
+    }
+}
+
+extension View {
+    /// "Replace N files?" before a set writes over files already in the folder. The request is
+    /// handed to the button so a dismissal that clears the binding cannot empty the action.
+    func replaceFilesAlert(_ request: Binding<ReplaceRequest?>, onReplace: @escaping (ReplaceRequest) -> Void) -> some View {
+        let n = request.wrappedValue?.names.count ?? 0
+        return alert("Replace \(n) file\(n == 1 ? "" : "s")?",
+                     isPresented: Binding(get: { request.wrappedValue != nil }, set: { if !$0 { request.wrappedValue = nil } }),
+                     presenting: request.wrappedValue) { r in
+            Button("Replace", role: .destructive) { onReplace(r) }
+            Button("Cancel", role: .cancel) {}
+        } message: { r in
+            Text("The folder already has \(r.summary). Saving writes the whole set over \(r.names.count == 1 ? "it" : "them").")
+        }
+    }
+}

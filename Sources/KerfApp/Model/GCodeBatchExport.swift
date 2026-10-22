@@ -96,16 +96,9 @@ enum GCodeBatchExport {
         }
     }
 
-    /// Posts every planned file (validator included).
+    /// Posts every planned file (validator included). `GCodeFileSet(posted:)` writes the result.
     static func post(_ files: [PlannedGCodeFile], project: KerfProject, profile: PostProfile,
                      jobName: String) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
         files.map { ($0, GCodeExporter.export(project: project, toolpaths: $0.toolpaths, profile: profile, jobName: jobName)) }
-    }
-
-    /// Writes every posted program into `directory`, all or none (`GCodeFileSet`): a program whose
-    /// post failed stops the whole save, and a failure part way through leaves the folder as it was.
-    @discardableResult
-    static func write(_ posted: [(file: PlannedGCodeFile, result: GCodeExportResult)], to directory: URL) throws -> [URL] {
-        try GCodeFileSet(posted: posted).write(to: directory)
     }
 }

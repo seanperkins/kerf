@@ -191,12 +191,14 @@ enum GCodeExporter {
         }
     }
 
-    /// File name like "Sign_Profile_1.tap" (unsafe characters replaced).
+    /// File name like "Sign_Profile_1.tap" (unsafe characters replaced). The extension comes from a
+    /// post profile, which may be any JSON file a user dropped in, so it is cleaned the same way.
     static func suggestedFileName(jobName: String, operationName: String?, profile: PostProfile) -> String {
         var base = jobName.isEmpty ? "Untitled" : jobName
         if let op = operationName { base += "_" + op }
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
         let clean = String(base.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" })
-        return clean + "." + profile.fileExtension
+        let ext = String(profile.fileExtension.unicodeScalars.filter { allowed.contains($0) && $0 != "." })
+        return clean + "." + (ext.isEmpty ? "tap" : ext)
     }
 }
