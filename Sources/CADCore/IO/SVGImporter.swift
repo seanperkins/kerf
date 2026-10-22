@@ -35,8 +35,8 @@ public struct SVGImporter: VectorImporter {
         return ScaleGuess(pixelsPerInch: program?.pixelsPerInch ?? 96, generator: program?.name)
     }
 
-    /// The program that wrote the file, from Inkscape's version attribute or the comment Illustrator leaves
-    /// at the top, with the user units per inch it draws in. Inkscape drew in 90 per inch up to 0.91 and
+    /// The program that wrote the file, from Inkscape's version attribute or the generator comment Illustrator
+    /// leaves at the top, with the user units per inch it draws in. Inkscape drew in 90 per inch up to 0.91 and
     /// has used 96 since 0.92; Illustrator uses 72.
     static func generator(root: SVGNode, data: Data) -> (name: String, pixelsPerInch: Double)? {
         if let version = root["inkscape:version"] {
@@ -46,7 +46,10 @@ public struct SVGImporter: VectorImporter {
                 return ("Inkscape \(number)", major == 0 && (parts.count > 1 ? parts[1] : 0) < 92 ? 90 : 96)
             }
         }
-        if String(decoding: data.prefix(4096), as: UTF8.self).range(of: "Adobe Illustrator", options: .caseInsensitive) != nil {
+        // Only the comment Illustrator writes ("<!-- Generator: Adobe Illustrator 19.0.0, ... -->"): a title or
+        // a text that mentions the program does not make the file one of its.
+        let head = String(decoding: data.prefix(4096), as: UTF8.self)
+        if head.range(of: #"<!--\s*Generator:\s*Adobe Illustrator"#, options: [.regularExpression, .caseInsensitive]) != nil {
             return ("Adobe Illustrator", 72)
         }
         return nil

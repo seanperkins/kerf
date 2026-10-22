@@ -56,8 +56,9 @@ enum SVGAttributes {
         return unitsPerInch[unit] != nil
     }
 
-    /// A length in pixels of an SVG drawn at `pixelsPerInch` (96 by CSS). Percentages resolve against `percentOf`.
-    static func pixels(_ s: String?, percentOf ref: Double = 0, pixelsPerInch: Double = 96) -> Double? {
+    /// A length in pixels of an SVG drawn at `pixelsPerInch` (96 by CSS). There is no default: every length of a file
+    /// goes through its scale. Percentages resolve against `percentOf`.
+    static func pixels(_ s: String?, percentOf ref: Double = 0, pixelsPerInch: Double) -> Double? {
         guard let (v, unit) = lengthParts(s) else { return nil }
         if let perInch = unitsPerInch[unit] { return v * pixelsPerInch / perInch }
         switch unit {
@@ -65,11 +66,6 @@ enum SVGAttributes {
         case "em": return v * 16
         default: return v   // "", "px", and units that are not understood
         }
-    }
-
-    /// A length converted to `unit` (physical: 96 px per inch).
-    static func physical(_ s: String?, in unit: LengthUnit, percentOf ref: Double = 0) -> Double? {
-        pixels(s, percentOf: ref).map { LengthUnit.inch.convert($0 / 96, to: unit) }
     }
 
     /// Declarations from a `style="a:b; c:d"` attribute.

@@ -21,21 +21,17 @@ struct SVGScaleRequest: Identifiable, Equatable, Sendable {
     /// The scales programs draw in: Illustrator, Inkscape 0.91 and older, the web.
     static let choices: [Double] = [72, 90, 96]
 
-    /// The width and height of the drawing in `units` when read at `pixelsPerInch`; nil when the file holds
-    /// no vectors or cannot be read.
-    func drawingSize(at pixelsPerInch: Double) -> Vec2? {
-        guard let result = try? SVGImporter(pixelsPerInch: pixelsPerInch).importVectors(from: data, targetUnits: units) else { return nil }
-        let boxes = result.shapes.map { $0.bounds() }
-        guard let first = boxes.first else { return nil }
-        let all = boxes.dropFirst().reduce(first) { $0.union($1) }
-        return Vec2(all.width, all.height)
-    }
-
-    /// The drawing's size at every choice; a choice it cannot be measured at is missing. (Physical lengths
-    /// inside the drawing keep their size, so the sizes are not simply proportional to the scale.)
+    /// The width and height of the drawing in `units` at every choice; a choice it cannot be measured at (no
+    /// vectors, or a file that cannot be read) is missing. Physical lengths inside the drawing keep their size,
+    /// so the sizes are not simply proportional to the scale.
     func drawingSizes() -> [Double: Vec2] {
         var sizes: [Double: Vec2] = [:]
-        for choice in Self.choices { sizes[choice] = drawingSize(at: choice) }
+        for choice in Self.choices {
+            guard let result = try? SVGImporter(pixelsPerInch: choice).importVectors(from: data, targetUnits: units),
+                  let first = result.shapes.first?.bounds() else { continue }
+            let all = result.shapes.dropFirst().reduce(first) { $0.union($1.bounds()) }
+            sizes[choice] = Vec2(all.width, all.height)
+        }
         return sizes
     }
 }

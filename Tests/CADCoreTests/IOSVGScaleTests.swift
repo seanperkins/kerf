@@ -147,6 +147,9 @@ import Testing
             #expect(approx(mm.width, 1, 1e-6) && approx(mm.height, 12.0 / 72, 1e-6), Comment(rawValue: "\(scale)"))
             // The page is 2 in whatever the scale, so the square drawn from the top-left sits where it should.
             #expect(approx(inch.min.y, 2 - 0.5 - 1, 1e-6), Comment(rawValue: "\(scale)"))
+            // The <use> copy of the pixel square is moved an inch right.
+            let copies = r.shapes.filter { $0.name == "px" }.map { $0.bounds().min.x }.sorted()
+            #expect(copies.count == 2 && approx(copies[0], 0, 1e-6) && approx(copies[1], 1, 1e-6), Comment(rawValue: "\(scale): \(copies)"))
         }
     }
 
@@ -174,5 +177,17 @@ import Testing
         // A width of 100vmin states nothing about inches: the file still needs a scale.
         let svg = #"<svg xmlns="http://www.w3.org/2000/svg" width="100vmin" height="100vmin" viewBox="0 0 10 10"/>"#
         #expect(try SVGImporter.scaleGuess(of: Data(svg.utf8)) != nil)
+    }
+
+    @Test func onlyTheGeneratorCommentMakesAFileIllustrators() throws {
+        func guess(_ head: String) throws -> SVGImporter.ScaleGuess? {
+            let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"96\" height=\"96\">\(head)<rect width=\"96\" height=\"96\"/></svg>"
+            return try SVGImporter.scaleGuess(of: Data(svg.utf8))
+        }
+        #expect(try guess("<title>Adobe Illustrator keyboard shortcuts</title>")?.generator == nil)
+        #expect(try guess("<!-- A tutorial for Adobe Illustrator users -->")?.generator == nil)
+        #expect(try guess("<text>Adobe Illustrator</text>")?.pixelsPerInch == 96)
+        #expect(try guess("<!--Generator: Adobe Illustrator 24.1.0, SVG Export Plug-In-->")?.pixelsPerInch == 72)
+        #expect(try guess("<!--   generator:  ADOBE ILLUSTRATOR 19-->")?.pixelsPerInch == 72)
     }
 }

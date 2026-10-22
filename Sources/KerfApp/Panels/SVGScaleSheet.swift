@@ -28,7 +28,8 @@ struct SVGScaleSheet: View {
     private var sizeText: String {
         guard let sizes else { return "Measuring…" }
         guard let size = sizes[pixelsPerInch] else { return "The size could not be measured: the file holds no vectors or could not be read." }
-        let u = document.units.abbreviation
+        // In the units the sizes were measured in: the document's may have changed while the sheet waited.
+        let u = request.units.abbreviation
         return "Comes in \(RulerTicks.label((size.x * 1000).rounded() / 1000)) × \(RulerTicks.label((size.y * 1000).rounded() / 1000)) \(u)"
     }
 
