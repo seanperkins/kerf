@@ -190,7 +190,6 @@ struct OperationEditor: View {
         }
     }
 
-    /// The primary tool's stepdown in document units.
     /// The operation's primary tool in document units.
     private var primaryTool: Tool? { library.tool(id: draft.setup.toolID)?.converted(to: units) }
 
