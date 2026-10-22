@@ -66,7 +66,8 @@ import Testing
         coordinator.tick()                       // the recovery timer is what looks at the file
         #expect(!doc.needsRecovery)
         #expect(store.entries().isEmpty)
-        #expect(!doc.confirmSave())              // nothing left to confirm
+        #expect(doc.confirmSave())               // the file still holds that save: the same answer
+        #expect(!doc.needsRecovery)
     }
 
     @Test func aFileThatHoldsSomethingElseIsNotAConfirmation() throws {
@@ -120,13 +121,12 @@ import Testing
         #expect(doc.confirmSave())
         doc.perform("Second") { $0.document.name = "Second" }
         _ = try saveBytes(doc)                 // handed over, never written
-        #expect(!doc.confirmSave())
+        #expect(doc.confirmSave())             // the file still holds the first save, and that stays the saved one
         #expect(doc.lastSavedProject.document.name == "First")
         #expect(doc.needsRecovery)
         try saveBytes(doc).write(to: url)      // saved again, and this one lands
         #expect(doc.confirmSave())
         #expect(!doc.needsRecovery)
-        #expect(!doc.confirmSave())
     }
 
     /// Saves can overlap: the older one's bytes are encoded after the newer snapshot was taken. The bytes belong
@@ -176,18 +176,59 @@ import Testing
         #expect(store.entries().count == 1)
     }
 
-    @Test func onlyTheLastFewUnwrittenSavesAreRemembered() throws {
+    /// A save that reached the file and was forgotten, because newer ones piled up before anyone looked, must not
+    /// leave the document looking clean once the project is undone to the old baseline.
+    @Test func forgettingAnUnlookedAtSaveNeverLeavesTheDocumentLookingClean() throws {
         let url = AppTestSupport.tempDir().appendingPathComponent("many.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
         let doc = makeDoc()
+        let um = UndoManager()
+        um.groupsByEvent = false
+        doc.undoManager = um
         doc.fileURL = url
-        doc.perform("First") { $0.document.name = "First" }
-        let first = try saveBytes(doc)
-        for i in 0..<12 {
-            doc.perform("Edit \(i)") { $0.document.name = "Edit \(i)" }
-            _ = try saveBytes(doc)
-        }
-        try first.write(to: url)                 // the very first save landed, long forgotten
-        #expect(!doc.confirmSave())              // not remembered: stays as it was (dirty), the safe side
+        let coordinator = RecoveryCoordinator(store: store)
+        coordinator.register(doc)
+        let original = doc.project.document.name
+
+        um.beginUndoGrouping(); doc.perform("A") { $0.document.name = "A" }; um.endUndoGrouping()
+        try saveBytes(doc).write(to: url)                              // A reaches the file, not yet looked at
+        um.beginUndoGrouping(); doc.perform("B") { $0.document.name = "B" }; um.endUndoGrouping()
+        for _ in 0..<9 { _ = try saveBytes(doc) }                      // nine saves that never land push A out
+        um.undo(); um.undo()                                           // back to the original project
+        #expect(doc.project.document.name == original)
+
+        coordinator.tick()
+        // The file holds A and the document holds the original: it must not be called clean.
         #expect(doc.needsRecovery)
+        #expect(store.entries().count == 1)
+        let copy = try #require(store.entries().first)
+        #expect(try store.project(for: copy.id).document.name == original)
+
+        // A later save that lands settles it again.
+        try saveBytes(doc).write(to: url)
+        coordinator.tick()
+        #expect(!doc.needsRecovery)
+        #expect(store.entries().isEmpty)
+    }
+
+    /// The file's content decides: an older save that lands after a newer one has replaced it.
+    @Test func aLateOlderWriteMovesTheSavedProjectBack() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("late.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let (doc, coordinator) = dirtyDocument(file: url, store: store)
+        let older = try doc.snapshot(contentType: .kerfProject)       // project "Edited"
+        doc.perform("Again") { $0.document.name = "Again" }
+        let newer = try doc.snapshot(contentType: .kerfProject)       // project "Again"
+        let olderBytes = try doc.fileData(for: older)
+        let newerBytes = try doc.fileData(for: newer)
+
+        try newerBytes.write(to: url)
+        coordinator.tick()
+        #expect(!doc.needsRecovery)                                    // the newer save is the file
+        try olderBytes.write(to: url)                                  // then the older one lands over it
+        coordinator.tick()
+        #expect(doc.lastSavedProject.document.name == "Edited")
+        #expect(doc.needsRecovery)
+        #expect(store.entries().map(\.name) == ["Again"])             // the newest work is protected again
     }
 }

@@ -173,7 +173,13 @@ final class KerfDocument: ReferenceFileDocument {
     /// once the file is seen to hold the saved bytes (`confirmSave`), so a write that failed leaves the document
     /// dirty and its recovery copy in place.
     private(set) var lastSavedProject: KerfProject
-    var needsRecovery: Bool { project != lastSavedProject }
+    /// True when the project differs from the saved one, or when the saved one is not known: a save that may have
+    /// reached the file was forgotten (see `pendingLimit`), so equality with `lastSavedProject` proves nothing.
+    var needsRecovery: Bool {
+        pendingLock.lock()
+        defer { pendingLock.unlock() }
+        return savedStateUnknown || project != lastSavedProject
+    }
 
     /// A save SwiftUI has taken (`snapshot`) that is not known to be on disk. The system writes the bytes after
     /// `fileWrapper` returns and reports nothing back, so each save waits here, by its id, until the file is seen
@@ -183,12 +189,19 @@ final class KerfDocument: ReferenceFileDocument {
         var project: KerfProject
         var bytes: (count: Int, digest: SHA256Digest)?
     }
-    /// Oldest first, kept to the last few: a save that never lands is dropped when newer ones pile up.
+    /// Oldest first, kept to the last few. A save stays in the list after it is matched, so a late older write
+    /// that replaces a newer one is noticed too.
     private static let pendingLimit = 8
-    /// `snapshot` runs on the main actor and `fileWrapper` may not, so the pending saves have their own lock.
+    /// `snapshot` runs on the main actor and `fileWrapper` may not, so the pending saves have their own lock
+    /// (it also guards the two flags below).
     private let pendingLock = NSLock()
     private var pendingSaves: [PendingSave] = []
     private var lastSaveID = 0
+    /// The newest save the file has been seen to hold.
+    private var lastConfirmedID = 0
+    /// Set when a save newer than `lastConfirmedID` is dropped from the list unlooked-at: the file may hold it,
+    /// so the document stays "needs recovery" until a later save is matched.
+    private var savedStateUnknown = false
 
     init(project: KerfProject, toolLibrary: ToolLibraryModel = .shared) {
         self.project = project
@@ -227,7 +240,10 @@ final class KerfDocument: ReferenceFileDocument {
         lastSaveID += 1
         let id = lastSaveID
         pendingSaves.append(PendingSave(id: id, project: project, bytes: nil))
-        if pendingSaves.count > Self.pendingLimit { pendingSaves.removeFirst() }
+        if pendingSaves.count > Self.pendingLimit {
+            let dropped = pendingSaves.removeFirst()
+            if dropped.id > lastConfirmedID { savedStateUnknown = true }
+        }
         pendingLock.unlock()
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
@@ -251,11 +267,11 @@ final class KerfDocument: ReferenceFileDocument {
         return data
     }
 
-    /// Looks at the file at `fileURL`: when it holds exactly what one of the pending saves handed over, that
-    /// save's project is the saved one (so the document is clean if it still matches, and its recovery copy goes
-    /// at the next tick) and that save and every older one stop pending. A write that failed or has not happened,
-    /// a file that is not a regular file, or one that holds something else leaves everything as it was. Returns
-    /// whether a save was confirmed.
+    /// Looks at the file at `fileURL`: when it holds exactly what one of the pending saves handed over (the newest
+    /// that matches), that save's project is the saved one, so the document is clean if it still equals it and its
+    /// recovery copy goes at the next tick. The file's content decides, so a late older write that replaced a newer
+    /// one moves the saved project back. A write that failed or has not happened, a file that is not a regular
+    /// file, or one that holds something else leaves everything as it was. Returns whether a save matched.
     @discardableResult
     func confirmSave() -> Bool {
         pendingLock.lock()
@@ -266,15 +282,17 @@ final class KerfDocument: ReferenceFileDocument {
               let match = candidates.last(where: { $0.bytes?.count == onDisk.count && $0.bytes?.digest == onDisk.digest })
         else { return false }
         pendingLock.lock()
-        pendingSaves.removeAll { $0.id <= match.id }
+        lastConfirmedID = max(lastConfirmedID, match.id)
+        savedStateUnknown = false
         pendingLock.unlock()
         lastSavedProject = match.project
         return true
     }
 
     /// Size and SHA-256 of the file at `url`, read in chunks, or nil unless it is a regular file of one of
-    /// `sizes` bytes. A file of any other size is not read at all, and a pipe or device put in the file's place
-    /// is not waited on (`O_NONBLOCK` opens a pipe at once; it is then refused for not being a regular file).
+    /// `sizes` bytes that was read to its end without error and without changing length. A file of any other
+    /// size is not read at all, and a pipe or device put in the file's place is not waited on (`O_NONBLOCK` opens
+    /// a pipe at once; it is then refused for not being a regular file).
     static func regularFileDigest(at url: URL, ofSizes sizes: Set<Int>) -> (count: Int, digest: SHA256Digest)? {
         let fd = open(url.path, O_RDONLY | O_NONBLOCK)
         guard fd >= 0 else { return nil }
@@ -283,10 +301,15 @@ final class KerfDocument: ReferenceFileDocument {
         guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, sizes.contains(Int(info.st_size)) else { return nil }
         var hasher = SHA256()
         var count = 0
-        while let chunk = try? handle.read(upToCount: 1 << 20), !chunk.isEmpty {
-            hasher.update(data: chunk)
-            count += chunk.count
+        do {
+            while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+                hasher.update(data: chunk)
+                count += chunk.count
+            }
+        } catch {
+            return nil
         }
+        guard count == Int(info.st_size) else { return nil }
         return (count, hasher.finalize())
     }
 
