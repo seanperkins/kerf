@@ -204,7 +204,7 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `ux-menus-shortcuts` | app-ux | Menus and keyboard shortcuts | done | P1 | App/KerfCommands.swift, DrawingTools.shortcut |
 | `ux-preferences` | app-ux | Preferences window (default units, grid, post, snapping, colours) | done | P2 | Panels/PreferencesView.swift, Model/AppPreferences.swift; PreferencesTests |
 | `ux-undo` | app-ux | Undo/redo for every document edit | done | P1 | KerfDocument.perform snapshot undo; DocumentTests |
-| `ux-autosave-crash` | app-ux | Autosave and crash recovery | done | P2 | DocumentGroup autosave + Model/RecoveryStore.swift recovery copies, Panels/RecoveryPrompt.swift; RecoveryTests |
+| `ux-autosave-crash` | app-ux | Autosave and crash recovery | done | P2 | DocumentGroup autosave + Model/RecoveryStore.swift recovery copies, Panels/RecoveryPrompt.swift (a save counts only once the file holds the saved bytes, KerfDocument.confirmSave); RecoveryTests, SaveConfirmationTests |
 | `ux-canvas-handles` | app-ux | On-canvas resize/rotate handles and mouse node editing | done | P1 | TransformHandles.swift, CanvasNodeEvents.swift; EditingRenderTests |
 | `ux-context-menus` | app-ux | Context (right-click) menus | done | P2 | Canvas/CanvasEditMenu.swift, SidebarView contextMenu |
 | `ux-contextual-help` | app-ux | Contextual help and tooltips | done | P2 | Model/HelpTopics.swift, Panels/HelpView.swift (per-form ? buttons, field tooltips); HelpTopicsTests |

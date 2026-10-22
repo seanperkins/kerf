@@ -125,9 +125,9 @@ import Testing
         let (doc, um) = makeDoc()
         step(um) { doc.addOperation(.vcarve) }
         let snap = try doc.snapshot(contentType: .kerfProject)
-        #expect(snap.tools.map(\.id) == [doc.project.operations[0].setup.toolID])
-        let decoded = try KerfProject.decode(from: snap.encoded())
-        #expect(decoded == snap)
+        #expect(snap.project.tools.map(\.id) == [doc.project.operations[0].setup.toolID])
+        let decoded = try KerfProject.decode(from: snap.project.encoded())
+        #expect(decoded == snap.project)
     }
 
     @Test func jobSetupChangeConvertsUnitsAndUndoes() {
