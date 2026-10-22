@@ -123,6 +123,9 @@ struct JobSetupSheet: View {
         }
         .padding(20)
         .frame(width: 900)
+        // Expressions in these fields see the form's own values, not the saved job's.
+        .environment(\.documentVariables, form.variableTable(in: document.document))
+        .environment(\.expressionUnits, form.units)
     }
 }
 
