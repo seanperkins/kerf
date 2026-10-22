@@ -36,8 +36,15 @@ enum SVGAttributes {
         return result
     }
 
-    /// A length in CSS pixels (SVG user units). Percentages resolve against `percentOf`.
-    static func pixels(_ s: String?, percentOf ref: Double = 0) -> Double? {
+    /// True when `s` is a length in a physical unit (in, mm, cm, pt, pc): it fixes a size, whatever the
+    /// pixels per inch.
+    static func hasPhysicalUnit(_ s: String?) -> Bool {
+        guard let raw = s?.trimmingCharacters(in: .whitespaces).lowercased() else { return false }
+        return ["in", "mm", "cm", "pt", "pc"].contains { raw.hasSuffix($0) }
+    }
+
+    /// A length in pixels of an SVG at `dpi` pixels per inch (96 by CSS). Percentages resolve against `percentOf`.
+    static func pixels(_ s: String?, percentOf ref: Double = 0, dpi: Double = 96) -> Double? {
         guard let raw = s?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
         var sc = SVGNumberScanner(raw)
         guard let v = sc.number() else { return nil }
@@ -45,11 +52,11 @@ enum SVGAttributes {
             .trimmingCharacters(in: .whitespaces).lowercased()
         switch unit {
         case "", "px": return v
-        case "in": return v * 96
-        case "mm": return v * 96 / 25.4
-        case "cm": return v * 96 / 2.54
-        case "pt": return v * 96 / 72
-        case "pc": return v * 16
+        case "in": return v * dpi
+        case "mm": return v * dpi / 25.4
+        case "cm": return v * dpi / 2.54
+        case "pt": return v * dpi / 72
+        case "pc": return v * dpi / 6
         case "%": return v / 100 * ref
         case "em": return v * 16
         default: return v

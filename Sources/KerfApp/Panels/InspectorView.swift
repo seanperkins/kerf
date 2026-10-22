@@ -200,7 +200,8 @@ struct ShapeInspector: View {
         case .polygon(let n, let r): return "\(n)-sided polygon, radius \(f(r)) \(u)"
         case .star(let n, let ro, _): return "\(n)-point star, radius \(f(ro)) \(u)"
         case .text(let t, let font, let size): return "Text “\(t)” · \(font) \(f(size)) \(u)"
-        case .imported(let fmt): return "Imported from \(fmt.uppercased())"
+        case .imported(let fmt, let ppi):
+            return "Imported from \(fmt.uppercased())" + (ppi.map { ", scaled at \(RulerTicks.label($0)) px per inch" } ?? "")
         case .derived(let op): return "Result of \(op)"
         case .drawn: return s.isClosed ? "Closed vector" : "Open vector"
         }

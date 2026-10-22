@@ -8,7 +8,7 @@ enum CanvasAccessibility {
     static func kind(_ shape: Shape) -> String {
         switch shape.origin {
         case .drawn: return shape.isClosed ? "Closed vector" : "Open vector"
-        case .imported(let f): return "Imported \(f.uppercased()) vector"
+        case .imported(let f, _): return "Imported \(f.uppercased()) vector"
         case .rectangle: return "Rectangle"
         case .circle: return "Circle"
         case .ellipse: return "Ellipse"

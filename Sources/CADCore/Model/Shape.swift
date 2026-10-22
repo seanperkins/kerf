@@ -4,7 +4,9 @@ import Foundation
 /// for CAM — CAM always works on `Shape.paths`.
 public enum ShapeOrigin: Codable, Hashable, Sendable {
     case drawn
-    case imported(format: String)
+    /// `pixelsPerInch` is the scale chosen or guessed for a file with no physical size (an SVG's user units
+    /// per inch); nil when the file states its own size.
+    case imported(format: String, pixelsPerInch: Double? = nil)
     case rectangle(width: Double, height: Double, cornerRadius: Double)
     case circle(radius: Double)
     case ellipse(rx: Double, ry: Double)

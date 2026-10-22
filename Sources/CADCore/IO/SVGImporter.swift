@@ -6,16 +6,69 @@ import Foundation
 public struct SVGImporter: VectorImporter {
     public static let fileExtensions = ["svg"]
 
-    /// Size of one user unit when the file has no physical width/height (CSS: 96 px per inch).
-    public var pixelsPerInch: Double
+    /// User units per inch to assume for a file that does not fix its own size (see `scaleInfo(of:)`).
+    /// nil guesses from the program that wrote the file: Inkscape 0.91 and older 90, Illustrator 72,
+    /// otherwise 96 (CSS). A file with a physical size ignores it.
+    public var pixelsPerInch: Double?
 
-    public init(pixelsPerInch: Double = 96) { self.pixelsPerInch = pixelsPerInch }
+    public init(pixelsPerInch: Double? = nil) { self.pixelsPerInch = pixelsPerInch }
+
+    /// What an SVG says about its own scale.
+    public struct ScaleInfo: Equatable, Sendable {
+        /// The file does not fix its size: it has no viewBox, or no physical unit (in, mm, cm, pt, pc) on its
+        /// page width or height, so the length of a user unit has to be assumed.
+        public var isUnitless: Bool
+        /// User units per inch assumed for such a file: the program's own, when it is recognised, else 96.
+        public var pixelsPerInch: Double
+        /// The program that wrote the file, when recognised ("Inkscape 0.91", "Adobe Illustrator").
+        public var generator: String?
+    }
+
+    public static func scaleInfo(of data: Data) throws -> ScaleInfo {
+        scaleInfo(root: try SVGNode.parse(data), data: data)
+    }
+
+    static func scaleInfo(root: SVGNode, data: Data) -> ScaleInfo {
+        let vb = root["viewBox"].map(SVGNumberScanner.numbers(in:)) ?? []
+        let hasViewBox = vb.count == 4 && vb[2] > 0 && vb[3] > 0
+        let physical = hasViewBox && (SVGAttributes.hasPhysicalUnit(root["width"]) || SVGAttributes.hasPhysicalUnit(root["height"]))
+        let program = generator(root: root, data: data)
+        return ScaleInfo(isUnitless: !physical, pixelsPerInch: program?.pixelsPerInch ?? 96, generator: program?.name)
+    }
+
+    /// The program that wrote the file, from Inkscape's version attribute or the comment Illustrator leaves
+    /// at the top, with the user units per inch it draws in. Inkscape drew in 90 per inch up to 0.91 and
+    /// has used 96 since 0.92; Illustrator uses 72.
+    static func generator(root: SVGNode, data: Data) -> (name: String, pixelsPerInch: Double)? {
+        if let version = root["inkscape:version"] {
+            let number = version.prefix { $0.isNumber || $0 == "." }
+            let parts = number.split(separator: ".").compactMap { Int($0) }
+            if let major = parts.first {
+                return ("Inkscape \(number)", major == 0 && (parts.count > 1 ? parts[1] : 0) < 92 ? 90 : 96)
+            }
+        }
+        if String(decoding: data.prefix(4096), as: UTF8.self).range(of: "Adobe Illustrator", options: .caseInsensitive) != nil {
+            return ("Adobe Illustrator", 72)
+        }
+        return nil
+    }
 
     public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
         let root = try SVGNode.parse(data)
         var ctx = Context(units: targetUnits)
         ctx.indexIDs(root)
-        let pageToDoc = viewportTransform(root, units: targetUnits, warnings: &ctx.warnings)
+        // A physical page size and a viewBox fix the scale. Otherwise a user unit is 1/dpi in, and the guess
+        // is reported unless the caller chose the scale.
+        let info = Self.scaleInfo(root: root, data: data)
+        let dpi = info.isUnitless ? (pixelsPerInch ?? info.pixelsPerInch) : 96
+        if info.isUnitless {
+            ctx.origin = .imported(format: "svg", pixelsPerInch: dpi)
+            if pixelsPerInch == nil {
+                let source = info.generator.map { " (\($0))" } ?? " (the web default)"
+                ctx.warnings.append("This SVG has no physical size, so it was scaled at \(Int(dpi)) px per inch\(source). If it comes in at the wrong size, import it again and choose another scale.")
+            }
+        }
+        let pageToDoc = viewportTransform(root, units: targetUnits, dpi: dpi)
 
         let defaultLayer = Layer(name: "SVG Import", colorHex: Self.palette[0])
         for child in root.children {
@@ -34,14 +87,15 @@ public struct SVGImporter: VectorImporter {
         return ImportResult(layers: ctx.layers, shapes: ctx.shapes, warnings: ctx.warnings, images: ctx.images)
     }
 
-    /// Maps root user space → document units with Y flipped (page bottom at y = 0).
-    func viewportTransform(_ root: SVGNode, units: LengthUnit, warnings: inout [String]) -> Transform2D {
-        let pxToUnit = LengthUnit.inch.convert(1 / pixelsPerInch, to: units)
+    /// Maps root user space → document units with Y flipped (page bottom at y = 0). `dpi` is the pixels
+    /// per inch of the page's own pixels, which physical sizes on the page are converted to.
+    func viewportTransform(_ root: SVGNode, units: LengthUnit, dpi: Double) -> Transform2D {
+        let pxToUnit = LengthUnit.inch.convert(1 / dpi, to: units)
         let vb = root["viewBox"].map(SVGNumberScanner.numbers(in:)) ?? []
         let hasVB = vb.count == 4 && vb[2] > 0 && vb[3] > 0
         // Viewport size in px (width/height attributes; default to the viewBox size).
-        let wAttr = SVGAttributes.pixels(root["width"], percentOf: hasVB ? vb[2] : 0)
-        let hAttr = SVGAttributes.pixels(root["height"], percentOf: hasVB ? vb[3] : 0)
+        let wAttr = SVGAttributes.pixels(root["width"], percentOf: hasVB ? vb[2] : 0, dpi: dpi)
+        let hAttr = SVGAttributes.pixels(root["height"], percentOf: hasVB ? vb[3] : 0, dpi: dpi)
         // With a viewBox, a missing (or "auto") dimension is the other one scaled by the viewBox
         // aspect ratio (SVG 2 §8.3); defaulting it to the viewBox size would mis-scale the file.
         var wPx = wAttr ?? (hasVB ? vb[2] : 0)
@@ -65,8 +119,6 @@ public struct SVGImporter: VectorImporter {
                 ty = -vb[1] * s + extraY * fy
             }
             userToPx = Transform2D(a: sx, b: 0, c: 0, d: sy, tx: tx, ty: ty)
-        } else if root["width"] == nil {
-            warnings.append("SVG has no viewBox or size; assuming \(Int(pixelsPerInch)) user units per inch.")
         }
         let flip = Transform2D(a: pxToUnit, b: 0, c: 0, d: -pxToUnit, tx: 0, ty: hPx * pxToUnit)
         return userToPx.concatenating(flip)
@@ -89,6 +141,8 @@ public struct SVGImporter: VectorImporter {
         var shapes: [Shape] = []
         var warnings: [String] = []
         var images: [ImportedImage] = []
+        /// Provenance of every shape: records the scale assumed for a file with no physical size.
+        var origin = ShapeOrigin.imported(format: "svg")
         var ids: [String: SVGNode] = [:]
         private var warned: Set<String> = []
         private var useDepth = 0
@@ -139,7 +193,7 @@ public struct SVGImporter: VectorImporter {
                     let doc = PathGeometry.closeNearlyClosed(paths.map { $0.transformed(ctm) },
                                                              tolerance: units == .inch ? 0.0005 : 0.01)
                     shapes.append(Shape(name: n.id.map(SVGImporter.displayName(forID:)) ?? n.name, layerID: layerID, paths: doc,
-                                        origin: .imported(format: "svg")))
+                                        origin: origin))
                 }
             }
         }
@@ -285,7 +339,7 @@ extension SVGImporter.Context {
         guard !paths.isEmpty else { return }
         let name = label.trimmingCharacters(in: .whitespaces)
         shapes.append(Shape(name: name.isEmpty ? "Text" : String(name.prefix(40)), layerID: layerID, paths: paths,
-                            origin: .imported(format: "svg")))
+                            origin: origin))
     }
 
     /// `<image>` with an embedded (data: URI) picture → tracing image; linked files are skipped.
