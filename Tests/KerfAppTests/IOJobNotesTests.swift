@@ -40,13 +40,13 @@ import Testing
     @Test func jobSheetPrintsTheNotes() {
         let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
         doc.setJobNotes("Spoilboard surfaced <today> & level", showOnOpen: false)
-        let js = doc.makeJobSheet()
+        let js = doc.makeJobSheet(settings: TimeEstimateSettings())
         #expect(js.notes == "Spoilboard surfaced <today> & level")
         let html = JobSheetHTML.render(js)
         #expect(html.contains("<h2>Notes</h2>"))
         #expect(html.contains("Spoilboard surfaced &lt;today&gt; &amp; level"))
         doc.setJobNotes("", showOnOpen: false)
-        #expect(!JobSheetHTML.render(doc.makeJobSheet()).contains("<h2>Notes</h2>"))
+        #expect(!JobSheetHTML.render(doc.makeJobSheet(settings: TimeEstimateSettings())).contains("<h2>Notes</h2>"))
     }
 
     @Test func notesSheetRenders() throws {

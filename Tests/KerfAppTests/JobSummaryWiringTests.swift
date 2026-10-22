@@ -61,7 +61,7 @@ import Testing
         let saved = defaults.object(forKey: GCodeExporter.groupByToolKey)
         defaults.set(groupByTool, forKey: GCodeExporter.groupByToolKey)
         defer { if let saved { defaults.set(saved, forKey: GCodeExporter.groupByToolKey) } else { defaults.removeObject(forKey: GCodeExporter.groupByToolKey) } }
-        let sheet = doc.makeJobSheet()
+        let sheet = doc.makeJobSheet(settings: settings)
         #expect(sheet.totalTime == ToolpathCalculator.formatDuration(s.totalSeconds) && sheet.toolChanges == s.toolChanges)
     }
 

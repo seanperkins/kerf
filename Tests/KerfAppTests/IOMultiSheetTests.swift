@@ -62,7 +62,7 @@ import Testing
         #expect(doc.document.job.thickness == 0.75)
         #expect(doc.outputProject.operations.map(\.id) == [op1.id])
         #expect(doc.document.job(ofSheet: sheet2)?.thickness == 0.5)
-        #expect(doc.makeJobSheet().jobName.contains("Sheet 1"))
+        #expect(doc.makeJobSheet(settings: TimeEstimateSettings()).jobName.contains("Sheet 1"))
         // Vectors spanning sheets cannot be calculated.
         var both = op1
         var s = both.editableSetup

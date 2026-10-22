@@ -19,6 +19,6 @@ import Testing
         #expect(report.sections.first?.issues.first?.message.contains("outside the material") == true)
         // The profile around the stray vector cuts off the stock.
         #expect(report.sections[1].issues.contains { $0.message.contains("cuts outside the material") })
-        #expect(doc.makeJobSheet().warnings.contains { $0.contains("outside the material") })
+        #expect(doc.makeJobSheet(settings: TimeEstimateSettings()).warnings.contains { $0.contains("outside the material") })
     }
 }

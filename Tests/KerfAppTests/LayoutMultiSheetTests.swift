@@ -62,7 +62,7 @@ import Testing
     @Test func jobSheetHasOneSectionPerSheet() {
         let (p, _) = overflowed()
         let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
-        let js = doc.makeJobSheet()
+        let js = doc.makeJobSheet(settings: TimeEstimateSettings())
         #expect(js.sheets.count == 3)
         #expect(js.sheets[0].title.contains("on the material"))
         #expect(js.sheets.map(\.partNames.count).reduce(0, +) == 9)

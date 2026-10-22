@@ -25,7 +25,7 @@ import Testing
 
     @Test func listsSetupToolsAndStepsInProgramOrder() {
         let doc = calculatedDoc()
-        let js = doc.makeJobSheet(date: Date(timeIntervalSince1970: 0))
+        let js = doc.makeJobSheet(settings: TimeEstimateSettings(), date: Date(timeIntervalSince1970: 0))
         #expect(js.steps.count >= 2)
         #expect(js.steps.first?.toolChange == true)
         #expect(js.steps.map(\.index) == Array(1...js.steps.count))
@@ -44,7 +44,7 @@ import Testing
     }
 
     @Test func describesSpoilboardZeroAndCenterOrigin() {
-        let js = calculatedDoc(zZero: .spoilboard, origin: .center).makeJobSheet()
+        let js = calculatedDoc(zZero: .spoilboard, origin: .center).makeJobSheet(settings: TimeEstimateSettings())
         #expect(js.zZeroInstruction.contains("SPOILBOARD"))
         #expect(js.xyOriginInstruction.contains("center"))
         #expect(js.origin == Vec2(12, 9))
@@ -55,13 +55,13 @@ import Testing
         p.operations = [OperationFactory.make(kind: .profile, project: p, library: .seeded,
                                               shapeIDs: [p.document.shapes[0].id])!]
         let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
-        let js = doc.makeJobSheet()
+        let js = doc.makeJobSheet(settings: TimeEstimateSettings())
         #expect(js.steps.isEmpty)
         #expect(js.warnings.count == 1)
     }
 
     @Test func htmlIsEscapedAndHasThePreview() {
-        let html = JobSheetHTML.render(calculatedDoc().makeJobSheet())
+        let html = JobSheetHTML.render(calculatedDoc().makeJobSheet(settings: TimeEstimateSettings()))
         #expect(html.hasPrefix("<!doctype html>"))
         #expect(html.contains("Sign &lt;1&gt;"))
         #expect(!html.contains("Sign <1>"))
