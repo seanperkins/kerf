@@ -120,6 +120,25 @@ import Testing
         #expect(doc.document.job.safeZ == 0.5)
     }
 
+    @Test func unitTogglesInTheFormDoNotMakeUntouchedFieldsLookEdited() throws {
+        // Width 4.2 in and height 2.1 in. Toggle the form millimetres, inches, millimetres and type
+        // =width/2 into Safe Z: the untouched height, which equals that value, is not linked,
+        // because it still reads exactly as a single conversion of the saved height.
+        var p = AppTestSupport.project()
+        p.document.job.width = 4.2; p.document.job.height = 2.1
+        let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
+        var form = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        form.setUnits(.millimeter); form.setUnits(.inch); form.setUnits(.millimeter)
+        #expect(form.job.height == 2.1 * 25.4 && form.job.width == 4.2 * 25.4)
+        form.job.safeZ = try Self.type("=width/2", into: form, document: doc, current: form.job.safeZ)
+        doc.applyJobSetup(form)
+        #expect(doc.document.linkedValues.map(\.path) == [["safeZ"]])
+        // Toggled back to inches before Apply, the untouched fields are the saved ones to the bit.
+        var back = JobSetupForm(project: AppTestSupport.project(), machines: MachineCatalog.shared.machines)
+        back.setUnits(.millimeter); back.setUnits(.inch)
+        #expect(back.job == AppTestSupport.project().document.job)
+    }
+
     @Test func anUnknownNameCannotHideASelfReference() throws {
         // "=zzz + thickness/2" in Thickness fails on zzz first; the guard still sees the thickness.
         let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
