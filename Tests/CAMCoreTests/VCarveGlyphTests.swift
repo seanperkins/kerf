@@ -81,6 +81,8 @@ private struct OutlineGrid {
     let cell: Double
     var buckets: [Int64: [(Vec2, Vec2)]] = [:]
     let extent: Int
+    /// The last cell column that holds any of the outline: a ray to the right of a point ends there.
+    let lastColumn: Int
 
     init(loops: [[Vec2]], cell: Double) {
         self.cell = cell
@@ -95,15 +97,17 @@ private struct OutlineGrid {
         let all = loops.flatMap { $0 }
         let box = Rect2(points: all)
         extent = Int(ceil(max(box.width, box.height) / cell)) + 2
+        lastColumn = Int(floor(box.max.x / cell))
     }
 
     /// Even-odd containment: the outline segments a ray to the right of `p` crosses, counted cell by cell.
     func contains(_ p: Vec2) -> Bool {
         let cx = Int(floor(p.x / cell)), cy = Int(floor(p.y / cell))
         var crossings = 0
-        for ix in cx...(cx + extent + Int(ceil(abs(p.x) / cell))) {
+        for ix in cx...max(cx, lastColumn) {
             for (a, b) in buckets[GrooveGrid.key(ix, cy)] ?? [] where (a.y > p.y) != (b.y > p.y) {
-                let x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
+                // Kept within the segment's own columns so rounding cannot put it in a cell the segment is not in.
+                let x = min(max(a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y), min(a.x, b.x)), max(a.x, b.x))
                 // Counted in the cell that holds the crossing, once, although a long segment is in several cells.
                 if x > p.x, Int(floor(x / cell)) == ix { crossings += 1 }
             }
@@ -150,8 +154,9 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     var v = Verdict()
     // The letter from the font's contours alone (outer loops counter-clockwise, counters and islands
     // alternating inside them), not from the region the operation builds from them.
-    // No union is applied: a point is inside when an odd number of contours enclose it (the even-odd rule the
-    // font is rendered with), and its distance to the letter's edge is its distance to the nearest contour.
+    // No union is applied: a point is inside when an odd number of contours enclose it (even-odd, which is the
+    // font's own nonzero fill here because no contours of these fonts overlap), and its distance to the
+    // letter's edge is its distance to the nearest contour.
     let region = paths.map { $0.flattened(tolerance: context.tolerance) }.filter { $0.count > 2 }
     // Pieces of the letter: the contours an even number of the others enclose.
     let outers = region.filter { loop in region.filter { $0 != loop && Polygon2D.contains($0, loop[0]) }.count % 2 == 0 }
@@ -169,14 +174,16 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     let bitRadius = VCarveFixture.vbit60.radius
     let allowed = size * 0.02
 
-    // Overcut and undercut along the cut. Every end of a move and every sixth sample between (a defect on one
-    // sample shows on its neighbours, since the moves are densified to 1% of the height), a plunge or lift
-    // included, has its axis inside the letter and is no wider than the outline allows there (or than the bit can cut), within 10% of that and a
-    // small absolute margin (half a percent of the height and three chord tolerances: the operation simplifies
-    // strokes by one tolerance). Where the bit moves sideways it is also no narrower (a plunge or a lift grows
-    // from nothing to the axis).
-    for (i, groove) in g.enumerated() where groove.vertex || i % 6 == 0 {
-        let room = inside(groove.xy) ? min(outlineDistance(groove.xy), bitRadius) : 0
+    // Overcut and undercut along the cut. Every sample (moves are densified to 1% of the height), a plunge or
+    // lift included, has its axis inside the letter. Every end of a move and every sixth sample between is also
+    // no wider than the outline allows there (or than the bit can cut), within 10% of that and a small absolute
+    // margin (half a percent of the height and three chord tolerances: the operation simplifies strokes by one
+    // tolerance); a defect on one sample shows on its neighbours. Where the bit moves sideways it is also no
+    // narrower (a plunge or a lift grows from nothing to the axis).
+    for (i, groove) in g.enumerated() {
+        let within = inside(groove.xy)
+        guard !within || groove.vertex || i % 6 == 0 else { continue }
+        let room = within ? min(outlineDistance(groove.xy), bitRadius) : 0
         let margin = size * 0.005 + 3 * context.tolerance + 0.1 * room
         v.worstOvercut = max(v.worstOvercut, groove.radius - room - margin)
         if groove.sideways { v.worstUndercut = max(v.worstUndercut, room - groove.radius - margin) }
