@@ -119,10 +119,11 @@ public enum Polygon2D {
         for i in loops.indices {
             for j in loops.indices where j > i && within[i][j] && within[j][i] { parent[root(j)] = root(i) }
         }
+        let group = loops.indices.map(root)
         return loops.indices.map { i in
             var containers = Set<Int>()
-            for j in loops.indices where within[i][j] && !within[j][i] && root(j) != root(i) {
-                containers.insert(root(j))
+            for j in loops.indices where within[i][j] && !within[j][i] && group[j] != group[i] {
+                containers.insert(group[j])
             }
             return containers.count % 2 == 1
         }
