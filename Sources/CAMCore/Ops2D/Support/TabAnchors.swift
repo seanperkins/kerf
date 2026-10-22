@@ -42,23 +42,26 @@ public enum TabAnchors {
         return best?.anchor
     }
 
-    /// Tab centre parameters for each closed loop: every anchor goes to the loop nearest to its
-    /// position, at that loop's closest parameter, provided a loop lies within `maxDistance`.
-    /// An anchor on a vector that no longer exists, or farther than that from every loop (left
-    /// behind by a moved shape, or placed on another part), is not attached to whatever loop
-    /// happens to be nearest; it is counted in `ignored` so the operation can say so.
-    public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], document: Document,
-                               maxDistance: Double, tolerance: Double) -> (centers: [[Double]], ignored: Int) {
+    /// Tab centre parameters for each closed loop: every anchor on one of `shapeIDs` goes to the
+    /// loop nearest to its position, at that loop's closest parameter. An anchor travels with its
+    /// vector, so one on a shape this toolpath does not cut (another part, however near), or on a
+    /// vector that no longer exists, is not attached to whatever loop happens to be nearest: it
+    /// comes back in `ignored` so the operation can say so.
+    public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
+                               document: Document, tolerance: Double) -> (centers: [[Double]], ignored: [TabAnchor]) {
         var out = Array(repeating: [Double](), count: loops.count)
-        var ignored = 0
+        var ignored: [TabAnchor] = []
         for a in anchors {
-            guard let p = point(of: a, in: document, tolerance: tolerance) else { ignored += 1; continue }
+            guard shapeIDs.contains(a.shapeID), let p = point(of: a, in: document, tolerance: tolerance) else {
+                ignored.append(a)
+                continue
+            }
             var best: (index: Int, s: Double, d: Double)?
             for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
                 let pr = loop.project(p)
                 if pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
             }
-            if let b = best, b.d <= maxDistance { out[b.index].append(b.s) } else { ignored += 1 }
+            if let b = best { out[b.index].append(b.s) } else { ignored.append(a) }
         }
         return (out.map { $0.sorted() }, ignored)
     }

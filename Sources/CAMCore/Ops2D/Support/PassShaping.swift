@@ -94,9 +94,8 @@ public struct TabLayout: Sendable {
     public var thickness: Double
     public var isTriangular: Bool
     public var loopLength: Double
-    /// How many tabs the settings asked for on this loop. Fewer in `centers` means the loop was
-    /// too short to hold them apart, which the operation reports: a part the operator believes
-    /// is tabbed and is not comes free on the last pass.
+    /// How many tabs were asked for on this loop (the settings' count, or the anchors given);
+    /// fewer in `centers` means some could not be kept apart.
     public var requestedCount: Int
 
     /// Lays out tabs evenly; `spacing` (if set) overrides the count.
