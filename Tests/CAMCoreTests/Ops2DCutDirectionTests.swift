@@ -251,25 +251,44 @@ func profileLoopsKeepTheRequestedDirectionUnderOrderingTabsAndStartPoints(side: 
 }
 
 @Test(arguments: CutDirection.allCases)
-func duplicateAndOverlappingVectorsOnTheLineCutLikeOuterLoops(direction: CutDirection) throws {
-    // Telling holes apart must not turn a stacked copy or a partly overlapping vector into a hole:
-    // neither lies wholly inside another distinct loop, so both keep cutting as outer loops did
-    // before, with the part taken to be inside each loop (clockwise for climb).
-    let want = direction == .climb ? -1.0 : 1.0
-    for (label, paths) in [("duplicates", [F.rect(1, 1, 3, 2), F.rect(1, 1, 3, 2)]),
-                           ("overlap", [F.rect(0, 0, 6, 4), F.rect(4, 2, 4, 2)]),
-                           ("abutting", [F.rect(0, 0, 2, 2), F.rect(2, 0, 2, 2)])] {
-        let (ctx, ids) = F.document(paths)
+func onTheLineNestingTellsHolesFromDuplicatesOverlapsAndNotches(direction: CutDirection) throws {
+    // Telling holes apart must rest on area, not on vertices: a stacked copy, a near copy, a partly
+    // overlapping vector, an abutting part, a part filling another's notch and a part bridging it
+    // all keep cutting as outer loops (the part inside each, clockwise for climb), while a true hole,
+    // even one touching the outer edge or under a duplicated outer, runs the other way.
+    let u = Path(points: [Vec2(0, 0), Vec2(6, 0), Vec2(6, 4), Vec2(4, 4), Vec2(4, 1), Vec2(2, 1), Vec2(2, 4), Vec2(0, 4)], closed: true)
+    let cases: [(label: String, paths: [Path], holes: [Bool])] = [
+        ("duplicates", [F.rect(1, 1, 3, 2), F.rect(1, 1, 3, 2)], [false, false]),
+        ("near duplicates", [F.rect(1, 1, 3, 2), F.rect(1, 1, 3.0004, 2)], [false, false]),
+        ("overlap", [F.rect(0, 0, 6, 4), F.rect(4, 2, 4, 2)], [false, false]),
+        ("abutting", [F.rect(0, 0, 2, 2), F.rect(2, 0, 2, 2)], [false, false]),
+        ("notch", [u, F.rect(2, 1, 2, 3)], [false, false]),
+        ("bridge", [u, F.rect(1, 3, 4, 0.5)], [false, false]),
+        ("duplicated outer", [F.rect(0, 0, 6, 4), F.rect(0, 0, 6, 4), F.rect(2, 1, 2, 2)], [false, false, true]),
+        ("touching hole", [F.rect(0, 0, 6, 4), F.rect(1, 0, 2, 2)], [false, true]),
+    ]
+    let passes = cutDepth.passDepths(toolStepdown: F.endMill.stepdown).count
+    for c in cases {
+        let (ctx, ids) = F.document(c.paths)
         var p = ProfileParameters(depth: cutDepth, side: .on, direction: direction)
         p.sharpCorners = true
         let tp = try #require(try ProfileOperation(setup: OperationSetup(name: "On", toolID: F.endMill.id, shapeIDs: ids),
                                                    params: p).generate(in: ctx).first)
-        let raw = paths.map { $0.flattened(tolerance: ctx.tolerance) }   // no union: duplicates would cancel
+        let raw = c.paths.map { $0.flattened(tolerance: ctx.tolerance) }   // no union: duplicates would cancel
         let found = laps(of: tp, coords: ctx.coords, sources: raw)
-        #expect(found.count >= 2 * 3, "\(label) \(direction): \(found.count) lap(s)")
+        #expect(found.count >= passes * c.paths.count, "\(c.label) \(direction): \(found.count) lap(s)")
         for lap in found {
+            // The lap follows the vector whose extent it shares (a hole may touch the outer's edge).
+            let box = Rect2(points: lap)
+            let loop = raw.indices.min { a, b in
+                let ba = Rect2(points: raw[a]), bb = Rect2(points: raw[b])
+                return ba.min.distance(to: box.min) + ba.max.distance(to: box.max)
+                    < bb.min.distance(to: box.min) + bb.max.distance(to: box.max)
+            }!
+            let want = (direction == .climb) == c.holes[loop] ? 1.0 : -1.0
             let area = Polygon2D.signedArea(lap)
-            #expect((area < 0 ? -1.0 : 1.0) == want, "\(label) \(direction): lap near \(lap[0]) has area \(area)")
+            #expect((area < 0 ? -1.0 : 1.0) == want,
+                    "\(c.label) \(direction): lap on vector \(loop) near \(lap[0]) has area \(area), wanted \(want > 0 ? "CCW" : "CW")")
         }
     }
 }
@@ -391,7 +410,7 @@ func pocketPlannerChainsRunTheRequestedDirectionIncludingRestPieces(direction: C
                 .flatMap { $0 }
             // Without full walls (an intermediate clearance tool) the walls themselves come as pieces.
             let pieces = rest.filter { !$0.isClosed }.count
-            #expect(fullWalls ? !rest.isEmpty : pieces >= 2, "rest fullWalls=\(fullWalls) from \(start): \(rest.count) chain(s), \(pieces) open")
+            #expect(fullWalls ? rest.count >= 2 : pieces >= 2, "rest fullWalls=\(fullWalls) from \(start): \(rest.count) chain(s), \(pieces) open")
             chains += rest.map { ($0, "rest fullWalls=\(fullWalls)") }
         }
         for (chain, label) in chains {
