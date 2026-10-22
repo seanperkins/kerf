@@ -309,4 +309,40 @@ import Testing
         try Data("something else entirely".utf8).write(to: url)
         #expect(!doc.confirmSave() && doc.needsRecovery)
     }
+
+    /// A snapshot can be forgotten by the list before it is encoded, and still produce bytes that land. With no
+    /// save confirmed yet there is no remembered digest, so encoding it must itself raise the uncertainty.
+    @Test func aSaveEncodedAfterTheListForgotItKeepsTheDocumentDirty() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("late-encode.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let doc = makeDoc()
+        let um = UndoManager()
+        um.groupsByEvent = false
+        doc.undoManager = um
+        doc.fileURL = url
+        let coordinator = RecoveryCoordinator(store: store)
+        coordinator.register(doc)
+        let original = doc.project.document.name
+
+        um.beginUndoGrouping(); doc.perform("A") { $0.document.name = "A" }; um.endUndoGrouping()
+        let first = try doc.snapshot(contentType: .kerfProject)        // taken, not encoded yet
+        um.beginUndoGrouping(); doc.perform("B") { $0.document.name = "B" }; um.endUndoGrouping()
+        for _ in 0..<8 { _ = try saveBytes(doc) }                      // eight more push the first one out
+        coordinator.tick()                                             // a recovery copy of B
+        let late = try doc.fileData(for: first)                        // now it is encoded, and written
+        try late.write(to: url)
+        um.undo(); um.undo()
+        #expect(doc.project.document.name == original)
+
+        coordinator.tick()
+        #expect(doc.needsRecovery)                                     // the file holds A, the document the original
+        let copy = try #require(store.entries().first)
+        #expect(try store.project(for: copy.id).document.name == original)
+
+        try saveBytes(doc).write(to: url)                              // an ordinary save settles it
+        coordinator.tick()
+        #expect(!doc.needsRecovery)
+        #expect(store.entries().isEmpty)
+    }
 }
+

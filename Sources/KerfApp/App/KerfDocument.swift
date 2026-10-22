@@ -195,6 +195,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// `snapshot` runs on the main actor and `fileWrapper` may not, so the pending saves have their own lock
     /// (it also guards the two flags below).
     private let pendingLock = NSLock()
+    /// One confirmation at a time: it reads the file and then promotes, and two interleaved could promote the older.
+    private let confirmLock = NSLock()
     private var pendingSaves: [PendingSave] = []
     private var lastSaveID = 0
     /// The size and digest of the file when it was last seen to hold a save: the evidence for `lastSavedProject`,
@@ -264,6 +266,9 @@ final class KerfDocument: ReferenceFileDocument {
         pendingLock.lock()
         if let i = pendingSaves.firstIndex(where: { $0.id == snapshot.saveID }) {
             pendingSaves[i].bytes = (data.count, digest)
+        } else {
+            // The list dropped this save before it was encoded; these bytes can still reach the file.
+            savedStateUnknown = true
         }
         pendingLock.unlock()
         return data
@@ -278,6 +283,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// as it was, which changes nothing. Returns whether the file holds a known save.
     @discardableResult
     func confirmSave() -> Bool {
+        confirmLock.lock()
+        defer { confirmLock.unlock() }
         pendingLock.lock()
         let candidates = pendingSaves.filter { $0.bytes != nil }
         let baseline = confirmedBytes
