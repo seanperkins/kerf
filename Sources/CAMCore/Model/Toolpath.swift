@@ -64,19 +64,28 @@ public struct Toolpath: Codable, Hashable, Identifiable, Sendable {
             return "\(cut) with a \(f(flute)) \(u) flute (\(toolName)); the shank rubs the wall above the flutes"
         }
 
-        private func f(_ v: Double) -> String { String(format: units == .inch ? "%.4f" : "%.3f", v) }
+        private func f(_ v: Double) -> String { Self.text(v, units: units) }
+
+        /// The digits a flute length or depth is shown with, everywhere it is shown.
+        public static func text(_ length: Double, units: LengthUnit) -> String {
+            String(format: units == .inch ? "%.4f" : "%.3f", length)
+        }
     }
 
-    /// The overrun when the deepest cutting move, measured from `clearedDepth` (or the material
-    /// top), is more than the tool's flute length below it; nil when the flute length is unknown
-    /// or long enough. `coords` and `units` are the frame the moves are in; the tool's flute
-    /// length is converted to `units` before comparing.
+    /// How far the deepest cutting move goes below the material already cleared above it (or the
+    /// material top): what the tool's flutes must span. Nil without a cutting move.
+    public func fluteReach(coords: MachineCoordinates) -> Double? {
+        minCutZ.map { coords.depth(ofMachineZ: $0) - max(0, clearedDepth ?? 0) }
+    }
+
+    /// The overrun when the flute reach is more than the tool's flute length; nil when the flute
+    /// length is unknown or long enough. `coords` and `units` are the frame the moves are in; the
+    /// tool's flute length is converted to `units` before comparing.
     public func cutBeyondFlute(coords: MachineCoordinates, units: LengthUnit, tolerance: Double) -> FluteOverrun? {
-        guard let flute = tool.converted(to: units).fluteLength, flute > 0, let z = minCutZ else { return nil }
-        let depth = coords.depth(ofMachineZ: z)
+        guard let flute = tool.converted(to: units).fluteLength, flute > 0, let reach = fluteReach(coords: coords),
+              reach > flute + tolerance else { return nil }
         let cleared = max(0, clearedDepth ?? 0)
-        guard depth - cleared > flute + tolerance else { return nil }
-        return FluteOverrun(depth: depth, cleared: cleared, flute: flute, toolName: tool.name, units: units)
+        return FluteOverrun(depth: reach + cleared, cleared: cleared, flute: flute, toolName: tool.name, units: units)
     }
 
     /// XY bounds of everything the moves reach, including the bulge of arcs (the quadrant points

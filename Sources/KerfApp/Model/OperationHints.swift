@@ -20,8 +20,7 @@ enum OperationHints {
     static func fluteLengthProblem(tool: Tool?, cutDepth: Double, startDepth: Double, units: LengthUnit) -> String? {
         guard let tool, let flute = tool.fluteLength, flute > 0 else { return nil }
         guard cutDepth - max(0, startDepth) > flute + CAMContext.defaultTolerance(units) else { return nil }
-        // The same digits as the toolpath warning and the export error, so one number reads alike.
-        return "Deeper than the \(String(format: units == .inch ? "%.4f" : "%.3f", flute)) \(units.abbreviation) flutes of \(tool.name); "
+        return "Deeper than the \(Toolpath.FluteOverrun.text(flute, units: units)) \(units.abbreviation) flutes of \(tool.name); "
             + "the shank will rub the wall above them."
     }
 
