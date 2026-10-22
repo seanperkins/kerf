@@ -55,9 +55,6 @@ enum VariableLinks {
         // ("=thickness - 0.1") were written in the old units.
         let unitsChanged = p.document.units != old.document.units
         let old = unitsChanged ? old.converted(to: p.document.units) : old
-        // A linked leaf is unlinked by any hand edit, however small. The form converts untouched
-        // fields from the saved values in one step, so nothing here drifts by an ulp.
-        func edited(_ a: Double?, _ b: Double?) -> Bool { a != b }
         let sheetIDs = Set(p.document.allSheets.map(\.id))
         let opIDs = Set(p.operations.map(\.id))
         links.removeAll {
@@ -83,7 +80,9 @@ enum VariableLinks {
                 guard l.target == t else { return false }
                 if unitsChanged { return true }
                 guard let o = oldTree else { return false }
-                return edited(number(at: l.path, in: o), number(at: l.path, in: newTree))
+                // A linked leaf is unlinked by any hand edit, however small. The form converts untouched
+                // fields from the saved values in one step, so nothing here drifts by an ulp.
+                return number(at: l.path, in: o) != number(at: l.path, in: newTree)
             }
             guard !pending.isEmpty else { continue }
             var newLeaves: [[String]: Double] = [:]

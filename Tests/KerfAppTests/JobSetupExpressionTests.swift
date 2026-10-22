@@ -135,9 +135,12 @@ import Testing
         doc.applyJobSetup(form)
         #expect(doc.document.linkedValues.map(\.path) == [["safeZ"]])
         // Toggled back to inches before Apply, the untouched fields are the saved ones to the bit.
-        var back = JobSetupForm(project: AppTestSupport.project(), machines: MachineCatalog.shared.machines)
-        back.setUnits(.millimeter); back.setUnits(.inch)
-        #expect(back.job == AppTestSupport.project().document.job)
+        var saved = AppTestSupport.project()
+        saved.document.job.home = Vec2(2.1, 3.3); saved.document.job.homeZ = 1.3; saved.document.job.safeZ = 0.9
+        saved.document.job.plungeGap = 0.7; saved.document.job.datumOffset = Vec2(1.1, 2.7); saved.document.gridSpacing = 0.7
+        var back = JobSetupForm(project: saved, machines: MachineCatalog.shared.machines)
+        for u in [LengthUnit.millimeter, .inch, .millimeter, .inch] { back.setUnits(u) }
+        #expect(back.job == saved.document.job && back.gridSpacing == saved.document.gridSpacing)
     }
 
     @Test func anUnknownNameCannotHideASelfReference() throws {
