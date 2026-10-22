@@ -234,9 +234,10 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
 }
 
 @Test func rapidMayTouchTheHoleBottomButNotPassIt() {
-    // eps is 0.0005 in: exactly the bottom is air the tool has been in; 2·eps below it is not.
+    // Exactly the bottom is air the tool has been in; one eps (0.0005 in) below it is not: the rule
+    // has no slack.
     #expect(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.1")).isEmpty)
-    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.101")), "Rapid plunge", .warning))
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.1005")), "Rapid plunge", .warning))
     #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.12")), "Rapid plunge", .warning))
 }
 
@@ -248,6 +249,19 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     // Back at the first hole after visiting a second XY: the checker gives the safe answer.
     let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nG0 X2\nG0 X1\nG0 Z-0.08"))
     #expect(has(issues, "Rapid plunge", .warning))
+}
+
+@Test func aRapidWithinEpsOfTheLastPositionButNotOfTheHoleWarns() {
+    // Two sub-eps steps are each "no XY move", yet together leave the hole by more than eps.
+    let steps = "G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nG0 X1.0004\nG0 X1.0008\nG0 Z-0.05"
+    #expect(has(validate(program(steps)), "Rapid plunge", .warning))
+}
+
+@Test func theHoleKeepsTheXYItWasDrilledAt() {
+    // Plunges in sub-eps steps deepen the hole but do not walk it sideways: 0.0008 in from the first
+    // plunge is outside eps of the hole, whatever the last plunge's XY was.
+    let steps = "G0 X1 Y1\nG1 Z-0.1 F30\nG0 X1.0004\nG1 Z-0.11 F30\nG0 Z0.05\nG0 X1.0008\nG0 Z-0.1"
+    #expect(has(validate(program(steps)), "Rapid plunge", .warning))
 }
 
 @Test func onlyPlungesDrillHoles() {
@@ -272,19 +286,27 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1\nG0 Z0.2\nG0 Z-0.08")), "Rapid plunge", .warning))
     #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F0\nG0 Z0.2\nG0 Z-0.08")), "Rapid plunge", .warning))
     #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG1 Z0.1 F30\nG0 Z-0.08")), "Rapid plunge", .warning))
-    let arc = "G0 X1 Y1\nG1 Z-0.1 F30\nG3 X1 Y1 I0.5 J0 F60\nG0 Z0.2\nG0 Z-0.08"
-    #expect(has(validate(program(arc)), "Rapid plunge", .warning))
+    // A helix ends where it started and goes down, but it clears a ring, not the column at its start.
+    let helix = "G0 X1 Y1\nG1 Z-0.1 F30\nG3 X1 Y1 Z-0.2 I0.5 J0 F60\nG0 Z0.2\nG0 Z-0.08"
+    #expect(has(validate(program(helix)), "Rapid plunge", .warning))
 }
 
 @Test func toolChangeForgetsTheHole() {
-    for change in ["M5\nT2 M6\nM3 S18000", "M5\nM0\nM3 S18000", "M5\nM1\nM3 S18000", "T2"] {
+    // Each code on its own, with nothing else between the plunge and the rapid back down.
+    for change in ["T2 M6", "M6", "M0", "M1", "T2"] {
         let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\n\(change)\nG0 Z0.05\nG0 Z-0.08"))
         #expect(has(issues, "Rapid plunge", .warning), "after \(change): \(issues)")
     }
     // The motion of a block runs before its stop, so a plunge sharing a line with M0 drills before
-    // the tool may change: the hole is forgotten after it.
-    let shared = validate(program("G0 X1 Y1\nG1 Z-0.1 F30 M0\nM3 S18000\nG0 Z0.05\nG0 Z-0.08"))
+    // the tool may change: the hole is forgotten after that block, not only before it.
+    let shared = validate(program("G0 X1 Y1\nG1 Z-0.1 F30 M0\nG0 Z0.05\nG0 Z-0.08"))
     #expect(has(shared, "Rapid plunge", .warning), "\(shared)")
+    // And a frame change or tool word applies to the motion on its own line, so the hole is
+    // forgotten before that block's rapid, not only after it.
+    for same in ["G55 G0 Z-0.08", "T2 G0 Z-0.08"] {
+        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\n\(same)"))
+        #expect(has(issues, "Rapid plunge", .warning), "\(same): \(issues)")
+    }
 }
 
 @Test func grblStopToolChangeForgetsTheHoleInMillimetres() {
@@ -296,9 +318,9 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     }
     let pecks = "G0 X25 Y25\nG0 Z1\nG1 Z-3 F500\nG0 Z1\nG0 Z-2.5\nG1 Z-6 F500"
     #expect(run(pecks).isEmpty, "\(run(pecks))")
-    // eps is 0.01 mm here: the bottom itself is allowed, 0.02 mm past it is not.
+    // The bottom itself is allowed; one eps (0.01 mm) past it is not.
     #expect(run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z1\nG0 Z-3").isEmpty)
-    #expect(has(run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z1\nG0 Z-3.02"), "Rapid plunge", .warning))
+    #expect(has(run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z1\nG0 Z-3.01"), "Rapid plunge", .warning))
     let changed = run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z5.08\nM5\n(Change to Tool: 12 mm)\nM0\nM3 S18000\nG0 Z1\nG0 Z-2.5")
     #expect(has(changed, "Rapid plunge", .warning), "\(changed)")
 }
@@ -390,6 +412,20 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
     paused.pauseAfter = PauseStep(message: "Add clamps")
     let afterPause = v.validate(toolpaths: [paused, toolpath("B", tool: PostFixtures.endMill, reenter)])
     #expect(has(afterPause, "Rapid plunge", .warning), "\(afterPause)")
+}
+
+@Test func toolpathCheckForgetsTheHoleAtADwell() {
+    // A dwell posts as G4, which the G-code check treats as not a plain move; the toolpath check
+    // agrees, so a rapid back down after a dwell warns in both.
+    let job = PostFixtures.job()
+    let mc = MachineCoordinates(job: job)
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    let p = Vec2(2, 2)
+    let moves = drillMoves(p, mc: mc, pecks: [0.1]).dropLast()
+        + [.dwell(seconds: 0.5), .rapid(to: Vec3(p.x, p.y, mc.z(aboveTop: 0.05))),
+           .rapid(to: Vec3(p.x, p.y, mc.z(depth: 0.08))), .rapid(to: Vec3(p.x, p.y, mc.safeZ))]
+    let issues = v.validate(toolpaths: [toolpath("Drill", tool: PostFixtures.endMill, Array(moves))])
+    #expect(has(issues, "Rapid plunge", .warning), "\(issues)")
 }
 
 @Test func toolpathCheckSurvivesANonFiniteHoleCentre() {

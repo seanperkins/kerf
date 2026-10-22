@@ -41,8 +41,7 @@ public struct GCodeValidator: Sendable {
     public func validate(toolpaths: [Toolpath]) -> [GCodeIssue] {
         var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units)
         var pos: Vec3?
-        var toolID: UUID?
-        var pausedBefore = false
+        var previous: Toolpath?
         // Two different tools with one T number post as one tool: the controller sees no change
         // and the second geometry cuts with the first bit in the spindle.
         var byNumber: [Int: [Tool]] = [:]
@@ -61,13 +60,15 @@ public struct GCodeValidator: Sendable {
                 continue
             }
             check.rpm(tp.spindleRPM, min: profile.minRPM, max: profile.maxRPM, line: nil)
-            // Where the post writes a tool change or an operator stop, either of which can change the bit.
-            if tp.tool.id != toolID || pausedBefore { check.leaveHole() }
-            toolID = tp.tool.id
-            pausedBefore = tp.pauseAfter != nil
+            // Where the post writes a tool change or an operator stop, either of which can change the bit
+            // (the same stops the time estimate counts).
+            if let previous, ToolpathStats.stopsBefore(tp, after: previous) { check.leaveHole() }
+            previous = tp
             for move in tp.moves {
                 switch move {
-                case .dwell: continue
+                case .dwell:
+                    check.leaveHole()   // posts as G4, which is not a plain move in the G-code check
+                    continue
                 case .rapid(let p):
                     // The post retracts before a toolpath's first rapid, so an unknown start is fine.
                     if let s = pos {
@@ -154,7 +155,7 @@ public struct GCodeValidator: Sendable {
                 case 91:
                     absolute = false
                     carried.add("incremental", .warning, line: b.line, "Incremental positioning (G91) in program")
-                case 0, 1, 2, 3: motion = Int(g)
+                case _ where Self.motionG.contains(g): motion = Int(g)
                 case 4, 28, 30: nonMotion = true
                 case 10, 53, 92, 92.1, 92.2:
                     // The controller now interprets every later coordinate in a frame this
@@ -168,12 +169,13 @@ public struct GCodeValidator: Sendable {
             var stop: Int?
             // The remembered hole survives only plain moves: any other G code may have moved the tool
             // or changed what the coordinates mean, and a stop, M6 or T word may have changed the bit.
-            // One rule that fails closed, applied before the block's motion (a frame change applies to
-            // it) and after (a controller moves before it stops). An unlisted code costs a warning,
-            // never a missed one.
-            let plainMove = b.values("G").allSatisfy { [0, 1, 2, 3].contains($0) }
+            // One rule that fails closed (an unlisted code costs a warning, never a missed one), applied
+            // before the block's motion, because a frame change or tool word applies to it, and again
+            // after, because a controller moves before it stops.
+            let plainMove = b.values("G").allSatisfy { Self.motionG.contains($0) }
                 && b.values("M").isEmpty && b.value("T") == nil
             if !plainMove { check.leaveHole() }
+            defer { if !plainMove { check.leaveHole() } }
             for m in b.values("M") {
                 if !Self.knownM.contains(m) {
                     carried.add("unknown-m", .warning, line: b.line,
@@ -265,7 +267,6 @@ public struct GCodeValidator: Sendable {
             // word order (LinuxCNC's order of execution; Mach follows it), so the stop is judged on
             // the state at the end of the block. An unknown Z (nothing moved yet) is not a problem;
             // a custom post's pause template might be.
-            if !plainMove { check.leaveHole() }
             if let stop {
                 if spindleOn {
                     carried.add("stop-spindle-on", .warning, line: b.line,
@@ -295,4 +296,6 @@ public struct GCodeValidator: Sendable {
     static let knownG: Set<Double> = [0, 1, 2, 3, 4, 10, 17, 18, 19, 20, 21, 28, 30, 40, 41, 42, 43, 49, 53, 54, 55, 56,
                                       57, 58, 59, 61, 64, 80, 81, 82, 83, 90, 90.1, 91, 91.1, 92, 92.1, 92.2, 93, 94, 98, 99]
     static let knownM: Set<Double> = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30]
+    /// The motion modes: the only G words a block may carry and still be a plain move.
+    static let motionG: Set<Double> = [0, 1, 2, 3]
 }
