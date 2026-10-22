@@ -101,6 +101,12 @@ extension KerfDocument {
         TimeEstimateSettings.load().estimate(toolpaths, rapidRate: rapidRateInDocumentUnits, units: units)
     }
 
+    /// The same for the motion alone: cutting, rapids (including those between toolpaths) and
+    /// dwell, with no tool-change allowance.
+    func motionSeconds(_ toolpaths: [Toolpath]) -> TimeInterval {
+        TimeEstimateSettings.load().estimate(toolpaths, rapidRate: rapidRateInDocumentUnits, units: units, toolChanges: false)
+    }
+
     /// Recomputes the stored per-operation estimates (after the settings or machine change).
     func refreshTimeEstimates() {
         let s = TimeEstimateSettings.load()

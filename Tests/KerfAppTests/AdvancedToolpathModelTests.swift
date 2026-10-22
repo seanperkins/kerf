@@ -76,16 +76,26 @@ private enum Job {
         p.operations[2] = .pocket(pocket)
         let results = Job.results(p)
         #expect(results[p.operations[2].id]!.toolpaths.count == 2)
-        let s = JobSummary.make(operations: p.operations, results: results, groupByTool: false, toolChangeSeconds: 90)
-        #expect(s.sequence.map(\.number) == [1, 6, 3, 1])
-        #expect(s.toolChanges == 3)
-        // Motion of every toolpath plus one allowance per change in the program: three, not four.
         var settings = TimeEstimateSettings.load()
         settings.toolChangeSeconds = 90
-        let motion = p.operations.map { settings.estimate(results[$0.id]!.toolpaths, rapidRate: 200, units: .inch, toolChanges: false) }
+        let s = JobSummary.make(operations: p.operations, results: results, groupByTool: false, toolChangeSeconds: 90,
+                                motion: { settings.estimate($0, rapidRate: 200, units: .inch, toolChanges: false) })
+        #expect(s.sequence.map(\.number) == [1, 6, 3, 1])
+        #expect(s.toolChanges == 3)
+        // Motion of the program in order plus one allowance per change: three, not four. The
+        // program's motion is more than the operations' own, by the rapids that link them, and the
+        // total is what the 3D preview shows for the same toolpaths (issue #27).
+        let program = GCodeExporter.toolpaths(scope: .all, operations: p.operations, results: results, groupByTool: false)
+        let linked = settings.estimate(program, rapidRate: 200, units: .inch, toolChanges: false)
+        let separate = p.operations.map { settings.estimate(results[$0.id]!.toolpaths, rapidRate: 200, units: .inch, toolChanges: false) }
             .reduce(0, +)
-        #expect(abs(s.machiningSeconds - motion) < 1e-6)
-        #expect(abs(s.totalSeconds - (motion + 3 * 90)) < 1e-6)
+        #expect(linked > separate + 0.1)
+        #expect(abs(s.machiningSeconds - linked) < 1e-6)
+        #expect(abs(s.totalSeconds - (linked + 3 * 90)) < 1e-6)
+        #expect(abs(s.totalSeconds - settings.estimate(program, rapidRate: 200, units: .inch)) < 1e-6)
+        // Without a program-order estimate the summary falls back to the operations' own motion.
+        let fallback = JobSummary.make(operations: p.operations, results: results, groupByTool: false, toolChangeSeconds: 90)
+        #expect(abs(fallback.machiningSeconds - separate) < 1e-6)
         // The pocket's own row still includes its internal change.
         let pocketResult = results[p.operations[2].id]!
         #expect(abs(pocketResult.estimatedSeconds - pocketResult.machiningSeconds - 90) < 1e-6)

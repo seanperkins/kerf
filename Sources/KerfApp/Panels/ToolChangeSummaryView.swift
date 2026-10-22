@@ -11,7 +11,8 @@ struct ToolChangeSummaryView: View {
 
     var body: some View {
         let s = JobSummary.make(operations: document.outputProject.operations, results: document.results,
-                                groupByTool: groupByTool, toolChangeSeconds: TimeEstimateSettings.load().toolChangeSeconds)
+                                groupByTool: groupByTool, toolChangeSeconds: TimeEstimateSettings.load().toolChangeSeconds,
+                                motion: document.motionSeconds)
         VStack(alignment: .leading, spacing: 4) {
             if s.hasEstimate {
                 // Longest wording that fits the sidebar; "4 tools · 3 changes" shortens before the time does.
