@@ -38,7 +38,8 @@ struct VCarveOrdering {
         // A stroke on an open vector is matched by three of its own vertices (the middle one is on the vector;
         // the middle of a simplified segment need not be). A stroke inside a shape's region is matched by the
         // middle of its middle segment: a two-point stroke (a spur from a corner of the outline to the
-        // skeleton) has its end on the outline, which no region contains, so a vertex would leave it ungrouped.
+        // skeleton) has its end on the outline, which no region contains, so a vertex alone would leave it
+        // ungrouped; the vertex is the fallback for a probe that a very short first segment puts on the outline.
         let vertex = stroke.points[stroke.points.count / 2].xy
         let ends = [stroke.points[0].xy, stroke.points[stroke.points.count - 1].xy, vertex]
         let k = max(1, stroke.points.count / 2)
@@ -48,7 +49,7 @@ struct VCarveOrdering {
                 return i
             }
         }
-        for (i, g) in groups.enumerated() where !g.region.isEmpty && g.region.contains(probe) { return i }
+        for (i, g) in groups.enumerated() where !g.region.isEmpty && (g.region.contains(probe) || g.region.contains(vertex)) { return i }
         return nil
     }
 
