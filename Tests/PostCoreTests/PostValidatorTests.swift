@@ -289,14 +289,14 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
 }
 
 @Test func anyCodeOtherThanAPlainMoveForgetsTheHole() {
-    // One rule: the hole survives only blocks made of G0–G3 with no M or T word. Tool changes and
+    // One rule: the hole survives only blocks made of G0–G3 with no M, T or S word. Tool changes and
     // stops (a different bit may not fit), frame shifts and reference returns (the same XY words
     // name another place), and codes the rule never heard of (spindle, coolant, dwell, tool length,
     // distance mode) all forget it, each here on its own line with nothing else between the plunge
     // and the rapid back down.
     let codes = ["T2 M6", "M6", "M0", "M1", "T2",
                  "G92 X1 Y1", "G92.1", "G55", "G59", "G10 L2 P1 X0 Y0", "G53 G0 X1 Y1", "G28", "G30 X1 Y1",
-                 "M3 S18000", "M8", "G4 P0.5", "G43 H1", "G90"]
+                 "M3 S18000", "S12000", "M8", "G4 P0.5", "G43 H1", "G90"]
     for code in codes {
         let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\n\(code)\nG0 Z-0.08"))
         #expect(has(issues, "Rapid plunge", .warning), "after \(code): \(issues)")

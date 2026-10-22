@@ -169,13 +169,13 @@ public struct GCodeValidator: Sendable {
                 }
             }
             var stop: Int?
-            // The remembered hole survives only plain moves: any other G code may have moved the tool
-            // or changed what the coordinates mean, and a stop, M6 or T word may have changed the bit.
-            // One rule that fails closed (an unlisted code costs a warning, never a missed one), applied
-            // before the block's motion, because a frame change or tool word applies to it, and again
-            // after, because a controller moves before it stops.
+            // The remembered hole survives only plain moves (motion, axis and feed words): any other G
+            // code may have moved the tool or changed what the coordinates mean, and a stop, M6, T or
+            // spindle word may mean the bit changed. One rule that fails closed (an unlisted word costs a
+            // warning, never a missed one), applied before the block's motion, because a frame change or
+            // tool word applies to it, and again after, because a controller moves before it stops.
             let plainMove = b.values("G").allSatisfy { Self.motionG.contains($0) }
-                && b.values("M").isEmpty && b.value("T") == nil
+                && b.values("M").isEmpty && b.value("T") == nil && b.value("S") == nil
             if !plainMove { check.leaveHole() }
             defer { if !plainMove { check.leaveHole() } }
             for m in b.values("M") {
