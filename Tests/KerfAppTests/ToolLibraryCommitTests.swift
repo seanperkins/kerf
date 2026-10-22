@@ -216,4 +216,48 @@ import Testing
         #expect(!ToolEditorField.material(1).isTextEdit(from: t, to: changed { $0.materials?.removeLast() }))
         #expect(!ToolEditorField.material(1).isTextEdit(from: t, to: changed { $0.materials?[1].feedRate += 1 }))
     }
+
+    /// The editor's own save paths (Return, leaving a field, closing, quitting) are commitEdit with an
+    /// unchanged tool; they must still retry a save that failed.
+    @Test func aFailedSaveIsRetriedWhenTheEditorSavesAgain() throws {
+        let dir = AppTestSupport.tempDir()
+        let blocker = dir.appendingPathComponent("blocker")
+        try Data().write(to: blocker)
+        let lib = ToolLibraryModel(store: ToolLibraryStore(fileURL: blocker.appendingPathComponent("tools.json")))
+        let edited = try edit(lib) { $0.diameter += 0.01 }
+        #expect(lib.commitEdit(edited))
+        #expect(lib.lastError != nil)
+        try FileManager.default.removeItem(at: blocker)
+        #expect(!lib.commitEdit(edited))   // the library already has it, but the file does not
+        #expect(lib.lastError == nil)
+        #expect(lib.writes == 1)
+        #expect(ToolLibraryModel(store: lib.store).tools.first?.diameter == edited.diameter)
+    }
+
+    /// Renaming a tool is not a new simulation: a preview part-way through a cut keeps its place.
+    @Test func aRenamedToolDoesNotRestartThe3DSimulation() throws {
+        let job = JobSetup(width: 10, height: 10, thickness: 0.75)
+        let coords = MachineCoordinates(job: job)
+        let tool = Tool(name: "EM", kind: .endMill, number: 1, diameter: 0.25, stepdown: 0.1, stepover: 0.1,
+                        feedRate: 60, plungeRate: 20)
+        func slot(_ tool: Tool) -> Toolpath {
+            Toolpath(name: "slot", kind: .profile, tool: tool, moves: [
+                .rapid(to: coords.machineAtSafeZ(Vec2(1, 1))),
+                .linear(to: coords.machine(Vec2(1, 1), depth: 0.2), feed: 18),
+                .linear(to: coords.machine(Vec2(7, 1), depth: 0.2), feed: 60),
+                .rapid(to: coords.machineAtSafeZ(Vec2(7, 1))),
+            ])
+        }
+        let model = SimulationPreviewModel()
+        var path = slot(tool)
+        model.configure(job: job, toolpaths: [path], rapidRate: 180, units: .inch)
+        let part = model.totalTime / 2
+        model.time = part
+        path.tool.name = "Renamed"   // what the document does to a calculated toolpath
+        model.configure(job: job, toolpaths: [path], rapidRate: 180, units: .inch)
+        #expect(model.time == part)
+        path.tool.diameter = 0.5
+        model.configure(job: job, toolpaths: [path], rapidRate: 180, units: .inch)
+        #expect(model.time == model.totalTime)
+    }
 }

@@ -49,9 +49,9 @@ struct ToolGroupSection: View {
                     .focused(typing, equals: .group)
                 if !existingGroups.isEmpty {
                     Menu {
-                        ForEach(existingGroups, id: \.self) { g in Button(g) { tool.group = g } }
+                        ForEach(existingGroups, id: \.self) { g in Button(g) { tool.group = g; typing.wrappedValue = nil } }
                         Divider()
-                        Button("No Group") { tool.group = nil }
+                        Button("No Group") { tool.group = nil; typing.wrappedValue = nil }
                     } label: { Image(systemName: "folder") }
                     .menuStyle(.borderlessButton).fixedSize()
                 }

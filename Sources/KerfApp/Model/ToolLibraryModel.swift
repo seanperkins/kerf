@@ -13,8 +13,8 @@ final class ToolLibraryModel: ObservableObject {
     /// True while tools.json is behind the library (the last save failed, or the file was unreadable),
     /// so the next change retries the save even when it changes nothing.
     private var unsaved = false
-    /// The Tool Database editor's text edit that the library has not heard about yet; anything that
-    /// reads the library flushes it first.
+    /// The Tool Database editor's text edit that the library has not heard about yet; duplicate, export
+    /// and import flush it first.
     private var draft: Tool?
     @Published var lastError: String?
     /// The material of the job whose window opened the Tool Database last, so the feeds calculator
@@ -104,7 +104,11 @@ final class ToolLibraryModel: ObservableObject {
     @discardableResult
     func commitEdit(_ tool: Tool) -> Bool {
         if draft?.id == tool.id { draft = nil }
-        guard let stored = library.tool(id: tool.id), stored != tool else { return false }
+        guard let stored = library.tool(id: tool.id) else { return false }
+        guard stored != tool else {
+            mutate { _ in }   // nothing to change; still retries a save that failed
+            return false
+        }
         update(tool)
         return true
     }
@@ -134,7 +138,6 @@ final class ToolLibraryModel: ObservableObject {
 
     /// Adds any of the seeded defaults that are missing (by id); never deletes user tools.
     func restoreDefaults() {
-        flushDraft()
         mutate { lib in for t in ToolLibrary.seeded.tools where lib.tool(id: t.id) == nil { lib.upsert(t) } }
     }
 
@@ -148,7 +151,6 @@ final class ToolLibraryModel: ObservableObject {
     /// Tools in a `.kerftools`/`tools.json`/`.csv` file, and which of them would overwrite a
     /// different library tool with the same id.
     func readImport(_ url: URL) throws -> (tools: [Tool], conflicts: [Tool]) {
-        flushDraft()
         let tools = try ToolLibraryExchange.read(url)
         return (tools, library.conflicts(with: tools))
     }
@@ -159,7 +161,6 @@ final class ToolLibraryModel: ObservableObject {
         flushDraft()
         var lib = library
         let report = lib.merge(tools, policy: policy)
-        guard lib != library else { return report }
         mutate { $0 = lib }
         return report
     }

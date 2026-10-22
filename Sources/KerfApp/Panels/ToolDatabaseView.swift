@@ -165,17 +165,27 @@ enum ToolEditorField: Hashable {
 
 struct ToolEditor: View {
     @EnvironmentObject var library: ToolLibraryModel
-    /// The tool as it was when this editor opened (what Revert goes back to).
+    /// The library's current copy of the tool (what Revert goes back to); the window passes it fresh on
+    /// every update.
     let original: Tool
     @State private var tool: Tool
+    /// The library copy `tool` was last in step with: what this editor last saved or adopted.
+    @State private var base: Tool
     @FocusState private var typing: ToolEditorField?
 
     /// Edits the library has not been told about yet (a text field is still being typed in).
-    private var unsaved: Bool { library.library.tool(id: tool.id).map { $0 != tool } ?? false }
+    private var unsaved: Bool { tool != original }
+
+    /// Saves the draft (a no-op when it matches the library).
+    private func commit() {
+        library.commitEdit(tool)
+        base = tool
+    }
 
     init(original: Tool) {
         self.original = original
         _tool = State(initialValue: original)
+        _base = State(initialValue: original)
     }
 
     private var isAngled: Bool { tool.kind == .vBit || tool.kind == .engraving }
@@ -245,10 +255,10 @@ struct ToolEditor: View {
             Section {
                 HStack {
                     Spacer()
-                    Text(unsaved ? "Saves when you leave this field." : tool == original ? "Changes save automatically." : "Changes saved.")
+                    Text(unsaved ? "Saves when you leave this field." : "Changes save automatically.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Revert Changes") { tool = original }
-                        .help("Go back to the settings this tool had when you selected it")
+                        .help("Discard the edits that are not saved yet")
                         .disabled(tool == original)
                 }
             }
@@ -257,16 +267,20 @@ struct ToolEditor: View {
         // A picker or number is one edit and saves at once; the text of the focused field waits until
         // the field is left (focus moves on or Return), the editor closes, or the app quits.
         .onChange(of: tool) { old, new in
-            if let field = typing, field.isTextEdit(from: old, to: new) { library.hold(new) } else { library.commitEdit(new) }
+            if let field = typing, field.isTextEdit(from: old, to: new) { library.hold(new) } else { commit() }
         }
-        // Another action replaced this tool in the library (an import with Replace): show that version,
-        // not the draft, so closing the editor does not write the draft back over it.
-        .onChange(of: original) { _, latest in if typing == nil && latest != tool { tool = latest } }
-        .onChange(of: typing) { _, _ in library.commitEdit(tool) }
-        .onSubmit { library.commitEdit(tool) }
-        .onDisappear { library.commitEdit(tool) }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-            library.commitEdit(tool)
+        // Something other than this editor changed the tool in the library (an import with Replace; any
+        // text typed before it was saved first): show that version, whether or not a field has focus,
+        // so a later save does not write the draft back over it.
+        .onChange(of: original) { _, latest in
+            guard latest != base else { return }
+            tool = latest
+            base = latest
+            library.commitEdit(latest)
         }
+        .onChange(of: typing) { _, _ in commit() }
+        .onSubmit { commit() }
+        .onDisappear { commit() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in commit() }
     }
 }
