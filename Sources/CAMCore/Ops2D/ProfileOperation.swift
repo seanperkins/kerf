@@ -21,10 +21,11 @@ public struct ProfileOperation: ToolpathOperation {
         guard !passes.isEmpty else { throw CAMError.invalidParameter("Cut depth must be deeper than start depth") }
         let tol = context.tolerance
 
-        let (closed, open) = ShapeGeometry.loops(of: shapes, tolerance: tol)
+        let flat = ShapeGeometry.flattened(shapes, tolerance: tol)
+        let vectors = flat.filter(\.isClosed)
+        let closed = vectors.map(\.points), open = flat.filter { !$0.isClosed }.map(\.points)
         let lastPass = effectiveLastPass(tolerance: tol)
         let finalOffset = tool.radius + params.allowance
-        let join: GeomKernel.Join = params.sharpCorners == true ? .miter(limit: ProfileGeometry.sharpMiterLimit) : .round
         let plan = ProfileGeometry.loops(closed: closed, side: params.side, offset: finalOffset + (lastPass?.allowance ?? 0),
                                          direction: params.direction, tolerance: tol, join: join)
         let finishPlan = lastPass.map {
@@ -57,10 +58,19 @@ public struct ProfileOperation: ToolpathOperation {
         let shapeLoops = shapes.map { s in s.paths.map { $0.flattened(tolerance: tol) } }
         var tabNotes = TabNotes()
         // Each pass resolves manual anchors against its own loops: an anchor's tab sits where the
-        // loop this toolpath would cut for the anchor's shape alone passes it, at this pass's offset.
-        let ownLoops = { (shape: Shape, offset: Double) -> [ArcLengthChain] in
-            ProfileGeometry.loops(closed: ShapeGeometry.loops(of: [shape], tolerance: tol).closed, side: params.side, offset: offset,
-                                  direction: params.direction, tolerance: tol, join: join).chains.map { ArcLengthChain($0) }
+        // loop this toolpath would cut for the anchor's part passes it, at this pass's offset. The
+        // part is the anchor's vector with every selected closed vector that overlaps or nests with
+        // it (a hole drawn as its own shape, or two shapes that overlap), offset together, so the
+        // loop is the one the toolpath cuts; a neighbour that only touches is not part of it.
+        let manual = params.tabs.isEnabled && !(params.tabs.manualTabs ?? []).isEmpty
+        let parts = manual ? Polygon2D.parts(of: closed) : []
+        var vectorIndex: [UUID: [Int: Int]] = [:]
+        for (i, v) in vectors.enumerated() { vectorIndex[v.shapeID, default: [:]][v.pathIndex] = i }
+        let ownLoops = { (anchor: TabAnchor, offset: Double) -> [ArcLengthChain] in
+            guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex], k < parts.count else { return [] }
+            let part = closed.indices.filter { parts[$0] == parts[k] }.map { closed[$0] }
+            return ProfileGeometry.loops(closed: part, side: params.side, offset: offset, direction: params.direction,
+                                         tolerance: tol, join: join).chains.map { ArcLengthChain($0) }
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
                              sourceStarts: sourceStarts, shapeLoops: shapeLoops,
@@ -108,6 +118,9 @@ public struct ProfileOperation: ToolpathOperation {
                          moves: builder.finish(), metadata: meta)]
     }
 
+    /// Corner treatment of the offset loops: squared off when sharp corners are asked for.
+    private var join: GeomKernel.Join { params.sharpCorners == true ? .miter(limit: ProfileGeometry.sharpMiterLimit) : .round }
+
     /// The last-pass settings when they apply (closed vectors cut outside/inside, allowance > 0).
     func effectiveLastPass(tolerance: Double) -> ProfileLastPass? {
         guard let lp = params.lastPass, params.side != .on, lp.allowance > tolerance else { return nil }
@@ -122,18 +135,17 @@ public struct ProfileOperation: ToolpathOperation {
     }
 
     /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`, resolving
-    /// manual anchors against these loops through `ownLoops` (what this pass would cut for one
-    /// shape alone). Returns the material-frame centre of every tab it placed and how many anchors
+    /// manual anchors against these loops through `ownLoops` (what this pass would cut for the
+    /// anchor's part). Returns the material-frame centre of every tab it placed and how many anchors
     /// it could not place. On the last pass, `roughing` gives the roughing pass's tabs and loops: a
     /// loop whose roughing loop (the one `allowance` farther out) had tabs takes those that project
     /// onto it, and is reported when none do, since the roughing pass has already cut through
     /// beside them; a loop the roughing offset swallowed lays out its own tabs and counts what it
     /// could not do, which the roughing pass did for every loop it had.
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
-                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], ownLoops: (Shape) -> [ArcLengthChain],
+                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], ownLoops: (TabAnchor) -> [ArcLengthChain],
                           roughing: (tabs: [Vec2], loops: [ArcLengthChain], allowance: Double)? = nil, context: CAMContext,
                           builder: inout ToolpathBuilder, tabNotes: inout TabNotes) -> (placed: [Vec2], ignored: Int) {
-        guard !chains.isEmpty else { return ([], params.tabs.isEnabled ? params.tabs.manualTabs?.count ?? 0 : 0) }
         let tol = context.tolerance
         let startPoint = params.startPoint ?? .nearest
         var ordered = ProfileOrdering.ordered(chains, by: params.order ?? .nearest, from: start, shapeLoops: shapeLoops,
@@ -147,6 +159,17 @@ public struct ProfileOperation: ToolpathOperation {
             manualCenters = resolved.centers
             ignored = resolved.ignored
         }
+        // Which roughing loop is each last-pass loop's: offsetting all the last-pass loops together by
+        // the allowance rebuilds the roughing loops (merged where the roughing offset merged them),
+        // and the roughing loop that runs through the rebuilt point one allowance across from a
+        // loop's edge is its own. Only with tabs on, which is all it serves: it walks every loop.
+        var rebuilt: [ArcLengthChain] = [], boxes: [Rect2] = []
+        if params.tabs.isEnabled, let roughing {
+            rebuilt = ProfileGeometry.loops(closed: ordered.filter(\.isClosed).map(\.points), side: params.side,
+                                            offset: roughing.allowance, direction: params.direction, tolerance: tol, join: join)
+                .chains.map { ArcLengthChain($0) }
+            boxes = rebuilt.map { Rect2(points: $0.chain.points).insetBy(-(roughing.allowance + 4 * tol + 1e-6)) }
+        }
         var placed: [Vec2] = []
         for (i, chain) in ordered.enumerated() {
             var centers = manualCenters?[i]
@@ -154,7 +177,18 @@ public struct ProfileOperation: ToolpathOperation {
             if params.tabs.isEnabled, let roughing, chain.isClosed {
                 let alc = ArcLengthChain(chain)
                 let within = roughing.allowance + 4 * tol + 1e-6
-                let roughLoops = roughing.loops.filter { TabAnchors.isOffset($0, of: alc, by: roughing.allowance, tolerance: tol) }
+                // The rebuilt point across from the first edge midpoint that has one: a stretch the
+                // roughing offset swallowed (a merge, a collapse) has nothing within an allowance.
+                var across: Vec2?
+                let walk = chain.walk
+                probes: for (a, b) in zip(walk, walk.dropFirst()) {
+                    let m = (a + b) * 0.5
+                    for (l, box) in zip(rebuilt, boxes) where box.contains(m) {
+                        let pr = l.project(m)
+                        if pr.distance <= within { across = l.point(at: pr.s); break probes }
+                    }
+                }
+                let roughLoops = across.map { q in roughing.loops.filter { $0.project(q).distance <= 8 * tol + 1e-6 } } ?? []
                 counts = roughLoops.isEmpty
                 if centers == nil, !roughLoops.isEmpty {
                     let inherited = roughing.tabs.compactMap { p -> Double? in

@@ -33,19 +33,31 @@ public struct Chain2D: Hashable, Sendable {
 
 /// Extracts flattened closed loops and open polylines from shapes.
 public enum ShapeGeometry {
-    public static func loops(of shapes: [Shape], tolerance: Double) -> (closed: [[Vec2]], open: [[Vec2]]) {
-        var closed: [[Vec2]] = [], open: [[Vec2]] = []
+    /// One path of a shape flattened: consecutive duplicate points removed, a closed loop kept
+    /// only with three or more points and an open polyline with two or more.
+    public struct Flattened: Sendable {
+        public var shapeID: UUID
+        public var pathIndex: Int
+        public var points: [Vec2]
+        public var isClosed: Bool
+    }
+
+    public static func flattened(_ shapes: [Shape], tolerance: Double) -> [Flattened] {
+        var out: [Flattened] = []
         for shape in shapes {
-            for path in shape.paths {
+            for (i, path) in shape.paths.enumerated() {
                 let pts = Polygon2D.deduplicated(path.flattened(tolerance: tolerance), closed: path.isClosed,
                                                  tolerance: tolerance * 1e-3)
-                if path.isClosed {
-                    if pts.count > 2 { closed.append(pts) }
-                } else if pts.count > 1 {
-                    open.append(pts)
+                if pts.count > (path.isClosed ? 2 : 1) {
+                    out.append(Flattened(shapeID: shape.id, pathIndex: i, points: pts, isClosed: path.isClosed))
                 }
             }
         }
-        return (closed, open)
+        return out
+    }
+
+    public static func loops(of shapes: [Shape], tolerance: Double) -> (closed: [[Vec2]], open: [[Vec2]]) {
+        let all = flattened(shapes, tolerance: tolerance)
+        return (all.filter(\.isClosed).map(\.points), all.filter { !$0.isClosed }.map(\.points))
     }
 }

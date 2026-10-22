@@ -42,50 +42,20 @@ public enum TabAnchors {
         return best?.anchor
     }
 
-    /// True when `loop` is `source` offset by `offset`: an offset loop is never nearer than its
-    /// offset to the curve it came from and runs exactly that far along every untrimmed stretch,
-    /// so the nearest of its vertices and edge midpoints, or of the source's vertices to it, is
-    /// one offset away (a mitered loop has only corner vertices, farther out; its edges and the
-    /// source's corners are not). A loop of some other curve, or one the offset swallowed, fails;
-    /// a loop two curves merged into is the offset of each.
-    static func isOffset(_ loop: ArcLengthChain, of source: ArcLengthChain, by offset: Double, tolerance: Double) -> Bool {
-        let slack = 4 * tolerance + 1e-6
-        // Far apart: no need to walk either.
-        let (lo, hi) = bounds(loop.chain.points), (so, sh) = bounds(source.chain.points)
-        let grow = offset + slack
-        guard hi.x >= so.x - grow, lo.x <= sh.x + grow, hi.y >= so.y - grow, lo.y <= sh.y + grow else { return false }
-        var nearest = Double.infinity
-        let walk = loop.chain.walk
-        for (i, v) in walk.enumerated() {
-            nearest = min(nearest, source.project(v).distance)
-            if i + 1 < walk.count { nearest = min(nearest, source.project((v + walk[i + 1]) * 0.5).distance) }
-        }
-        for v in source.chain.points { nearest = min(nearest, loop.project(v).distance) }
-        return abs(nearest - offset) <= slack
-    }
-
-    private static func bounds(_ pts: [Vec2]) -> (Vec2, Vec2) {
-        var lo = Vec2(.infinity, .infinity), hi = Vec2(-.infinity, -.infinity)
-        for p in pts {
-            lo = Vec2(min(lo.x, p.x), min(lo.y, p.y))
-            hi = Vec2(max(hi.x, p.x), max(hi.y, p.y))
-        }
-        return (lo, hi)
-    }
-
     /// Tab centre parameters for each closed loop. An anchor travels with its vector, so it is used
     /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
-    /// cuts) and the loop the toolpath would cut for that shape alone (`ownLoops`, the same side,
-    /// offset and join) runs through one of `loops` at the anchor's nearest point; it goes onto
+    /// cuts) and the loop the toolpath would cut for the anchor's part (`ownLoops`: its vector and
+    /// whatever selected vectors overlap or nest with it, offset together on the same side with the
+    /// same offset and join) runs through one of `loops` at the anchor's nearest point; it goes onto
     /// that loop there. One on another part however near, on an open vector, on a vector that no
     /// longer exists, or whose own loop the offset swallowed or merged away is never attached to
     /// whatever loop happens to be nearest; `ignored` counts them so the operation can say so.
     public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
-                               ownLoops: (Shape) -> [ArcLengthChain], document: Document,
+                               ownLoops: (TabAnchor) -> [ArcLengthChain], document: Document,
                                tolerance: Double) -> (centers: [[Double]], ignored: Int) {
         var out = Array(repeating: [Double](), count: loops.count)
         var ignored = 0
-        var own: [UUID: [ArcLengthChain]] = [:]
+        var own: [UUID: [Int: [ArcLengthChain]]] = [:]
         for a in anchors {
             guard shapeIDs.contains(a.shapeID), let shape = document.shape(id: a.shapeID),
                   shape.paths.indices.contains(a.pathIndex), shape.paths[a.pathIndex].isClosed,
@@ -94,10 +64,14 @@ public enum TabAnchors {
                 continue
             }
             let p = vector.point(at: min(max(a.fraction, 0), 1) * vector.length)
-            // Where the tab would sit on this shape's own loop, then the toolpath loop through there.
-            if own[shape.id] == nil { own[shape.id] = ownLoops(shape) }
+            // Where the tab would sit on the part's own loop, then the toolpath loop through there.
+            let mine = own[a.shapeID]?[a.pathIndex] ?? {
+                let l = ownLoops(a)
+                own[a.shapeID, default: [:]][a.pathIndex] = l
+                return l
+            }()
             var site: (point: Vec2, distance: Double)?
-            for l in own[shape.id]! where l.isClosed && l.length > 0 {
+            for l in mine where l.isClosed && l.length > 0 {
                 let pr = l.project(p)
                 if pr.distance < (site?.distance ?? .infinity) { site = (l.point(at: pr.s), pr.distance) }
             }
