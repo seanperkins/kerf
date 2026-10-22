@@ -89,7 +89,7 @@ import Testing
         #expect(!doc.confirmSave())
     }
 
-    @Test func aPipeInTheFilesPlaceIsNotWaitedOn() throws {
+    @Test(.timeLimit(.minutes(1))) func aPipeInTheFilesPlaceIsNotWaitedOn() throws {
         let url = AppTestSupport.tempDir().appendingPathComponent("pipe.kerf")
         #expect(mkfifo(url.path, 0o644) == 0)
         let doc = makeDoc()

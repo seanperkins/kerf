@@ -105,8 +105,9 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
   size (Inkscape 1.x, CorelDRAW) imports at once. Measure the imported shape in the inspector against
   the size you drew it at.
 - **A failed save keeps your work.** Save a document into a folder, then in Terminal make the file and folder
-  read-only (`chmod 444 file.kerf && chmod 555 folder`). Change something and press ⌘S: macOS shows its "could not be
-  saved" error and the window stays edited (dot in the close button). Wait for the recovery interval (Preferences)
+  read-only (`chmod 444 file.kerf && chmod 555 folder`). Change something and press ⌘S: macOS refuses the save (a
+  permission or "could not be saved" alert, or a "locked" sheet offering Duplicate: choose Cancel) and the window
+  stays edited (dot in the close button). Wait for the recovery interval (Preferences)
   and check `~/Library/Application Support/Kerf/Recovery/` still holds a copy. Then `chmod 755 folder && chmod 644
   file.kerf`, press ⌘S, and the copy goes away at the next interval. (An untitled document keeps its copy until it
   has been saved to a file.)
