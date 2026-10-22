@@ -17,82 +17,120 @@ struct GCodeFileSet {
         var text: String?
     }
 
-    /// The file operations a write uses. Tests swap in ones that fail on cue, so every rollback
-    /// path is exercised; the app uses the live ones. Each live operation opens the folder it works
-    /// in without following a link and works relative to that descriptor, so a working folder swapped
-    /// for a link mid-save is refused rather than followed. `writeText` creates the file and fails
-    /// when anything is at the name already; `moveItem` is an exclusive rename that never writes over
-    /// an item at the destination, link or file. On a volume without exclusive rename a hard link,
-    /// which is exclusive everywhere, stands in; on one without hard links either, the rename is
-    /// check-then-rename, and a file created in that instant would be replaced. `removeItem` removes
-    /// one file, link or empty folder and never recurses, so a folder swapped in for the working
-    /// folder keeps its contents and is left behind.
-    struct FileOperations {
-        var createDirectory: (URL) throws -> Void
-        var writeText: (String, URL) throws -> Void
-        var moveItem: (URL, URL) throws -> Void
-        var removeItem: (URL) throws -> Void
+    /// An open directory, held for as long as a save works in it. Every operation is relative to
+    /// one of these, so a folder renamed or swapped under the save after it was opened changes
+    /// nothing: the save keeps working in the folder it opened.
+    final class Folder {
+        let fd: Int32
+        /// Where it was opened, for messages and for tests that tell folders apart by name.
+        let url: URL
+        private let device: dev_t
+        private let inode: ino_t
 
-        static let live = FileOperations(
-            createDirectory: { url in
-                let dir = try Folder(of: url)
-                guard mkdirat(dir.fd, dir.name, 0o755) == 0 else { throw posixError(errno, url.path) }
-            },
-            writeText: { text, url in
-                let dir = try Folder(of: url)
-                let fd = openat(dir.fd, dir.name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o644)
-                guard fd >= 0 else { throw posixError(errno, url.path) }
-                let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-                try handle.write(contentsOf: Data(text.utf8))
-                try handle.close()   // a network volume can report a failed write-behind only here
-            },
-            moveItem: { from, to in
-                let source = try Folder(of: from), destination = try Folder(of: to)
-                if renameatx_np(source.fd, source.name, destination.fd, destination.name, UInt32(RENAME_EXCL)) == 0 { return }
-                var code = errno
-                if code == ENOTSUP {
-                    if linkat(source.fd, source.name, destination.fd, destination.name, 0) == 0 {
-                        guard unlinkat(source.fd, source.name, 0) == 0 else { throw posixError(errno, from.path) }
-                        return
-                    }
-                    code = errno
-                    if code == ENOTSUP || code == EPERM {
-                        var info = stat()
-                        if fstatat(destination.fd, destination.name, &info, AT_SYMLINK_NOFOLLOW) == 0 { code = EEXIST }
-                        else if renameat(source.fd, source.name, destination.fd, destination.name) == 0 { return }
-                        else { code = errno }
-                    }
-                }
-                throw posixError(code, to.path)
-            },
-            removeItem: { url in
-                // One file, link or empty folder: nothing here ever deletes recursively.
-                var info = stat()
-                let dir = try Folder(of: url)
-                guard fstatat(dir.fd, dir.name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { throw posixError(errno, url.path) }
-                let flags: Int32 = info.st_mode & S_IFMT == S_IFDIR ? AT_REMOVEDIR : 0
-                guard unlinkat(dir.fd, dir.name, flags) == 0 else { throw posixError(errno, url.path) }
-            })
-
-        /// The folder an item is in, opened without following a final link, and the item's name in it.
-        private final class Folder {
-            let fd: Int32
-            let name: String
-            init(of url: URL) throws {
-                let parent = url.deletingLastPathComponent().path
-                fd = open(parent, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-                guard fd >= 0 else { throw FileOperations.posixError(errno, parent) }
-                name = url.lastPathComponent
-            }
-            deinit { close(fd) }
+        private init(fd: Int32, url: URL) throws {
+            var info = stat()
+            guard fstat(fd, &info) == 0 else { let code = errno; close(fd); throw Folder.posixError(code, url.path) }
+            self.fd = fd
+            self.url = url
+            device = info.st_dev
+            inode = info.st_ino
         }
 
-        private static func posixError(_ code: Int32, _ path: String) -> NSError {
+        deinit { close(fd) }
+
+        /// The folder the user chose, by its real path (a user's alias is followed here, once).
+        static func open(_ url: URL) throws -> Folder {
+            guard let real = realpath(url.path, nil) else { throw posixError(errno, url.path) }
+            defer { free(real) }
+            let path = String(cString: real)
+            let fd = Darwin.open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW_ANY | O_CLOEXEC)
+            guard fd >= 0 else { throw posixError(errno, path) }
+            return try Folder(fd: fd, url: URL(fileURLWithPath: path, isDirectory: true))
+        }
+
+        /// A new folder inside `parent`, made and opened without following anything.
+        static func make(in parent: Folder, named name: String) throws -> Folder {
+            let url = parent.url.appendingPathComponent(name, isDirectory: true)
+            guard mkdirat(parent.fd, name, 0o755) == 0 else { throw posixError(errno, url.path) }
+            let fd = openat(parent.fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            guard fd >= 0 else { throw posixError(errno, url.path) }
+            return try Folder(fd: fd, url: url)
+        }
+
+        /// What `name` is in this folder, without following a link; nil when nothing is there.
+        func type(of name: String) -> mode_t? {
+            var info = stat()
+            guard fstatat(fd, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return nil }
+            return info.st_mode & S_IFMT
+        }
+
+        /// True while `name` in `parent` is still this very folder and not something put in its place.
+        func isStill(in parent: Folder, named name: String) -> Bool {
+            var info = stat()
+            guard fstatat(parent.fd, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return false }
+            return info.st_dev == device && info.st_ino == inode
+        }
+
+        fileprivate static func posixError(_ code: Int32, _ path: String) -> NSError {
             NSError(domain: NSPOSIXErrorDomain, code: Int(code), userInfo: [
                 NSFilePathErrorKey: path,
                 NSLocalizedDescriptionKey: "\(String(cString: strerror(code))) (\((path as NSString).lastPathComponent)).",
             ])
         }
+    }
+
+    /// The file operations a write uses, each relative to a held `Folder`. Tests swap in ones that
+    /// fail on cue, so every rollback path is exercised; the app uses the live ones. `writeText`
+    /// creates the file and fails when anything is at the name already; `moveItem` is an exclusive
+    /// rename that never writes over an item at the destination, link or file. On a volume without
+    /// exclusive rename a hard link, which is exclusive everywhere, stands in; on one without hard
+    /// links either, the rename is check-then-rename, and a file created in that instant would be
+    /// replaced. `removeItem` removes one file, link or empty folder and never recurses.
+    struct FileOperations {
+        var openFolder: (URL) throws -> Folder
+        var makeFolder: (Folder, String) throws -> Folder
+        var writeText: (String, Folder, String) throws -> Void
+        var moveItem: (Folder, String, Folder, String) throws -> Void
+        var removeItem: (Folder, String) throws -> Void
+
+        static let live = FileOperations(
+            openFolder: Folder.open,
+            makeFolder: Folder.make(in:named:),
+            writeText: { text, folder, name in
+                let fd = openat(folder.fd, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o644)
+                guard fd >= 0 else { throw Folder.posixError(errno, folder.url.appendingPathComponent(name).path) }
+                let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+                try handle.write(contentsOf: Data(text.utf8))
+                try handle.close()   // a network volume can report a failed write-behind only here
+            },
+            moveItem: { from, fromName, to, toName in
+                if renameatx_np(from.fd, fromName, to.fd, toName, UInt32(RENAME_EXCL)) == 0 { return }
+                var code = errno
+                if code == ENOTSUP {
+                    if linkat(from.fd, fromName, to.fd, toName, AT_SYMLINK_NOFOLLOW_ANY) == 0 {
+                        guard unlinkat(from.fd, fromName, 0) == 0 else {
+                            // Undo the link so that a throw still means nothing happened.
+                            let failure = errno
+                            unlinkat(to.fd, toName, 0)
+                            throw Folder.posixError(failure, from.url.appendingPathComponent(fromName).path)
+                        }
+                        return
+                    }
+                    code = errno
+                    if code == ENOTSUP || code == EPERM || code == EINVAL {
+                        var info = stat()
+                        if fstatat(to.fd, toName, &info, AT_SYMLINK_NOFOLLOW) == 0 { code = EEXIST }
+                        else if renameat(from.fd, fromName, to.fd, toName) == 0 { return }
+                        else { code = errno }
+                    }
+                }
+                throw Folder.posixError(code, to.url.appendingPathComponent(toName).path)
+            },
+            removeItem: { folder, name in
+                let path = folder.url.appendingPathComponent(name).path
+                guard let type = folder.type(of: name) else { throw Folder.posixError(errno, path) }
+                guard unlinkat(folder.fd, name, type == S_IFDIR ? AT_REMOVEDIR : 0) == 0 else { throw Folder.posixError(errno, path) }
+            })
     }
 
     var files: [File]
@@ -159,21 +197,17 @@ struct GCodeFileSet {
     private func inspect(_ directory: URL) throws -> [String: FileAttributeType] {
         var found: [String: FileAttributeType] = [:]
         for name in files.map(\.fileName) {
-            if let type = try Self.type(at: directory.appendingPathComponent(name), name: name) { found[name] = type }
+            do {
+                found[name] = try FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent(name).path)[.type] as? FileAttributeType
+            } catch let error as NSError {
+                let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError
+                if error.code == NSFileReadNoSuchFileError || (underlying?.domain == NSPOSIXErrorDomain && underlying?.code == Int(ENOENT)) {
+                    continue
+                }
+                throw GCodeFileSetError.couldNotRead(file: name, underlying: error)
+            }
         }
         return found
-    }
-
-    private static func type(at url: URL, name: String) throws -> FileAttributeType? {
-        do {
-            return try FileManager.default.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType
-        } catch let error as NSError {
-            let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError
-            if error.code == NSFileReadNoSuchFileError || (underlying?.domain == NSPOSIXErrorDomain && underlying?.code == Int(ENOENT)) {
-                return nil
-            }
-            throw GCodeFileSetError.couldNotRead(file: name, underlying: error)
-        }
     }
 
     /// Writes every file into `directory` or none. Refuses while any post failed, any name is not a
@@ -182,77 +216,79 @@ struct GCodeFileSet {
     /// hidden working folder inside `directory` (same volume, and nothing visible has changed), and
     /// each file goes into place by two renames: the file that was there into `was/` inside the
     /// working folder, then the new one onto its name. Both renames are exclusive, so a file that
-    /// appeared in the meantime stops the save rather than being lost. A failure removes the new
-    /// files and renames the files that were there back; if even that fails the working folder is
-    /// kept and the error says which earlier files are in it. On success the working folder, old
-    /// files included, is removed. A crash part way through leaves the working folder in the user's
-    /// folder, not in a temporary one. Returns the written URLs in order.
+    /// appeared in the meantime stops the save rather than being lost. The chosen folder, the
+    /// working folder and `was/` are opened once and held, so nothing swapped in at their names
+    /// during the save is used, and the working folder is cleaned out only by the names this save
+    /// put in it. A failure removes the new files and renames the files that were there back; if
+    /// even that fails the working folder is kept and the error says which earlier files are in it.
+    /// On success the working folder, old files included, is removed. A crash part way through
+    /// leaves the working folder in the user's folder, not in a temporary one. Returns the written
+    /// URLs in order.
     @discardableResult
     func write(to directory: URL, replacing confirmed: [String] = []) throws -> [URL] {
-        // The chosen folder may itself be a link (a user's alias); the operations below refuse to
-        // follow links, so resolve it once here and work in the real folder.
-        let directory = directory.resolvingSymlinksInPath()
         let missing = unposted
         guard missing.isEmpty else { throw GCodeFileSetError.notPosted(missing) }
         let bad = invalidNames
         guard bad.isEmpty else { throw GCodeFileSetError.invalidNames(bad) }
-        let found = try inspect(directory)
+        let dir: Folder
+        do { dir = try operations.openFolder(directory) } catch { throw GCodeFileSetError.couldNotStage(error) }
+        let found = try inspect(dir.url)
         let inTheWay = files.map(\.fileName).filter { found[$0] == .typeDirectory }
         guard inTheWay.isEmpty else { throw GCodeFileSetError.directoryInTheWay(inTheWay) }
         let present = Set(found.keys)
         let unconfirmed = present.subtracting(confirmed).sorted()
         guard unconfirmed.isEmpty else { throw GCodeFileSetError.notConfirmed(unconfirmed) }
 
-        let tag = String(UUID().uuidString.prefix(8)).lowercased()
-        let staging = directory.appendingPathComponent(Self.workingFolderPrefix + tag, isDirectory: true)
-        let was = staging.appendingPathComponent(Self.replacedFolderName, isDirectory: true)
-        do { try operations.createDirectory(staging) } catch { throw GCodeFileSetError.couldNotStage(error) }
-        // `aside` holds the names whose old file is in was/, `placed` the names whose new file is in
-        // place; each is appended after the rename that made it true, and a rename that throws did
-        // nothing. The working folder is cleaned out by those names, never recursively, so anything
-        // in it that this save did not put there is left where it is.
-        var aside: [String] = [], placed: [String] = []
+        let stagingName = Self.workingFolderPrefix + String(UUID().uuidString.prefix(8)).lowercased()
+        let staging: Folder, was: Folder
+        do { staging = try operations.makeFolder(dir, stagingName) } catch { throw GCodeFileSetError.couldNotStage(error) }
+        do { was = try operations.makeFolder(staging, Self.replacedFolderName) } catch {
+            if staging.isStill(in: dir, named: stagingName) { try? operations.removeItem(dir, stagingName) }
+            throw GCodeFileSetError.couldNotStage(error)
+        }
+        // `staged` holds the names this save wrote into the working folder, `aside` the names whose
+        // old file is in was/, `placed` the names whose new file is in place; each is appended after
+        // the operation that made it true, and an operation that throws did nothing. The working
+        // folder is cleaned out by those names alone and removed only while it is still itself, so
+        // anything this save did not put there is left where it is.
+        var staged: [String] = [], aside: [String] = [], placed: [String] = []
         var keepWorkingFolder = false
         defer {
             if !keepWorkingFolder {
-                for file in files { try? operations.removeItem(staging.appendingPathComponent(file.fileName)) }
-                for name in aside { try? operations.removeItem(was.appendingPathComponent(name)) }
-                try? operations.removeItem(was)
-                try? operations.removeItem(staging)
+                for name in staged where !placed.contains(name) { try? operations.removeItem(staging, name) }
+                for name in aside { try? operations.removeItem(was, name) }
+                try? operations.removeItem(staging, Self.replacedFolderName)
+                if staging.isStill(in: dir, named: stagingName) { try? operations.removeItem(dir, stagingName) }
             }
         }
-        do { try operations.createDirectory(was) } catch { throw GCodeFileSetError.couldNotStage(error) }
 
         // 1. Every program into the working folder: nothing the user can see has changed. The create
         //    is exclusive, so two names the volume folds into one fail here, on the second.
         for file in files {
-            do { try operations.writeText(file.text!, staging.appendingPathComponent(file.fileName)) }
+            do { try operations.writeText(file.text!, staging, file.fileName) }
             catch { throw GCodeFileSetError.writeFailed(file: file.fileName, title: file.title, underlying: error) }
+            staged.append(file.fileName)
         }
 
         // 2. Into place by renames.
         for file in files {
             let name = file.fileName
-            let target = directory.appendingPathComponent(name)
             do {
                 if present.contains(name) {
-                    let kept = was.appendingPathComponent(name)
-                    try operations.moveItem(target, kept)
+                    try operations.moveItem(dir, name, was, name)
                     aside.append(name)
-                    // A directory that took the name after the check would be deleted with the
-                    // working folder: put it back and refuse instead.
-                    if try Self.type(at: kept, name: name) == .typeDirectory { throw GCodeFileSetError.directoryInTheWay([name]) }
+                    // A directory that took the name after the check must not be treated as a file.
+                    if was.type(of: name) == S_IFDIR { throw GCodeFileSetError.directoryInTheWay([name]) }
                 }
-                try operations.moveItem(staging.appendingPathComponent(name), target)
+                try operations.moveItem(staging, name, dir, name)
                 placed.append(name)
             } catch {
                 var newLeft: [String] = [], oldLeft: [String] = []
                 for n in placed.reversed() {
-                    do { try operations.removeItem(directory.appendingPathComponent(n)) } catch { newLeft.append(n) }
+                    do { try operations.removeItem(dir, n) } catch { newLeft.append(n) }
                 }
                 for n in aside.reversed() {
-                    do { try operations.moveItem(was.appendingPathComponent(n), directory.appendingPathComponent(n)) }
-                    catch { oldLeft.append(n) }
+                    do { try operations.moveItem(was, n, dir, n) } catch { oldLeft.append(n) }
                 }
                 if newLeft.isEmpty && oldLeft.isEmpty {
                     if let refusal = error as? GCodeFileSetError { throw refusal }
@@ -260,11 +296,11 @@ struct GCodeFileSet {
                 }
                 keepWorkingFolder = !oldLeft.isEmpty
                 throw GCodeFileSetError.rollbackFailed(file: name, underlying: error, newLeft: newLeft,
-                                                       oldLeft: oldLeft, workingFolder: was)
+                                                       oldLeft: oldLeft, workingFolder: was.url)
             }
         }
         // 3. The set is in place: the working folder, old files included, goes with the defer.
-        return files.map { directory.appendingPathComponent($0.fileName) }
+        return files.map { dir.url.appendingPathComponent($0.fileName) }
     }
 }
 
@@ -279,7 +315,7 @@ enum GCodeFileSetError: LocalizedError {
     case notConfirmed([String])
     /// A planned name in the folder could not be looked at; nothing was written.
     case couldNotRead(file: String, underlying: Error)
-    /// The hidden working folder could not be made; nothing was written.
+    /// The folder could not be opened or the hidden working folder could not be made; nothing was written.
     case couldNotStage(Error)
     /// A file could not be written or put in place; the folder is as it was.
     case writeFailed(file: String, title: String, underlying: Error)
