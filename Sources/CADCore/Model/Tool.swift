@@ -65,12 +65,20 @@ public struct Tool: Codable, Hashable, Identifiable, Sendable {
 
     public var radius: Double { diameter / 2 }
 
-    /// True when `other` would cut the same toolpaths: the name, notes and folder only label a
-    /// tool, every other field (geometry, feeds, number, per-material data) reaches the program.
+    /// True when `other`, the same tool as it was before an edit, would cut the same toolpaths:
+    /// the name, notes and folder only label a tool, every other field (geometry, feeds, number,
+    /// per-material data) reaches the program. A document shows the new name without recalculating.
     public func cutsSameToolpaths(as other: Tool) -> Bool {
         var t = other
-        t.name = name; t.notes = notes; t.group = group
+        t.id = id; t.name = name; t.notes = notes; t.group = group
         return t == self
+    }
+
+    /// Changes the type; a V-bit or engraving bit gets the usual 60° angle if it has none, so the
+    /// type and its angle are one edit.
+    public mutating func setKind(_ k: ToolKind) {
+        kind = k
+        if (k == .vBit || k == .engraving) && angle == nil { angle = 60 }
     }
 
     /// Same tool with all lengths/feeds converted to `target` units.

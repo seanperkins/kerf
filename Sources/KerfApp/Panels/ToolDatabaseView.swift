@@ -3,8 +3,9 @@ import CAMCore
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Tool Database window: list of tools + editor. Edits save to tools.json as they are made
-/// (and once more when the editor closes), so switching tools or closing the window never drops them.
+/// Tool Database window: list of tools + editor. A number or choice saves to tools.json as it is made;
+/// text saves when you leave the field. The editor saves once more when it closes, so switching tools
+/// or closing the window never drops an edit.
 struct ToolDatabaseView: View {
     static let windowID = "tool-database"
     @EnvironmentObject var library: ToolLibraryModel
@@ -144,6 +145,22 @@ extension ToolDatabaseView {
 enum ToolEditorField: Hashable {
     case name, group, notes
     case material(Int)
+
+    /// True when `new` differs from `old` only in the text of this field, so a keystroke waits for
+    /// the field to be left. Any other change (a picker, the units, Apply in the calculator) is
+    /// its own edit and saves at once, even while a text field has focus.
+    func isTextEdit(from old: Tool, to new: Tool) -> Bool {
+        var t = old
+        switch self {
+        case .name: t.name = new.name
+        case .group: t.group = new.group
+        case .notes: t.notes = new.notes
+        case .material(let i):
+            guard let n = new.materials, n.indices.contains(i), old.materials?.count == n.count else { return false }
+            t.materials?[i].material = n[i].material
+        }
+        return t == new
+    }
 }
 
 struct ToolEditor: View {
@@ -169,7 +186,7 @@ struct ToolEditor: View {
             Section {
                 TextField("Name", text: $tool.name)
                     .focused($typing, equals: .name)
-                Picker("Type", selection: $tool.kind) {
+                Picker("Type", selection: Binding(get: { tool.kind }, set: { tool.setKind($0) })) {
                     ForEach(ToolKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                     .fieldHelp("Type")
@@ -237,12 +254,14 @@ struct ToolEditor: View {
             }
         }
         .formStyle(.grouped)
-        .onChange(of: tool.kind) { _, k in
-            if (k == .vBit || k == .engraving) && tool.angle == nil { tool.angle = 60 }
+        // A picker or number is one edit and saves at once; the text of the focused field waits until
+        // the field is left (focus moves on or Return), the editor closes, or the app quits.
+        .onChange(of: tool) { old, new in
+            if let field = typing, field.isTextEdit(from: old, to: new) { library.hold(new) } else { library.commitEdit(new) }
         }
-        // A picker or number is one edit and saves at once; text waits until the field is left
-        // (focus moves on or Return), the editor closes, or the app quits.
-        .onChange(of: tool) { _, t in if typing == nil { library.commitEdit(t) } }
+        // Another action replaced this tool in the library (an import with Replace): show that version,
+        // not the draft, so closing the editor does not write the draft back over it.
+        .onChange(of: original) { _, latest in if typing == nil && latest != tool { tool = latest } }
         .onChange(of: typing) { _, _ in library.commitEdit(tool) }
         .onSubmit { library.commitEdit(tool) }
         .onDisappear { library.commitEdit(tool) }

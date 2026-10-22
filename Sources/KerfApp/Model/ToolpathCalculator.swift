@@ -20,6 +20,19 @@ struct ToolpathResult: Sendable {
     }
 
     var isOK: Bool { error == nil && !toolpaths.isEmpty }
+
+    /// This result with each toolpath's tool carrying the name `library` gives it now; nil when
+    /// no name differs.
+    func renamingTools(from library: ToolLibrary) -> ToolpathResult? {
+        var out = self
+        var changed = false
+        for i in out.toolpaths.indices {
+            guard let name = library.tool(id: out.toolpaths[i].tool.id)?.name, name != out.toolpaths[i].tool.name else { continue }
+            out.toolpaths[i].tool.name = name
+            changed = true
+        }
+        return changed ? out : nil
+    }
 }
 
 enum ToolpathCalculator {

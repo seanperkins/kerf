@@ -17,7 +17,7 @@ public struct ToolLibrary: Codable, Hashable, Sendable {
     /// True when toolpaths calculated from `old` could differ from ones calculated from this
     /// library: a tool was added or removed, or one changed in more than its name, notes or folder.
     public func changesToolpaths(from old: ToolLibrary) -> Bool {
-        guard Set(tools.map(\.id)) == Set(old.tools.map(\.id)) else { return true }
+        guard tools.count == old.tools.count else { return true }
         return tools.contains { t in old.tool(id: t.id).map { !t.cutsSameToolpaths(as: $0) } ?? true }
     }
 

@@ -166,6 +166,7 @@ final class KerfDocument: ReferenceFileDocument {
         self.lastSavedProject = project
         self.toolLibrary = toolLibrary
         toolLibrary.$revision.dropFirst().sink { [weak self] _ in self?.designRevision += 1 }.store(in: &cancellables)
+        toolLibrary.$library.dropFirst().sink { [weak self] lib in self?.showToolNames(of: lib) }.store(in: &cancellables)
     }
 
     convenience init() {
@@ -613,8 +614,17 @@ final class KerfDocument: ReferenceFileDocument {
     /// Stores a result unless a newer calculation of the same operation already landed.
     private func store(_ r: ToolpathResult, for id: UUID, generation: Int) {
         guard operation(id) != nil, generation > resultGeneration[id] ?? 0 else { return }
-        results[id] = r
+        results[id] = r.renamingTools(from: toolLibrary.library) ?? r
         resultGeneration[id] = generation
+    }
+
+    /// A rename in the Tool Database does not make toolpaths stale (the name is a label), so the
+    /// calculated toolpaths, which carry a copy of their tool, take the new name in place. The
+    /// program comments, the job sheet and the checks then read the current name.
+    private func showToolNames(of library: ToolLibrary) {
+        for (id, r) in results {
+            if let renamed = r.renamingTools(from: library) { results[id] = renamed }
+        }
     }
 
     var totalEstimatedSeconds: TimeInterval {

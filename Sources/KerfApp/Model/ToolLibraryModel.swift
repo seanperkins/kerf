@@ -8,8 +8,14 @@ final class ToolLibraryModel: ObservableObject {
     /// Bumped when a change can alter toolpaths (a tool added or removed, or edited in more than
     /// its name, notes or folder), so documents mark their toolpaths stale.
     @Published private(set) var revision = 0
-    /// How many times tools.json was written (what the tests count).
+    /// How many times tools.json was written successfully (what the tests count).
     private(set) var writes = 0
+    /// True while tools.json is behind the library (the last save failed, or the file was unreadable),
+    /// so the next change retries the save even when it changes nothing.
+    private var unsaved = false
+    /// The Tool Database editor's text edit that the library has not heard about yet; anything that
+    /// reads the library flushes it first.
+    private var draft: Tool?
     @Published var lastError: String?
     /// The material of the job whose window opened the Tool Database last, so the feeds calculator
     /// can start from its preset (the database window has no document of its own).
@@ -22,6 +28,7 @@ final class ToolLibraryModel: ObservableObject {
         self.store = store
         do { library = try store.load() } catch {
             library = .seeded
+            unsaved = true
             // The next edit saves the seeded library over the file; keep the user's copy first.
             let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
             let backup = store.fileURL.deletingPathExtension().appendingPathExtension("unreadable-\(stamp).json")
@@ -96,13 +103,22 @@ final class ToolLibraryModel: ObservableObject {
     /// A tool deleted meanwhile is not brought back. Returns whether anything was written.
     @discardableResult
     func commitEdit(_ tool: Tool) -> Bool {
+        if draft?.id == tool.id { draft = nil }
         guard let stored = library.tool(id: tool.id), stored != tool else { return false }
         update(tool)
         return true
     }
 
+    /// Notes a text edit the editor is still typing, so the library actions below see it.
+    func hold(_ tool: Tool) { draft = tool }
+
+    private func flushDraft() {
+        if let d = draft { commitEdit(d) }
+    }
+
     @discardableResult
     func duplicate(id: UUID) -> Tool? {
+        flushDraft()
         guard var t = library.tool(id: id) else { return nil }
         t.id = UUID()
         t.name += " copy"
@@ -111,10 +127,14 @@ final class ToolLibraryModel: ObservableObject {
         return t
     }
 
-    func delete(id: UUID) { mutate { $0.remove(id: id) } }
+    func delete(id: UUID) {
+        if draft?.id == id { draft = nil }
+        mutate { $0.remove(id: id) }
+    }
 
     /// Adds any of the seeded defaults that are missing (by id); never deletes user tools.
     func restoreDefaults() {
+        flushDraft()
         mutate { lib in for t in ToolLibrary.seeded.tools where lib.tool(id: t.id) == nil { lib.upsert(t) } }
     }
 
@@ -128,6 +148,7 @@ final class ToolLibraryModel: ObservableObject {
     /// Tools in a `.kerftools`/`tools.json`/`.csv` file, and which of them would overwrite a
     /// different library tool with the same id.
     func readImport(_ url: URL) throws -> (tools: [Tool], conflicts: [Tool]) {
+        flushDraft()
         let tools = try ToolLibraryExchange.read(url)
         return (tools, library.conflicts(with: tools))
     }
@@ -135,6 +156,7 @@ final class ToolLibraryModel: ObservableObject {
     /// Merges imported tools into the library (see `ToolLibrary.merge`).
     @discardableResult
     func importTools(_ tools: [Tool], policy: ToolImportPolicy) -> ToolImportReport {
+        flushDraft()
         var lib = library
         let report = lib.merge(tools, policy: policy)
         guard lib != library else { return report }
@@ -144,20 +166,27 @@ final class ToolLibraryModel: ObservableObject {
 
     /// Writes the tools with `ids` (all tools when nil) in the format of `url`'s extension.
     func export(ids: Set<UUID>?, to url: URL) throws {
+        flushDraft()
         let tools = ids.map { ids in library.tools.filter { ids.contains($0.id) } } ?? library.tools
         try ToolLibraryExchange.write(tools, to: url)
     }
 
-    /// Applies `change`; a change that leaves the library as it was writes nothing.
+    /// Applies `change` and saves. A change that leaves the library as it was writes nothing,
+    /// unless an earlier save failed and the file is still behind.
     private func mutate(_ change: (inout ToolLibrary) -> Void) {
         var next = library
         change(&next)
-        guard next != library else { return }
-        let alters = next.changesToolpaths(from: library)
-        library = next
-        if alters { revision += 1 }
-        writes += 1
-        do { try store.save(library); lastError = nil } catch {
+        if next != library {
+            let alters = next.changesToolpaths(from: library)
+            library = next
+            if alters { revision += 1 }
+            unsaved = true
+        }
+        guard unsaved else { return }
+        do {
+            try store.save(library)
+            unsaved = false; writes += 1; lastError = nil
+        } catch {
             lastError = "Could not save tools: \(error.localizedDescription)"
         }
     }

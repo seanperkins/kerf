@@ -96,6 +96,8 @@ struct JobSummary: Equatable {
         struct Result: Hashable {
             var id: UUID
             var toolpathIDs: [UUID]
+            /// A tool renamed in the database is renamed in place in its toolpaths.
+            var toolNames: [String]
             var estimatedSeconds: TimeInterval
             var error: String?
         }
@@ -110,7 +112,7 @@ struct JobSummary: Equatable {
              rapidRate: Double, units: LengthUnit) {
             self.operations = operations
             self.results = results.sorted { $0.key.uuidString < $1.key.uuidString }.map { id, r in
-                Result(id: id, toolpathIDs: r.toolpaths.map(\.id), estimatedSeconds: r.estimatedSeconds, error: r.error)
+                Result(id: id, toolpathIDs: r.toolpaths.map(\.id), toolNames: r.toolpaths.map(\.tool.name), estimatedSeconds: r.estimatedSeconds, error: r.error)
             }
             self.groupByTool = groupByTool; self.settings = settings; self.rapidRate = rapidRate; self.units = units
         }
