@@ -107,6 +107,8 @@ final class KerfDocument: ReferenceFileDocument {
     @Published var kerningShapeID: UUID?
     /// STL imports waiting for the placement dialog (shown one after another).
     var pendingPlacements: [ModelPlacementForm] = []
+    /// SVG files with no physical size, waiting for their scale to be confirmed (`IOSheet.svgScale`).
+    var pendingScales: [SVGScaleRequest] = []
     var deferredAlert: AlertMessage?
     /// Expressions typed into numeric fields, linked to parameters on the next edit (io).
     let expressionRecorder = ExpressionRecorder()
@@ -505,6 +507,12 @@ final class KerfDocument: ReferenceFileDocument {
         sheet = .placeModel(pendingPlacements.removeFirst())
     }
 
+    /// Shows the next SVG whose scale the file does not state.
+    func showNextScaleRequest() {
+        guard sheet == nil, !pendingScales.isEmpty else { return }
+        sheet = .io(.svgScale(pendingScales.removeFirst()))
+    }
+
     func editPlacement(of modelID: UUID) {
         guard let m = project.document.model(id: modelID) else { return }
         sheet = .placeModel(ModelPlacementForm(editing: m, job: project.document.job, library: mergedLibrary))
@@ -674,6 +682,11 @@ final class KerfDocument: ReferenceFileDocument {
                         data: data, fileName: url.lastPathComponent, project: project, library: mergedLibrary))
                     continue
                 }
+                // An SVG that does not say how big it is waits for the user to confirm the scale.
+                if let ask = ImportService.scaleRequest(data: data, fileName: url.lastPathComponent, units: units) {
+                    pendingScales.append(ask)
+                    continue
+                }
                 var outcome = ImportOutcome()
                 var p = project
                 outcome = try ImportService.importFile(data: data, fileName: url.lastPathComponent, into: &p)
@@ -688,13 +701,14 @@ final class KerfDocument: ReferenceFileDocument {
         }
         if !newShapes.isEmpty { setSelection(newShapes); sidebarTab = .design; requestCanvas(.fit) }
         let message = messages.isEmpty ? nil : AlertMessage(title: "Import", message: messages.joined(separator: "\n"))
-        if pendingPlacements.isEmpty {
+        if pendingPlacements.isEmpty && pendingScales.isEmpty {
             if let message { report(message) }
         } else {
-            // A sheet and an alert cannot show together: report after the placement dialogs.
+            // A sheet and an alert cannot show together: report after the placement and scale dialogs.
             hold(message)
             showDesignCanvas()
             showNextPlacement()
+            showNextScaleRequest()
         }
     }
 
@@ -724,6 +738,8 @@ final class KerfDocument: ReferenceFileDocument {
         _ = expressionRecorder.take()
         if !pendingPlacements.isEmpty {
             showNextPlacement()
+        } else if !pendingScales.isEmpty {
+            showNextScaleRequest()
         } else if let a = deferredAlert {
             deferredAlert = nil
             alert = a

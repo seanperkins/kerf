@@ -1,0 +1,14 @@
+{
+  "name": "importing an SVG that does not state its size: the scale sheet, a choice, the result",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "import", "name": "Tests/Fixtures/CADCore/illustrator-px.svg"},
+    {"op": "captureSheet", "name": "scale-sheet"},
+    {"op": "press", "name": "96", "value": "AXRadioButton"},
+    {"op": "wait", "seconds": 0.6},
+    {"op": "captureSheet", "name": "scale-sheet-96"},
+    {"op": "press", "name": "Import", "value": "AXButton"},
+    {"op": "wait", "seconds": 0.8},
+    {"op": "capture", "name": "imported"}
+  ]
+}
