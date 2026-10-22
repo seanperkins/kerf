@@ -1,0 +1,12 @@
+{
+  "name": "inspector controls: the accessibility frames match where the controls are drawn (a click at the reported frame hits the control)",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "select", "names": ["KERF"]},
+    {"op": "capture", "name": "before"},
+    {"op": "press", "name": "Locked", "value": "AXCheckBox"},
+    {"op": "wait", "seconds": 0.5},
+    {"op": "capture", "name": "after"}
+  ]
+}

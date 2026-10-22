@@ -90,8 +90,8 @@ enum HarnessCapture {
     }
 
     /// The window's scroll views: frame in window points (origin top left), content insets and scroll offset.
-    /// Appended to the accessibility dump, because SwiftUI reports the frames of a scroll view's content
-    /// without the view's top content inset, so a reader of the dump can correct for it.
+    /// Appended to the accessibility dump so a reader can tell where a scroll view really is and how far its
+    /// content is inset (SwiftUI reports a scroll view's content frames without the view's own top inset).
     static func scrollViewNotes(of window: NSWindow) -> String {
         guard let content = window.contentView else { return "" }
         let h = window.frame.height
@@ -231,9 +231,9 @@ enum HarnessCapture {
             let found = await lookup(text: text, role: role, in: window)
             if let found, found.exact {
                 let settled = await settled(found.name, at: found.center, text: text, role: role, in: window)
-                return (settled.name, correctedForScrollInsets(settled.center, in: window))
+                return (settled.name, settled.center)
             }
-            if let found, loose == nil { loose = (found.name, correctedForScrollInsets(found.center, in: window)) }
+            if let found, loose == nil { loose = (found.name, found.center) }
             try? await Task.sleep(nanoseconds: 250_000_000)
         } while Date() < deadline
         return loose
@@ -289,17 +289,6 @@ enum HarnessCapture {
             last = again.center
         }
         return (name, last)
-    }
-
-    /// SwiftUI reports the accessibility frames of a scroll view's content without the scroll view's top
-    /// content inset (the inspector's content sits 52 pt lower than its frames say, under the toolbar), so a
-    /// point inside such a scroll view is moved down by that inset. Window coordinates, origin bottom left.
-    private static func correctedForScrollInsets(_ point: CGPoint, in window: NSWindow) -> CGPoint {
-        guard let content = window.contentView else { return point }
-        let scrollViews = descendants(of: content).compactMap { $0 as? NSScrollView }
-            .filter { $0.convert($0.bounds, to: nil).contains(point) && $0.contentView.contentInsets.top > 0 }
-        guard let inner = scrollViews.min(by: { $0.bounds.height < $1.bounds.height }) else { return point }
-        return CGPoint(x: point.x, y: point.y - inner.contentView.contentInsets.top)
     }
 
     /// A left click at `point` (window coordinates, origin bottom left). Both events go through the app's event
