@@ -109,7 +109,10 @@ public struct ProfileOperation: ToolpathOperation {
             let finish = cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
                                   wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
                                   ownLoops: ownLoops(at: finalOffset),
-                                  roughing: (tabs: rough.placed, loops: plan.chains.map { ArcLengthChain($0) }, allowance: lastPass.allowance),
+                                  // The allowance the roughing loops actually stand off by: a negative
+                                  // allowance beyond the tool radius clamps either offset at zero.
+                                  roughing: (tabs: rough.placed, loops: plan.chains.map { ArcLengthChain($0) },
+                                             allowance: max(roughOffset, 0) - max(finalOffset, 0)),
                                   context: context, builder: &builder, tabNotes: &tabNotes)
             ignoredAnchors = finish.ignored
         }

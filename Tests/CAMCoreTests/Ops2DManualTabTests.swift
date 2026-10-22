@@ -126,6 +126,12 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     #expect(!tp.moves.isEmpty && tabCount(tp, ctx) == 1)
     let w = try #require(tp.metadata["warning"])
     #expect(w.contains("1 \(fewerTabs)") && w.contains("fewest placed: 1"))
+    // With a negative allowance that clamps both passes onto the line, the last pass finds its
+    // roughing loop (the same loop) and the shortfall is counted once.
+    let (clamped, ctxC) = try tabbedProfile([F.rect(0, 0, 0.3, 0.3)], allowance: -0.3, lastPass: ProfileLastPass(allowance: 0.1)) { _ in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, countPerPath: 4)
+    }
+    #expect(tabCount(clamped, ctxC) == 2 && clamped.metadata["warning"]?.contains("1 \(fewerTabs)") == true)
     // A loop long enough for its tabs says nothing.
     let (tp2, _) = try tabbedProfile([F.rect(0, 0, 6, 4)]) { _ in
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, countPerPath: 4)
