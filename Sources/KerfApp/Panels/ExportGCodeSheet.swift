@@ -19,6 +19,8 @@ struct ExportGCodeSheet: View {
     @State private var confirmErrors = false
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
+    /// Why the last Save failed, shown above the buttons (an alert on the document would sit under this sheet).
+    @State private var failure: String?
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
@@ -53,6 +55,7 @@ struct ExportGCodeSheet: View {
                 CalculationProgressView(count: calculatingCount) { stopCalculating() }
             }
             issuesView
+            SheetErrorRow(message: failure)
             HStack {
                 Button("Refresh") { run() }
                 Spacer()
@@ -124,6 +127,7 @@ struct ExportGCodeSheet: View {
     /// Recalculates stale toolpaths in the background (exported toolpaths must reflect the
     /// current parameters), then posts.
     private func run() {
+        failure = nil
         calcTask?.cancel()
         calcTask = nil
         let stale = targetOperations().filter { document.isStale($0) }
@@ -156,7 +160,8 @@ struct ExportGCodeSheet: View {
 
     private func save() {
         guard let text = result?.text else { return }
-        let panel = NSSavePanel()
+        failure = nil
+        let panel = PanelRunner.makeSavePanel()
         var opName: String?
         if case .operation(let id) = scope { opName = document.operation(id)?.setup.name }
         panel.nameFieldStringValue = SavePanelName.suggested(
@@ -172,7 +177,7 @@ struct ExportGCodeSheet: View {
                 if profileID != initialProfileID { document.setPostProfile(profileID) }
                 dismiss()
             } catch {
-                document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+                failure = "Could not save G-code: \(error.localizedDescription)"
             }
         }
     }

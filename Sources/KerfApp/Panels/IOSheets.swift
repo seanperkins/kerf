@@ -112,7 +112,7 @@ extension KerfDocument {
             requestCanvas(.fit)
         }
         if !outcome.warnings.isEmpty {
-            deferredAlert = AlertMessage(title: "Import Parts", message: outcome.warnings.joined(separator: "\n"))
+            report(AlertMessage(title: "Import Parts", message: outcome.warnings.joined(separator: "\n")))
         }
     }
 }
@@ -160,9 +160,8 @@ struct ModelPartsSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Import") {
-                    let f = form
+                    document.importModelParts(form)
                     dismiss()
-                    document.importModelParts(f)
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(form.gap < 0)

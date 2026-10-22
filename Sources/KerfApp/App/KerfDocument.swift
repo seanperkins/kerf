@@ -134,6 +134,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// Side shown and edited in a two-sided job.
     @Published var activeSide: JobSide = .top
     @Published var sheet: DocumentSheet?
+    /// Shown by ContentView on the document window. Never set it while a sheet is up: SwiftUI drops an
+    /// alert under a sheet. A sheet shows its own failure (`SheetErrorRow`) or reports with `report(_:)`.
     @Published var alert: AlertMessage?
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
     /// Cursor position in document units (for the status bar).
@@ -687,12 +689,30 @@ final class KerfDocument: ReferenceFileDocument {
         if !newShapes.isEmpty { setSelection(newShapes); sidebarTab = .design; requestCanvas(.fit) }
         let message = messages.isEmpty ? nil : AlertMessage(title: "Import", message: messages.joined(separator: "\n"))
         if pendingPlacements.isEmpty {
-            alert = message
+            if let message { report(message) }
         } else {
             // A sheet and an alert cannot show together: report after the placement dialogs.
-            deferredAlert = message
+            hold(message)
             showDesignCanvas()
             showNextPlacement()
+        }
+    }
+
+    /// Reports a result to the user: at once, or after the open sheet closes (`sheetDismissed()` shows
+    /// it), because an alert cannot show over a sheet.
+    func report(_ message: AlertMessage) {
+        if sheet == nil { alert = message } else { hold(message) }
+    }
+
+    /// Keeps a report for `sheetDismissed()`. Reports held together are joined, each under its own
+    /// title after the first, so none is lost.
+    func hold(_ message: AlertMessage?) {
+        guard let message else { return }
+        if var held = deferredAlert {
+            held.message += "\n\n\(message.title): \(message.message)"
+            deferredAlert = held
+        } else {
+            deferredAlert = message
         }
     }
 

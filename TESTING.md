@@ -78,6 +78,10 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 8. **Save All Toolpaths…** (⌥⌘S): try "one file per toolpath" in a scratch folder. Save into the
    same folder again: "Replace N files?" names the files; Cancel leaves them. If a program failed to
    generate, the Save button is disabled (a set with a file missing is never written).
+   **Sheet errors.** In Terminal make a read-only folder (`mkdir /tmp/ro && chmod 555 /tmp/ro`), then
+   File ▸ Export G-code… ▸ Save… into it: a red line "Could not save G-code: …" appears above the
+   buttons and the sheet stays open; choose a writable folder and it saves and closes. Same for
+   Save All Toolpaths (one file, and per-toolpath into the folder) and Save Tiled G-code.
 9. **Tool Database** (⇧⌘T): add or edit a tool. Tools are stored in
    `~/Library/Application Support/Kerf/`. Type a long name and watch `tools.json`'s modified time:
    it changes once, when you press Return or click another field, not per letter. With a toolpath

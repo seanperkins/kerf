@@ -328,9 +328,13 @@ final class UIHarness {
             doc.sheet = try sheet(named: step.value ?? "")
             try await waitUntil("a sheet") { self.window?.attachedSheet != nil }
             await settle(0.9)
+        case "fileTarget":
+            PanelRunner.harnessTarget = (step.name ?? "").isEmpty ? nil : URL(fileURLWithPath: step.name ?? "")
         case "closeSheet":
+            PanelRunner.harnessTarget = nil
             doc.sheet = nil
             doc.alert = nil
+            doc.deferredAlert = nil
             await settle(0.7)
         case "import":
             let path = step.name ?? ""

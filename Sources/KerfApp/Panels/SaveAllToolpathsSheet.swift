@@ -21,6 +21,8 @@ struct SaveAllToolpathsSheet: View {
     @State private var replaceRequest: ReplaceRequest?
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
+    /// Why the last save failed, shown above the buttons (an alert on the document would sit under this sheet).
+    @State private var failure: String?
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
@@ -51,6 +53,7 @@ struct SaveAllToolpathsSheet: View {
             } else {
                 List(Array(posted.enumerated()), id: \.offset) { _, item in fileRow(item.file, item.result) }
             }
+            SheetErrorRow(message: failure)
             HStack {
                 Button("Check Toolpaths…") { document.sheet = .validation }
                 Spacer()
@@ -113,6 +116,7 @@ struct SaveAllToolpathsSheet: View {
     }
 
     private func run() {
+        failure = nil
         calcTask?.cancel()
         calcTask = nil
         let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
@@ -143,9 +147,10 @@ struct SaveAllToolpathsSheet: View {
     }
 
     private func save() {
+        failure = nil
         if mode.isSingleFile {
             guard let item = posted.first, let text = item.result.text else { return }
-            let panel = NSSavePanel()
+            let panel = PanelRunner.makeSavePanel()
             panel.nameFieldStringValue = SavePanelName.suggested(item.file.fileName, allowedExtension: profile.fileExtension)
             if let t = UTType(filenameExtension: profile.fileExtension) { panel.allowedContentTypes = [t] }
             panel.allowsOtherFileTypes = true
@@ -155,7 +160,7 @@ struct SaveAllToolpathsSheet: View {
                 finishSaving { try text.write(to: url, atomically: true, encoding: .utf8) }
             }
         } else {
-            let panel = NSOpenPanel()
+            let panel = PanelRunner.makeOpenPanel()
             panel.canChooseDirectories = true
             panel.canChooseFiles = false
             panel.canCreateDirectories = true
@@ -174,17 +179,15 @@ struct SaveAllToolpathsSheet: View {
     }
 
     /// Runs the write chosen in the panel, then remembers the post and closes the sheet. A failure
-    /// closes the sheet too, so the alert that names the file is seen (an alert under an open sheet
-    /// is not).
+    /// stays in the sheet, above its buttons (an alert on the document would sit under the sheet),
+    /// so another file or folder can be chosen.
     private func finishSaving(_ write: () throws -> Void) {
         do {
             try write()
             if profileID != initialProfileID { document.setPostProfile(profileID) }
             dismiss()
         } catch {
-            dismiss()
-            let message = error.localizedDescription
-            Task { @MainActor in document.alert = AlertMessage(title: "Could not save G-code", message: message) }
+            failure = "Could not save G-code: \(error.localizedDescription)"
         }
     }
 }

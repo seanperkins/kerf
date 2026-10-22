@@ -14,6 +14,9 @@ struct ProductionPlatesSheet: View {
     @State private var fileName: String?
     @State private var fitColumns = true
     @State private var columns = 3
+    /// Why the file could not be read or the plates not made, shown above the buttons (an alert on the
+    /// document would sit under this sheet).
+    @State private var failure: String?
 
     init(document: KerfDocument) {
         self.document = document
@@ -66,6 +69,7 @@ struct ProductionPlatesSheet: View {
                 }
                 Toggle("Add the plates to the template's toolpaths", isOn: $options.includeToolpaths)
             }
+            SheetErrorRow(message: failure)
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -76,6 +80,7 @@ struct ProductionPlatesSheet: View {
         }
         .padding(20)
         .frame(width: 480)
+        .onChange(of: csvText) { _, _ in failure = nil }
     }
 
     private func csvSummary(_ t: CSVTable, unmatched: [String]) -> String {
@@ -92,16 +97,18 @@ struct ProductionPlatesSheet: View {
         panel.allowedContentTypes = [.commaSeparatedText, .tabSeparatedText, .plainText]
         panel.message = "Choose a spreadsheet saved as CSV"
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        failure = nil
         do {
             let data = try Data(contentsOf: url)
             csvText = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
             fileName = url.lastPathComponent
         } catch {
-            document.alert = AlertMessage(title: "Could not read the file", message: error.localizedDescription)
+            failure = "Could not read \(url.lastPathComponent): \(error.localizedDescription)"
         }
     }
 
     private func run() {
+        failure = nil
         var o = options
         o.columns = fitColumns ? nil : columns
         let ids = self.ids, t = table
@@ -111,7 +118,6 @@ struct ProductionPlatesSheet: View {
             let result = p
             document.perform("Production Plates") { $0 = result }
             document.setSelection(r.shapeIDs)
-            dismiss()
             var notes: [String] = []
             if !r.missingFields.isEmpty {
                 notes.append("No column matched " + r.missingFields.map { "{\($0)}" }.joined(separator: ", ") + "; those placeholders were left as typed.")
@@ -119,12 +125,13 @@ struct ProductionPlatesSheet: View {
             if r.outsideMaterial > 0 {
                 notes.append("\(r.outsideMaterial) plate\(r.outsideMaterial == 1 ? " reaches" : "s reach") past the material. Enlarge the material, use fewer rows, or nest them onto extra sheets (Design > Layout > Nest Parts…).")
             }
+            // The notes are reported once the sheet has closed (a sheet and an alert cannot show together).
             if !notes.isEmpty {
-                document.alert = AlertMessage(title: r.summary, message: notes.joined(separator: "\n\n"))
+                document.report(AlertMessage(title: r.summary, message: notes.joined(separator: "\n\n")))
             }
-        } catch {
             dismiss()
-            document.alert = AlertMessage(title: "Plates not made", message: ImportService.describe(error))
+        } catch {
+            failure = "Plates not made: \(ImportService.describe(error))"
         }
     }
 }

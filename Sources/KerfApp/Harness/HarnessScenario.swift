@@ -59,6 +59,7 @@ struct HarnessScenario: Decodable {
         "select": "names: shapes to select by name",
         "selectToolpath": "name: a toolpath to select (also shows the Toolpaths tab)",
         "calculate": "calculate all toolpaths and wait",
+        "fileTarget": "name: the path that Export G-code, Save All Toolpaths and Save Tiled G-code answer their save or folder panel with, until closeSheet or an empty fileTarget (the system file panel cannot be driven)",
         "sheet": "value: " + sheets.sorted().joined(separator: " | "),
         "closeSheet": "close the open sheet or alert",
         "import": "name: a file to import as File > Import does, relative to the repo root (scripts/ui.sh runs from there). An import alert stays open until a closeSheet step",

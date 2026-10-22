@@ -1,0 +1,15 @@
+{
+  "name": "Export G-code: a failed save shows its error in the sheet, which stays open",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "calculate"},
+    {"op": "fileTarget", "name": "/nonexistent-kerf-folder/out.tap"},
+    {"op": "sheet", "value": "exportGCode"},
+    {"op": "wait", "seconds": 1},
+    {"op": "press", "name": "Save…", "value": "AXButton"},
+    {"op": "wait", "seconds": 0.8},
+    {"op": "captureSheet", "name": "export-unwritable"},
+    {"op": "closeSheet"}
+  ]
+}
