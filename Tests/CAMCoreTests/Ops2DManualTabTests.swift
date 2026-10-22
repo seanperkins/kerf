@@ -76,11 +76,13 @@ private let quarterTabs = TabSettings(isEnabled: true, length: 0.25, thickness: 
 /// A profile over `paths` (the first is always selected; `select` adds more by index), 0.5 in
 /// deep with the 1/4 in end mill. Returns the toolpath and its context.
 private func tabbedProfile(_ paths: [Path], select: [Int] = [], side: ProfileSide = .outside, allowance: Double = 0,
-                           lastPass: ProfileLastPass? = nil, tabs: ([UUID]) -> TabSettings) throws -> (Toolpath, CAMContext) {
+                           sharpCorners: Bool = false, lastPass: ProfileLastPass? = nil,
+                           tabs: ([UUID]) -> TabSettings) throws -> (Toolpath, CAMContext) {
     let (ctx, ids) = F.document(paths)
     var p = ProfileParameters(depth: DepthSettings(cutDepth: 0.5), side: side)
     p.tabs = tabs(ids)
     p.allowance = allowance
+    p.sharpCorners = sharpCorners ? true : nil
     p.lastPass = lastPass
     let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: [ids[0]] + select.map { ids[$0] }), params: p)
     return (try op.generate(in: ctx)[0], ctx)
@@ -88,6 +90,19 @@ private func tabbedProfile(_ paths: [Path], select: [Int] = [], side: ProfileSid
 
 private func tabCount(_ tp: Toolpath, _ ctx: CAMContext) -> Int {
     tabEntries(tp, cut: ctx.coords.z(depth: 0.5), top: ctx.coords.z(depth: 0.4)).count
+}
+
+/// How many distinct places along the drawn outline `along` the tabs of `tp` rise at (within
+/// `radius` of arc length counts as one): two passes that reuse the same tabs stand one allowance
+/// apart across the edge but at the same place along it, so they give as many places as tabs.
+private func tabPlaces(_ tp: Toolpath, _ ctx: CAMContext, along: Path, radius: Double = 0.05) throws -> Int {
+    let outline = try #require(TabAnchors.chain(along, tolerance: 0.001))
+    var places: [Double] = []
+    for e in tabEntries(tp, cut: ctx.coords.z(depth: 0.5), top: ctx.coords.z(depth: 0.4)) {
+        let s = outline.project(ctx.coords.materialXY(fromMachine: e.xy)).s
+        if !places.contains(where: { d in let gap = abs(d - s); return min(gap, outline.length - gap) < radius }) { places.append(s) }
+    }
+    return places.count
 }
 
 private let fewerTabs = "loop(s) got fewer tabs than asked"
@@ -126,6 +141,7 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         ("open vector", [F.rect(0, 0, 6, 4), line], [1], .outside, { [TabAnchor(shapeID: $0[1], fraction: 0.5)] }),
         ("swallowed vector", [F.rect(0, 0, 6, 4), F.rect(7, 0, 0.2, 1)], [1], .inside, { [TabAnchor(shapeID: $0[1], fraction: 0.25)] }),
         ("swallowed vector beside", [F.rect(0, 0, 6, 4), F.rect(6.05, 0, 0.2, 1)], [1], .inside, { [TabAnchor(shapeID: $0[1], fraction: 0.6)] }),
+        ("swallowed vector touching", [F.rect(0, 0, 6, 4), F.rect(6.001, 0, 0.2, 1)], [1], .inside, { [TabAnchor(shapeID: $0[1], fraction: 0.6)] }),
     ]
     for (name, paths, select, side, anchors) in cases {
         let (tp, ctx) = try tabbedProfile(paths, select: select, side: side) { ids in
@@ -161,6 +177,38 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     #expect(tabCount(acute, ctxA) == 2 && acute.metadata["warning"] == nil)
 }
 
+@Test func ops2DProfileTabsAreTheSameWithSharpCorners() throws {
+    // A mitered outside loop has only corner vertices, none of them one offset from the vector.
+    // Anchors must still find their loop wherever the part sits (the loop's start vertex moves
+    // with it), with and without a second part to approach from, and the last pass must reuse
+    // the roughing tabs rather than lay out its own a little way along.
+    let anchors: ([UUID]) -> TabSettings = { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1,
+                    manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.15), TabAnchor(shapeID: ids[0], fraction: 0.65)])
+    }
+    for origin in [Vec2(0, 0), Vec2(2, 2)] {
+        let rect = F.rect(origin.x, origin.y, 6, 4)
+        let (tp, ctx) = try tabbedProfile([rect], sharpCorners: true, tabs: anchors)
+        #expect(tabCount(tp, ctx) == 2 && tp.metadata["warning"] == nil, "\(origin)")
+        let (two, ctx2) = try tabbedProfile([rect], sharpCorners: true, lastPass: ProfileLastPass(allowance: 0.1), tabs: anchors)
+        #expect(tabCount(two, ctx2) == 4 && two.metadata["warning"] == nil, "\(origin)")
+        #expect(try tabPlaces(two, ctx2, along: rect) == 2, "\(origin)")
+    }
+    let (beside, ctx3) = try tabbedProfile([F.rect(0, 0, 6, 4), F.rect(8, 6, 2, 2)], select: [1], sharpCorners: true,
+                                           lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.15)])
+    }
+    #expect(tabCount(beside, ctx3) == 2 && beside.metadata["warning"] == nil)
+    #expect(try tabPlaces(beside, ctx3, along: F.rect(0, 0, 6, 4)) == 1)
+    for allowance in [0.02, 0.1, 0.25] {
+        let (auto, ctx4) = try tabbedProfile([F.rect(0, 0, 6, 4)], sharpCorners: true, lastPass: ProfileLastPass(allowance: allowance)) { _ in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, countPerPath: 4)
+        }
+        #expect(tabCount(auto, ctx4) == 8 && auto.metadata["warning"] == nil, "\(allowance)")
+        #expect(try tabPlaces(auto, ctx4, along: F.rect(0, 0, 6, 4), radius: 0.3 * allowance + 0.01) == 4, "\(allowance)")
+    }
+}
+
 @Test func ops2DProfileReportsRoughingTabsThatDoNotReachTheLastPass() throws {
     // Two parts 0.27 in apart cut outside: the roughing offset merges them into one loop and both
     // automatic tabs land on the big part. The last pass cuts two loops; the small part's gets no
@@ -171,10 +219,14 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     #expect(tabCount(tp, ctx) == 4)   // the big part's two, on both passes
     #expect(tp.metadata["warning"] == "tabs did not carry to the last pass on 1 loop(s); the part may come free")
     // A loop too short for any tab on the roughing pass is reported once, as short, not again as
-    // lost: a 0.6 in square cut inside with a 0.1 in allowance.
-    let (short, ctx2) = try tabbedProfile([F.rect(0, 0, 0.6, 0.6)], side: .inside, lastPass: ProfileLastPass(allowance: 0.1)) { _ in quarterTabs }
-    #expect(tabCount(short, ctx2) == 0)
-    #expect(short.metadata["warning"] == "1 \(fewerTabs) (too short, or anchors too close; fewest placed: 0); the part may come free")
+    // lost: a 0.6 in square cut inside with a 0.1 in allowance, alone and beside a tabbed part
+    // (whose roughing tabs are not this loop's).
+    for paths in [[F.rect(0, 0, 0.6, 0.6)], [F.rect(0, 0, 0.6, 0.6), F.rect(2, 0, 3, 3)]] {
+        let (short, ctx2) = try tabbedProfile(paths, select: paths.count == 2 ? [1] : [], side: .inside,
+                                              lastPass: ProfileLastPass(allowance: 0.1)) { _ in quarterTabs }
+        #expect(tabCount(short, ctx2) == (paths.count == 2 ? 4 : 0))
+        #expect(short.metadata["warning"] == "1 \(fewerTabs) (too short, or anchors too close; fewest placed: 0); the part may come free")
+    }
 }
 
 @Test func ops2DProfileOverlappingManualAnchorsAreReportedOnce() throws {
@@ -226,21 +278,46 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     let other = Shape(layerID: doc.defaultLayerID, paths: [F.rect(4.3, 0, 1, 2)])
     let line = Shape(layerID: doc.defaultLayerID, paths: [Path(points: [Vec2(0, 2.1), Vec2(4, 2.1)], closed: false)])
     doc.add(near); doc.add(other); doc.add(line)
-    // The near rectangle's loop offset 0.125 outward (rounded corners): its own vector's loop.
-    let loop = ArcLengthChain(ProfileGeometry.loops(closed: [near.paths[0].flattened(tolerance: 0.001)], side: .outside, offset: 0.125,
-                                                     direction: .climb, tolerance: 0.001).chains[0])
+    func loops(_ shapes: [Shape], offset: Double, join: GeomKernel.Join = .round) -> [ArcLengthChain] {
+        ProfileGeometry.loops(closed: ShapeGeometry.loops(of: shapes, tolerance: 0.001).closed, side: .outside, offset: offset,
+                              direction: .climb, tolerance: 0.001, join: join).chains.map { ArcLengthChain($0) }
+    }
     let gone = TabAnchor(shapeID: UUID(), fraction: 0.25)
     let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: other.id, fraction: 0.25),
                    TabAnchor(shapeID: line.id, fraction: 0.5), gone]
     let all: Set<UUID> = [near.id, other.id, line.id]
     // Only the near anchor: the other rectangle is 0.3 in away but this loop is not its offset,
-    // the line is open, the last vector is gone. Selection alone is not enough.
-    let r = TabAnchors.centers(for: anchors, loops: [loop], shapeIDs: all, offset: 0.125, document: doc, tolerance: 0.001)
-    #expect(r.centers.map(\.count) == [1] && r.ignored == 3)
-    #expect(abs(r.centers[0][0] - loop.project(Vec2(3, 0)).s) < 1e-6)
-    // With the wrong offset nothing matches; a loop that two vectors merged into is both vectors' offset.
-    #expect(TabAnchors.centers(for: anchors, loops: [loop], shapeIDs: all, offset: 0.25, document: doc, tolerance: 0.001).ignored == 4)
-    let merged = ArcLengthChain(ProfileGeometry.loops(closed: [near.paths[0], other.paths[0]].map { $0.flattened(tolerance: 0.001) },
-                                                       side: .outside, offset: 0.2, direction: .climb, tolerance: 0.001).chains[0])
-    #expect(TabAnchors.centers(for: anchors, loops: [merged], shapeIDs: all, offset: 0.2, document: doc, tolerance: 0.001).ignored == 2)
+    // the line is open, the last vector is gone. Selection alone is not enough; so with miter joins.
+    for join in [GeomKernel.Join.round, .miter(limit: ProfileGeometry.sharpMiterLimit)] {
+        let loop = loops([near], offset: 0.125, join: join)
+        let r = TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { loops([$0], offset: 0.125, join: join) },
+                                   document: doc, tolerance: 0.001)
+        #expect(r.centers.map(\.count) == [1] && r.ignored == 3)
+        #expect(abs(r.centers[0][0] - loop[0].project(Vec2(3, 0)).s) < 1e-6)
+    }
+    // Loops of another offset are not this toolpath's; a loop two vectors merged into is both
+    // vectors' offset, and an anchor on the swallowed stretch between them has no loop to go to.
+    let loop = loops([near], offset: 0.125)
+    #expect(TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { loops([$0], offset: 0.25) }, document: doc, tolerance: 0.001).ignored == 4)
+    let merged = loops([near, other], offset: 0.2)
+    #expect(merged.count == 1)
+    let r = TabAnchors.centers(for: anchors + [TabAnchor(shapeID: near.id, fraction: 0.4)], loops: merged, shapeIDs: all,
+                               ownLoops: { loops([$0], offset: 0.2) }, document: doc, tolerance: 0.001)
+    #expect(r.centers.map(\.count) == [2] && r.ignored == 3)   // near 0.25, other 0.25; near 0.4 faces the gap
 }
+
+@Test func tabAnchorsIsOffsetSeesMiteredAndRoundLoops() {
+    let square = ArcLengthChain(Chain2D(points: [Vec2(0, 0), Vec2(4, 0), Vec2(4, 4), Vec2(0, 4)], isClosed: true))
+    for join in [GeomKernel.Join.round, .miter(limit: ProfileGeometry.sharpMiterLimit)] {
+        let loop = ArcLengthChain(ProfileGeometry.loops(closed: [square.chain.points], side: .outside, offset: 0.125, direction: .climb,
+                                                         tolerance: 0.0005, join: join).chains[0])
+        #expect(TabAnchors.isOffset(loop, of: square, by: 0.125, tolerance: 0.0005))
+        #expect(!TabAnchors.isOffset(loop, of: square, by: 0.2, tolerance: 0.0005))
+        let farther = ArcLengthChain(ProfileGeometry.loops(closed: [square.chain.points], side: .outside, offset: 0.225, direction: .climb,
+                                                            tolerance: 0.0005, join: join).chains[0])
+        #expect(TabAnchors.isOffset(farther, of: loop, by: 0.1, tolerance: 0.0005))   // a roughing loop of a last-pass loop
+    }
+    let elsewhere = ArcLengthChain(Chain2D(points: [Vec2(10, 0), Vec2(14, 0), Vec2(14, 4), Vec2(10, 4)], isClosed: true))
+    #expect(!TabAnchors.isOffset(elsewhere, of: square, by: 0.125, tolerance: 0.0005))
+}
+

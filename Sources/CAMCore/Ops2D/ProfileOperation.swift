@@ -56,10 +56,15 @@ public struct ProfileOperation: ToolpathOperation {
         let sourceStarts = closed.compactMap(\.first)
         let shapeLoops = shapes.map { s in s.paths.map { $0.flattened(tolerance: tol) } }
         var tabNotes = TabNotes()
-        // Each pass resolves manual anchors against its own loops, by the offset it applied.
-        let loopOffset = params.side == .on ? 0 : finalOffset
+        // Each pass resolves manual anchors against its own loops: an anchor's tab sits where the
+        // loop this toolpath would cut for the anchor's shape alone passes it, at this pass's offset.
+        let ownLoops = { (shape: Shape, offset: Double) -> [ArcLengthChain] in
+            ProfileGeometry.loops(closed: ShapeGeometry.loops(of: [shape], tolerance: tol).closed, side: params.side, offset: offset,
+                                  direction: params.direction, tolerance: tol, join: join).chains.map { ArcLengthChain($0) }
+        }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
-                             sourceStarts: sourceStarts, shapeLoops: shapeLoops, offset: loopOffset + (lastPass?.allowance ?? 0),
+                             sourceStarts: sourceStarts, shapeLoops: shapeLoops,
+                             ownLoops: { ownLoops($0, finalOffset + (lastPass?.allowance ?? 0)) },
                              context: context, builder: &builder, tabNotes: &tabNotes)
         var ignoredAnchors = rough.ignored
         if let lastPass, let finishPlan {
@@ -72,7 +77,7 @@ public struct ProfileOperation: ToolpathOperation {
             let finishPasses = lastPass.fullDepth ? [params.depth.cutDepth] : passes
             let finish = cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
                                   wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
-                                  offset: loopOffset,
+                                  ownLoops: { ownLoops($0, finalOffset) },
                                   roughing: (tabs: rough.placed, loops: plan.chains.map { ArcLengthChain($0) }, allowance: lastPass.allowance),
                                   context: context, builder: &builder, tabNotes: &tabNotes)
             ignoredAnchors = finish.ignored
@@ -117,15 +122,15 @@ public struct ProfileOperation: ToolpathOperation {
     }
 
     /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`, resolving
-    /// manual anchors against these loops by `offset`, the offset that produced them. Returns the
-    /// material-frame centre of every tab it placed and how many anchors it could not place. On
-    /// the last pass, `roughing` gives the roughing pass's tabs and loops: a loop whose roughing
-    /// loop (the one `allowance` farther out) had tabs takes those that project onto it, and is
-    /// reported when none do, since the roughing pass has already cut through beside them; a loop
-    /// the roughing offset swallowed lays out its own tabs and counts what it could not do, which
-    /// the roughing pass did for every loop it had.
+    /// manual anchors against these loops through `ownLoops` (what this pass would cut for one
+    /// shape alone). Returns the material-frame centre of every tab it placed and how many anchors
+    /// it could not place. On the last pass, `roughing` gives the roughing pass's tabs and loops: a
+    /// loop whose roughing loop (the one `allowance` farther out) had tabs takes those that project
+    /// onto it, and is reported when none do, since the roughing pass has already cut through
+    /// beside them; a loop the roughing offset swallowed lays out its own tabs and counts what it
+    /// could not do, which the roughing pass did for every loop it had.
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
-                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], offset: Double,
+                          sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], ownLoops: (Shape) -> [ArcLengthChain],
                           roughing: (tabs: [Vec2], loops: [ArcLengthChain], allowance: Double)? = nil, context: CAMContext,
                           builder: inout ToolpathBuilder, tabNotes: inout TabNotes) -> (placed: [Vec2], ignored: Int) {
         guard !chains.isEmpty else { return ([], params.tabs.isEnabled ? params.tabs.manualTabs?.count ?? 0 : 0) }
@@ -138,7 +143,7 @@ public struct ProfileOperation: ToolpathOperation {
         var ignored = 0
         if params.tabs.isEnabled, let anchors = params.tabs.manualTabs {
             let resolved = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) }, shapeIDs: Set(setup.shapeIDs),
-                                              offset: offset, document: context.document, tolerance: tol)
+                                              ownLoops: ownLoops, document: context.document, tolerance: tol)
             manualCenters = resolved.centers
             ignored = resolved.ignored
         }
@@ -146,17 +151,18 @@ public struct ProfileOperation: ToolpathOperation {
         for (i, chain) in ordered.enumerated() {
             var centers = manualCenters?[i]
             var counts = true
-            if let roughing, chain.isClosed {
+            if params.tabs.isEnabled, let roughing, chain.isClosed {
                 let alc = ArcLengthChain(chain)
                 let within = roughing.allowance + 4 * tol + 1e-6
                 let roughLoops = roughing.loops.filter { TabAnchors.isOffset($0, of: alc, by: roughing.allowance, tolerance: tol) }
                 counts = roughLoops.isEmpty
                 if centers == nil, !roughLoops.isEmpty {
-                    centers = roughing.tabs.compactMap { p in
+                    let inherited = roughing.tabs.compactMap { p -> Double? in
                         let pr = alc.project(p)
                         return pr.distance <= within ? pr.s : nil
                     }
-                    if centers!.isEmpty, roughing.tabs.contains(where: { p in roughLoops.contains { $0.project(p).distance <= within } }) {
+                    centers = inherited
+                    if inherited.isEmpty, roughing.tabs.contains(where: { p in roughLoops.contains { $0.project(p).distance <= within } }) {
                         tabNotes.lostOnLastPass += 1
                     }
                 }
@@ -168,8 +174,8 @@ public struct ProfileOperation: ToolpathOperation {
     }
 
     /// `manualTabs`: tab centres (loop parameters) for this loop (nil = automatic layout);
-    /// `layingOut` is false on a pass that repeats another pass's tabs, so nothing is counted
-    /// twice. Returns the material-frame centre of each tab used.
+    /// `layingOut` is false for a last-pass loop whose roughing loop was counted already, so no
+    /// loop is counted twice. Returns the material-frame centre of each tab used.
     private func cut(_ chain: Chain2D, passes: [Double], tool: Tool, wasteRegion: WasteSide, manualTabs: [Double]?,
                      layingOut: Bool, builder: inout ToolpathBuilder, tolerance tol: Double,
                      tabNotes: inout TabNotes) -> [Vec2] {
