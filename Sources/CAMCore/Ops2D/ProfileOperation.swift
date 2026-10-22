@@ -240,13 +240,26 @@ public enum ProfileGeometry {
         switch side {
         case .on:
             // Each vector as drawn (no union, so overlapping vectors each get their own cut), oriented
-            // the way the region's loops come back: a loop inside an odd number of others is a hole
-            // and runs clockwise, so the part is on the same side of travel at a hole as at the outer
-            // edge and a ring cut on the line is climb all round.
+            // the way the region's loops come back: a loop that lies wholly inside an odd number of
+            // others is a hole and runs clockwise, so the part is on the same side of travel at a hole
+            // as at the outer edge and a ring cut on the line is climb all round. Identical outlines
+            // do not count each other, and a loop that only partly overlaps another is not inside it,
+            // so duplicates and overlaps are cut like outer loops, as they were before holes were told
+            // apart.
+            let boxes = closed.map { Rect2(points: $0) }
             loops = closed.indices.map { i in
                 let loop = closed[i]
+                guard loop.count > 2 else { return loop }
                 let depth = closed.indices.filter { j in
-                    j != i && closed[j].count > 2 && Polygon2D.contains(closed[j], loop[0])
+                    let other = closed[j], box = boxes[j].insetBy(-tolerance)
+                    guard j != i, other.count > 2, box.contains(boxes[i].min), box.contains(boxes[i].max) else { return false }
+                    let twin = boxes[i].min.distance(to: boxes[j].min) <= tolerance
+                        && boxes[i].max.distance(to: boxes[j].max) <= tolerance
+                        && abs(abs(Polygon2D.signedArea(other)) - abs(Polygon2D.signedArea(loop))) <= tolerance
+                    if twin { return false }
+                    return loop.allSatisfy { v in
+                        Polygon2D.contains(other, v) || Polygon2D.distance(from: v, toLoop: other) <= tolerance
+                    }
                 }.count
                 return (Polygon2D.signedArea(loop) < 0) == (depth % 2 == 1) ? loop : loop.reversed()
             }

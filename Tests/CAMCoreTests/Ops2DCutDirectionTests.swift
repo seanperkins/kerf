@@ -30,10 +30,10 @@ private func nearest(_ p: Vec2, in sources: [[Vec2]]) -> (point: Vec2, distance:
 /// runs the tool radius away from its vector with the material on the vector's side, so the sign
 /// of Σ cross(travel, toward the nearest vector) over the segments says which side the material
 /// is on: negative is the right of travel, which is climb on a clockwise spindle. The legs of a
-/// zig-zag ramp cancel. A cut on the line has no offset, so there the material is on whichever
-/// side the vectors' region lies. Also returns the cut's offset from the vectors and the vector it
-/// follows. The direction is nil when the geometry cannot tell (a cut with no net side).
-private func observed(_ pts: [Vec2], closed: Bool, sources: [[Vec2]])
+/// zig-zag ramp cancel. A cut on the line (`onLine`) has no offset, so there the material is on
+/// whichever side the vectors' region lies. Also returns the cut's offset from the vectors and
+/// the vector it follows. The direction is nil when the geometry cannot tell (no net side).
+private func observed(_ pts: [Vec2], closed: Bool, sources: [[Vec2]], onLine: Bool = false)
     -> (direction: CutDirection?, distance: Double, loop: Int) {
     var sum = 0.0, dist = Double.infinity, loop = 0
     let n = closed ? pts.count : pts.count - 1
@@ -45,11 +45,11 @@ private func observed(_ pts: [Vec2], closed: Bool, sources: [[Vec2]])
         let (q, d, k) = nearest(m, in: sources)
         if d < dist { dist = d; loop = k }
         let u: Vec2
-        if d > 1e-6 {
-            u = (q - m) * (1 / d)
-        } else {
+        if onLine {
             let left = t.perpendicular.normalized
             u = Polygon2D.regionContains(sources, m + left * 1e-3) ? left : -left
+        } else {
+            u = (q - m) * (1 / max(d, 1e-9))
         }
         sum += t.cross(u)
     }
@@ -135,6 +135,9 @@ private func sourceLoops(_ paths: [Path], tolerance: Double) -> [[Vec2]] {
     Polygon2D.region(fromLoops: paths.map { $0.flattened(tolerance: tolerance) })
 }
 
+private let cutDepth = DepthSettings(cutDepth: 0.3)
+private let ramps: [RampType?] = [nil, .zigzag, .spiral, .smooth]
+
 // MARK: Profiles
 
 private struct ProfileCase: CustomStringConvertible {
@@ -156,10 +159,12 @@ private struct ProfileCase: CustomStringConvertible {
     static let lastPassAllowance = 0.06
     static let lastPasses: [ProfileLastPass?] = [nil, ProfileLastPass(allowance: lastPassAllowance, reverseDirection: false),
                                                  ProfileLastPass(allowance: lastPassAllowance, reverseDirection: true)]
-    static let ramps: [RampType?] = [nil, .zigzag, .spiral, .smooth]
+
+    /// The last pass the generator will honour: a cut on the line has no allowance to take off.
+    var effectiveLastPass: ProfileLastPass? { side == .on ? nil : lastPass }
 
     var params: ProfileParameters {
-        var p = ProfileParameters(depth: DepthSettings(cutDepth: 0.3), side: side, direction: direction)
+        var p = ProfileParameters(depth: cutDepth, side: side, direction: direction)
         p.sharpCorners = sharp
         p.lead = LeadSettings(type: lead, distance: 0.25, overcut: lead == .arc ? 0.1 : 0)
         p.lastPass = lastPass
@@ -180,7 +185,7 @@ private struct ProfileFixture {
     init(_ paths: [Path], asOneShape: Bool = false) {
         (ctx, ids) = asOneShape ? F.document(shapePaths: paths) : F.document(paths)
         sources = sourceLoops(paths, tolerance: ctx.tolerance)
-        passes = DepthSettings(cutDepth: 0.3).passDepths(toolStepdown: F.endMill.stepdown).count
+        passes = cutDepth.passDepths(toolStepdown: F.endMill.stepdown).count
     }
 }
 
@@ -194,11 +199,11 @@ private func checkProfile(_ c: ProfileCase, _ f: ProfileFixture, sourceLocation:
     #expect(F.conventionViolations(tp, coords: f.ctx.coords).isEmpty, "\(c)", sourceLocation: sourceLocation)
     var rough = [Int](repeating: 0, count: f.sources.count), finish = rough
     for lap in laps(of: tp, coords: f.ctx.coords, sources: f.sources) {
-        let (direction, d, loop) = observed(lap, closed: true, sources: f.sources)
+        let (direction, d, loop) = observed(lap, closed: true, sources: f.sources, onLine: c.side == .on)
         // Roughing laps run outside the last pass's allowance; the finishing lap is at the tool radius.
-        let isFinish = c.lastPass != nil && d < F.endMill.radius + ProfileCase.lastPassAllowance / 2
+        let isFinish = c.effectiveLastPass != nil && d < F.endMill.radius + ProfileCase.lastPassAllowance / 2
         if isFinish { finish[loop] += 1 } else { rough[loop] += 1 }
-        let want = isFinish && c.lastPass!.reverseDirection ? c.direction.reversed : c.direction
+        let want = isFinish && c.effectiveLastPass!.reverseDirection ? c.direction.reversed : c.direction
         #expect(direction == want,
                 "\(c): \(isFinish ? "finishing" : "roughing") lap along vector \(loop) near \(lap[0]) runs \(direction.map { "\($0)" } ?? "nowhere"), wanted \(want)",
                 sourceLocation: sourceLocation)
@@ -206,7 +211,7 @@ private func checkProfile(_ c: ProfileCase, _ f: ProfileFixture, sourceLocation:
     for i in f.sources.indices {
         #expect(rough[i] >= f.passes, "\(c): \(rough[i]) roughing lap(s) along vector \(i), wanted \(f.passes)",
                 sourceLocation: sourceLocation)
-        if c.lastPass != nil {
+        if c.effectiveLastPass != nil {
             #expect(finish[i] >= 1, "\(c): no finishing lap along vector \(i)", sourceLocation: sourceLocation)
         }
     }
@@ -218,8 +223,8 @@ func profileLoopsKeepTheRequestedDirectionUnderEveryOption(side: ProfileSide, di
     let f = ProfileFixture([F.rect(1, 1, 3, 2), F.rect(5, 1, 2, 2)])
     for sharp in [false, true] {
         for lead in LeadType.allCases {
-            for lastPass in (side == .on ? [nil] : ProfileCase.lastPasses) {
-                for ramp in ProfileCase.ramps {
+            for lastPass in ProfileCase.lastPasses {
+                for ramp in ramps {
                     try checkProfile(ProfileCase(side: side, direction: direction, sharp: sharp, lead: lead,
                                                  lastPass: lastPass, ramp: ramp), f)
                 }
@@ -231,17 +236,62 @@ func profileLoopsKeepTheRequestedDirectionUnderEveryOption(side: ProfileSide, di
 @Test(arguments: ProfileSide.allCases, CutDirection.allCases)
 func profileLoopsKeepTheRequestedDirectionUnderOrderingTabsAndStartPoints(side: ProfileSide, direction: CutDirection) throws {
     // The options that reorder or rotate a loop or raise the cut over tabs, crossed with the ramps.
+    // Ordering only reorders loops and a start point only rotates one, so each is varied on its own.
     let f = ProfileFixture([F.rect(1, 1, 3, 2), F.rect(5, 1, 2, 2)])
-    for order in ProfileOrder.allCases {
-        for start in ProfileStartPoint.allCases {
-            for tabs in [false, true] {
-                for ramp in ProfileCase.ramps {
-                    try checkProfile(ProfileCase(side: side, direction: direction, ramp: ramp, tabs: tabs,
-                                                 order: order, start: start), f)
-                }
+    let picks = ProfileOrder.allCases.map { ($0, ProfileStartPoint.nearest) }
+        + ProfileStartPoint.allCases.map { (ProfileOrder.nearest, $0) }
+    for (order, start) in picks {
+        for tabs in [false, true] {
+            for ramp in ramps {
+                try checkProfile(ProfileCase(side: side, direction: direction, ramp: ramp, tabs: tabs,
+                                             order: order, start: start), f)
             }
         }
     }
+}
+
+@Test(arguments: CutDirection.allCases)
+func duplicateAndOverlappingVectorsOnTheLineCutLikeOuterLoops(direction: CutDirection) throws {
+    // Telling holes apart must not turn a stacked copy or a partly overlapping vector into a hole:
+    // neither lies wholly inside another distinct loop, so both keep cutting as outer loops did
+    // before, with the part taken to be inside each loop (clockwise for climb).
+    let want = direction == .climb ? -1.0 : 1.0
+    for (label, paths) in [("duplicates", [F.rect(1, 1, 3, 2), F.rect(1, 1, 3, 2)]),
+                           ("overlap", [F.rect(0, 0, 6, 4), F.rect(4, 2, 4, 2)]),
+                           ("abutting", [F.rect(0, 0, 2, 2), F.rect(2, 0, 2, 2)])] {
+        let (ctx, ids) = F.document(paths)
+        var p = ProfileParameters(depth: cutDepth, side: .on, direction: direction)
+        p.sharpCorners = true
+        let tp = try #require(try ProfileOperation(setup: OperationSetup(name: "On", toolID: F.endMill.id, shapeIDs: ids),
+                                                   params: p).generate(in: ctx).first)
+        let raw = paths.map { $0.flattened(tolerance: ctx.tolerance) }   // no union: duplicates would cancel
+        let found = laps(of: tp, coords: ctx.coords, sources: raw)
+        #expect(found.count >= 2 * 3, "\(label) \(direction): \(found.count) lap(s)")
+        for lap in found {
+            let area = Polygon2D.signedArea(lap)
+            #expect((area < 0 ? -1.0 : 1.0) == want, "\(label) \(direction): lap near \(lap[0]) has area \(area)")
+        }
+    }
+}
+
+@Test(arguments: CutDirection.allCases)
+func prismCarvesAHoleInTheSameSenseAsTheOuterEdge(direction: CutDirection) throws {
+    // A prism carve runs the V-bit's tip on the line round every loop of a region, holes included
+    // (the counter of a letter): the material is the region, so both loops keep it on the same side.
+    let paths = [F.rect(0, 0, 4, 3), F.rect(1, 1, 2, 1)]
+    let (ctx, ids) = F.document(shapePaths: paths)
+    let sources = sourceLoops(paths, tolerance: ctx.tolerance)
+    let vBit = ToolLibrary.seeded.tools[6]   // 90°, 1/2 in
+    let op = PrismOperation(setup: OperationSetup(name: "Prism", toolID: vBit.id, shapeIDs: ids),
+                            params: PrismParameters(direction: direction))
+    let tp = try #require(try op.generate(in: ctx).first)
+    var perLoop = [Int](repeating: 0, count: sources.count)
+    for lap in laps(of: tp, coords: ctx.coords, sources: sources) {
+        let (observedDirection, _, loop) = observed(lap, closed: true, sources: sources, onLine: true)
+        perLoop[loop] += 1
+        #expect(observedDirection == direction, "\(direction): lap along vector \(loop) near \(lap[0]) runs \(observedDirection.map { "\($0)" } ?? "nowhere")")
+    }
+    #expect(perLoop.allSatisfy { $0 >= 1 }, "\(direction): laps per vector \(perLoop)")
 }
 
 @Test(arguments: ProfileSide.allCases, CutDirection.allCases)
@@ -249,7 +299,7 @@ func profileHoleLoopsRunOppositeToTheOuterLoop(side: ProfileSide, direction: Cut
     // A ring: the material is on the other side of the hole's loop, so it winds the other way. On
     // the line too: the part is the ring, on the left of the outer loop and the right of the hole.
     let f = ProfileFixture([F.rect(0, 0, 6, 4), F.rect(2, 1, 2, 2)], asOneShape: true)
-    for lastPass in (side == .on ? [nil] : [nil, ProfileCase.lastPasses[2]]) {
+    for lastPass in [nil, ProfileCase.lastPasses[2]] {
         for lead in LeadType.allCases {
             try checkProfile(ProfileCase(side: side, direction: direction, lead: lead, lastPass: lastPass), f)
         }
@@ -270,7 +320,7 @@ private struct PocketCase: CustomStringConvertible {
     }
 
     var params: PocketParameters {
-        var p = PocketParameters(depth: DepthSettings(cutDepth: 0.3), strategy: strategy, direction: direction)
+        var p = PocketParameters(depth: cutDepth, strategy: strategy, direction: direction)
         p.profilePassFirst = profileFirst
         if let ramp { p.ramp = RampSettings(isEnabled: true, type: ramp, length: 0.5, maxAngle: 15) }
         if clearance { p.clearanceToolIDs = [F.bigEndMill.id] }
@@ -282,7 +332,7 @@ private struct PocketCase: CustomStringConvertible {
         for strategy in [PocketStrategy.offset, .raster(angle: 0, profilePass: true), .raster(angle: 45, profilePass: true)] {
             // Profile-pass-first only means something with a raster.
             for profileFirst in (strategy == .offset ? [false] : [false, true]) {
-                for ramp in ProfileCase.ramps {
+                for ramp in ramps {
                     for clearance in [false, true] {
                         out.append(PocketCase(direction: direction, strategy: strategy, profileFirst: profileFirst,
                                               ramp: ramp, clearance: clearance))
@@ -307,6 +357,7 @@ func pocketWallsAndIslandWallsKeepTheRequestedDirection(direction: CutDirection)
         let tps = try op.generate(in: ctx)
         try #require(tps.count == (c.clearance ? 2 : 1), "\(c)")
         for tp in tps {
+            let passes = cutDepth.passDepths(toolStepdown: tp.tool.stepdown).count
             #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty, "\(c)")
             var outer = 0, island = 0
             for lap in laps(of: tp, coords: ctx.coords, sources: sources) {
@@ -315,8 +366,9 @@ func pocketWallsAndIslandWallsKeepTheRequestedDirection(direction: CutDirection)
                 #expect(observedDirection == c.direction,
                         "\(c) [\(tp.name)]: lap along vector \(loop) near \(lap[0]) runs \(observedDirection.map { "\($0)" } ?? "nowhere")")
             }
-            // Each toolpath cuts both walls (the clearance tool's rings, the finish tool's walls).
-            #expect(outer >= 1 && island >= 1, "\(c) [\(tp.name)]: \(outer) outer and \(island) island lap(s) found")
+            // Each toolpath cuts both walls on every pass (the clearance tool's rings, the finish tool's walls).
+            #expect(outer >= passes && island >= passes,
+                    "\(c) [\(tp.name)]: \(outer) outer and \(island) island lap(s) found, wanted \(passes) each")
         }
     }
 }
@@ -334,14 +386,14 @@ func pocketPlannerChainsRunTheRequestedDirectionIncludingRestPieces(direction: C
             chains += planner.rasterClearing(angle: angle, profilePass: true, from: start).flatMap { $0 }
                 .filter(\.isClosed).map { ($0, "raster \(angle)") }   // raster lines have no side
         }
-        var pieces = 0
         for fullWalls in [true, false] {
             let rest = planner.restClearing(clearanceRadius: F.bigEndMill.radius, from: start, fullWalls: fullWalls)
                 .flatMap { $0 }
-            pieces += rest.filter { !$0.isClosed }.count
+            // Without full walls (an intermediate clearance tool) the walls themselves come as pieces.
+            let pieces = rest.filter { !$0.isClosed }.count
+            #expect(fullWalls ? !rest.isEmpty : pieces >= 2, "rest fullWalls=\(fullWalls) from \(start): \(rest.count) chain(s), \(pieces) open")
             chains += rest.map { ($0, "rest fullWalls=\(fullWalls)") }
         }
-        #expect(pieces >= 2, "from \(start): \(pieces) open rest piece(s)")
         for (chain, label) in chains {
             #expect(isOffsetPath(chain.points, closed: chain.isClosed, sources: sources), "\(label) from \(start): not an offset path")
             let (observedDirection, _, loop) = observed(chain.points, closed: chain.isClosed, sources: sources)
