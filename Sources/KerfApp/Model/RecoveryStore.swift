@@ -117,6 +117,7 @@ final class RecoveryCoordinator {
     func tick(now: Date = Date()) {
         for (id, ref) in docs {
             guard let doc = ref.doc else { docs[id] = nil; discard(id); continue }
+            doc.confirmSave()   // a save the system has written since the last look makes the document clean
             if doc.needsRecovery {
                 guard written[id] != doc.project else { continue }
                 let entry = RecoveryEntry(id: id, name: doc.document.name, savedAt: now)

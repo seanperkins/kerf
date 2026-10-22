@@ -50,8 +50,12 @@ import Testing
         #expect(store.entries().map(\.name) == ["Edited"])
         #expect(try store.project(for: doc.recoveryID) == doc.project)
 
-        // Saving (snapshot) makes it clean again: the copy is removed on the next tick.
-        _ = try? doc.snapshot(contentType: .kerfProject)
+        // A save that reached the file makes it clean again: the copy is removed on the next tick.
+        let url = AppTestSupport.tempDir().appendingPathComponent("saved.kerf")
+        doc.fileURL = url
+        let snap = try doc.snapshot(contentType: .kerfProject)
+        try doc.fileData(for: snap).write(to: url)
+        #expect(doc.confirmSave())
         #expect(!doc.needsRecovery)
         c.tick()
         #expect(store.entries().isEmpty)

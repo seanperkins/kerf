@@ -161,9 +161,23 @@ final class KerfDocument: ReferenceFileDocument {
 
     /// Identifies this window's crash-recovery copy.
     let recoveryID = UUID()
-    /// The project as last opened or saved; unsaved changes = `project` differs from it.
+    /// The project as last opened or saved; unsaved changes = `project` differs from it. A save moves it only
+    /// once the file is seen to hold the saved bytes (`confirmSave`), so a write that failed leaves the document
+    /// dirty and its recovery copy in place.
     private(set) var lastSavedProject: KerfProject
     var needsRecovery: Bool { project != lastSavedProject }
+
+    /// A save SwiftUI has taken (`snapshot`) and had encoded (`fileData`) but that is not known to be on disk:
+    /// the system writes the bytes after `fileWrapper` returns and reports nothing back.
+    private struct PendingSave {
+        var serial: Int
+        var project: KerfProject
+        var data: Data?
+    }
+    /// `snapshot` runs on the main actor and `fileWrapper` may not, so the pending save has its own lock.
+    private let pendingLock = NSLock()
+    private var pendingSave: PendingSave?
+    private var saveSerial = 0
 
     init(project: KerfProject, toolLibrary: ToolLibraryModel = .shared) {
         self.project = project
@@ -197,15 +211,48 @@ final class KerfDocument: ReferenceFileDocument {
     func snapshot(contentType: UTType) throws -> KerfProject {
         // After a save, the next live toolpath edit opens a new undo step (re-dirtying the file).
         liveOperationEdit = nil
-        lastSavedProject = project
-        scheduleFileThumbnail()
+        pendingLock.lock()
+        saveSerial += 1
+        pendingSave = PendingSave(serial: saveSerial, project: project, data: nil)
+        pendingLock.unlock()
+        // The system writes after this returns and says nothing about it: look at the file shortly after, and
+        // again if the write is slow. The recovery timer and a new file URL check too.
+        for delay in [0.4, 2.0, 6.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.confirmSave() }
+        }
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
         return p
     }
 
     func fileWrapper(snapshot: KerfProject, configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: FileThumbnail.withQuickLookThumbnail(try snapshot.encoded(), for: snapshot.document))
+        FileWrapper(regularFileWithContents: try fileData(for: snapshot))
+    }
+
+    /// The bytes the system is asked to write for `snapshot`, kept so the file can be checked against them.
+    func fileData(for snapshot: KerfProject) throws -> Data {
+        let data = FileThumbnail.withQuickLookThumbnail(try snapshot.encoded(), for: snapshot.document)
+        pendingLock.lock()
+        pendingSave?.data = data
+        pendingLock.unlock()
+        return data
+    }
+
+    /// Counts the last save as done when the file at `fileURL` holds exactly the bytes it handed over; then that
+    /// project is the saved one, the document is clean and the recovery copy goes at the next tick. A write that
+    /// failed, or has not happened yet, leaves everything as it was. Returns whether it confirmed.
+    @discardableResult
+    func confirmSave(read: (URL) -> Data? = { try? Data(contentsOf: $0) }) -> Bool {
+        pendingLock.lock()
+        let pending = pendingSave
+        pendingLock.unlock()
+        guard let pending, let data = pending.data, let url = fileURL, read(url) == data else { return false }
+        pendingLock.lock()
+        if pendingSave?.serial == pending.serial { pendingSave = nil }
+        pendingLock.unlock()
+        lastSavedProject = pending.project
+        scheduleFileThumbnail()
+        return true
     }
 
     // MARK: Undoable edits
