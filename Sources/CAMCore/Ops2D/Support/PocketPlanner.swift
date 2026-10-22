@@ -81,8 +81,11 @@ public struct PocketPlanner: Sendable {
     }
 
     /// Orders tagged chains: components nearest-first; inside each, `rank` ascending
-    /// (lower rank cut first), nearest neighbour within constraints.
+    /// (lower rank cut first), nearest neighbour within constraints. `allowReverse` lets an open
+    /// chain start at its nearer end: right for a raster line, which has no side, wrong for a piece
+    /// of an oriented ring, which would then cut its wall in the opposite direction.
     func order(_ items: [(chain: Chain2D, rank: Int, probe: Vec2)], outers: [[Vec2]], from start: Vec2,
+               allowReverse: Bool,
                mustPrecede: (Chain2D, Int, Chain2D, Int) -> Bool = { _, ra, _, rb in ra < rb }) -> [[Chain2D]] {
         var groups: [Int: [(Chain2D, Int)]] = [:]
         for it in items { groups[componentIndex(of: it.probe, outers: outers), default: []].append((it.chain, it.rank)) }
@@ -92,14 +95,14 @@ public struct PocketPlanner: Sendable {
         while !remaining.isEmpty {
             // Nearest component by its lowest-rank chains.
             let next = remaining.min { a, b in
-                minDistance(groups[a]!, cur) < minDistance(groups[b]!, cur)
+                minDistance(groups[a]!, cur, allowReverse: allowReverse) < minDistance(groups[b]!, cur, allowReverse: allowReverse)
             }!
             remaining.remove(next)
             let g = groups[next]!
             let preds: [Set<Int>] = g.map { item in
                 Set(g.indices.filter { g[$0].1 < item.1 && mustPrecede(g[$0].0, g[$0].1, item.0, item.1) })
             }
-            let ordered = ChainOrdering.nearestNeighbour(g.map(\.0), from: cur, allowReverse: true,
+            let ordered = ChainOrdering.nearestNeighbour(g.map(\.0), from: cur, allowReverse: allowReverse,
                                                          predecessors: preds, tolerance: tolerance)
             if let last = ordered.last { cur = last.end }
             out.append(ordered)
@@ -107,10 +110,12 @@ public struct PocketPlanner: Sendable {
         return out
     }
 
-    private func minDistance(_ g: [(Chain2D, Int)], _ p: Vec2) -> Double {
+    private func minDistance(_ g: [(Chain2D, Int)], _ p: Vec2, allowReverse: Bool) -> Double {
         let lowest = g.map(\.1).min() ?? 0
         return g.filter { $0.1 == lowest }.map { c in
-            c.0.isClosed ? Polygon2D.distance(from: p, toLoop: c.0.points) : min(c.0.start.distance(to: p), c.0.end.distance(to: p))
+            if c.0.isClosed { return Polygon2D.distance(from: p, toLoop: c.0.points) }
+            let fromStart = c.0.start.distance(to: p)
+            return allowReverse ? min(fromStart, c.0.end.distance(to: p)) : fromStart
         }.min() ?? .infinity
     }
 
@@ -127,7 +132,7 @@ public struct PocketPlanner: Sendable {
         // A ring waits only for the deeper rings right next to it, so separate lobes and the
         // rings around islands are each cleared inside-out and linked at depth.
         let reach = stepover * 1.5 + tolerance
-        return order(items, outers: outers0, from: start) { a, ra, b, rb in
+        return order(items, outers: outers0, from: start, allowReverse: false) { a, ra, b, rb in   // all closed
             rb == ra + 1 && Self.loopsWithin(a.points, b.points, reach)
         }
     }
@@ -156,7 +161,7 @@ public struct PocketPlanner: Sendable {
         if profilePass {
             for loop in boundary { items.append((chain(loop), profileFirst ? 0 : 1, loop[0])) }
         }
-        return order(items, outers: outers, from: start)
+        return order(items, outers: outers, from: start, allowReverse: true)   // a raster line has no side
     }
 
     /// Parallel lines across `area` (spacing ≤ stepover) clipped to it.
@@ -207,6 +212,7 @@ public struct PocketPlanner: Sendable {
                 }
             }
         }
-        return order(items, outers: outers0, from: start)
+        // The pieces are cuts of oriented rings: they keep their direction, whichever end is nearer.
+        return order(items, outers: outers0, from: start, allowReverse: false)
     }
 }
