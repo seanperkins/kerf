@@ -87,11 +87,11 @@ enum GCodeBatchExport {
             let ext = (f.fileName as NSString).pathExtension
             let base = (f.fileName as NSString).deletingPathExtension
             var n = 2
-            while used.contains(out.fileName.lowercased()) {
+            while used.contains(GCodeFileSet.collisionKey(out.fileName)) {
                 out.fileName = "\(base)_\(n)" + (ext.isEmpty ? "" : ".\(ext)")
                 n += 1
             }
-            used.insert(out.fileName.lowercased())
+            used.insert(GCodeFileSet.collisionKey(out.fileName))
             return out
         }
     }

@@ -61,11 +61,12 @@ struct SaveAllToolpathsSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(posted.isEmpty || hasUnposted)
                 .help(hasUnposted ? "A program could not be generated; fix it before saving, so no file is left out." : "")
+                // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
+                .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
             }
         }
         .padding(20)
         .frame(width: 620, height: 600)
-        .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
         .onAppear {
             profileID = document.postProfile.id
             initialProfileID = profileID
@@ -182,7 +183,8 @@ struct SaveAllToolpathsSheet: View {
             dismiss()
         } catch {
             dismiss()
-            document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+            let message = error.localizedDescription
+            Task { @MainActor in document.alert = AlertMessage(title: "Could not save G-code", message: message) }
         }
     }
 }

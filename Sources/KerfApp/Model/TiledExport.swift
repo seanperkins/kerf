@@ -44,7 +44,7 @@ enum TiledExport {
             }
             var r = GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title)
             r.issues.insert(contentsOf: missing, at: 0)
-            let name = String(format: "%@_tile%02d.%@", stem, tile.number, profile.fileExtension)
+            let name = String(format: "%@_tile%02d.%@", stem, tile.number, GCodeExporter.fileExtension(for: profile))
             return File(tile: tile, fileName: name, title: title, result: r)
         }
     }

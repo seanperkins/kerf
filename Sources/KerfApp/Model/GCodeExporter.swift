@@ -191,14 +191,21 @@ enum GCodeExporter {
         }
     }
 
-    /// File name like "Sign_Profile_1.tap" (unsafe characters replaced). The extension comes from a
-    /// post profile, which may be any JSON file a user dropped in, so it is cleaned the same way.
+    private static let fileNameCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
+
+    /// File name like "Sign_Profile_1.tap": unsafe characters replaced, and a leading dot too, so the
+    /// file is never hidden from the operator.
     static func suggestedFileName(jobName: String, operationName: String?, profile: PostProfile) -> String {
         var base = jobName.isEmpty ? "Untitled" : jobName
         if let op = operationName { base += "_" + op }
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
-        let clean = String(base.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" })
-        let ext = String(profile.fileExtension.unicodeScalars.filter { allowed.contains($0) && $0 != "." })
-        return clean + "." + (ext.isEmpty ? "tap" : ext)
+        var clean = String(base.unicodeScalars.map { fileNameCharacters.contains($0) ? Character($0) : "_" })
+        if clean.hasPrefix(".") { clean = "_" + clean.dropFirst() }
+        return clean + "." + fileExtension(for: profile)
+    }
+
+    /// The post profile's extension, cleaned: a profile is any JSON file a user dropped in.
+    static func fileExtension(for profile: PostProfile) -> String {
+        let ext = String(profile.fileExtension.unicodeScalars.filter { fileNameCharacters.contains($0) && $0 != "." })
+        return ext.isEmpty ? "tap" : ext
     }
 }

@@ -51,11 +51,12 @@ struct TilingSheet: View {
                     .keyboardShortcut(.defaultAction)
                     .disabled(files.isEmpty || hasUnposted)
                     .help(hasUnposted ? "A tile could not be generated; fix it before saving, so no tile is left out." : "")
+                    // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
+                    .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
             }
         }
         .padding(20)
         .frame(width: 600, height: 560)
-        .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
         .onAppear {
             settings = TiledExport.defaultSettings(profile: document.postProfile, units: document.units)
             run()
@@ -142,7 +143,8 @@ struct TilingSheet: View {
             dismiss()
         } catch {
             dismiss()
-            document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
+            let message = error.localizedDescription
+            Task { @MainActor in document.alert = AlertMessage(title: "Could not save G-code", message: message) }
         }
     }
 }
