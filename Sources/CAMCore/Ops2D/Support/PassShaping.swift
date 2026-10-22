@@ -94,6 +94,10 @@ public struct TabLayout: Sendable {
     public var thickness: Double
     public var isTriangular: Bool
     public var loopLength: Double
+    /// How many tabs the settings asked for on this loop. Fewer in `centers` means the loop was
+    /// too short to hold them apart, which the operation reports: a part the operator believes
+    /// is tabbed and is not comes free on the last pass.
+    public var requestedCount: Int
 
     /// Lays out tabs evenly; `spacing` (if set) overrides the count.
     public init(loopLength L: Double, settings: TabSettings, toolDiameter: Double, cutDepth: Double) {
@@ -104,6 +108,7 @@ public struct TabLayout: Sendable {
         halfWidth = max(0, settings.length + toolDiameter) / 2
         var n = settings.countPerPath
         if let sp = settings.spacing, sp > 0 { n = max(1, Int((L / sp).rounded(.down))) }
+        requestedCount = max(0, n)
         // Tabs must not overlap: keep at least one raised length of cutting between them.
         if halfWidth > 0 { n = min(n, Int((L / (4 * halfWidth)).rounded(.down))) }
         n = max(0, n)
@@ -114,6 +119,7 @@ public struct TabLayout: Sendable {
     public init(loopLength L: Double, centers: [Double], settings: TabSettings, toolDiameter: Double,
                 cutDepth: Double) {
         self.init(loopLength: L, settings: settings, toolDiameter: toolDiameter, cutDepth: cutDepth)
+        requestedCount = centers.count
         let wrapped = centers.map { c -> Double in
             let r = L > 0 ? c.truncatingRemainder(dividingBy: L) : 0
             return r < 0 ? r + L : r

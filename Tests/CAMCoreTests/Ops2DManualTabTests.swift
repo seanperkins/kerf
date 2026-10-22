@@ -68,3 +68,60 @@ private func profile(_ tabs: (UUID) -> TabSettings) throws -> (Toolpath, CAMCont
                            toolDiameter: 0.25, cutDepth: 0.5)
     #expect(layout.centers == [5, 12, 19.95])
 }
+
+// MARK: - Tabs that could not be placed as asked are reported (issue #9)
+
+@Test func ops2DProfileWarnsWhenALoopIsTooShortForTheRequestedTabs() throws {
+    // A 0.3 in square cut outside with a 1/4 in end mill: the loop is about 2 in around, and
+    // four 1/4 in tabs need 4 in of loop to stay apart, so one fits. The job must still post,
+    // and the operator must be told the part is held by one tab, not four.
+    let (ctx, ids) = F.document([F.rect(0, 0, 0.3, 0.3)])
+    var p = ProfileParameters(depth: DepthSettings(cutDepth: 0.5), side: .outside)
+    p.tabs = TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, countPerPath: 4)
+    let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: ids), params: p)
+    let tp = try op.generate(in: ctx)[0]
+    #expect(!tp.moves.isEmpty)
+    let c = ctx.coords
+    #expect(tabEntries(tp, cut: c.z(depth: 0.5), top: c.z(depth: 0.4)).count == 1)
+    let w = try #require(tp.metadata["warning"])
+    #expect(w.contains("tabs") && w.contains("4 asked") && w.contains("1 fit"))
+    // A loop long enough for its tabs says nothing.
+    let (ctx2, ids2) = F.document([F.rect(0, 0, 6, 4)])
+    let op2 = ProfileOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: ids2), params: p)
+    #expect(try op2.generate(in: ctx2)[0].metadata["warning"] == nil)
+}
+
+@Test func ops2DProfileIgnoresAnchorsFarFromItsVectorsAndSaysSo() throws {
+    // The anchor sits on another part 5 in away (or on a vector that was deleted). It must not be
+    // dragged onto the nearest loop of this toolpath: no tab is placed, and the warning says why.
+    let (ctx, ids) = F.document([F.rect(0, 0, 6, 4), F.rect(11, 0, 2, 2)])
+    var p = ProfileParameters(depth: DepthSettings(cutDepth: 0.5), side: .outside)
+    p.tabs = TabSettings(isEnabled: true, length: 0.25, thickness: 0.1,
+                         manualTabs: [TabAnchor(shapeID: ids[1], fraction: 0.25), TabAnchor(shapeID: UUID(), fraction: 0.5)])
+    let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: [ids[0]]), params: p)
+    let tp = try op.generate(in: ctx)[0]
+    let c = ctx.coords
+    #expect(tabEntries(tp, cut: c.z(depth: 0.5), top: c.z(depth: 0.4)).isEmpty)
+    let w = try #require(tp.metadata["warning"])
+    #expect(w.contains("2 tab anchor(s) ignored") && w.contains("no tab was placed"))
+    // An anchor on this toolpath's own vector is within reach and places its tab without a word.
+    p.tabs.manualTabs = [TabAnchor(shapeID: ids[0], fraction: 0.15)]
+    let op2 = ProfileOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: [ids[0]]), params: p)
+    let tp2 = try op2.generate(in: ctx)[0]
+    #expect(tabEntries(tp2, cut: c.z(depth: 0.5), top: c.z(depth: 0.4)).count == 1)
+    #expect(tp2.metadata["warning"] == nil)
+}
+
+@Test func tabAnchorsBeyondReachAreCountedNotAttached() throws {
+    var doc = Document()
+    let near = Shape(layerID: doc.defaultLayerID, paths: [F.rect(0, 0, 4, 2)])
+    let far = Shape(layerID: doc.defaultLayerID, paths: [F.rect(10, 0, 4, 2)])
+    doc.add(near); doc.add(far)
+    let loop = try #require(TabAnchors.chain(near.paths[0], tolerance: 0.001))
+    let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: far.id, fraction: 0.25),
+                   TabAnchor(shapeID: UUID(), fraction: 0.25)]
+    let r = TabAnchors.centers(for: anchors, loops: [loop], document: doc, maxDistance: 0.5, tolerance: 0.001)
+    #expect(r.centers == [[3]] && r.ignored == 2)
+    // With no limit to speak of, the far anchor lands on the only loop, as before.
+    #expect(TabAnchors.centers(for: anchors, loops: [loop], document: doc, maxDistance: 100, tolerance: 0.001).ignored == 1)
+}

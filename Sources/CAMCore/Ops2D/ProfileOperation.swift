@@ -55,9 +55,10 @@ public struct ProfileOperation: ToolpathOperation {
                                       fitArcs: params.preferArcs)
         let sourceStarts = closed.compactMap(\.first)
         let shapeLoops = shapes.map { s in s.paths.map { $0.flattened(tolerance: tol) } }
+        var tabNotes = TabNotes()
         let roughTabs = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
                                  sourceStarts: sourceStarts, shapeLoops: shapeLoops, context: context,
-                                 builder: &builder)
+                                 builder: &builder, tabNotes: &tabNotes)
         if let lastPass, let finishPlan {
             // Last pass: removes the side allowance the roughing passes left on the wall. Its loops
             // start wherever the roughing ended, so automatic tabs would land elsewhere and the lap
@@ -66,10 +67,10 @@ public struct ProfileOperation: ToolpathOperation {
             _ = cutLoops(finishPlan.chains, passes: finishPasses, from: builder.position?.xy ?? home, tool: tool,
                          wasteRegion: finishPlan.wasteRegion, sourceStarts: sourceStarts, shapeLoops: shapeLoops,
                          inheritedTabs: (points: roughTabs, within: lastPass.allowance + 4 * tol + 1e-6),
-                         context: context, builder: &builder)
+                         context: context, builder: &builder, tabNotes: &tabNotes)
         }
         var meta: [String: String] = [:]
-        var warnings: [String] = []
+        var warnings = tabNotes.warnings
         let dropped = finishPlan?.droppedLoops ?? plan.droppedLoops
         if dropped > 0 { warnings.append("\(dropped) vector(s) too small for the tool") }
         if openOffsetFailures > 0 {
@@ -92,11 +93,42 @@ public struct ProfileOperation: ToolpathOperation {
     /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`. Returns the
     /// material-frame centre of every tab it placed. `inheritedTabs` puts tabs at those centres
     /// (each projected onto the loop within `within`) instead of laying them out afresh.
+    /// What the tab layout could not do as asked, gathered over the loops and reported once: a
+    /// part the operator believes is held and is not comes free on the last pass.
+    struct TabNotes {
+        /// Loops too short for the requested tabs, the request, the fewest that fit and that loop's length.
+        var shortLoops = 0, requested = 0, fewest = Int.max, shortestLength = Double.infinity
+        /// Manual anchors on a deleted vector or too far from every loop of this toolpath, and the limit.
+        var ignoredAnchors = 0, anchorReach = 0.0
+
+        mutating func noteShortfall(requested n: Int, placed: Int, loopLength: Double) {
+            shortLoops += 1
+            requested = max(requested, n)
+            if placed < fewest || (placed == fewest && loopLength < shortestLength) {
+                fewest = placed
+                shortestLength = loopLength
+            }
+        }
+
+        var warnings: [String] {
+            var out: [String] = []
+            if shortLoops > 0 {
+                out.append("Fewer tabs than asked on \(shortLoops) loop(s): \(requested) asked, "
+                    + "\(fewest) fit on a loop \(String(format: "%.2f", shortestLength)) long; the part may come free")
+            }
+            if ignoredAnchors > 0 {
+                out.append("\(ignoredAnchors) tab anchor(s) ignored: on a deleted vector or farther than "
+                    + "\(String(format: "%.2f", anchorReach)) from this toolpath's vectors; no tab was placed for them")
+            }
+            return out
+        }
+    }
+
     @discardableResult
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
                           sourceStarts: [Vec2], shapeLoops: [[[Vec2]]],
                           inheritedTabs: (points: [Vec2], within: Double)? = nil, context: CAMContext,
-                          builder: inout ToolpathBuilder) -> [Vec2] {
+                          builder: inout ToolpathBuilder, tabNotes: inout TabNotes) -> [Vec2] {
         guard !chains.isEmpty else { return [] }
         let tol = context.tolerance
         let startPoint = params.startPoint ?? .nearest
@@ -105,8 +137,16 @@ public struct ProfileOperation: ToolpathOperation {
         ordered = ordered.map { StartPoints.rotate($0, to: startPoint, sourceStarts: sourceStarts, tolerance: tol) }
         var manualCenters: [[Double]]?
         if params.tabs.isEnabled, let anchors = params.tabs.manualTabs {
-            manualCenters = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) },
-                                               document: context.document, tolerance: tol)
+            // An anchor sits on the drawn vector; the loop is a tool radius (and any last-pass
+            // allowance) away from it. One tab length past that is as far as an anchor may be.
+            let reach = tool.diameter + max(0, params.tabs.length) + (effectiveLastPass(tolerance: tol)?.allowance ?? 0)
+            let resolved = TabAnchors.centers(for: anchors, loops: ordered.map { ArcLengthChain($0) },
+                                              document: context.document, maxDistance: reach, tolerance: tol)
+            manualCenters = resolved.centers
+            if inheritedTabs == nil {   // the finish pass resolves the same anchors again
+                tabNotes.ignoredAnchors += resolved.ignored
+                tabNotes.anchorReach = reach
+            }
         }
         var placed: [Vec2] = []
         for (i, chain) in ordered.enumerated() {
@@ -119,7 +159,7 @@ public struct ProfileOperation: ToolpathOperation {
                 }
             }
             placed += cut(chain, passes: passes, tool: tool, wasteRegion: wasteRegion, manualTabs: centers,
-                          builder: &builder, tolerance: tol)
+                          builder: &builder, tolerance: tol, tabNotes: &tabNotes)
         }
         return placed
     }
@@ -127,7 +167,7 @@ public struct ProfileOperation: ToolpathOperation {
     /// `manualTabs`: tab centres (loop parameters) for this loop (nil = automatic layout).
     /// Returns the material-frame centre of each tab used.
     private func cut(_ chain: Chain2D, passes: [Double], tool: Tool, wasteRegion: WasteSide, manualTabs: [Double]?,
-                     builder: inout ToolpathBuilder, tolerance tol: Double) -> [Vec2] {
+                     builder: inout ToolpathBuilder, tolerance tol: Double, tabNotes: inout TabNotes) -> [Vec2] {
         let alc = ArcLengthChain(chain)
         guard alc.length > tol else { return [] }
         let start = params.depth.startDepth
@@ -152,8 +192,12 @@ public struct ProfileOperation: ToolpathOperation {
                 tabs = TabLayout(loopLength: alc.length, centers: manual, settings: params.tabs,
                                  toolDiameter: tool.diameter, cutDepth: params.depth.cutDepth)
             } else {
-                tabs = TabLayout(loopLength: alc.length, settings: params.tabs, toolDiameter: tool.diameter,
-                                 cutDepth: params.depth.cutDepth)
+                let layout = TabLayout(loopLength: alc.length, settings: params.tabs, toolDiameter: tool.diameter,
+                                       cutDepth: params.depth.cutDepth)
+                if layout.centers.count < layout.requestedCount {
+                    tabNotes.noteShortfall(requested: layout.requestedCount, placed: layout.centers.count, loopLength: alc.length)
+                }
+                tabs = layout
             }
         }
         let useLeads = params.lead.type != .none && params.lead.distance > 0

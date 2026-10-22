@@ -43,19 +43,23 @@ public enum TabAnchors {
     }
 
     /// Tab centre parameters for each closed loop: every anchor goes to the loop nearest to its
-    /// position, at that loop's closest parameter. Anchors on missing vectors are ignored.
+    /// position, at that loop's closest parameter, provided a loop lies within `maxDistance`.
+    /// An anchor on a vector that no longer exists, or farther than that from every loop (left
+    /// behind by a moved shape, or placed on another part), is not attached to whatever loop
+    /// happens to be nearest; it is counted in `ignored` so the operation can say so.
     public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], document: Document,
-                               tolerance: Double) -> [[Double]] {
+                               maxDistance: Double, tolerance: Double) -> (centers: [[Double]], ignored: Int) {
         var out = Array(repeating: [Double](), count: loops.count)
+        var ignored = 0
         for a in anchors {
-            guard let p = point(of: a, in: document, tolerance: tolerance) else { continue }
+            guard let p = point(of: a, in: document, tolerance: tolerance) else { ignored += 1; continue }
             var best: (index: Int, s: Double, d: Double)?
             for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
                 let pr = loop.project(p)
                 if pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
             }
-            if let b = best { out[b.index].append(b.s) }
+            if let b = best, b.d <= maxDistance { out[b.index].append(b.s) } else { ignored += 1 }
         }
-        return out.map { $0.sorted() }
+        return (out.map { $0.sorted() }, ignored)
     }
 }
