@@ -23,20 +23,30 @@ private enum Job {
             ($0.id, ToolpathCalculator.calculate($0, project: p, library: .seeded, designRevision: 0, rapidRate: 200))
         })
     }
+
+    /// Motion over a program with the default settings (the fixture owns its model, not the
+    /// developer's calibration).
+    static let settings = TimeEstimateSettings()
+    static func motion(_ tps: [Toolpath]) -> TimeInterval { settings.estimate(tps, rapidRate: 200, units: .inch, toolChanges: false) }
+    static func summary(_ p: KerfProject, results: [UUID: ToolpathResult]? = nil, groupByTool: Bool,
+                        toolChangeSeconds: TimeInterval = 0) -> JobSummary {
+        JobSummary.make(operations: p.operations, results: results ?? Job.results(p), groupByTool: groupByTool,
+                        toolChangeSeconds: toolChangeSeconds, motion: motion)
+    }
 }
 
 @Suite struct JobSummaryTests {
     @Test func groupingNeverPullsAPocketAheadOfOverlappingVCarve() {
         // The pocket (T1) is on the same shape as the V-carve (T6), so it keeps its place.
         let p = Job.project()
-        let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true)
+        let s = Job.summary(p, groupByTool: true)
         #expect(s.sequence.map(\.number) == [1, 6, 1])
         #expect(s.toolChanges == 2)
     }
 
     @Test func listOrderChangesToolWheneverItDiffers() {
         let p = Job.project()
-        let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: false)
+        let s = Job.summary(p, groupByTool: false)
         #expect(s.sequence.map(\.number) == [1, 6, 1])
         #expect(s.toolChanges == 2)
     }
@@ -44,14 +54,17 @@ private enum Job {
     @Test func rowsCarryTimesAndToolsAndTotalSkipsDisabled() {
         var p = Job.project()
         let results = Job.results(p)
-        var s = JobSummary.make(operations: p.operations, results: results, groupByTool: true)
+        var s = Job.summary(p, results: results, groupByTool: true)
         #expect(s.rows.count == 3)
         #expect(s.rows.allSatisfy { ($0.estimatedSeconds ?? 0) > 0 })
         #expect(s.rows[1].tools.first?.hasPrefix("T6") == true)
         let all = s.totalSeconds
         p.operations[1].editableSetup.isEnabled = false
-        s = JobSummary.make(operations: p.operations, results: results, groupByTool: true)
-        #expect(abs(s.totalSeconds - (all - (s.rows[1].estimatedSeconds ?? 0))) < 1e-6)
+        s = Job.summary(p, results: results, groupByTool: true)
+        // The total is the remaining program's motion (its own linking rapids), not a sum of rows.
+        let remaining = GCodeExporter.toolpaths(scope: .all, operations: p.operations, results: results, groupByTool: true)
+        #expect(abs(s.totalSeconds - Job.motion(remaining)) < 1e-6)
+        #expect(s.totalSeconds < all - (s.rows[1].estimatedSeconds ?? 0) + 5)
         #expect(s.sequence.map(\.number) == [1])
     }
 
@@ -59,8 +72,8 @@ private enum Job {
         // The sidebar total used to leave tool changes out, while the 3D preview counted them.
         let p = Job.project()
         let results = Job.results(p)
-        let bare = JobSummary.make(operations: p.operations, results: results, groupByTool: true)
-        let allowed = JobSummary.make(operations: p.operations, results: results, groupByTool: true, toolChangeSeconds: 90)
+        let bare = Job.summary(p, results: results, groupByTool: true)
+        let allowed = Job.summary(p, results: results, groupByTool: true, toolChangeSeconds: 90)
         #expect(bare.toolChangeAllowance == 0 && bare.totalSeconds == bare.machiningSeconds)
         #expect(allowed.machiningSeconds == bare.machiningSeconds)
         #expect(allowed.toolChangeAllowance == 2 * 90)  // T1, T6, T1
@@ -76,10 +89,9 @@ private enum Job {
         p.operations[2] = .pocket(pocket)
         let results = Job.results(p)
         #expect(results[p.operations[2].id]!.toolpaths.count == 2)
-        var settings = TimeEstimateSettings.load()
+        var settings = Job.settings
         settings.toolChangeSeconds = 90
-        let s = JobSummary.make(operations: p.operations, results: results, groupByTool: false, toolChangeSeconds: 90,
-                                motion: { settings.estimate($0, rapidRate: 200, units: .inch, toolChanges: false) })
+        let s = Job.summary(p, results: results, groupByTool: false, toolChangeSeconds: 90)
         #expect(s.sequence.map(\.number) == [1, 6, 3, 1])
         #expect(s.toolChanges == 3)
         // Motion of the program in order plus one allowance per change: three, not four. The
@@ -93,12 +105,9 @@ private enum Job {
         #expect(abs(s.machiningSeconds - linked) < 1e-6)
         #expect(abs(s.totalSeconds - (linked + 3 * 90)) < 1e-6)
         #expect(abs(s.totalSeconds - settings.estimate(program, rapidRate: 200, units: .inch)) < 1e-6)
-        // Without a program-order estimate the summary falls back to the operations' own motion.
-        let fallback = JobSummary.make(operations: p.operations, results: results, groupByTool: false, toolChangeSeconds: 90)
-        #expect(abs(fallback.machiningSeconds - separate) < 1e-6)
         // The pocket's own row still includes its internal change.
         let pocketResult = results[p.operations[2].id]!
-        #expect(abs(pocketResult.estimatedSeconds - pocketResult.machiningSeconds - 90) < 1e-6)
+        #expect(abs(pocketResult.estimatedSeconds - Job.motion(pocketResult.toolpaths) - 90) < 1e-6)
         #expect(abs((s.rows[2].estimatedSeconds ?? 0) - pocketResult.estimatedSeconds) < 1e-9)
     }
 
@@ -107,21 +116,21 @@ private enum Job {
     @Test func nothingCalculatedMeansNoEstimate() {
         // The sidebar read "Estimated time: 0s · No tools" before anything was calculated.
         let p = Job.project()
-        #expect(!JobSummary.make(operations: p.operations, results: [:], groupByTool: true).hasEstimate)
-        #expect(JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true).hasEstimate)
+        #expect(!Job.summary(p, results: [:], groupByTool: true).hasEstimate)
+        #expect(Job.summary(p, groupByTool: true).hasEstimate)
     }
 
     @Test func aSingleToolJobHasNoAllowance() {
         var p = Job.project()
         p.operations[1].editableSetup.isEnabled = false  // the V-carve is the only T6 toolpath
-        let s = JobSummary.make(operations: p.operations, results: Job.results(p), groupByTool: true, toolChangeSeconds: 90)
+        let s = Job.summary(p, groupByTool: true, toolChangeSeconds: 90)
         #expect(s.toolChanges == 0 && s.toolChangeAllowance == 0)
         #expect(s.totalSeconds == s.machiningSeconds)
     }
 
     @Test func uncalculatedRowsHaveNoTime() {
         let p = Job.project()
-        let s = JobSummary.make(operations: p.operations, results: [:], groupByTool: true)
+        let s = Job.summary(p, results: [:], groupByTool: true)
         #expect(s.rows.allSatisfy { $0.estimatedSeconds == nil })
         #expect(s.sequence.isEmpty)
         #expect(s.toolChanges == 0)

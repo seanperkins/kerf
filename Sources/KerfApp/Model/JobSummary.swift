@@ -60,11 +60,11 @@ struct JobSummary: Equatable {
     static func label(_ tool: Tool) -> String { "T\(tool.number) · \(tool.name)" }
 
     /// `motion` times a list of toolpaths in order, without tool-change allowance (the user's
-    /// time-estimate settings); it sees the rapids between toolpaths that a per-operation estimate
-    /// cannot. Without it the operations' own motion times are summed, which drifts from the 3D
-    /// preview by those rapids.
+    /// time-estimate settings over the document's rapid rate); it sees the rapids between
+    /// toolpaths that a per-operation estimate cannot, which is why the summary cannot be made
+    /// from the operations' own times.
     static func make(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool,
-                     toolChangeSeconds: TimeInterval = 0, motion: (([Toolpath]) -> TimeInterval)? = nil) -> JobSummary {
+                     toolChangeSeconds: TimeInterval = 0, motion: ([Toolpath]) -> TimeInterval) -> JobSummary {
         let rows = operations.map { op -> Row in
             let r = results[op.id]
             var tools: [String] = []
@@ -77,11 +77,8 @@ struct JobSummary: Equatable {
         let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: groupByTool)
         // A row's own time includes the tool changes inside its operation (a pocket's clearance
         // tool, a V-carve's flat-area tool); the job total counts every stop once, below. The
-        // motion is timed over the program as exported, so the rapids between toolpaths count.
-        let total = motion?(tps) ?? operations.filter(\.setup.isEnabled).compactMap { op -> TimeInterval? in
-            guard let r = results[op.id], r.error == nil else { return nil }
-            return r.machiningSeconds
-        }.reduce(0, +)
+        // motion is timed over the toolpaths in program order, so the rapids between them count.
+        let total = motion(tps)
         var pauses: [PauseRow] = []
         var stops = 0
         for (i, tp) in tps.enumerated() where i > 0 {

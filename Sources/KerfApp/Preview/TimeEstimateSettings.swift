@@ -6,7 +6,7 @@ import CAMCore
 import Combine
 import Foundation
 
-struct TimeEstimateSettings: Equatable, Sendable {
+struct TimeEstimateSettings: Hashable, Sendable {
     /// Model acceleration and cornering (off = length / feed).
     var useAcceleration = true
     /// Machine acceleration in inches per second² (converted for mm documents).
@@ -114,10 +114,8 @@ extension KerfDocument {
         var changed = results
         for (id, r) in results where r.isOK {
             changed[id]?.estimatedSeconds = s.estimate(r.toolpaths, rapidRate: rapid, units: units)
-            changed[id]?.machiningSeconds = s.estimate(r.toolpaths, rapidRate: rapid, units: units, toolChanges: false)
         }
-        if changed.contains(where: { results[$0.key]?.estimatedSeconds != $0.value.estimatedSeconds
-                                        || results[$0.key]?.machiningSeconds != $0.value.machiningSeconds }) {
+        if changed.contains(where: { results[$0.key]?.estimatedSeconds != $0.value.estimatedSeconds }) {
             results = changed
         }
     }

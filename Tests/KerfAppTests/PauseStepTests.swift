@@ -147,7 +147,8 @@ import Testing
         let (doc, _, ids) = makeDoc()
         setPause(doc, ids[0], PauseStep(message: "Flip the part"))
         setPause(doc, ids[1], PauseStep(message: "Never written"))
-        let s = JobSummary.make(operations: doc.project.operations, results: doc.results, groupByTool: false, toolChangeSeconds: 90)
+        let s = JobSummary.make(operations: doc.project.operations, results: doc.results, groupByTool: false, toolChangeSeconds: 90,
+                                motion: doc.motionSeconds)
         #expect(s.pauses == [JobSummary.PauseRow(after: "Profile 1", text: "Flip the part")])
         #expect(s.toolChanges == 0)
         #expect(s.stops == 1)
