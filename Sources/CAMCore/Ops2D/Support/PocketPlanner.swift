@@ -81,8 +81,11 @@ public struct PocketPlanner: Sendable {
     }
 
     /// Orders tagged chains: components nearest-first; inside each, `rank` ascending
-    /// (lower rank cut first), nearest neighbour within constraints.
+    /// (lower rank cut first), nearest neighbour within constraints. `allowReverse` lets an open
+    /// chain start at its nearer end: right for a raster line, which has no side, wrong for a piece
+    /// of an oriented ring, which would then cut its wall in the opposite direction.
     func order(_ items: [(chain: Chain2D, rank: Int, probe: Vec2)], outers: [[Vec2]], from start: Vec2,
+               allowReverse: Bool = true,
                mustPrecede: (Chain2D, Int, Chain2D, Int) -> Bool = { _, ra, _, rb in ra < rb }) -> [[Chain2D]] {
         var groups: [Int: [(Chain2D, Int)]] = [:]
         for it in items { groups[componentIndex(of: it.probe, outers: outers), default: []].append((it.chain, it.rank)) }
@@ -99,7 +102,7 @@ public struct PocketPlanner: Sendable {
             let preds: [Set<Int>] = g.map { item in
                 Set(g.indices.filter { g[$0].1 < item.1 && mustPrecede(g[$0].0, g[$0].1, item.0, item.1) })
             }
-            let ordered = ChainOrdering.nearestNeighbour(g.map(\.0), from: cur, allowReverse: true,
+            let ordered = ChainOrdering.nearestNeighbour(g.map(\.0), from: cur, allowReverse: allowReverse,
                                                          predecessors: preds, tolerance: tolerance)
             if let last = ordered.last { cur = last.end }
             out.append(ordered)
@@ -207,6 +210,7 @@ public struct PocketPlanner: Sendable {
                 }
             }
         }
-        return order(items, outers: outers0, from: start)
+        // The pieces are cuts of oriented rings: they keep their direction, whichever end is nearer.
+        return order(items, outers: outers0, from: start, allowReverse: false)
     }
 }

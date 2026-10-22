@@ -239,14 +239,24 @@ public enum ProfileGeometry {
         var loops: [[Vec2]]
         switch side {
         case .on:
-            loops = closed.map { Polygon2D.signedArea($0) < 0 ? $0.reversed() : $0 }
+            // Each vector as drawn (no union, so overlapping vectors each get their own cut), oriented
+            // the way the region's loops come back: a loop inside an odd number of others is a hole
+            // and runs clockwise, so the part is on the same side of travel at a hole as at the outer
+            // edge and a ring cut on the line is climb all round.
+            loops = closed.indices.map { i in
+                let loop = closed[i]
+                let depth = closed.indices.filter { j in
+                    j != i && closed[j].count > 2 && Polygon2D.contains(closed[j], loop[0])
+                }.count
+                return (Polygon2D.signedArea(loop) < 0) == (depth % 2 == 1) ? loop : loop.reversed()
+            }
         case .outside:
             loops = GeomKernel.offset(region, by: max(offset, 0), join: join, arcTolerance: tolerance)
         case .inside:
             loops = GeomKernel.offset(region, by: -max(offset, 0), join: join, arcTolerance: tolerance)
         }
         loops = loops.map { Polygon2D.deduplicated($0, closed: true, tolerance: tolerance * 1e-3) }.filter { $0.count > 2 }
-        // Region loops come back with the region on the left (outer CCW, holes CW).
+        // Loops have the region on the left (outer CCW, holes CW).
         // Part on the left for outside/on cuts, on the right for inside cuts.
         let partOnLeft = side != .inside
         let climb = direction == .climb
