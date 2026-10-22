@@ -55,12 +55,9 @@ enum VariableLinks {
         // ("=thickness - 0.1") were written in the old units.
         let unitsChanged = p.document.units != old.document.units
         let old = unitsChanged ? old.converted(to: p.document.units) : old
-        // A linked leaf is unlinked by a hand edit. A unit round trip inside a form (inches to
-        // millimetres and back before Apply) moves every leaf by an ulp or so; that is not an edit.
-        func edited(_ a: Double?, _ b: Double?) -> Bool {
-            guard let a, let b else { return (a == nil) != (b == nil) }
-            return abs(a - b) > 1e-9 * max(1, abs(a), abs(b))
-        }
+        // A linked leaf is unlinked by any hand edit, however small. The form converts untouched
+        // fields from the saved values in one step, so nothing here drifts by an ulp.
+        func edited(_ a: Double?, _ b: Double?) -> Bool { a != b }
         let sheetIDs = Set(p.document.allSheets.map(\.id))
         let opIDs = Set(p.operations.map(\.id))
         links.removeAll {

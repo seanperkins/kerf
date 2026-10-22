@@ -106,7 +106,8 @@ import Testing
 
     @Test func aUnitRoundTripBeforeApplyKeepsTheLinks() throws {
         // Safe Z linked to the thickness; Job Setup opened, units toggled to millimetres and back,
-        // Apply: every leaf drifted by an ulp, which is not a hand edit, so the link survives.
+        // Apply: untouched fields are converted from the saved values in one step, so they are not
+        // hand edits and the link survives.
         let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
         var first = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
         first.job.safeZ = try Self.type("=thickness/2", into: first, document: doc, current: first.job.safeZ)
