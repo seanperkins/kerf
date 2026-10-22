@@ -344,5 +344,79 @@ import Testing
         #expect(!doc.needsRecovery)
         #expect(store.entries().isEmpty)
     }
-}
 
+    /// Before any save is matched there is no remembered digest, but a file that none of the saves handed over
+    /// explains (replaced, unreadable, gone) must still not let the document look clean.
+    @Test func aFileNoSaveExplainsIsUnknownEvenBeforeTheFirstConfirmation() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("first.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let doc = makeDoc()
+        let um = UndoManager()
+        um.groupsByEvent = false
+        doc.undoManager = um
+        doc.fileURL = url
+        let coordinator = RecoveryCoordinator(store: store)
+        coordinator.register(doc)
+        let original = doc.project.document.name
+
+        um.beginUndoGrouping(); doc.perform("A") { $0.document.name = "A" }; um.endUndoGrouping()
+        try saveBytes(doc).write(to: url)                              // A is written, not yet looked at
+        um.undo()                                                      // the project is the original again
+        try Data("replaced by someone else".utf8).write(to: url)       // and the file is replaced
+        coordinator.tick()
+        #expect(doc.needsRecovery)
+        let copy = try #require(store.entries().first)
+        #expect(try store.project(for: copy.id).document.name == original)
+        // The same when the file cannot be read at all.
+        try FileManager.default.removeItem(at: url)
+        coordinator.tick()
+        #expect(doc.needsRecovery)
+        // An ordinary save settles it.
+        try saveBytes(doc).write(to: url)
+        coordinator.tick()
+        #expect(!doc.needsRecovery)
+    }
+
+    /// One save id can be encoded twice with different bytes; either may land, and only the last is recorded.
+    @Test func encodingOneSaveTwiceWithDifferentBytesKeepsTheDocumentDirty() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("twice-encoded.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let doc = makeDoc()
+        let um = UndoManager()
+        um.groupsByEvent = false
+        doc.undoManager = um
+        doc.fileURL = url
+        let coordinator = RecoveryCoordinator(store: store)
+        coordinator.register(doc)
+        let original = doc.project.document.name
+
+        um.beginUndoGrouping(); doc.perform("A") { $0.document.name = "A" }; um.endUndoGrouping()
+        let snap = try doc.snapshot(contentType: .kerfProject)
+        let firstBytes = try doc.fileData(for: snap)
+        var different = snap
+        different.project.document.name = "A, encoded again"
+        _ = try doc.fileData(for: different)                            // same save id, other bytes
+        try firstBytes.write(to: url)                                   // the first payload is the one that lands
+        um.undo()
+        coordinator.tick()
+        #expect(doc.needsRecovery)
+        let copy = try #require(store.entries().first)
+        #expect(try store.project(for: copy.id).document.name == original)
+    }
+
+    /// The identity check after the read (same device, inode, size and modification time) cannot be raced from a
+    /// test; this pins that a stable file is read in full and digested the same way twice, and that two files
+    /// of one size digest differently.
+    @Test func aStableFileIsReadInFullAndDigestsTheSameTwice() throws {
+        let size = 3 << 20
+        let url = AppTestSupport.tempDir().appendingPathComponent("stable.kerf")
+        try Data(repeating: 7, count: size).write(to: url)
+        let a = try #require(KerfDocument.regularFileDigest(at: url, ofSizes: [size]))
+        let b = try #require(KerfDocument.regularFileDigest(at: url, ofSizes: [size]))
+        #expect(a.digest == b.digest && a.count == size)
+        let other = AppTestSupport.tempDir().appendingPathComponent("other.kerf")
+        try Data(repeating: 8, count: size).write(to: other)
+        #expect(try #require(KerfDocument.regularFileDigest(at: other, ofSizes: [size])).digest != a.digest)
+        #expect(KerfDocument.regularFileDigest(at: url, ofSizes: [size + 1]) == nil)   // other sizes are never read
+    }
+}

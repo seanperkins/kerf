@@ -265,6 +265,8 @@ final class KerfDocument: ReferenceFileDocument {
         let digest = SHA256.hash(data: data)
         pendingLock.lock()
         if let i = pendingSaves.firstIndex(where: { $0.id == snapshot.saveID }) {
+            // Encoded before with different bytes (a preference read at encoding time): both may land.
+            if let old = pendingSaves[i].bytes, old.count != data.count || old.digest != digest { savedStateUnknown = true }
             pendingSaves[i].bytes = (data.count, digest)
         } else {
             // The list dropped this save before it was encoded; these bytes can still reach the file.
@@ -278,8 +280,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// that matches), that save's project is the saved one, so the document is clean if it still equals it and its
     /// recovery copy goes at the next tick. The file's content decides: a late older write that replaced a newer
     /// one moves the saved project back. When the file holds neither a known save nor what it held when the saved
-    /// project was last set (an older save that was forgotten landed, the file was replaced or removed), the saved
-    /// state is unknown and the document stays dirty. A write that failed or has not happened leaves the file
+    /// project was last set, or, before any save was matched, none of the saves handed over (an older save that was
+    /// forgotten landed, the file was replaced or removed), the saved state is unknown and the document stays dirty. A write that failed or has not happened leaves the file
     /// as it was, which changes nothing. Returns whether the file holds a known save.
     @discardableResult
     func confirmSave() -> Bool {
@@ -293,7 +295,7 @@ final class KerfDocument: ReferenceFileDocument {
         var sizes = Set(candidates.compactMap { $0.bytes?.count })
         if let baseline { sizes.insert(baseline.count) }
         guard let onDisk = Self.regularFileDigest(at: url, ofSizes: sizes) else {
-            if baseline != nil { markSavedStateUnknown() }   // gone, unreadable, or a size nothing we saved had
+            markSavedStateUnknown()   // gone, unreadable, changing, or a size nothing we saved had
             return false
         }
         if let match = candidates.last(where: { $0.bytes?.count == onDisk.count && $0.bytes?.digest == onDisk.digest }) {
@@ -310,7 +312,7 @@ final class KerfDocument: ReferenceFileDocument {
             pendingLock.unlock()
             return true
         }
-        if baseline != nil { markSavedStateUnknown() }
+        markSavedStateUnknown()
         return false
     }
 
@@ -341,6 +343,12 @@ final class KerfDocument: ReferenceFileDocument {
             return nil
         }
         guard count == Int(info.st_size) else { return nil }
+        // The path must still name the file that was read, unchanged: a replacement or rewrite while hashing is no
+        // observation of either version.
+        var after = stat()
+        guard stat(url.path, &after) == 0, after.st_dev == info.st_dev, after.st_ino == info.st_ino,
+              after.st_size == info.st_size, after.st_mtimespec.tv_sec == info.st_mtimespec.tv_sec,
+              after.st_mtimespec.tv_nsec == info.st_mtimespec.tv_nsec else { return nil }
         return (count, hasher.finalize())
     }
 
