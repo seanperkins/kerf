@@ -21,7 +21,7 @@ private let sizes = [0.25, 1.0, 2.0]                        // capital height, i
 private let slope = tan(30.0 * .pi / 180)                   // the 60 degree V-bit of VCarveFixture
 
 /// One groove point: where the bit's axis passes and how wide the groove is there (depth x slope).
-private struct Groove { var xy: Vec2; var radius: Double; var run: Int; var sideways: Bool }
+private struct Groove { var xy: Vec2; var radius: Double; var run: Int; var sideways: Bool; var vertex: Bool }
 
 /// Cut points (xy, groove radius) of `tp` at or below the surface, densified to `step`; `run` numbers the
 /// runs of cutting moves between rapids.
@@ -39,7 +39,7 @@ private func grooves(_ tp: Toolpath, coords: MachineCoordinates, step: Double) -
         let sideways = a.xy.distance(to: t.xy) > 1e-9   // a plunge or a lift moves straight down or up
         for k in 0...n {
             let mat = coords.material(fromMachine: a + (t - a) * (Double(k) / Double(n)))
-            if mat.depth > -1e-9 { out.append(Groove(xy: mat.xy, radius: max(0, mat.depth) * slope, run: run, sideways: sideways)) }
+            if mat.depth > -1e-9 { out.append(Groove(xy: mat.xy, radius: max(0, mat.depth) * slope, run: run, sideways: sideways, vertex: k == 0 || k == n)) }
         }
         open = true
     }
@@ -99,6 +99,20 @@ private struct OutlineGrid {
         extent = Int(ceil(max(box.width, box.height) / cell)) + 2
     }
 
+    /// Even-odd containment: the outline segments a ray to the right of `p` crosses, counted cell by cell.
+    func contains(_ p: Vec2) -> Bool {
+        let cx = Int(floor(p.x / cell)), cy = Int(floor(p.y / cell))
+        var crossings = 0
+        for ix in cx...(cx + extent + Int(ceil(abs(p.x) / cell))) {
+            for (a, b) in buckets[GrooveGrid.key(ix, cy)] ?? [] where (a.y > p.y) != (b.y > p.y) {
+                let x = a.x + (p.y - a.y) * (b.x - a.x) / (b.y - a.y)
+                // Counted in the cell that holds the crossing, once, although a long segment is in several cells.
+                if x > p.x, Int(floor(x / cell)) == ix { crossings += 1 }
+            }
+        }
+        return crossings % 2 == 1
+    }
+
     func distance(from p: Vec2) -> Double {
         var best = Double.infinity
         let cx = Int(floor(p.x / cell)), cy = Int(floor(p.y / cell))
@@ -138,39 +152,36 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     var v = Verdict()
     // The letter from the font's contours alone (outer loops counter-clockwise, counters and islands
     // alternating inside them), not from the region the operation builds from them.
-    let rawLoops = paths.map { $0.flattened(tolerance: context.tolerance) }.filter { $0.count > 2 }
-    let region = Polygon2D.region(fromLoops: rawLoops)
-    func inside(_ p: Vec2) -> Bool { region.reduce(0) { $0 + (Polygon2D.contains($1, p) ? 1 : 0) } % 2 == 1 }
-    let outers = region.filter { Polygon2D.signedArea($0) > 0 }
+    // No union is applied: a point is inside when an odd number of contours enclose it (the even-odd rule the
+    // font is rendered with), and its distance to the letter's edge is its distance to the nearest contour.
+    let region = paths.map { $0.flattened(tolerance: context.tolerance) }.filter { $0.count > 2 }
+    // Pieces of the letter: the contours an even number of the others enclose.
+    let outers = region.filter { loop in region.filter { $0 != loop && Polygon2D.contains($0, loop[0]) }.count % 2 == 0 }
     v.pieces = outers.count
     let outline = OutlineGrid(loops: region, cell: size * 0.05)
+    func inside(_ p: Vec2) -> Bool { outline.contains(p) }
     func outlineDistance(_ p: Vec2) -> Double { outline.distance(from: p) }
 
     let g = grooves(tp, coords: context.coords, step: size * 0.01)
     for (a, b) in zip(g, g.dropFirst()) where a.run == b.run { v.cutLength += a.xy.distance(to: b.xy) }
-    // Pieces, counted again from the raw contours (those an even number of other contours enclose), which the
-    // union above cannot have lost: each must hold some cut.
-    let rawOuters = rawLoops.filter { loop in rawLoops.filter { $0 != loop && Polygon2D.contains($0, loop[0]) }.count % 2 == 0 }
-    v.uncutPieces = rawOuters.filter { outer in !g.contains { $0.radius > 0 && Polygon2D.contains(outer, $0.xy) } }.count
-    v.pieces = max(outers.count, 0)
+    // Each piece must hold some cut.
+    v.uncutPieces = outers.filter { outer in !g.contains { $0.radius > 0 && Polygon2D.contains(outer, $0.xy) } }.count
 
     let grid = GrooveGrid(g, cell: size * 0.05)
     let bitRadius = VCarveFixture.vbit60.radius
     let allowed = size * 0.02
 
-    // Overcut and undercut along the cut: where the bit moves sideways its groove is as wide as the outline
-    // allows at its axis (or as the bit can cut), within 10% and a small absolute margin (half a percent of the
-    // height and three chord tolerances: the operation simplifies strokes by one tolerance), and its axis is inside
-    // the letter (every second sample: a defect on one sample shows on its neighbour too). A plunge or a lift is
-    // skipped (its groove narrows to the axis). This is tight for thin
-    // strokes too, where the 2% allowance of the checks below is not.
-    for (i, groove) in g.enumerated() where groove.sideways && i % 2 == 0 {
-        // (The point is inside the letter if the nearest outline distance says so for the first of every few
-        // grooves; a groove axis that is outside is wrong along its whole run.)
-        let room = (i % 4 != 0 || inside(groove.xy)) ? min(outlineDistance(groove.xy), bitRadius) : 0
+    // Overcut and undercut along the cut. Every end of a move and every sixth sample between (a defect on one
+    // sample shows on its neighbours, since the moves are densified to 1% of the height), a plunge or lift
+    // included, has its axis inside the letter and is no wider than the outline allows there (or than the bit can cut), within 10% of that and a
+    // small absolute margin (half a percent of the height and three chord tolerances: the operation simplifies
+    // strokes by one tolerance). Where the bit moves sideways it is also no narrower (a plunge or a lift grows
+    // from nothing to the axis).
+    for (i, groove) in g.enumerated() where groove.vertex || i % 6 == 0 {
+        let room = inside(groove.xy) ? min(outlineDistance(groove.xy), bitRadius) : 0
         let margin = size * 0.005 + 3 * context.tolerance + 0.1 * room
         v.worstOvercut = max(v.worstOvercut, groove.radius - room - margin)
-        v.worstUndercut = max(v.worstUndercut, room - groove.radius - margin)
+        if groove.sideways { v.worstUndercut = max(v.worstUndercut, room - groove.radius - margin) }
     }
 
     // Interior: at q the outline allows a groove of radius min(d, bit radius) (a stroke wider than the bit is
@@ -229,13 +240,25 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     // and the floor between the two axes is carved (a run starts at a junction of the skeleton, and at a
     // reflex corner of a letter the next groove just touches the first). A gap in the skeleton that leaves
     // a ridge between its ends is not a join, and neither are two unrelated strokes close together.
-    var byRun: [[Groove]] = Array(Set(g.map(\.run))).sorted().map { id in g.filter { $0.run == id } }
-    byRun = byRun.filter { !$0.isEmpty }
+    var byRun: [[Groove]] = []
+    for groove in g {
+        if let last = byRun.last?.first, last.run == groove.run { byRun[byRun.count - 1].append(groove) } else { byRun.append([groove]) }
+    }
     var parent = Array(byRun.indices)
     func find(_ i: Int) -> Int { var i = i; while parent[i] != i { parent[i] = parent[parent[i]]; i = parent[i] }; return i }
+    // Runs of one skeleton share the vertices where they meet, so first join the runs that start or end on a
+    // point another run passes through.
+    var holders: [Int64: Int] = [:]
+    func key(_ p: Vec2) -> Int64 { Int64((p.x * 1e6).rounded()) &* 1_000_003 &+ Int64((p.y * 1e6).rounded()) }
+    for (r, run) in byRun.enumerated() { for pt in run { holders[key(pt.xy)] = r } }
+    for (r, run) in byRun.enumerated() {
+        for pt in [run[0], run[run.count - 1]] { if let other = holders[key(pt.xy)], other != r { parent[find(r)] = find(other) } }
+    }
     let slack = size * 0.004
     let boxes = byRun.map { run in Rect2(points: run.map(\.xy)).insetBy(-((run.map(\.radius).max() ?? 0) + slack)) }
-    for a in byRun.indices {
+    // Only when that leaves more cuts than the letter has pieces, look for grooves that reach each other.
+    let joinedByVertices = Set(byRun.indices.map(find)).count
+    for a in byRun.indices where joinedByVertices > v.pieces {
         for b in byRun.indices where b > a && find(a) != find(b) && boxes[a].intersects(boxes[b]) {
             search: for p in byRun[a] {
                 for q in byRun[b] where p.xy.distance(to: q.xy) <= max(p.radius, q.radius) + slack {
