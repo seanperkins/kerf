@@ -5,7 +5,7 @@ import Testing
 
 /// A save is only a save once the file holds the project. SwiftUI hands the bytes to the system after
 /// `snapshot` and `fileWrapper`, and says nothing about the write, so the document counts the project as saved
-/// (and the recovery copy as no longer needed) when it finds those exact bytes in the file.
+/// (and the recovery copy as no longer needed) when it finds the bytes of one of its saves in the file.
 @MainActor
 @Suite struct SaveConfirmationTests {
     func makeDoc() -> KerfDocument {
@@ -23,19 +23,21 @@ import Testing
         return (doc, coordinator)
     }
 
+    /// What SwiftUI does for a save: take the snapshot, encode it. Returns the bytes the system is asked to write.
     func saveBytes(_ doc: KerfDocument) throws -> Data {
-        let snap = try doc.snapshot(contentType: .kerfProject)
-        return try doc.fileData(for: snap)
+        try doc.fileData(for: doc.snapshot(contentType: .kerfProject))
     }
 
-    @Test func aSnapshotAloneDoesNotMarkTheProjectSaved() throws {
+    @Test func aSavedButUnwrittenSnapshotDoesNotMarkTheProjectSaved() throws {
         let store = RecoveryStore(directory: AppTestSupport.tempDir())
         let (doc, coordinator) = dirtyDocument(file: AppTestSupport.tempDir().appendingPathComponent("a.kerf"), store: store)
         #expect(store.entries().count == 1)
-        _ = try saveBytes(doc)
-        #expect(doc.needsRecovery)
+        _ = try doc.snapshot(contentType: .kerfProject)       // not even encoded yet
         coordinator.tick()
-        #expect(store.entries().count == 1)
+        #expect(doc.needsRecovery && store.entries().count == 1)
+        _ = try saveBytes(doc)                                // encoded, never written
+        coordinator.tick()
+        #expect(doc.needsRecovery && store.entries().count == 1)
     }
 
     @Test func aFailedWriteKeepsTheDocumentDirtyAndItsRecoveryCopy() throws {
@@ -61,20 +63,10 @@ import Testing
         #expect(store.entries().count == 1)
 
         try saveBytes(doc).write(to: url)
-        #expect(doc.confirmSave())
-        #expect(!doc.needsRecovery)
-        coordinator.tick()
-        #expect(store.entries().isEmpty)
-    }
-
-    @Test func theRecoveryTimerConfirmsASaveItWasNotToldAbout() throws {
-        let url = AppTestSupport.tempDir().appendingPathComponent("tick.kerf")
-        let store = RecoveryStore(directory: AppTestSupport.tempDir())
-        let (doc, coordinator) = dirtyDocument(file: url, store: store)
-        try saveBytes(doc).write(to: url)
-        coordinator.tick()
+        coordinator.tick()                       // the recovery timer is what looks at the file
         #expect(!doc.needsRecovery)
         #expect(store.entries().isEmpty)
+        #expect(!doc.confirmSave())              // nothing left to confirm
     }
 
     @Test func aFileThatHoldsSomethingElseIsNotAConfirmation() throws {
@@ -84,13 +76,27 @@ import Testing
         doc.perform("Rename") { $0.document.name = "Edited" }
         _ = try saveBytes(doc)
         try Data("the previous version".utf8).write(to: url)   // the write did not replace it
-        #expect(!doc.confirmSave())
-        #expect(doc.needsRecovery)
+        #expect(!doc.confirmSave() && doc.needsRecovery)
+        // Same size, different bytes: not confirmed either.
+        let same = try saveBytes(doc)
+        try Data(repeating: 0x20, count: same.count).write(to: url)
+        #expect(!doc.confirmSave() && doc.needsRecovery)
         // And with no file at all, or a document that was never given a place.
         try FileManager.default.removeItem(at: url)
         #expect(!doc.confirmSave())
         doc.fileURL = nil
         #expect(!doc.confirmSave())
+    }
+
+    @Test func aPipeInTheFilesPlaceIsNotWaitedOn() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("pipe.kerf")
+        #expect(mkfifo(url.path, 0o644) == 0)
+        let doc = makeDoc()
+        doc.fileURL = url
+        doc.perform("Rename") { $0.document.name = "Edited" }
+        _ = try saveBytes(doc)
+        #expect(!doc.confirmSave())              // returns at once instead of blocking on the open
+        #expect(doc.needsRecovery)
     }
 
     @Test func editsMadeAfterTheSaveStayUnsaved() throws {
@@ -117,10 +123,71 @@ import Testing
         #expect(!doc.confirmSave())
         #expect(doc.lastSavedProject.document.name == "First")
         #expect(doc.needsRecovery)
-        // Confirming when nothing is pending, or twice, changes nothing.
-        try saveBytes(doc).write(to: url)
+        try saveBytes(doc).write(to: url)      // saved again, and this one lands
         #expect(doc.confirmSave())
-        #expect(!doc.confirmSave())
         #expect(!doc.needsRecovery)
+        #expect(!doc.confirmSave())
+    }
+
+    /// Saves can overlap: the older one's bytes are encoded after the newer snapshot was taken. The bytes belong
+    /// to the older save, so the file holding them says nothing about the newer project.
+    @Test func bytesAreKeptAgainstTheSaveTheyWereEncodedFor() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("overlap.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let (doc, coordinator) = dirtyDocument(file: url, store: store)
+        let older = try doc.snapshot(contentType: .kerfProject)       // project "Edited"
+        doc.perform("Again") { $0.document.name = "Again" }
+        let newer = try doc.snapshot(contentType: .kerfProject)       // project "Again"
+        let olderBytes = try doc.fileData(for: older)                 // encoded last
+        try olderBytes.write(to: url)                                 // and the newer write fails
+        _ = newer
+
+        #expect(doc.confirmSave())
+        #expect(doc.lastSavedProject.document.name == "Edited")       // not "Again"
+        #expect(doc.needsRecovery)
+        coordinator.tick()
+        #expect(store.entries().map(\.name) == ["Again"])             // the newer work keeps its copy
+    }
+
+    /// A save that reached the file but has not been looked at yet must survive a newer save that fails: the file
+    /// holds the first one, so undoing back to the original is not "clean".
+    @Test func anUnconfirmedSaveIsNotForgottenWhenANewerOneStarts() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("history.kerf")
+        let store = RecoveryStore(directory: AppTestSupport.tempDir())
+        let doc = makeDoc()
+        let um = UndoManager()
+        um.groupsByEvent = false
+        doc.undoManager = um
+        doc.fileURL = url
+        let coordinator = RecoveryCoordinator(store: store)
+        coordinator.register(doc)
+
+        um.beginUndoGrouping(); doc.perform("A") { $0.document.name = "A" }; um.endUndoGrouping()
+        try saveBytes(doc).write(to: url)                              // A reaches the file, not yet looked at
+        um.beginUndoGrouping(); doc.perform("B") { $0.document.name = "B" }; um.endUndoGrouping()
+        _ = try saveBytes(doc)                                         // B fails
+        um.undo(); um.undo()                                           // back to the original project
+        #expect(doc.project.document.name != "A" && doc.project.document.name != "B")
+
+        coordinator.tick()
+        // The file holds A, the document holds the original: it is dirty and keeps its recovery copy.
+        #expect(doc.lastSavedProject.document.name == "A")
+        #expect(doc.needsRecovery)
+        #expect(store.entries().count == 1)
+    }
+
+    @Test func onlyTheLastFewUnwrittenSavesAreRemembered() throws {
+        let url = AppTestSupport.tempDir().appendingPathComponent("many.kerf")
+        let doc = makeDoc()
+        doc.fileURL = url
+        doc.perform("First") { $0.document.name = "First" }
+        let first = try saveBytes(doc)
+        for i in 0..<12 {
+            doc.perform("Edit \(i)") { $0.document.name = "Edit \(i)" }
+            _ = try saveBytes(doc)
+        }
+        try first.write(to: url)                 // the very first save landed, long forgotten
+        #expect(!doc.confirmSave())              // not remembered: stays as it was (dirty), the safe side
+        #expect(doc.needsRecovery)
     }
 }

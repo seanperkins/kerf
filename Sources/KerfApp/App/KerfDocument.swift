@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import Combine
+import CryptoKit
 import Foundation
 import PostCore
 import SwiftUI
@@ -81,10 +82,17 @@ struct CanvasRequest: Equatable {
     var serial: Int
 }
 
+/// What SwiftUI takes when it saves and hands back to encode: the project to write, and which save it belongs to
+/// (the id ties the encoded bytes to this save however saves overlap).
+struct KerfSnapshot {
+    var project: KerfProject
+    var saveID: Int
+}
+
 /// One open `.kerf` document: the project plus per-window editing state. All project edits go
 /// through `perform`, which registers snapshot-based undo with the window's undo manager.
 final class KerfDocument: ReferenceFileDocument {
-    typealias Snapshot = KerfProject
+    typealias Snapshot = KerfSnapshot
 
     static var readableContentTypes: [UTType] { [.kerfProject] }
     static var writableContentTypes: [UTType] { [.kerfProject] }
@@ -167,17 +175,20 @@ final class KerfDocument: ReferenceFileDocument {
     private(set) var lastSavedProject: KerfProject
     var needsRecovery: Bool { project != lastSavedProject }
 
-    /// A save SwiftUI has taken (`snapshot`) and had encoded (`fileData`) but that is not known to be on disk:
-    /// the system writes the bytes after `fileWrapper` returns and reports nothing back.
+    /// A save SwiftUI has taken (`snapshot`) that is not known to be on disk. The system writes the bytes after
+    /// `fileWrapper` returns and reports nothing back, so each save waits here, by its id, until the file is seen
+    /// to hold what it handed over. `bytes` is the size and SHA-256 of that data once `fileData` has produced it.
     private struct PendingSave {
-        var serial: Int
+        var id: Int
         var project: KerfProject
-        var data: Data?
+        var bytes: (count: Int, digest: SHA256Digest)?
     }
-    /// `snapshot` runs on the main actor and `fileWrapper` may not, so the pending save has its own lock.
+    /// Oldest first, kept to the last few: a save that never lands is dropped when newer ones pile up.
+    private static let pendingLimit = 8
+    /// `snapshot` runs on the main actor and `fileWrapper` may not, so the pending saves have their own lock.
     private let pendingLock = NSLock()
-    private var pendingSave: PendingSave?
-    private var saveSerial = 0
+    private var pendingSaves: [PendingSave] = []
+    private var lastSaveID = 0
 
     init(project: KerfProject, toolLibrary: ToolLibraryModel = .shared) {
         self.project = project
@@ -208,51 +219,75 @@ final class KerfDocument: ReferenceFileDocument {
         snapToObjects = prefs.snapToObjects
     }
 
-    func snapshot(contentType: UTType) throws -> KerfProject {
+    func snapshot(contentType: UTType) throws -> KerfSnapshot {
         // After a save, the next live toolpath edit opens a new undo step (re-dirtying the file).
         liveOperationEdit = nil
+        scheduleFileThumbnail()
         pendingLock.lock()
-        saveSerial += 1
-        pendingSave = PendingSave(serial: saveSerial, project: project, data: nil)
+        lastSaveID += 1
+        let id = lastSaveID
+        pendingSaves.append(PendingSave(id: id, project: project, bytes: nil))
+        if pendingSaves.count > Self.pendingLimit { pendingSaves.removeFirst() }
         pendingLock.unlock()
-        // The system writes after this returns and says nothing about it: look at the file shortly after, and
-        // again if the write is slow. The recovery timer and a new file URL check too.
-        for delay in [0.4, 2.0, 6.0] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.confirmSave() }
-        }
         var p = project
         p.refreshToolSnapshot(from: toolLibrary.library)
-        return p
+        return KerfSnapshot(project: p, saveID: id)
     }
 
-    func fileWrapper(snapshot: KerfProject, configuration: WriteConfiguration) throws -> FileWrapper {
+    func fileWrapper(snapshot: KerfSnapshot, configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: try fileData(for: snapshot))
     }
 
-    /// The bytes the system is asked to write for `snapshot`, kept so the file can be checked against them.
-    func fileData(for snapshot: KerfProject) throws -> Data {
-        let data = FileThumbnail.withQuickLookThumbnail(try snapshot.encoded(), for: snapshot.document)
+    /// The bytes the system is asked to write for `snapshot`; their size and digest are kept against that save
+    /// (not against whichever save is newest) so the file can be checked later.
+    func fileData(for snapshot: KerfSnapshot) throws -> Data {
+        let data = FileThumbnail.withQuickLookThumbnail(try snapshot.project.encoded(), for: snapshot.project.document)
+        let digest = SHA256.hash(data: data)
         pendingLock.lock()
-        pendingSave?.data = data
+        if let i = pendingSaves.firstIndex(where: { $0.id == snapshot.saveID }) {
+            pendingSaves[i].bytes = (data.count, digest)
+        }
         pendingLock.unlock()
         return data
     }
 
-    /// Counts the last save as done when the file at `fileURL` holds exactly the bytes it handed over; then that
-    /// project is the saved one, the document is clean and the recovery copy goes at the next tick. A write that
-    /// failed, or has not happened yet, leaves everything as it was. Returns whether it confirmed.
+    /// Looks at the file at `fileURL`: when it holds exactly what one of the pending saves handed over, that
+    /// save's project is the saved one (so the document is clean if it still matches, and its recovery copy goes
+    /// at the next tick) and that save and every older one stop pending. A write that failed or has not happened,
+    /// a file that is not a regular file, or one that holds something else leaves everything as it was. Returns
+    /// whether a save was confirmed.
     @discardableResult
-    func confirmSave(read: (URL) -> Data? = { try? Data(contentsOf: $0) }) -> Bool {
+    func confirmSave() -> Bool {
         pendingLock.lock()
-        let pending = pendingSave
+        let candidates = pendingSaves.filter { $0.bytes != nil }
         pendingLock.unlock()
-        guard let pending, let data = pending.data, let url = fileURL, read(url) == data else { return false }
+        guard !candidates.isEmpty, let url = fileURL,
+              let onDisk = Self.regularFileDigest(at: url, ofSizes: Set(candidates.compactMap { $0.bytes?.count })),
+              let match = candidates.last(where: { $0.bytes?.count == onDisk.count && $0.bytes?.digest == onDisk.digest })
+        else { return false }
         pendingLock.lock()
-        if pendingSave?.serial == pending.serial { pendingSave = nil }
+        pendingSaves.removeAll { $0.id <= match.id }
         pendingLock.unlock()
-        lastSavedProject = pending.project
-        scheduleFileThumbnail()
+        lastSavedProject = match.project
         return true
+    }
+
+    /// Size and SHA-256 of the file at `url`, read in chunks, or nil unless it is a regular file of one of
+    /// `sizes` bytes. A file of any other size is not read at all, and a pipe or device put in the file's place
+    /// is not waited on (`O_NONBLOCK` opens a pipe at once; it is then refused for not being a regular file).
+    static func regularFileDigest(at url: URL, ofSizes sizes: Set<Int>) -> (count: Int, digest: SHA256Digest)? {
+        let fd = open(url.path, O_RDONLY | O_NONBLOCK)
+        guard fd >= 0 else { return nil }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        var info = stat()
+        guard fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, sizes.contains(Int(info.st_size)) else { return nil }
+        var hasher = SHA256()
+        var count = 0
+        while let chunk = try? handle.read(upToCount: 1 << 20), !chunk.isEmpty {
+            hasher.update(data: chunk)
+            count += chunk.count
+        }
+        return (count, hasher.finalize())
     }
 
     // MARK: Undoable edits

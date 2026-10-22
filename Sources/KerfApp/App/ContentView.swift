@@ -44,7 +44,6 @@ struct ContentView: View {
         .onAppear { document.showJobNotesOnOpenIfNeeded() }
         .onChange(of: documentConfiguration?.fileURL) { _, url in
             document.fileURL = url
-            document.confirmSave()   // a first Save As gives the document its URL once the file is written
             document.scheduleFileThumbnail()
         }
         .sheet(item: $document.sheet, onDismiss: { document.sheetDismissed() }) { sheet in

@@ -55,9 +55,8 @@ import Testing
         doc.fileURL = url
         let snap = try doc.snapshot(contentType: .kerfProject)
         try doc.fileData(for: snap).write(to: url)
-        #expect(doc.confirmSave())
+        c.tick()                                  // looks at the file
         #expect(!doc.needsRecovery)
-        c.tick()
         #expect(store.entries().isEmpty)
     }
 
