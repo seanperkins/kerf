@@ -35,13 +35,14 @@ struct VCarveOrdering {
     /// Index of the first group (selection order) the stroke belongs to, or nil.
     func group(of stroke: VCarveStroke) -> Int? {
         guard !stroke.points.isEmpty else { return nil }
-        // The middle of the middle segment: a two-point stroke (a spur from a corner of the outline to the
+        // A stroke on an open vector is matched by three of its own vertices (the middle one is on the vector;
+        // the middle of a simplified segment need not be). A stroke inside a shape's region is matched by the
+        // middle of its middle segment: a two-point stroke (a spur from a corner of the outline to the
         // skeleton) has its end on the outline, which no region contains, so a vertex would leave it ungrouped.
+        let vertex = stroke.points[stroke.points.count / 2].xy
+        let ends = [stroke.points[0].xy, stroke.points[stroke.points.count - 1].xy, vertex]
         let k = max(1, stroke.points.count / 2)
-        let probe = stroke.points.count > 1
-            ? (stroke.points[k - 1].xy + stroke.points[k].xy) * 0.5
-            : stroke.points[0].xy
-        let ends = [stroke.points[0].xy, stroke.points[stroke.points.count - 1].xy, probe]
+        let probe = stroke.points.count > 1 ? (stroke.points[k - 1].xy + stroke.points[k].xy) * 0.5 : stroke.points[0].xy
         for (i, g) in groups.enumerated() {
             if g.lines.contains(where: { line in ends.allSatisfy { Self.distance($0, to: line) <= lineTolerance } }) {
                 return i

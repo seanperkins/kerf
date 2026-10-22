@@ -21,7 +21,7 @@ private let sizes = [0.25, 1.0, 2.0]                        // capital height, i
 private let slope = tan(30.0 * .pi / 180)                   // the 60 degree V-bit of VCarveFixture
 
 /// One groove point: where the bit's axis passes and how wide the groove is there (depth x slope).
-private struct Groove { var xy: Vec2; var radius: Double; var run: Int }
+private struct Groove { var xy: Vec2; var radius: Double; var run: Int; var sideways: Bool }
 
 /// Cut points (xy, groove radius) of `tp` at or below the surface, densified to `step`; `run` numbers the
 /// runs of cutting moves between rapids.
@@ -36,9 +36,10 @@ private func grooves(_ tp: Toolpath, coords: MachineCoordinates, step: Double) -
         if m.isRapid { if open { run += 1; open = false }; continue }
         guard let a = last else { continue }
         let n = max(1, Int((a.xy.distance(to: t.xy) / step).rounded(.up)))
+        let sideways = a.xy.distance(to: t.xy) > 1e-9   // a plunge or a lift moves straight down or up
         for k in 0...n {
             let mat = coords.material(fromMachine: a + (t - a) * (Double(k) / Double(n)))
-            if mat.depth > -1e-9 { out.append(Groove(xy: mat.xy, radius: max(0, mat.depth) * slope, run: run)) }
+            if mat.depth > -1e-9 { out.append(Groove(xy: mat.xy, radius: max(0, mat.depth) * slope, run: run, sideways: sideways)) }
         }
         open = true
     }
@@ -74,6 +75,47 @@ private struct GrooveGrid {
     }
 }
 
+/// The segments of the letter's outline bucketed on a grid, for distance queries that look at a few cells
+/// instead of every segment.
+private struct OutlineGrid {
+    let cell: Double
+    var buckets: [Int64: [(Vec2, Vec2)]] = [:]
+    let extent: Int
+
+    init(loops: [[Vec2]], cell: Double) {
+        self.cell = cell
+        var maxCells = 1
+        for loop in loops {
+            for i in loop.indices {
+                let a = loop[i], b = loop[(i + 1) % loop.count]
+                let x0 = Int(floor(min(a.x, b.x) / cell)), x1 = Int(floor(max(a.x, b.x) / cell))
+                let y0 = Int(floor(min(a.y, b.y) / cell)), y1 = Int(floor(max(a.y, b.y) / cell))
+                for ix in x0...x1 { for iy in y0...y1 { buckets[GrooveGrid.key(ix, iy), default: []].append((a, b)) } }
+                maxCells = max(maxCells, x1 - x0 + 1, y1 - y0 + 1)
+            }
+        }
+        let all = loops.flatMap { $0 }
+        let box = Rect2(points: all)
+        extent = Int(ceil(max(box.width, box.height) / cell)) + 2
+    }
+
+    func distance(from p: Vec2) -> Double {
+        var best = Double.infinity
+        let cx = Int(floor(p.x / cell)), cy = Int(floor(p.y / cell))
+        for ring in 0...(extent + Int(ceil(max(abs(p.x), abs(p.y)) / cell))) {
+            for ix in (cx - ring)...(cx + ring) {
+                for iy in (cy - ring)...(cy + ring) where max(abs(ix - cx), abs(iy - cy)) == ring {
+                    for (a, b) in buckets[GrooveGrid.key(ix, iy)] ?? [] {
+                        best = min(best, Polygon2D.closestPoint(onSegment: a, b, to: p).point.distance(to: p))
+                    }
+                }
+            }
+            if best <= Double(ring) * cell { break }
+        }
+        return best
+    }
+}
+
 private struct Verdict {
     var cutLength = 0.0
     /// The most any interior point is short of the depth the outline allows there, in inches of groove radius.
@@ -83,6 +125,8 @@ private struct Verdict {
     var worstOutlineGap = 0.0
     /// The most any groove is wider than the outline allows where it is (a groove outside the letter counts as all of it).
     var worstOvercut = 0.0
+    /// The most any groove along the cut is narrower than the outline allows where it is, beyond the margin.
+    var worstUndercut = 0.0
     var cuts = 0
     var pieces = 0
     /// Pieces of the glyph with no cut in them.
@@ -94,25 +138,39 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     var v = Verdict()
     // The letter from the font's contours alone (outer loops counter-clockwise, counters and islands
     // alternating inside them), not from the region the operation builds from them.
-    let region = Polygon2D.region(fromLoops: paths.map { $0.flattened(tolerance: context.tolerance) }.filter { $0.count > 2 })
+    let rawLoops = paths.map { $0.flattened(tolerance: context.tolerance) }.filter { $0.count > 2 }
+    let region = Polygon2D.region(fromLoops: rawLoops)
     func inside(_ p: Vec2) -> Bool { region.reduce(0) { $0 + (Polygon2D.contains($1, p) ? 1 : 0) } % 2 == 1 }
-    func outlineDistance(_ p: Vec2) -> Double { region.map { Polygon2D.distance(from: p, toLoop: $0) }.min() ?? 0 }
     let outers = region.filter { Polygon2D.signedArea($0) > 0 }
     v.pieces = outers.count
+    let outline = OutlineGrid(loops: region, cell: size * 0.05)
+    func outlineDistance(_ p: Vec2) -> Double { outline.distance(from: p) }
 
     let g = grooves(tp, coords: context.coords, step: size * 0.01)
     for (a, b) in zip(g, g.dropFirst()) where a.run == b.run { v.cutLength += a.xy.distance(to: b.xy) }
-    v.uncutPieces = outers.filter { outer in !g.contains { $0.radius > 0 && Polygon2D.contains(outer, $0.xy) } }.count
+    // Pieces, counted again from the raw contours (those an even number of other contours enclose), which the
+    // union above cannot have lost: each must hold some cut.
+    let rawOuters = rawLoops.filter { loop in rawLoops.filter { $0 != loop && Polygon2D.contains($0, loop[0]) }.count % 2 == 0 }
+    v.uncutPieces = rawOuters.filter { outer in !g.contains { $0.radius > 0 && Polygon2D.contains(outer, $0.xy) } }.count
+    v.pieces = max(outers.count, 0)
 
     let grid = GrooveGrid(g, cell: size * 0.05)
     let bitRadius = VCarveFixture.vbit60.radius
     let allowed = size * 0.02
 
-    // Overcut: a groove is never wider than the outline allows at its axis (or than the bit can cut), and
-    // never has its axis outside the letter. Every eighth groove point is enough to see a region built wrong.
-    for (i, groove) in g.enumerated() where groove.radius > 0 && i % 8 == 0 {
-        let room = inside(groove.xy) ? min(outlineDistance(groove.xy), bitRadius) : 0
-        v.worstOvercut = max(v.worstOvercut, groove.radius - room)
+    // Overcut and undercut along the cut: where the bit moves sideways its groove is as wide as the outline
+    // allows at its axis (or as the bit can cut), within 10% and a small absolute margin (half a percent of the
+    // height and three chord tolerances: the operation simplifies strokes by one tolerance), and its axis is inside
+    // the letter (every second sample: a defect on one sample shows on its neighbour too). A plunge or a lift is
+    // skipped (its groove narrows to the axis). This is tight for thin
+    // strokes too, where the 2% allowance of the checks below is not.
+    for (i, groove) in g.enumerated() where groove.sideways && i % 2 == 0 {
+        // (The point is inside the letter if the nearest outline distance says so for the first of every few
+        // grooves; a groove axis that is outside is wrong along its whole run.)
+        let room = (i % 4 != 0 || inside(groove.xy)) ? min(outlineDistance(groove.xy), bitRadius) : 0
+        let margin = size * 0.005 + 3 * context.tolerance + 0.1 * room
+        v.worstOvercut = max(v.worstOvercut, groove.radius - room - margin)
+        v.worstUndercut = max(v.worstUndercut, room - groove.radius - margin)
     }
 
     // Interior: at q the outline allows a groove of radius min(d, bit radius) (a stroke wider than the bit is
@@ -146,6 +204,7 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
     // Outline: every point of every contour is within reach of some groove (its edge touches or passes it),
     // which also sees a thin stroke or serif the interior grid steps over.
     let step = size / 45
+    let outlineReach = size * 0.01 + 2 * context.tolerance
     for loop in region {
         var carried = 0.0
         for i in loop.indices {
@@ -157,7 +216,7 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
                 var gap = Double.infinity
                 grid.forEachNear(p, within: size * 0.3) { j in
                     gap = min(gap, g[j].xy.distance(to: p) - g[j].radius)
-                    return gap > size * 0.015   // reached: stop looking
+                    return gap > outlineReach   // reached: stop looking
                 }
                 v.worstOutlineGap = max(v.worstOutlineGap, gap)
                 t += step
@@ -182,7 +241,7 @@ private func judge(_ tp: Toolpath, paths: [Path], context: CAMContext, size: Dou
                 for q in byRun[b] where p.xy.distance(to: q.xy) <= max(p.radius, q.radius) + slack {
                     let m = p.xy.lerp(to: q.xy, 0.5)
                     let carved = max(p.radius - m.distance(to: p.xy), q.radius - m.distance(to: q.xy))
-                    if carved >= min(outlineDistance(m), bitRadius) - allowed {
+                    if inside(m), carved >= min(outlineDistance(m), bitRadius) - allowed {
                         parent[find(a)] = find(b)
                         break search
                     }
@@ -250,11 +309,12 @@ func vcarveCarvesEveryGlyph(font: String, cell: VCarveGlyphCell) throws {
         }
         let v = judge(tp, paths: paths, context: context, size: cell.size)
         #expect(v.cutLength > 0, Comment(rawValue: "\(name): no cut"))
-        #expect(v.worstOvercut <= cell.size * 0.02, Comment(rawValue: "\(name): a groove is \(v.worstOvercut) in wider than the outline allows"))
+        #expect(v.worstOvercut <= 0, Comment(rawValue: "\(name): a groove is \(v.worstOvercut) in wider than the outline allows"))
+        #expect(v.worstUndercut <= 0, Comment(rawValue: "\(name): a groove is \(v.worstUndercut) in narrower than the outline allows"))
         #expect(v.uncutPieces == 0, Comment(rawValue: "\(name): \(v.uncutPieces) of \(v.pieces) glyph piece(s) have no cut in them"))
         #expect(v.worstShortfall <= cell.size * 0.02,
                 Comment(rawValue: "\(name): carve is \(v.worstShortfall) in short near \(v.shortfallAt)"))
-        #expect(v.worstOutlineGap <= cell.size * 0.015, Comment(rawValue: "\(name): an outline point is \(v.worstOutlineGap) in from every groove"))
+        #expect(v.worstOutlineGap <= cell.size * 0.01 + 2 * context.tolerance, Comment(rawValue: "\(name): an outline point is \(v.worstOutlineGap) in from every groove"))
         #expect(v.cuts == v.pieces, Comment(rawValue: "\(name): \(v.cuts) connected cut(s) for \(v.pieces) glyph piece(s)"))
     }
 }
@@ -286,9 +346,10 @@ func vcarveKeepsAMultiContourGlyphWholeInEveryOrder(font: String, glyph: String)
                 let v = judge(tp, paths: paths, context: context, size: 1)
                 let name = "\(font) '\(glyph)' contours \(order) startPoints=\(startPoints) selectionOrder=\(selectionOrder)"
                 #expect(v.cutLength > 0, Comment(rawValue: "\(name): no cut"))
-                #expect(v.worstOvercut <= 0.02, Comment(rawValue: "\(name): a groove is \(v.worstOvercut) in wider than the outline allows"))
+                #expect(v.worstOvercut <= 0, Comment(rawValue: "\(name): a groove is \(v.worstOvercut) in wider than the outline allows"))
+                #expect(v.worstUndercut <= 0, Comment(rawValue: "\(name): a groove is \(v.worstUndercut) in narrower than the outline allows"))
                 #expect(v.worstShortfall <= 0.02, Comment(rawValue: "\(name): carve is \(v.worstShortfall) in short near \(v.shortfallAt)"))
-                #expect(v.worstOutlineGap <= 0.015, Comment(rawValue: "\(name): an outline point is \(v.worstOutlineGap) in from every groove"))
+                #expect(v.worstOutlineGap <= 0.01 + 2 * context.tolerance, Comment(rawValue: "\(name): an outline point is \(v.worstOutlineGap) in from every groove"))
                 #expect(v.cuts == 1 && v.pieces == 1, Comment(rawValue: "\(name): \(v.cuts) connected cut(s) for \(v.pieces) glyph piece(s)"))
             }
         }
@@ -321,4 +382,49 @@ func vcarveSelectionOrderFollowsTheSelectedLetters(order: [Int]) throws {
         if seen.last != letter { seen.append(letter) }
     }
     #expect(seen == order, Comment(rawValue: "selected \(order) (0 = O, 1 = B) but cut \(seen)"))
+}
+
+/// A stroke along a curved open vector, simplified to a few vertices, still belongs to its vector: the check
+/// uses the stroke's own vertices, which lie on the vector, not the middle of a segment, which does not.
+@Test func vcarveSelectionOrderKeepsASimplifiedStrokeOnItsCurvedOpenVector() {
+    let layer = UUID()
+    let curve = (0...200).map { i in Vec2(5 * cos(0.002 * Double(i)), 5 * sin(0.002 * Double(i))) }
+    let shapes = [Shape(layerID: layer, paths: [Path(points: curve, closed: false)]),
+                  Shape(layerID: layer, paths: [Path(points: [Vec2(1, 3), Vec2(2, 3)], closed: false)])]
+    let ordering = VCarveOrdering(shapes: shapes, useStartPoints: false, useSelectionOrder: true, tolerance: 0.0005, units: .inch)
+    let simplified = [0, 51, 102, 153, 200].map { VCarveStroke(points: [Vec3(curve[$0], z: 0.05)], isClosed: false).points[0] }
+    let stroke = VCarveStroke(points: simplified, isClosed: false)
+    #expect(ordering.group(of: stroke) == 0)
+    // A two-point spur inside a closed shape is grouped too (its end lies on the outline).
+    let square = Shape(layerID: layer, paths: [Path(points: [Vec2(0, 0), Vec2(1, 0), Vec2(1, 1), Vec2(0, 1)], closed: true)])
+    let inside = VCarveOrdering(shapes: [shapes[1], square], useStartPoints: false, useSelectionOrder: true, tolerance: 0.0005, units: .inch)
+    let spur = VCarveStroke(points: [Vec3(Vec2(0, 0), z: 0), Vec3(Vec2(0.1, 0.1), z: 0.05)], isClosed: false)
+    #expect(inside.group(of: spur) == 1)
+}
+
+/// A stroke simplified for the toolpath stays within the tolerance of every point it replaces, however gently
+/// it curves. (The old simplifier compared each point with the segment from the last kept point to the next raw
+/// point, so a long shallow arc drifted by many tolerances: a hairline of Snell Roundhand's L was cut 0.013 in
+/// off its axis.)
+@Test func vcarveSimplifiedStrokesStayWithinToleranceOfTheOriginal() {
+    // A shallow arc: 200 points over 1.4 in, sagitta 0.03 in.
+    let radius = 8.0
+    let arc = (0...200).map { i -> Vec3 in
+        let a = Double(i) * 0.007 / radius
+        return Vec3(x: radius * sin(a), y: radius * (1 - cos(a)), z: 0.02 + 0.00002 * Double(i))
+    }
+    for tolerance in [0.0005, 0.002] {
+        let kept = VCarveStrokes.simplified(arc, tolerance: tolerance)
+        #expect(kept.count > 2 && kept.count < arc.count)
+        // Every original point lies within the tolerance of the simplified polyline.
+        for p in arc {
+            var best = Double.infinity
+            for (a, b) in zip(kept, kept.dropFirst()) {
+                let ab = b - a, ap = p - a
+                let t = max(0, min(1, ap.dot(ab) / max(ab.dot(ab), 1e-300)))
+                best = min(best, p.distance(to: a + ab * t))
+            }
+            #expect(best <= tolerance + 1e-12, Comment(rawValue: "tolerance \(tolerance): a point is \(best) from the simplified stroke"))
+        }
+    }
 }
