@@ -14,6 +14,12 @@ struct MotionChecker {
     var issues = IssueCollector()
     private var minP = Vec3(.infinity, .infinity, .infinity)
     private var maxP = Vec3(-.infinity, -.infinity, -.infinity)
+    /// The hole the tool is standing in: the XY of the straight-down feed that cut it and the deepest Z
+    /// the tool has fed to there. Kept through Z-only rapids; dropped by any XY move, any other feed,
+    /// and `leaveHole()`. A rapid back down into it, stopping at or above its bottom, only moves through
+    /// air, which is how peck drilling re-enters every hole. One slot is enough: nothing returns to a
+    /// hole after visiting another, and the old warning is the safe answer if something does.
+    private var hole: (xy: Vec2, z: Double)?
 
     /// `job` is in `jobUnits`; everything is converted to `units`.
     init(profile: PostProfile, job: JobSetup, jobUnits: LengthUnit, units: LengthUnit) {
@@ -33,12 +39,16 @@ struct MotionChecker {
     var allowedMinZ: Double { coords.materialBottomZ - limits.maxSpoilboardCut }
 
     private func f(_ v: Double) -> String { NumberFormat.fixed(v, decimals: units == .inch ? 4 : 3) }
+    /// Forget the hole: the caller saw something that may have changed the bit or the frame (the
+    /// G-code check: any block that is not a plain move; the toolpath check: a stop or a dwell).
+    mutating func leaveHole() { hole = nil }
 
     // MARK: Rules
 
     /// `xyMove`: the rapid changes (or may change, when the start XY is unknown) X/Y.
     mutating func rapid(from start: Vec3?, to target: Vec3, xyMove: Bool, line: Int?) {
         if xyMove {
+            hole = nil
             guard let s = start else {
                 issues.add("rapid-unknown-z", .warning, line: line,
                            "Rapid XY move before the Z height is known; retract to safe Z first")
@@ -53,16 +63,23 @@ struct MotionChecker {
                 issues.add("rapid-below-safe", .warning, line: line,
                            "Rapid XY move below safe Z (Z\(f(low)) < Z\(f(safeZ)))")
             }
-        } else if let s = start, target.z < s.z - eps, target.z < topZ - eps {
+        } else if let s = start, target.z < s.z - eps, target.z < topZ - eps,
+                  !(hole.map { $0.xy.distance(to: target.xy) <= eps && target.z >= $0.z } ?? false) {
+            // Not a re-entry into the hole this tool has just drilled (a NaN coordinate compares false
+            // and so is never one).
             issues.add("rapid-plunge", .warning, line: line,
                        "Rapid plunge below the material top to Z\(f(target.z)); use a feed move")
         }
         visit(target, line: line)
     }
 
-    mutating func feedMove(from start: Vec3?, path: [Vec3], feed: Double?, spindleOn: Bool, line: Int?) {
+    /// `startKnown`: the start XY is a position the program set, not a guess for a program that has
+    /// not named X and Y yet; only a feed from a known XY can drill a hole the checker remembers.
+    mutating func feedMove(from start: Vec3?, path: [Vec3], feed: Double?, spindleOn: Bool, line: Int?,
+                           startKnown: Bool) {
         guard let feed else {
             issues.add("feed-missing", .error, line: line, "Feed move without a feed rate (F)")
+            hole = nil
             path.forEach { visit($0, line: line) }
             return
         }
@@ -75,6 +92,18 @@ struct MotionChecker {
         let low = ([start?.z].compactMap { $0 } + path.map(\.z)).min() ?? .infinity
         if !spindleOn, low < topZ - eps {
             issues.add("spindle-off", .error, line: line, "Cutting move with the spindle off (no M3 before cutting)")
+        }
+        if startKnown, feed > 0, let s = start, low < s.z - eps,
+           path.allSatisfy({ $0.xy.distance(to: s.xy) <= eps }) {
+            // A plunge from a known XY drills the hole the tool is in, or deepens it (keeping the XY
+            // it was first drilled at, so a run of sub-eps steps cannot walk the claim sideways).
+            if let h = hole, h.xy.distance(to: s.xy) <= eps {
+                hole = (h.xy, min(h.z, low))
+            } else {
+                hole = (s.xy, low)
+            }
+        } else {
+            hole = nil   // sideways, upward, from nowhere known, or a feed that cannot run
         }
         path.forEach { visit($0, line: line) }
     }

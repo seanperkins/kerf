@@ -95,8 +95,7 @@ struct SampleFilesTests {
         let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile,
                                           jobName: "Sign")
         #expect(result.errorMessage == nil)
-        let errors = result.issues.filter { $0.severity == .error }
-        #expect(errors.isEmpty, "\(errors)")
+        #expect(result.issues.isEmpty, "\(result.issues)")   // no warnings either: the sample ships clean
         let text = try #require(result.text)
         #expect(text.contains("G20"))
         #expect(text.contains("M30"))
@@ -140,12 +139,12 @@ struct SampleFilesTests {
         let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile,
                                           jobName: "Sign")
         let text = try #require(result.text)
-        #expect(result.issues.filter { $0.severity == .error }.isEmpty)
+        #expect(result.issues.isEmpty, "\(result.issues)")
         let committed = String(decoding: try read("sign.tap"), as: UTF8.self)
         #expect(text == committed)
         let validator = GCodeValidator(profile: profile, job: project.document.job, units: project.document.units)
-        let fileErrors = GCodeValidator.errors(in: validator.validate(gcode: committed))
-        #expect(fileErrors.isEmpty, "\(fileErrors)")
+        let fileIssues = validator.validate(gcode: committed)
+        #expect(fileIssues.isEmpty, "\(fileIssues)")
     }
 
     // MARK: DXF part

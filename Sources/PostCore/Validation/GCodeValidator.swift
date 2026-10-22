@@ -41,6 +41,7 @@ public struct GCodeValidator: Sendable {
     public func validate(toolpaths: [Toolpath]) -> [GCodeIssue] {
         var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units)
         var pos: Vec3?
+        var previous: Toolpath?
         // Two different tools with one T number post as one tool: the controller sees no change
         // and the second geometry cuts with the first bit in the spindle.
         var byNumber: [Int: [Tool]] = [:]
@@ -59,9 +60,17 @@ public struct GCodeValidator: Sendable {
                 continue
             }
             check.rpm(tp.spindleRPM, min: profile.minRPM, max: profile.maxRPM, line: nil)
+            // Where the post writes a tool change or an operator stop, either of which can change the bit
+            // (the same stops the time estimate counts).
+            if let previous, ToolpathStats.stopsBefore(tp, after: previous) { check.leaveHole() }
+            previous = tp
             for move in tp.moves {
                 switch move {
-                case .dwell: continue
+                case .dwell(let seconds):
+                    // Posts as G4, which is not a plain move in the G-code check; the writer drops a
+                    // dwell of no length, so it does not forget the hole here either.
+                    if seconds > 0 { check.leaveHole() }
+                    continue
                 case .rapid(let p):
                     // The post retracts before a toolpath's first rapid, so an unknown start is fine.
                     if let s = pos {
@@ -70,12 +79,12 @@ public struct GCodeValidator: Sendable {
                         check.visit(p, line: nil)
                     }
                 case .linear(let p, let feed):
-                    check.feedMove(from: pos, path: [p], feed: feed, spindleOn: true, line: nil)
+                    check.feedMove(from: pos, path: [p], feed: feed, spindleOn: true, line: nil, startKnown: true)
                 case .arcCW(let p, let c, let feed), .arcCCW(let p, let c, let feed):
                     let path = pos.map {
                         ArcGeometry.points(from: $0, to: p, center: c, clockwise: isCW(move), tolerance: check.eps)
                     } ?? [p]
-                    check.feedMove(from: pos, path: path, feed: feed, spindleOn: true, line: nil)
+                    check.feedMove(from: pos, path: path, feed: feed, spindleOn: true, line: nil, startKnown: true)
                 }
                 pos = move.target ?? pos
             }
@@ -148,7 +157,7 @@ public struct GCodeValidator: Sendable {
                 case 91:
                     absolute = false
                     carried.add("incremental", .warning, line: b.line, "Incremental positioning (G91) in program")
-                case 0, 1, 2, 3: motion = Int(g)
+                case _ where Self.motionG.contains(g): motion = Int(g)
                 case 4, 28, 30: nonMotion = true
                 case 10, 53, 92, 92.1, 92.2:
                     // The controller now interprets every later coordinate in a frame this
@@ -160,6 +169,17 @@ public struct GCodeValidator: Sendable {
                 }
             }
             var stop: Int?
+            // The remembered hole survives only plain moves: a block of nothing but motion-mode, axis,
+            // arc, feed and line-number words. Any other G code may have moved the tool or changed what
+            // the coordinates mean, a stop, M6 or T word may mean the bit changed, and a letter this
+            // validator does not model is not vouched for. One rule that fails closed (an unlisted word
+            // costs a warning, never a missed one), applied before the block's motion, because a frame
+            // change or tool word applies to it, and again after, because a controller moves before it
+            // stops.
+            let plainMove = b.words.allSatisfy { Self.plainMoveLetters.contains($0.letter) }
+                && b.values("G").allSatisfy { Self.motionG.contains($0) }
+            if !plainMove { check.leaveHole() }
+            defer { if !plainMove { check.leaveHole() } }
             for m in b.values("M") {
                 if !Self.knownM.contains(m) {
                     carried.add("unknown-m", .warning, line: b.line,
@@ -215,7 +235,8 @@ public struct GCodeValidator: Sendable {
                             && (!xyKnown || Vec2(x ?? 0, y ?? 0).distance(to: target.xy) > check.eps)
                         check.rapid(from: start, to: target, xyMove: xyMove, line: b.line)
                     case 1:
-                        check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleOn, line: b.line)
+                        check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleOn, line: b.line,
+                                       startKnown: xyKnown)
                     default:
                         var path = [target]
                         if let s = start, xyKnown {
@@ -237,7 +258,8 @@ public struct GCodeValidator: Sendable {
                                                           tolerance: check.eps)
                             }
                         }
-                        check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleOn, line: b.line)
+                        check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleOn, line: b.line,
+                                       startKnown: xyKnown)
                     }
                     x = tx ?? x; y = ty ?? y; z = tz ?? z
                 } else {
@@ -278,4 +300,8 @@ public struct GCodeValidator: Sendable {
     static let knownG: Set<Double> = [0, 1, 2, 3, 4, 10, 17, 18, 19, 20, 21, 28, 30, 40, 41, 42, 43, 49, 53, 54, 55, 56,
                                       57, 58, 59, 61, 64, 80, 81, 82, 83, 90, 90.1, 91, 91.1, 92, 92.1, 92.2, 93, 94, 98, 99]
     static let knownM: Set<Double> = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30]
+    /// The motion modes: the only G words a block may carry and still be a plain move.
+    static let motionG: Set<Double> = [0, 1, 2, 3]
+    /// The word letters a plain move is made of: G, axes, arc centre and radius, feed, line number.
+    static let plainMoveLetters: Set<Character> = ["G", "X", "Y", "Z", "I", "J", "K", "R", "F", "N"]
 }
