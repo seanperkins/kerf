@@ -269,9 +269,34 @@ import Testing
         #expect(try content(dir, "b.tap/x.txt") == "inside")
     }
 
+    @Test func aFolderSwappedInForTheWorkingFolderIsNeitherUsedNorDeleted() throws {
+        // Someone with write access to the folder moves the working folder away and puts the user's
+        // own "Projects" folder at its name while programs are being staged. The save must fail, the
+        // folder must keep its contents, and nothing may be deleted recursively.
+        let dir = AppTestSupport.tempDir()
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("Projects"), withIntermediateDirectories: false)
+        try write("precious", dir, "Projects/notes.txt")
+        var set = GCodeFileSet(files: [file("a.tap", "A"), file("b.tap", "B")])
+        let live = GCodeFileSet.FileOperations.live
+        set.operations.writeText = { text, url in
+            try live.writeText(text, url)
+            if url.lastPathComponent == "a.tap" {
+                let staging = url.deletingLastPathComponent()
+                try FileManager.default.moveItem(at: staging, to: dir.appendingPathComponent("elsewhere"))
+                try FileManager.default.moveItem(at: dir.appendingPathComponent("Projects"), to: staging)
+            }
+        }
+        let m = message { try set.write(to: dir) }
+        #expect(m.contains("as they were"), Comment(rawValue: m))
+        let working = names(in: dir).filter { $0.hasPrefix(GCodeFileSet.workingFolderPrefix) }
+        #expect(working.count == 1)
+        #expect(try content(dir, "\(working[0])/notes.txt") == "precious")
+        #expect(!names(in: dir).contains("a.tap") && !names(in: dir).contains("b.tap"))
+    }
+
     @Test func theLiveOperationsNeverWriteOverAnything() throws {
-        // The exclusive create and exclusive rename the app uses: a file, a dangling link and a case
-        // twin at the destination all refuse, and nothing is followed.
+        // The exclusive create and exclusive rename the app uses: a file, a live link, a case twin
+        // and a Unicode-form twin at the destination all refuse, and nothing is followed.
         let dir = AppTestSupport.tempDir()
         let live = GCodeFileSet.FileOperations.live
         try live.writeText("one", dir.appendingPathComponent("a.tap"))
@@ -283,7 +308,8 @@ import Testing
         #expect(throws: (any Error).self) { try live.writeText("through", dir.appendingPathComponent("l.tap")) }
         #expect(try content(elsewhere, "real.tap") == "pointed at")
         try live.writeText("new", dir.appendingPathComponent("n.tap"))
-        for taken in ["a.tap", "A.TAP", "l.tap"] {
+        try live.writeText("nfc", dir.appendingPathComponent("Caf\u{E9}.tap"))
+        for taken in ["a.tap", "A.TAP", "l.tap", "Cafe\u{301}.tap"] {
             #expect(throws: (any Error).self) { try live.moveItem(dir.appendingPathComponent("n.tap"), dir.appendingPathComponent(taken)) }
         }
         #expect(try content(dir, "n.tap") == "new")
@@ -291,6 +317,21 @@ import Testing
         #expect(try content(elsewhere, "real.tap") == "pointed at")
         try live.moveItem(dir.appendingPathComponent("n.tap"), dir.appendingPathComponent("m.tap"))
         #expect(try content(dir, "m.tap") == "new")
+        // A folder swapped for a link to another folder is refused as a parent: nothing is created,
+        // moved into, or removed through it.
+        let swapped = dir.appendingPathComponent("work")
+        try FileManager.default.createSymbolicLink(at: swapped, withDestinationURL: elsewhere)
+        #expect(throws: (any Error).self) { try live.writeText("x", swapped.appendingPathComponent("n.tap")) }
+        #expect(throws: (any Error).self) { try live.createDirectory(swapped.appendingPathComponent("was")) }
+        #expect(throws: (any Error).self) { try live.moveItem(dir.appendingPathComponent("m.tap"), swapped.appendingPathComponent("m.tap")) }
+        #expect(throws: (any Error).self) { try live.removeItem(swapped.appendingPathComponent("real.tap")) }
+        #expect(names(in: elsewhere) == ["real.tap"])
+        #expect(try content(dir, "m.tap") == "new")
+        // A set written through a link to the folder lands in the folder.
+        let alias = AppTestSupport.tempDir().appendingPathComponent("alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: dir)
+        try GCodeFileSet(files: [file("z.tap", "Z")]).write(to: alias)
+        #expect(try content(dir, "z.tap") == "G0 Z1\nM30\n")
     }
 
     @Test func aFileThatAppearsLateStopsTheSave() throws {
@@ -303,8 +344,8 @@ import Testing
         #expect(m.contains("b.tap") && m.contains("Nothing was saved"))
         #expect(try content(dir, "b.tap") == "late")
         try FileManager.default.removeItem(at: dir.appendingPathComponent("b.tap"))
-        // During the write (a sync client drops it in while programs are being staged): a rename never
-        // writes over it, so the save fails and rolls back with the late file untouched.
+        // During the write (a sync client drops it in while programs are being staged): the exclusive
+        // rename refuses it, so the save fails and rolls back with the late file untouched.
         let live = GCodeFileSet.FileOperations.live
         set.operations.writeText = { text, url in
             try live.writeText(text, url)
