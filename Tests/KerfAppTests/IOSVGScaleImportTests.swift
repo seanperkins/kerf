@@ -35,10 +35,10 @@ import Testing
     @Test func aSizelessFileIsAskedWithItsProgramsScaleSelected() throws {
         let ai = try #require(ImportService.scaleRequest(data: Data(contentsOf: url("illustrator-px.svg")),
                                                           fileName: "illustrator-px.svg", units: .inch))
-        #expect(ai.info.pixelsPerInch == 72 && ai.info.generator == "Adobe Illustrator")
+        #expect(ai.guess.pixelsPerInch == 72 && ai.guess.generator == "Adobe Illustrator")
         let plain = try #require(ImportService.scaleRequest(data: Data(contentsOf: url("paths-px.svg")),
                                                              fileName: "paths-px.svg", units: .inch))
-        #expect(plain.info.pixelsPerInch == 96 && plain.info.generator == nil)
+        #expect(plain.guess.pixelsPerInch == 96 && plain.guess.generator == nil)
         #expect(SVGScaleRequest.choices.contains(72) && SVGScaleRequest.choices.contains(90) && SVGScaleRequest.choices.contains(96))
     }
 
@@ -49,9 +49,11 @@ import Testing
         let ask = try #require(asked(doc))
         #expect(doc.project.document.shapes.count == before)
         // The drawing is a 216 px square: 3 in at 72 per inch, 2.25 in at 96.
-        let at72 = try #require(ask.drawingSize(at: 72)), at96 = try #require(ask.drawingSize(at: 96))
+        let sizes = ask.drawingSizes()
+        #expect(Set(sizes.keys) == Set(SVGScaleRequest.choices))
+        let at72 = try #require(sizes[72]), at90 = try #require(sizes[90]), at96 = try #require(sizes[96])
         #expect(close(at72.x, 3) && close(at72.y, 3))
-        #expect(close(at96.x, 2.25) && close(at96.y, 2.25))
+        #expect(close(at90.x, 2.4) && close(at96.x, 2.25) && close(at96.y, 2.25))
     }
 
     @Test func confirmingTheScaleImportsAtItWithOneUndoStepAndNoQuestions() throws {
@@ -75,7 +77,7 @@ import Testing
         doc.sheet = nil          // Cancel
         doc.sheetDismissed()
         #expect(asked(doc)?.fileName == "inkscape-091-px.svg")
-        #expect(asked(doc)?.info.pixelsPerInch == 90)
+        #expect(asked(doc)?.guess.pixelsPerInch == 90)
         doc.sheet = nil
         doc.sheetDismissed()
         #expect(doc.sheet == nil && doc.project.document.shapes.count == before)
@@ -88,5 +90,18 @@ import Testing
         let s = try #require(square(in: doc))
         #expect(close(s.bounds().width, 3, 1e-4))      // the millimetre file, already in
         #expect(s.origin == .imported(format: "svg"))
+    }
+
+    @Test func everyScaleTheImporterGuessesIsOneTheSheetOffers() throws {
+        for name in ["illustrator-px.svg", "inkscape-091-px.svg", "paths-px.svg"] {
+            let guess = try #require(try SVGImporter.scaleGuess(of: Data(contentsOf: url(name))))
+            #expect(SVGScaleRequest.choices.contains(guess.pixelsPerInch), Comment(rawValue: name))
+        }
+    }
+
+    @Test func aFileWithNothingToMeasureSaysSoRatherThanGuessing() throws {
+        let empty = Data(#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>"#.utf8)
+        let ask = try #require(ImportService.scaleRequest(data: empty, fileName: "empty.svg", units: .inch))
+        #expect(ask.drawingSizes().isEmpty)
     }
 }

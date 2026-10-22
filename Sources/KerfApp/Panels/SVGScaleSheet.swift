@@ -9,25 +9,25 @@ struct SVGScaleSheet: View {
     @Environment(\.dismiss) private var dismiss
     let request: SVGScaleRequest
     @State private var pixelsPerInch: Double
-    @State private var size: Vec2?
-    @State private var measured = false
+    /// The drawing's size at each choice, measured once when the sheet opens; nil while that runs.
+    @State private var sizes: [Double: Vec2]?
 
     init(document: KerfDocument, request: SVGScaleRequest) {
         self.document = document
         self.request = request
-        _pixelsPerInch = State(initialValue: request.info.pixelsPerInch)
+        _pixelsPerInch = State(initialValue: request.guess.pixelsPerInch)
     }
 
     private var why: String {
-        if let program = request.info.generator {
-            return "It looks like it came from \(program), which draws at \(Int(request.info.pixelsPerInch)) pixels per inch, so that is selected."
+        if let program = request.guess.generator {
+            return "It looks like it came from \(program), which draws at \(Int(request.guess.pixelsPerInch)) pixels per inch, so that is selected."
         }
         return "Nothing in the file says which program wrote it, so 96, the web default, is selected."
     }
 
     private var sizeText: String {
-        guard measured else { return "Measuring…" }
-        guard let size else { return "The file holds no vectors." }
+        guard let sizes else { return "Measuring…" }
+        guard let size = sizes[pixelsPerInch] else { return "The size could not be measured: the file holds no vectors or could not be read." }
         let u = document.units.abbreviation
         return "Comes in \(RulerTicks.label((size.x * 1000).rounded() / 1000)) × \(RulerTicks.label((size.y * 1000).rounded() / 1000)) \(u)"
     }
@@ -43,7 +43,7 @@ struct SVGScaleSheet: View {
             }
             .pickerStyle(.segmented)
             Text(sizeText).font(.body.monospacedDigit())
-            Text("72: Adobe Illustrator and most design tools. 90: Inkscape 0.91 and older. 96: Inkscape 0.92 and newer, browsers and most other programs.")
+            Text("72: Adobe Illustrator. 90: Inkscape 0.91 and older. 96: Inkscape 0.92 and newer, browsers and most other programs.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
@@ -58,11 +58,9 @@ struct SVGScaleSheet: View {
         }
         .padding(20)
         .frame(width: 480)
-        .task(id: pixelsPerInch) {
-            measured = false
-            let request = request, ppi = pixelsPerInch
-            size = await Task.detached { request.drawingSize(at: ppi) }.value
-            measured = true
+        .task {
+            let request = request
+            sizes = await Task.detached { request.drawingSizes() }.value
         }
     }
 }

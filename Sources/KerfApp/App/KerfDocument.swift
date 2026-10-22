@@ -687,11 +687,7 @@ final class KerfDocument: ReferenceFileDocument {
                     pendingScales.append(ask)
                     continue
                 }
-                var outcome = ImportOutcome()
-                var p = project
-                outcome = try ImportService.importFile(data: data, fileName: url.lastPathComponent, into: &p)
-                let imported = p
-                perform("Import \(url.lastPathComponent)") { $0 = imported }
+                let outcome = try commitImport(data: data, fileName: url.lastPathComponent)
                 newShapes += outcome.shapeIDs
                 if !outcome.imageIDs.isEmpty && outcome.shapeIDs.isEmpty { requestCanvas(.fit) }
                 messages += outcome.warnings.map { "\(url.lastPathComponent): \($0)" }
@@ -710,6 +706,16 @@ final class KerfDocument: ReferenceFileDocument {
             showNextPlacement()
             showNextScaleRequest()
         }
+    }
+
+    /// Imports one file as one undo step. `svgPixelsPerInch` is the scale the user confirmed for an SVG with no
+    /// physical size (nil: the importer guesses).
+    func commitImport(data: Data, fileName: String, svgPixelsPerInch: Double? = nil) throws -> ImportOutcome {
+        var p = project
+        let outcome = try ImportService.importFile(data: data, fileName: fileName, into: &p, svgPixelsPerInch: svgPixelsPerInch)
+        let imported = p
+        perform("Import \(fileName)") { $0 = imported }
+        return outcome
     }
 
     /// Reports a result to the user: at once, or after the open sheet closes (`sheetDismissed()` shows

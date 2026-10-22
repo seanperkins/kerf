@@ -15,20 +15,28 @@ struct SVGScaleRequest: Identifiable, Equatable, Sendable {
     let id = UUID()
     var fileName: String
     var data: Data
-    var info: SVGImporter.ScaleInfo
+    var guess: SVGImporter.ScaleGuess
     var units: LengthUnit
 
     /// The scales programs draw in: Illustrator, Inkscape 0.91 and older, the web.
     static let choices: [Double] = [72, 90, 96]
 
     /// The width and height of the drawing in `units` when read at `pixelsPerInch`; nil when the file holds
-    /// no vectors.
+    /// no vectors or cannot be read.
     func drawingSize(at pixelsPerInch: Double) -> Vec2? {
         guard let result = try? SVGImporter(pixelsPerInch: pixelsPerInch).importVectors(from: data, targetUnits: units) else { return nil }
         let boxes = result.shapes.map { $0.bounds() }
         guard let first = boxes.first else { return nil }
         let all = boxes.dropFirst().reduce(first) { $0.union($1) }
         return Vec2(all.width, all.height)
+    }
+
+    /// The drawing's size at every choice; a choice it cannot be measured at is missing. (Physical lengths
+    /// inside the drawing keep their size, so the sizes are not simply proportional to the scale.)
+    func drawingSizes() -> [Double: Vec2] {
+        var sizes: [Double: Vec2] = [:]
+        for choice in Self.choices { sizes[choice] = drawingSize(at: choice) }
+        return sizes
     }
 }
 
@@ -72,8 +80,8 @@ enum ImportService {
     /// file, and for an SVG with a physical page size and a viewBox.
     static func scaleRequest(data: Data, fileName: String, units: LengthUnit) -> SVGScaleRequest? {
         guard (fileName as NSString).pathExtension.lowercased() == "svg",
-              let info = try? SVGImporter.scaleInfo(of: data), info.isUnitless else { return nil }
-        return SVGScaleRequest(fileName: fileName, data: data, info: info, units: units)
+              let guess = try? SVGImporter.scaleGuess(of: data) else { return nil }
+        return SVGScaleRequest(fileName: fileName, data: data, guess: guess, units: units)
     }
 
     /// `svgPixelsPerInch` is the scale the user chose for an SVG with no physical size (nil = guess it).
@@ -91,12 +99,8 @@ enum ImportService {
         if imageExtensions.contains(ext) {
             return try importBitmap(data: data, name: base, into: &project)
         }
-        guard var importer = FileFormats.importer(forExtension: ext) else {
+        guard let importer = ext == "svg" ? SVGImporter(pixelsPerInch: svgPixelsPerInch) : FileFormats.importer(forExtension: ext) else {
             throw KerfIOError.unsupportedFormat(ext)
-        }
-        if var svg = importer as? SVGImporter, let svgPixelsPerInch {
-            svg.pixelsPerInch = svgPixelsPerInch
-            importer = svg
         }
         let result = try importer.importVectors(from: data, targetUnits: units)
         var outcome = ImportOutcome(warnings: result.warnings)

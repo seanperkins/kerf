@@ -111,11 +111,7 @@ extension KerfDocument {
     /// the sheet is still up when this runs.
     func importSVG(_ request: SVGScaleRequest, pixelsPerInch: Double) {
         do {
-            var p = project
-            let outcome = try ImportService.importFile(data: request.data, fileName: request.fileName, into: &p,
-                                                       svgPixelsPerInch: pixelsPerInch)
-            let imported = p
-            perform("Import \(request.fileName)") { $0 = imported }
+            let outcome = try commitImport(data: request.data, fileName: request.fileName, svgPixelsPerInch: pixelsPerInch)
             if !outcome.shapeIDs.isEmpty {
                 setSelection(outcome.shapeIDs)
                 sidebarTab = .design

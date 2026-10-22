@@ -35,23 +35,23 @@ import Testing
         #expect(approx(ink1x.min.x, 26.458333 / 25.4, 1e-4) && approx(ink1x.min.y, (297 - 26.458333 - 76.2) / 25.4, 1e-4))
     }
 
-    @Test func scaleInfoNamesTheGeneratorAndTheUnitsItAssumes() throws {
-        let ink091 = try SVGImporter.scaleInfo(of: IOFixtures.data("inkscape-091-px.svg"))
-        #expect(ink091.isUnitless && ink091.pixelsPerInch == 90 && ink091.generator == "Inkscape 0.91")
-        let ai = try SVGImporter.scaleInfo(of: IOFixtures.data("illustrator-px.svg"))
-        #expect(ai.isUnitless && ai.pixelsPerInch == 72 && ai.generator == "Adobe Illustrator")
-        // A physical size on the page and a viewBox fix the scale, whoever wrote the file.
+    @Test func scaleGuessNamesTheProgramAndTheUnitsItAssumes() throws {
+        let ink091 = try #require(try SVGImporter.scaleGuess(of: IOFixtures.data("inkscape-091-px.svg")))
+        #expect(ink091.pixelsPerInch == 90 && ink091.generator == "Inkscape 0.91")
+        let ai = try #require(try SVGImporter.scaleGuess(of: IOFixtures.data("illustrator-px.svg")))
+        #expect(ai.pixelsPerInch == 72 && ai.generator == "Adobe Illustrator")
+        // A physical size on the page and a viewBox fix the scale, whoever wrote the file: nothing to guess.
         for file in ["inkscape-1x-mm.svg", "coreldraw-in.svg", "inkscape-mm.svg", "illustrator-pt.svg"] {
-            #expect(!(try SVGImporter.scaleInfo(of: IOFixtures.data(file))).isUnitless, Comment(rawValue: file))
+            #expect(try SVGImporter.scaleGuess(of: IOFixtures.data(file)) == nil, Comment(rawValue: file))
         }
-        let plain = try SVGImporter.scaleInfo(of: IOFixtures.data("paths-px.svg"))
-        #expect(plain.isUnitless && plain.pixelsPerInch == 96 && plain.generator == nil)
+        let plain = try #require(try SVGImporter.scaleGuess(of: IOFixtures.data("paths-px.svg")))
+        #expect(plain.pixelsPerInch == 96 && plain.generator == nil)
     }
 
     @Test func inkscapeVersionsFromTheFirstThatUses96() throws {
         func ppi(_ version: String) throws -> Double {
             let svg = #"<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="100" height="100" inkscape:version="\#(version)"/>"#
-            return try SVGImporter.scaleInfo(of: Data(svg.utf8)).pixelsPerInch
+            return try SVGImporter.scaleGuess(of: Data(svg.utf8))?.pixelsPerInch ?? 0
         }
         #expect(try ppi("0.48.5 r10040") == 90 && ppi("0.91 r13725") == 90 && ppi("0.9") == 90)
         #expect(try ppi("0.92.4 (5da689c313, 2019-01-14)") == 96 && ppi("1.0") == 96 && ppi("1.2.2 (b0a8486541)") == 96)
@@ -106,7 +106,7 @@ import Testing
         let b = try #require(r.shapes.first).bounds()
         #expect(approx(b.width, 3, 1e-4))
         #expect(approx(b.min.y, 297 / 25.4 - 370.0 / 90, 1e-4))
-        #expect(try SVGImporter.scaleInfo(of: Data(svg.utf8)).isUnitless)
+        #expect(try SVGImporter.scaleGuess(of: Data(svg.utf8))?.pixelsPerInch == 90)
     }
 
     @Test func unitlessShapesRecordTheScaleAndPhysicalOnesDoNot() throws {
@@ -125,5 +125,54 @@ import Testing
         #expect(!String(decoding: now, as: UTF8.self).contains("pixelsPerInch"))
         let withScale = try JSONEncoder().encode(ShapeOrigin.imported(format: "svg", pixelsPerInch: 72))
         #expect(try JSONDecoder().decode(ShapeOrigin.self, from: withScale) == .imported(format: "svg", pixelsPerInch: 72))
+    }
+
+    @Test func physicalLengthsInsideTheDrawingKeepTheirSizeAtAnyScale() throws {
+        // A 2 in page, a 1 in square and a 90 px square: the inch square is an inch whatever the scale; the
+        // pixel square is 90 px, which is 90/scale inches.
+        let svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="2in" height="2in">
+          <rect id="inch" x="0.5in" y="0.5in" width="1in" height="1in"/>
+          <rect id="px" x="0" y="0" width="90" height="90"/>
+          <rect id="mm" x="0" y="0" width="25.4mm" height="12pt"/>
+          <use href="#px" x="1in"/>
+        </svg>
+        """
+        for scale in [72.0, 90, 96] {
+            let r = try SVGImporter(pixelsPerInch: scale).importVectors(from: Data(svg.utf8), targetUnits: .inch)
+            func box(_ name: String) throws -> Rect2 { try #require(r.shapes.first { $0.name == name }).bounds() }
+            let inch = try box("inch"), px = try box("px"), mm = try box("mm")
+            #expect(approx(inch.width, 1, 1e-6) && approx(inch.height, 1, 1e-6) && approx(inch.min.x, 0.5, 1e-6), Comment(rawValue: "\(scale)"))
+            #expect(approx(px.width, 90 / scale, 1e-6), Comment(rawValue: "\(scale)"))
+            #expect(approx(mm.width, 1, 1e-6) && approx(mm.height, 12.0 / 72, 1e-6), Comment(rawValue: "\(scale)"))
+            // The page is 2 in whatever the scale, so the square drawn from the top-left sits where it should.
+            #expect(approx(inch.min.y, 2 - 0.5 - 1, 1e-6), Comment(rawValue: "\(scale)"))
+        }
+    }
+
+    @Test func fontSizesInPointsAreWorthTheirPointsAtAnyScale() throws {
+        let svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" width="600" height="300">
+          <text id="t" x="0" y="200" style="font-family:Helvetica; font-size:72pt">H</text>
+        </svg>
+        """
+        // 72 pt is an inch, so a capital H is about 0.72 in tall at any scale.
+        for scale in [72.0, 96] {
+            let r = try SVGImporter(pixelsPerInch: scale).importVectors(from: Data(svg.utf8), targetUnits: .inch)
+            let h = try #require(r.shapes.first).bounds().height
+            #expect(h > 0.65 && h < 0.78, Comment(rawValue: "\(scale): \(h) in"))
+        }
+    }
+
+    @Test func onlyRealPhysicalUnitsFixASize() throws {
+        for good in ["1in", "25.4mm", "2.54cm", "72pt", "6pc", " 5MM ", "3 cm"] {
+            #expect(SVGAttributes.hasPhysicalUnit(good), Comment(rawValue: good))
+        }
+        for bad in ["100vmin", "50%", "12", "12px", "2em", "", "mm", nil] as [String?] {
+            #expect(!SVGAttributes.hasPhysicalUnit(bad), Comment(rawValue: bad ?? "nil"))
+        }
+        // A width of 100vmin states nothing about inches: the file still needs a scale.
+        let svg = #"<svg xmlns="http://www.w3.org/2000/svg" width="100vmin" height="100vmin" viewBox="0 0 10 10"/>"#
+        #expect(try SVGImporter.scaleGuess(of: Data(svg.utf8)) != nil)
     }
 }

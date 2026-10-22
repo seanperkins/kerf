@@ -36,30 +36,34 @@ enum SVGAttributes {
         return result
     }
 
-    /// True when `s` is a length in a physical unit (in, mm, cm, pt, pc): it fixes a size, whatever the
-    /// pixels per inch.
-    static func hasPhysicalUnit(_ s: String?) -> Bool {
-        guard let raw = s?.trimmingCharacters(in: .whitespaces).lowercased() else { return false }
-        return ["in", "mm", "cm", "pt", "pc"].contains { raw.hasSuffix($0) }
-    }
+    /// The physical units of a length, as how many make an inch.
+    private static let unitsPerInch: [String: Double] = ["in": 1, "mm": 25.4, "cm": 2.54, "pt": 72, "pc": 6]
 
-    /// A length in pixels of an SVG at `dpi` pixels per inch (96 by CSS). Percentages resolve against `percentOf`.
-    static func pixels(_ s: String?, percentOf ref: Double = 0, dpi: Double = 96) -> Double? {
+    /// The number and the unit (lowercased, "" for a bare number) of a length attribute.
+    private static func lengthParts(_ s: String?) -> (value: Double, unit: String)? {
         guard let raw = s?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
         var sc = SVGNumberScanner(raw)
         guard let v = sc.number() else { return nil }
         let unit = String(raw.utf8.dropFirst(sc.index).map { Character(UnicodeScalar($0)) })
             .trimmingCharacters(in: .whitespaces).lowercased()
+        return (v, unit)
+    }
+
+    /// True when `s` is a length in a physical unit (in, mm, cm, pt, pc): it fixes a size, whatever the
+    /// pixels per inch. "50vmin" is not.
+    static func hasPhysicalUnit(_ s: String?) -> Bool {
+        guard let unit = lengthParts(s)?.unit else { return false }
+        return unitsPerInch[unit] != nil
+    }
+
+    /// A length in pixels of an SVG drawn at `pixelsPerInch` (96 by CSS). Percentages resolve against `percentOf`.
+    static func pixels(_ s: String?, percentOf ref: Double = 0, pixelsPerInch: Double = 96) -> Double? {
+        guard let (v, unit) = lengthParts(s) else { return nil }
+        if let perInch = unitsPerInch[unit] { return v * pixelsPerInch / perInch }
         switch unit {
-        case "", "px": return v
-        case "in": return v * dpi
-        case "mm": return v * dpi / 25.4
-        case "cm": return v * dpi / 2.54
-        case "pt": return v * dpi / 72
-        case "pc": return v * dpi / 6
         case "%": return v / 100 * ref
         case "em": return v * 16
-        default: return v
+        default: return v   // "", "px", and units that are not understood
         }
     }
 

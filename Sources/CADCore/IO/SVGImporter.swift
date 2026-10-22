@@ -6,34 +6,33 @@ import Foundation
 public struct SVGImporter: VectorImporter {
     public static let fileExtensions = ["svg"]
 
-    /// User units per inch to assume for a file that does not fix its own size (see `scaleInfo(of:)`).
+    /// User units per inch to assume for a file that does not fix its own size (see `scaleGuess(of:)`).
     /// nil guesses from the program that wrote the file: Inkscape 0.91 and older 90, Illustrator 72,
     /// otherwise 96 (CSS). A file with a physical size ignores it.
     public var pixelsPerInch: Double?
 
     public init(pixelsPerInch: Double? = nil) { self.pixelsPerInch = pixelsPerInch }
 
-    /// What an SVG says about its own scale.
-    public struct ScaleInfo: Equatable, Sendable {
-        /// The file does not fix its size: it has no viewBox, or no physical unit (in, mm, cm, pt, pc) on its
-        /// page width or height, so the length of a user unit has to be assumed.
-        public var isUnitless: Bool
-        /// User units per inch assumed for such a file: the program's own, when it is recognised, else 96.
+    /// The scale to assume for an SVG that does not state its own size.
+    public struct ScaleGuess: Equatable, Sendable {
+        /// User units per inch: the program's own, when it is recognised, else 96.
         public var pixelsPerInch: Double
         /// The program that wrote the file, when recognised ("Inkscape 0.91", "Adobe Illustrator").
         public var generator: String?
     }
 
-    public static func scaleInfo(of data: Data) throws -> ScaleInfo {
-        scaleInfo(root: try SVGNode.parse(data), data: data)
+    /// nil when the file states its own size: a viewBox plus a physical unit (in, mm, cm, pt, pc) on the page
+    /// width or height. Otherwise the length of a user unit has to be assumed.
+    public static func scaleGuess(of data: Data) throws -> ScaleGuess? {
+        scaleGuess(root: try SVGNode.parse(data), data: data)
     }
 
-    static func scaleInfo(root: SVGNode, data: Data) -> ScaleInfo {
+    static func scaleGuess(root: SVGNode, data: Data) -> ScaleGuess? {
         let vb = root["viewBox"].map(SVGNumberScanner.numbers(in:)) ?? []
         let hasViewBox = vb.count == 4 && vb[2] > 0 && vb[3] > 0
-        let physical = hasViewBox && (SVGAttributes.hasPhysicalUnit(root["width"]) || SVGAttributes.hasPhysicalUnit(root["height"]))
+        if hasViewBox && (SVGAttributes.hasPhysicalUnit(root["width"]) || SVGAttributes.hasPhysicalUnit(root["height"])) { return nil }
         let program = generator(root: root, data: data)
-        return ScaleInfo(isUnitless: !physical, pixelsPerInch: program?.pixelsPerInch ?? 96, generator: program?.name)
+        return ScaleGuess(pixelsPerInch: program?.pixelsPerInch ?? 96, generator: program?.name)
     }
 
     /// The program that wrote the file, from Inkscape's version attribute or the comment Illustrator leaves
@@ -57,18 +56,19 @@ public struct SVGImporter: VectorImporter {
         let root = try SVGNode.parse(data)
         var ctx = Context(units: targetUnits)
         ctx.indexIDs(root)
-        // A physical page size and a viewBox fix the scale. Otherwise a user unit is 1/dpi in, and the guess
+        // A physical page size and a viewBox fix the scale. Otherwise a user unit is 1/scale inch, and the guess
         // is reported unless the caller chose the scale.
-        let info = Self.scaleInfo(root: root, data: data)
-        let dpi = info.isUnitless ? (pixelsPerInch ?? info.pixelsPerInch) : 96
-        if info.isUnitless {
-            ctx.origin = .imported(format: "svg", pixelsPerInch: dpi)
+        let guess = Self.scaleGuess(root: root, data: data)
+        let scale = guess.map { pixelsPerInch ?? $0.pixelsPerInch } ?? 96
+        ctx.pixelsPerInch = scale
+        if let guess {
+            ctx.origin = .imported(format: "svg", pixelsPerInch: scale)
             if pixelsPerInch == nil {
-                let source = info.generator.map { " (\($0))" } ?? " (the web default)"
-                ctx.warnings.append("This SVG has no physical size, so it was scaled at \(Int(dpi)) px per inch\(source). If it comes in at the wrong size, import it again and choose another scale.")
+                let source = guess.generator.map { " (\($0))" } ?? " (the web default)"
+                ctx.warnings.append("This SVG has no physical size, so it was scaled at \(Int(scale)) px per inch\(source). If it comes in at the wrong size, import it again and choose another scale.")
             }
         }
-        let pageToDoc = viewportTransform(root, units: targetUnits, dpi: dpi)
+        let pageToDoc = viewportTransform(root, units: targetUnits, pixelsPerInch: scale)
 
         let defaultLayer = Layer(name: "SVG Import", colorHex: Self.palette[0])
         for child in root.children {
@@ -87,15 +87,15 @@ public struct SVGImporter: VectorImporter {
         return ImportResult(layers: ctx.layers, shapes: ctx.shapes, warnings: ctx.warnings, images: ctx.images)
     }
 
-    /// Maps root user space → document units with Y flipped (page bottom at y = 0). `dpi` is the pixels
-    /// per inch of the page's own pixels, which physical sizes on the page are converted to.
-    func viewportTransform(_ root: SVGNode, units: LengthUnit, dpi: Double) -> Transform2D {
-        let pxToUnit = LengthUnit.inch.convert(1 / dpi, to: units)
+    /// Maps root user space → document units with Y flipped (page bottom at y = 0). `pixelsPerInch` is the
+    /// scale of the page's own pixels, which physical sizes on the page are converted to.
+    func viewportTransform(_ root: SVGNode, units: LengthUnit, pixelsPerInch: Double) -> Transform2D {
+        let pxToUnit = LengthUnit.inch.convert(1 / pixelsPerInch, to: units)
         let vb = root["viewBox"].map(SVGNumberScanner.numbers(in:)) ?? []
         let hasVB = vb.count == 4 && vb[2] > 0 && vb[3] > 0
         // Viewport size in px (width/height attributes; default to the viewBox size).
-        let wAttr = SVGAttributes.pixels(root["width"], percentOf: hasVB ? vb[2] : 0, dpi: dpi)
-        let hAttr = SVGAttributes.pixels(root["height"], percentOf: hasVB ? vb[3] : 0, dpi: dpi)
+        let wAttr = SVGAttributes.pixels(root["width"], percentOf: hasVB ? vb[2] : 0, pixelsPerInch: pixelsPerInch)
+        let hAttr = SVGAttributes.pixels(root["height"], percentOf: hasVB ? vb[3] : 0, pixelsPerInch: pixelsPerInch)
         // With a viewBox, a missing (or "auto") dimension is the other one scaled by the viewBox
         // aspect ratio (SVG 2 §8.3); defaulting it to the viewBox size would mis-scale the file.
         var wPx = wAttr ?? (hasVB ? vb[2] : 0)
@@ -143,6 +143,8 @@ public struct SVGImporter: VectorImporter {
         var images: [ImportedImage] = []
         /// Provenance of every shape: records the scale assumed for a file with no physical size.
         var origin = ShapeOrigin.imported(format: "svg")
+        /// User units per inch: what a length written with a physical unit ("1in", "12pt") is worth.
+        var pixelsPerInch = 96.0
         var ids: [String: SVGNode] = [:]
         private var warned: Set<String> = []
         private var useDepth = 0
@@ -153,6 +155,11 @@ public struct SVGImporter: VectorImporter {
             var map: [String: SVGNode] = [:]
             root.forEach { if let id = $0.id { map[id] = $0 } }
             ids = map
+        }
+
+        /// A length attribute in user units at this file's scale.
+        func length(_ s: String?, percentOf ref: Double = 0) -> Double? {
+            SVGAttributes.pixels(s, percentOf: ref, pixelsPerInch: pixelsPerInch)
         }
 
         mutating func warnOnce(_ msg: String) {
@@ -168,14 +175,14 @@ public struct SVGImporter: VectorImporter {
                 for c in n.children { walk(c, ctm: ctm, layerID: layerID) }
             case "svg":
                 // Nested viewport: honour x/y offset only.
-                let off = Transform2D.translation(Vec2(SVGAttributes.pixels(n["x"]) ?? 0, SVGAttributes.pixels(n["y"]) ?? 0))
+                let off = Transform2D.translation(Vec2(length(n["x"]) ?? 0, length(n["y"]) ?? 0))
                 for c in n.children { walk(c, ctm: off.concatenating(ctm), layerID: layerID) }
             case "use":
                 let ref = (n["xlink:href"] ?? n["href"]).map { $0.hasPrefix("#") ? String($0.dropFirst()) : $0 }
                 guard let ref, let target = ids[ref], useDepth < 16 else {
                     warnOnce("Ignored <use> with a missing reference."); return
                 }
-                let off = Transform2D.translation(Vec2(SVGAttributes.pixels(n["x"]) ?? 0, SVGAttributes.pixels(n["y"]) ?? 0))
+                let off = Transform2D.translation(Vec2(length(n["x"]) ?? 0, length(n["y"]) ?? 0))
                 useDepth += 1
                 if target.name == "symbol" {
                     for c in target.children { walk(c, ctm: off.concatenating(ctm), layerID: layerID) }
@@ -188,7 +195,7 @@ public struct SVGImporter: VectorImporter {
             case "image":
                 addImage(n, ctm: ctm)
             default:
-                if let paths = SVGImporter.geometry(of: n), !paths.isEmpty {
+                if let paths = SVGImporter.geometry(of: n, pixelsPerInch: pixelsPerInch), !paths.isEmpty {
                     // A subpath that returns to its start without "Z" is still a closed vector.
                     let doc = PathGeometry.closeNearlyClosed(paths.map { $0.transformed(ctm) },
                                                              tolerance: units == .inch ? 0.0005 : 0.01)
@@ -229,15 +236,17 @@ public struct SVGImporter: VectorImporter {
         return isHash ? String(id[..<dash]) : id
     }
 
-    static func geometry(of n: SVGNode) -> [Path]? {
-        func num(_ k: String, _ ref: Double = 0) -> Double { SVGAttributes.pixels(n[k], percentOf: ref) ?? 0 }
+    /// The paths of a basic shape or path element; lengths with a physical unit are worth `pixelsPerInch` per inch.
+    static func geometry(of n: SVGNode, pixelsPerInch: Double) -> [Path]? {
+        func length(_ s: String?, _ ref: Double = 0) -> Double? { SVGAttributes.pixels(s, percentOf: ref, pixelsPerInch: pixelsPerInch) }
+        func num(_ k: String, _ ref: Double = 0) -> Double { length(n[k], ref) ?? 0 }
         switch n.name {
         case "path":
             return SVGPathParser.parse(n["d"] ?? "")
         case "rect":
             let w = num("width"), h = num("height")
             guard w > 0, h > 0 else { return nil }
-            var rx = SVGAttributes.pixels(n["rx"]), ry = SVGAttributes.pixels(n["ry"])
+            var rx = length(n["rx"]), ry = length(n["ry"])
             if rx == nil { rx = ry }
             if ry == nil { ry = rx }
             let r = Rect2(x: num("x"), y: num("y"), width: w, height: h)
@@ -293,7 +302,7 @@ extension SVGImporter.Context {
     mutating func addText(_ n: SVGNode, ctm: Transform2D, layerID: UUID) {
         var paths: [Path] = []
         var label = ""
-        var cursor = Vec2(SVGAttributes.pixels(n["x"]) ?? 0, SVGAttributes.pixels(n["y"]) ?? 0)
+        var cursor = Vec2(length(n["x"]) ?? 0, length(n["y"]) ?? 0)
         var atStart = true
 
         func run(_ node: SVGNode) {
@@ -307,17 +316,17 @@ extension SVGImporter.Context {
                     emit(s, style: node)
                 } else if c.name == "tspan" || c.name == "textPath" {
                     if c.property("display") == "none" { continue }
-                    if let x = SVGAttributes.pixels(c["x"]) { cursor.x = x }
-                    if let y = SVGAttributes.pixels(c["y"]) { cursor.y = y }
-                    cursor.x += SVGAttributes.pixels(c["dx"]) ?? 0
-                    cursor.y += SVGAttributes.pixels(c["dy"]) ?? 0
+                    if let x = length(c["x"]) { cursor.x = x }
+                    if let y = length(c["y"]) { cursor.y = y }
+                    cursor.x += length(c["dx"]) ?? 0
+                    cursor.y += length(c["dy"]) ?? 0
                     run(c)
                 }
             }
         }
 
         func emit(_ s: String, style: SVGNode) {
-            let size = SVGAttributes.pixels(style.inherited("font-size"), percentOf: 16) ?? 16
+            let size = length(style.inherited("font-size"), percentOf: 16) ?? 16
             let family = style.inherited("font-family")
             guard let font = SVGImporter.resolveFont(family: family, weight: style.inherited("font-weight")) ?? {
                 warnOnce("Font \(family ?? "?") is not installed; Helvetica was used.")
@@ -344,8 +353,8 @@ extension SVGImporter.Context {
 
     /// `<image>` with an embedded (data: URI) picture → tracing image; linked files are skipped.
     mutating func addImage(_ n: SVGNode, ctm: Transform2D) {
-        let x = SVGAttributes.pixels(n["x"]) ?? 0, y = SVGAttributes.pixels(n["y"]) ?? 0
-        guard let w = SVGAttributes.pixels(n["width"]), let h = SVGAttributes.pixels(n["height"]), w > 0, h > 0 else {
+        let x = length(n["x"]) ?? 0, y = length(n["y"]) ?? 0
+        guard let w = length(n["width"]), let h = length(n["height"]), w > 0, h > 0 else {
             warnOnce("An <image> without a width and height was skipped.")
             return
         }
