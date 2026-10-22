@@ -9,6 +9,9 @@ struct InspectorView: View {
     @ObservedObject var document: KerfDocument
 
     var body: some View {
+        // The scroll view must not take the toolbar as a content inset: SwiftUI reports a scroll view's content
+        // frames for accessibility without that inset, which put every control's frame 52 pt above where it was
+        // drawn (issue #42). So the scroll view ignores the top safe area and the content pads itself by it.
         GeometryReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {

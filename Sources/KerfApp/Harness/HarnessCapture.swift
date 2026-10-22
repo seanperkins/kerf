@@ -231,7 +231,7 @@ enum HarnessCapture {
             let found = await lookup(text: text, role: role, in: window)
             if let found, found.exact {
                 let settled = await settled(found.name, at: found.center, text: text, role: role, in: window)
-                return (settled.name, settled.center)
+                return settled
             }
             if let found, loose == nil { loose = (found.name, found.center) }
             try? await Task.sleep(nanoseconds: 250_000_000)
