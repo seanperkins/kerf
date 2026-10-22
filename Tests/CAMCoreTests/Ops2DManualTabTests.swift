@@ -357,6 +357,9 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         ("corner out", [F.rect(0, 0, 4, 2), F.rect(2, 1, 4, 2)], Vec2(4, 1.5), .outside),
         ("corner in", [F.rect(0, 0, 4, 2), F.rect(2, 1, 4, 2)], Vec2(3, 2), .inside),
         ("notch", [outer, ShapeFactory.circle(center: Vec2(3, 4), radius: 1)], Vec2(3, 4), .outside),
+        // Overlaps narrower than twice the offset: the vectors shrink apart, yet the region joins them.
+        ("thin in", [a, F.rect(1.9, 0.5, 2, 2)], Vec2(2, 1), .inside),
+        ("thin in 0.3", [a, F.rect(1.7, 0.5, 2, 2)], Vec2(2, 1), .inside),
     ]
     for (name, paths, at, side) in crossings {
         for lastPass in [nil, ProfileLastPass(allowance: 0.1)] {
