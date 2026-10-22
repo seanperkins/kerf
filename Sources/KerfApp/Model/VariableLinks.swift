@@ -55,6 +55,12 @@ enum VariableLinks {
         // ("=thickness - 0.1") were written in the old units.
         let unitsChanged = p.document.units != old.document.units
         let old = unitsChanged ? old.converted(to: p.document.units) : old
+        // A linked leaf is unlinked by a hand edit. A unit round trip inside a form (inches to
+        // millimetres and back before Apply) moves every leaf by an ulp or so; that is not an edit.
+        func edited(_ a: Double?, _ b: Double?) -> Bool {
+            guard let a, let b else { return (a == nil) != (b == nil) }
+            return abs(a - b) > 1e-9 * max(1, abs(a), abs(b))
+        }
         let sheetIDs = Set(p.document.allSheets.map(\.id))
         let opIDs = Set(p.operations.map(\.id))
         links.removeAll {
@@ -80,7 +86,7 @@ enum VariableLinks {
                 guard l.target == t else { return false }
                 if unitsChanged { return true }
                 guard let o = oldTree else { return false }
-                return number(at: l.path, in: o) != number(at: l.path, in: newTree)
+                return edited(number(at: l.path, in: o), number(at: l.path, in: newTree))
             }
             guard !pending.isEmpty else { continue }
             var newLeaves: [[String]: Double] = [:]
@@ -95,6 +101,10 @@ enum VariableLinks {
                 }
                 guard let e = pending.last(where: matches) else { continue }
                 let link = VariableLink(target: t, path: path, expression: e.text)
+                // The link must give back the value the field shows: a bare literal typed before
+                // a unit switch ("=width/2 - 1" in inches) means something else in millimetres,
+                // so that expression is not linked and the converted value stands.
+                guard let check = evaluate(link, in: p), abs(check - v) <= 1e-9 * max(1, abs(v)) else { continue }
                 let others = links.filter { !($0.target == t && $0.path == path) }
                 guard !closesCycle(link, among: others, in: p) else { continue }
                 links = others + [link]

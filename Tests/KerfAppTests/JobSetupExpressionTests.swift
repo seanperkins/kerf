@@ -91,10 +91,40 @@ import Testing
         #expect(abs(doc.document.job.safeZ - 12.7) < 1e-9)
     }
 
+    @Test func aLiteralTypedBeforeTheUnitsAreSwitchedIsNotLinked() throws {
+        // "=width/2 - 1" typed in inches (11) then the form switched to millimetres: the sheet shows
+        // 279.4 mm, and re-evaluating the text in millimetres would give 303.8. The converted value
+        // is what Apply commits, with no link.
+        let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
+        var form = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        form.job.height = try Self.type("=width/2 - 1", into: form, document: doc, current: form.job.height)
+        #expect(form.job.height == 11)
+        form.setUnits(.millimeter)
+        doc.applyJobSetup(form)
+        #expect(abs(doc.document.job.height - 279.4) < 1e-9 && doc.document.linkedValues.isEmpty)
+    }
+
+    @Test func aUnitRoundTripBeforeApplyKeepsTheLinks() throws {
+        // Safe Z linked to the thickness; Job Setup opened, units toggled to millimetres and back,
+        // Apply: every leaf drifted by an ulp, which is not a hand edit, so the link survives.
+        let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
+        var first = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        first.job.safeZ = try Self.type("=thickness/2", into: first, document: doc, current: first.job.safeZ)
+        doc.applyJobSetup(first)
+        #expect(doc.document.linkedValues.count == 1)
+        var toggled = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        toggled.setUnits(.millimeter); toggled.setUnits(.inch)
+        doc.applyJobSetup(toggled)
+        #expect(doc.document.linkedValues.count == 1)
+        doc.perform("Thicker") { $0.document.job.thickness = 1.0 }
+        #expect(doc.document.job.safeZ == 0.5)
+    }
+
     @Test func anUnknownNameCannotHideASelfReference() throws {
         // "=zzz + thickness/2" in Thickness fails on zzz first; the guard still sees the thickness.
         let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
         #expect(VariableLink.references("thickness", in: "=zzz + thickness/2", variables: doc.document.variableTable, units: .inch))
+        #expect(VariableLink.references("thickness", in: "=1/zzz + thickness/2", variables: doc.document.variableTable, units: .inch))
         #expect(!VariableLink.references("width", in: "=zzz + thickness/2", variables: doc.document.variableTable, units: .inch))
         let thickness = doc.document.job.thickness
         doc.perform("Stale") {
@@ -173,16 +203,32 @@ import Testing
         doc.perform("Unrelated") { $0.document.job.width = 30 }
         #expect(doc.document.job.thickness == 0.375)
         // Two fields that feed each other are a cycle too: the second link is refused, so the
-        // first stands and nothing moves on later edits.
+        // first stands and nothing moves on later edits. (Thickness is 0.375 here; "=safez*2"
+        // gives the same 0.375, which the field nudges by an ulp so the change can be seen.)
         var cyclic = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
         cyclic.job.safeZ = try Self.type("=thickness/2", into: cyclic, document: doc, current: cyclic.job.safeZ)
-        cyclic.job.thickness = try Self.type("=safez/2", into: cyclic, document: doc, current: cyclic.job.thickness)
+        cyclic.job.thickness = try Self.type("=safez*2", into: cyclic, document: doc, current: cyclic.job.thickness)
         doc.applyJobSetup(cyclic)
         #expect(doc.document.linkedValues.map(\.path) == [["safeZ"]])
-        #expect(doc.document.job.thickness == cyclic.job.thickness && doc.document.job.safeZ == cyclic.job.thickness / 2)
+        #expect(abs(doc.document.job.thickness - 0.375) < 1e-12 && abs(doc.document.job.safeZ - 0.1875) < 1e-12)
         let before = (doc.document.job.thickness, doc.document.job.safeZ)
         doc.perform("Unrelated") { $0.document.job.width = 31 }
         #expect((doc.document.job.thickness, doc.document.job.safeZ) == before)
+        // The same cycle entered on a later Apply is refused as well.
+        var later = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        later.job.thickness = try Self.type("=safez*2", into: later, document: doc, current: later.job.thickness)
+        doc.applyJobSetup(later)
+        #expect(doc.document.linkedValues.map(\.path) == [["safeZ"]])
+        doc.perform("Unrelated") { $0.document.job.width = 32 }
+        // The refused field keeps the ulp the equal-value nudge wrote; nothing else moved.
+        #expect(abs(doc.document.job.thickness - before.0) < 1e-12 && abs(doc.document.job.safeZ - before.1) < 1e-12)
+        // An expression typed before a field it uses was changed in the same form no longer gives
+        // the value the sheet shows, so it is not linked either: Apply commits what was shown.
+        var stale = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+        stale.job.safeZ = try Self.type("=thickness/3", into: stale, document: doc, current: stale.job.safeZ)
+        stale.job.thickness = 0.6
+        doc.applyJobSetup(stale)
+        #expect(abs(doc.document.job.safeZ - 0.125) < 1e-12 && doc.document.linkedValues.isEmpty)
         // Also an existing self-link from an older file: dropped, and the value no longer moves.
         doc.perform("Stale link") {
             $0.document.linkedValues = [VariableLink(target: .job(sheetID: $0.document.currentSheetID), path: ["safeZ"], expression: "=safez*2")]
