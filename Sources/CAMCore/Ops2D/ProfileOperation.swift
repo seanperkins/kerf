@@ -240,16 +240,10 @@ public enum ProfileGeometry {
         switch side {
         case .on:
             // Each vector as drawn (no union), oriented like a region's loops: outer loops
-            // counter-clockwise, loops within an odd number of other distinct loops clockwise, so a
-            // ring's hole keeps the part on the same side of travel as its outer edge.
-            let within = Polygon2D.containment(closed, tolerance: tolerance)
-            loops = closed.indices.map { i in
-                let loop = closed[i]
-                var containers: [Int] = []   // identical outlines count as one container
-                for j in closed.indices where j != i && within[i][j] && !within[j][i] {
-                    if !containers.contains(where: { within[j][$0] && within[$0][j] }) { containers.append(j) }
-                }
-                return (Polygon2D.signedArea(loop) < 0) == (containers.count % 2 == 1) ? loop : loop.reversed()
+            // counter-clockwise, holes clockwise, so a ring's hole keeps the part on the same side of
+            // travel as its outer edge.
+            loops = zip(closed, Polygon2D.holes(in: closed, tolerance: tolerance)).map { loop, hole in
+                (Polygon2D.signedArea(loop) < 0) == hole ? loop : loop.reversed()
             }
         case .outside:
             loops = GeomKernel.offset(region, by: max(offset, 0), join: join, arcTolerance: tolerance)

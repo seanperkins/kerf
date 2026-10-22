@@ -260,6 +260,9 @@ func onTheLineNestingTellsHolesFromDuplicatesOverlapsAndNotches(direction: CutDi
     let cases: [(label: String, paths: [Path], holes: [Bool])] = [
         ("duplicates", [F.rect(1, 1, 3, 2), F.rect(1, 1, 3, 2)], [false, false]),
         ("near duplicates", [F.rect(1, 1, 3, 2), F.rect(1, 1, 3.0004, 2)], [false, false]),
+        ("near duplicates, enclosing", [F.rect(1, 1, 3, 2), F.rect(0.9998, 0.9998, 3.0004, 2.0004)], [false, false]),
+        ("chain of near duplicates over a hole",
+         [F.rect(1, 1, 3, 2), F.rect(1, 1, 3.0004, 2), F.rect(1, 1, 3.0008, 2), F.rect(2, 1.5, 1, 1)], [false, false, false, true]),
         ("overlap", [F.rect(0, 0, 6, 4), F.rect(4, 2, 4, 2)], [false, false]),
         ("abutting", [F.rect(0, 0, 2, 2), F.rect(2, 0, 2, 2)], [false, false]),
         ("notch", [u, F.rect(2, 1, 2, 3)], [false, false]),

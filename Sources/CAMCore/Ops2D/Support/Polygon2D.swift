@@ -103,13 +103,32 @@ public enum Polygon2D {
         GeomKernel.boolean(.union, subject: loops.filter { $0.count > 2 }, clip: [], fillRule: .evenOdd)
     }
 
-    /// `within[i][j]`: loop i lies within loop j, judged by area rather than by vertices (unlike
-    /// `PathGeometry.nestingDepths`, which probes one vertex and is right for well-formed drawings):
-    /// the part of i outside j has no more area than a `tolerance`-wide strip along i. So a part
-    /// sitting in another part's notch or bridging it is not within it, a hole touching its outer
-    /// edge is, and identical or near-identical outlines lie within each other. One Clipper
-    /// difference per pair whose bounding boxes nest.
-    public static func containment(_ loops: [[Vec2]], tolerance: Double) -> [[Bool]] {
+    /// Which of `loops` are holes: the loops within an odd number of other distinct loops. Containment
+    /// is judged by area rather than by vertices (unlike `PathGeometry.nestingDepths`, which probes one
+    /// vertex and is right for well-formed drawings): loop i is within loop j when the part of i outside
+    /// j has no more area than a `tolerance`-wide strip along i, one Clipper difference per pair whose
+    /// bounding boxes nest. So a part in another part's notch or bridging it is not within it, a hole
+    /// touching its outer edge is, and identical or near-identical outlines, which lie within each
+    /// other, count as one loop (a chain of near copies is one loop too), never as holes of each other.
+    public static func holes(in loops: [[Vec2]], tolerance: Double) -> [Bool] {
+        let within = containment(loops, tolerance: tolerance)
+        // Group identical outlines: union-find over mutual containment, so a chain of near copies
+        // whose ends are not mutually within still forms one group.
+        var parent = Array(loops.indices)
+        func root(_ i: Int) -> Int { var i = i; while parent[i] != i { i = parent[i] }; return i }
+        for i in loops.indices {
+            for j in loops.indices where j > i && within[i][j] && within[j][i] { parent[root(j)] = root(i) }
+        }
+        return loops.indices.map { i in
+            var containers = Set<Int>()
+            for j in loops.indices where within[i][j] && !within[j][i] && root(j) != root(i) {
+                containers.insert(root(j))
+            }
+            return containers.count % 2 == 1
+        }
+    }
+
+    private static func containment(_ loops: [[Vec2]], tolerance: Double) -> [[Bool]] {
         let boxes = loops.map { Rect2(points: $0) }
         return loops.indices.map { i in
             loops.indices.map { j in
@@ -117,7 +136,8 @@ public enum Polygon2D {
                 let box = boxes[j].insetBy(-tolerance)
                 guard box.contains(boxes[i].min), box.contains(boxes[i].max) else { return false }
                 let outside = GeomKernel.boolean(.difference, subject: [loops[i]], clip: [loops[j]], fillRule: .nonZero)
-                let area = outside.reduce(0) { $0 + abs(signedArea($1)) }
+                // Signed: a hole in the difference (j wholly inside i) takes its area away.
+                let area = abs(outside.reduce(0) { $0 + signedArea($1) })
                 return area <= tolerance * length(loops[i], closed: true)
             }
         }
