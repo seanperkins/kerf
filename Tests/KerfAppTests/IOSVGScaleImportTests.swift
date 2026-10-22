@@ -104,4 +104,19 @@ import Testing
         let ask = try #require(ImportService.scaleRequest(data: empty, fileName: "empty.svg", units: .inch))
         #expect(ask.drawingSizes().isEmpty)
     }
+
+    @Test func theSizeShownCountsEmbeddedImagesToo() throws {
+        // A 96 px square and a 96 px wide picture 96 px to its right: 3 in wide at 96 per inch, and an
+        // image-only file still has a size.
+        let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        let image = #"<image x="192" y="0" width="96" height="96" href="data:image/png;base64,\#(png)"/>"#
+        let both = Data(#"<svg xmlns="http://www.w3.org/2000/svg" width="288" height="96"><rect width="96" height="96"/>\#(image)</svg>"#.utf8)
+        let ask = try #require(ImportService.scaleRequest(data: both, fileName: "both.svg", units: .inch))
+        let at96 = try #require(ask.drawingSizes()[96])
+        #expect(close(at96.x, 3) && close(at96.y, 1))
+        let only = Data(#"<svg xmlns="http://www.w3.org/2000/svg" width="288" height="96">\#(image)</svg>"#.utf8)
+        let imageOnly = try #require(ImportService.scaleRequest(data: only, fileName: "only.svg", units: .inch))
+        let size = try #require(imageOnly.drawingSizes()[96])
+        #expect(close(size.x, 1) && close(size.y, 1))
+    }
 }
