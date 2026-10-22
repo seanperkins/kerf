@@ -121,19 +121,100 @@ public struct PocketPlanner: Sendable {
 
     // MARK: Strategies
 
-    /// Contour-parallel clearing: innermost rings first, finishing on the walls.
+    /// Contour-parallel clearing: innermost rings first, finishing on the walls, plus the cuts that cover the
+    /// floor the rings leave uncut within the tool's reach (see `coverageCleanup`).
     public func offsetClearing(from start: Vec2) -> [[Chain2D]] {
+        offsetClearingReport(from: start).groups
+    }
+
+    /// `offsetClearing` plus the area of floor within the tool's reach that is still farther than the
+    /// coverage slack from every cut (zero unless the cleanup could not finish the job).
+    public func offsetClearingReport(from start: Vec2) -> (groups: [[Chain2D]], uncoveredArea: Double) {
         let levels = offsetLevels()
-        guard let outers0 = levels.first?.filter({ Polygon2D.signedArea($0) > 0 }), !outers0.isEmpty else { return [] }
+        guard let outers0 = levels.first?.filter({ Polygon2D.signedArea($0) > 0 }), !outers0.isEmpty else { return ([], 0) }
         var items: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
         for (k, lv) in levels.enumerated() {
             for loop in lv { items.append((chain(loop), levels.count - 1 - k, loop[0])) }
         }
-        // A ring waits only for the deeper rings right next to it, so separate lobes and the
-        // rings around islands are each cleared inside-out and linked at depth.
+        let cleanup = coverageCleanup(levels: levels, rings: items.map(\.chain))
+        items += cleanup.fragments
+        // A ring waits only for the deeper rings right next to it, so separate lobes and the rings around
+        // islands are each cleared inside-out and linked at depth. A cleanup fragment has the rank of the ring
+        // just outside it, so it waits for the ring just inside it.
         let reach = stepover * 1.5 + tolerance
-        return order(items, outers: outers0, from: start, allowReverse: false) { a, ra, b, rb in   // all closed
+        let groups = order(items, outers: outers0, from: start, allowReverse: false) { a, ra, b, rb in
             rb == ra + 1 && Self.loopsWithin(a.points, b.points, reach)
+        }
+        return (groups, cleanup.uncoveredArea)
+    }
+
+    // MARK: Coverage cleanup
+
+    /// How far past the tool radius floor may sit from every cut and still count as cut: 2% of the
+    /// diameter. This is the coverage promise of offset pocketing (the coverage test asserts it), apart
+    /// from `allowance`, which is left on the walls on purpose.
+    public static let coverageSlackFraction = 0.02
+    var coverageSlack: Double { max(2 * toolRadius * Self.coverageSlackFraction, 2 * tolerance) }
+
+    /// Cuts that cover the floor the rings leave behind. Rings a stepover apart leave floor uncut where
+    /// the next ring is farther than the tool's reach: at a sharp corner the worst point on the diagonal
+    /// is 0.59 stepovers from the nearest ring (the scallop shows from a stepover of 85% of the diameter),
+    /// and at the narrow tip of a wedge or lobe the last ring ends well short of the point the tool can
+    /// reach (a stud up to a stepover minus the radius wide). Floor the tool could reach but the rings
+    /// leave more than `coverageSlack` from every cut is covered by the pieces of the ring halfway
+    /// between the rings that lie in the zone around that floor: with a stepover under the diameter every
+    /// point is within half a stepover of the half ring, so one halving suffices. (The half-step ring
+    /// `offsetLevels` adds past the last full ring is the same idea for the middle of the pocket.) Returns
+    /// the pieces and the area still farther than the slack from every cut afterwards, which is zero unless
+    /// that argument fails.
+    func coverageCleanup(levels: [[[Vec2]]], rings: [Chain2D])
+        -> (fragments: [(chain: Chain2D, rank: Int, probe: Vec2)], uncoveredArea: Double) {
+        // Every floor point inside the tool-centre region is within one stepover of a ring (walk from it
+        // straight to the nearest wall: the wall distance falls at rate 1 and crosses the ring's level),
+        // and every point outside it is within the radius of ring 0. So rings no further apart than the
+        // radius plus the slack leave nothing past the slack, at a corner or a tip too. (A planner with a
+        // zero radius plans tool-centre paths for a caller that adds the tool itself, and needs no cleanup.)
+        guard toolRadius > 0, stepover > toolRadius + coverageSlack else { return ([], 0) }
+        let reachable = GeomKernel.offset(centerRegion, by: toolRadius, join: .round, arcTolerance: tolerance)
+        guard !reachable.isEmpty else { return ([], 0) }
+        func uncovered(_ walks: [[Vec2]]) -> [[Vec2]] {
+            let covered = GeomKernel.offset(walks, by: toolRadius + coverageSlack, join: .round, end: .openRound,
+                                            arcTolerance: tolerance)
+            return withoutSlivers(GeomKernel.boolean(.difference, subject: reachable, clip: covered, fillRule: .nonZero),
+                                  by: max(tolerance, 1e-5))
+        }
+        func area(_ loops: [[Vec2]]) -> Double { max(loops.reduce(0) { $0 + Polygon2D.signedArea($1) }, 0) }
+        var walks = rings.map(\.walk)
+        let rest = uncovered(walks)
+        guard !rest.isEmpty else { return ([], 0) }
+        let zone = GeomKernel.offset(rest, by: toolRadius, join: .round, arcTolerance: tolerance)
+        var out: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
+        for k in levels.indices {
+            // The half ring between ring k and ring k + 1 is cut with ring k.
+            let half = inset(toolRadius + allowance + (Double(k) + 0.5) * stepover)
+            for piece in ringPieces(half.map { chain($0).walk }, inside: zone, longerThan: max(tolerance * 4, coverageSlack)) {
+                out.append((piece.chain, levels.count - 1 - k, piece.probe))
+                walks.append(piece.chain.walk)
+            }
+        }
+        return (out, area(uncovered(walks)))
+    }
+
+    /// `loops` without the slivers a boolean leaves along arcs: opened and closed again by `eps`.
+    func withoutSlivers(_ loops: [[Vec2]], by eps: Double) -> [[Vec2]] {
+        GeomKernel.offset(GeomKernel.offset(loops, by: -eps, arcTolerance: tolerance), by: eps, arcTolerance: tolerance)
+    }
+
+    /// The parts of the open `walks` (a ring walked from its start to its end) inside `zone`, as chains of
+    /// the same direction: a part that is a whole ring comes back closed. Parts no longer than `longerThan`
+    /// are dropped.
+    func ringPieces(_ walks: [[Vec2]], inside zone: [[Vec2]], longerThan shortest: Double) -> [(chain: Chain2D, probe: Vec2)] {
+        guard !walks.isEmpty else { return [] }
+        let frags = GeomKernel.boolean(.intersection, subject: walks, clip: zone, fillRule: .nonZero, subjectsOpen: true)
+        return frags.filter { $0.count > 1 && Polygon2D.length($0, closed: false) > shortest }.map { f in
+            let closed = f.first!.distance(to: f.last!) <= tolerance * 1e-2 && f.count > 3
+            let c = closed ? Chain2D(points: Array(f.dropLast()), isClosed: true) : Chain2D(points: f, isClosed: false)
+            return (c, f[f.count / 2])
         }
     }
 
@@ -194,8 +275,7 @@ public struct PocketPlanner: Sendable {
                                                                   arcTolerance: tolerance)
         var rest = GeomKernel.boolean(.difference, subject: stock, clip: reached, fillRule: .nonZero)
         // Drop slivers from flattening differences.
-        let eps = max(tolerance * 4, 1e-5)
-        rest = GeomKernel.offset(GeomKernel.offset(rest, by: -eps, arcTolerance: tolerance), by: eps, arcTolerance: tolerance)
+        rest = withoutSlivers(rest, by: max(tolerance * 4, 1e-5))
         var items: [(chain: Chain2D, rank: Int, probe: Vec2)] = []
         if fullWalls {
             for loop in levels[0] { items.append((chain(loop), 1_000_000, loop[0])) }
@@ -203,12 +283,8 @@ public struct PocketPlanner: Sendable {
         if !rest.isEmpty {
             let zone = GeomKernel.offset(rest, by: toolRadius + stepover * 0.5, join: .round, arcTolerance: tolerance)
             for (k, lv) in levels.enumerated() where k > 0 || !fullWalls {
-                let open = lv.map { chain($0).walk }
-                let frags = GeomKernel.boolean(.intersection, subject: open, clip: zone, fillRule: .nonZero, subjectsOpen: true)
-                for f in frags where f.count > 1 && Polygon2D.length(f, closed: false) > tolerance * 4 {
-                    let closed = f.first!.distance(to: f.last!) <= tolerance * 1e-2 && f.count > 3
-                    let c = closed ? Chain2D(points: Array(f.dropLast()), isClosed: true) : Chain2D(points: f, isClosed: false)
-                    items.append((c, levels.count - k, f[f.count / 2]))
+                for piece in ringPieces(lv.map { chain($0).walk }, inside: zone, longerThan: tolerance * 4) {
+                    items.append((piece.chain, levels.count - k, piece.probe))
                 }
             }
         }

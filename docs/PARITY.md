@@ -116,7 +116,7 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `tp-ramps` | toolpaths-2d | Ramps (smooth, zig-zag, spiral) by distance/angle | done | P1 | RampSettings, PassShaping.swift; Ops2DProfileTests |
 | `tp-leads` | toolpaths-2d | Lead-in/out (linear, arc) and overcut | done | P1 | Ops2D/Support/Leads.swift; Ops2DProfileTests |
 | `tp-sharp-corners` | toolpaths-2d | Sharp external corners (square corners) | done | P2 | ProfileParameters.sharpCorners (miter joins); Ops2DSharpCornerTests |
-| `tp-pocket-offset-raster` | toolpaths-2d | Pocket: offset and raster with angle, islands | done | P1 | CAMCore/Ops2D/PocketOperation.swift, PocketPlanner.swift; Ops2DPocketTests |
+| `tp-pocket-offset-raster` | toolpaths-2d | Pocket: offset and raster with angle, islands | done | P1 | CAMCore/Ops2D/PocketOperation.swift, PocketPlanner.swift (coverageCleanup); Ops2DPocketTests, Ops2DPocketCoverageTests |
 | `tp-pocket-profile-pass` | toolpaths-2d | Pocket profile pass first/last/none | done | P2 | PocketParameters.profilePassFirst; Pocket form None/First/Last; Ops2DPocketProfilePassTests |
 | `tp-pocket-multi-tool` | toolpaths-2d | Pocket with multiple clearance tools (rest machining) | done | P1 | PocketParameters.clearanceToolIDs, PocketPlanner.restClearing(fullWalls:); ClearanceToolsEditor; Ops2DPocketMultiToolTests |
 | `tp-pocket-ramp-allowance` | toolpaths-2d | Pocket ramp plunges and pocket allowance | done | P1 | PocketParameters.ramp/allowance; Ops2DPocketTests |
