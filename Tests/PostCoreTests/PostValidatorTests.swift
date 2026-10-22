@@ -208,3 +208,68 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
     #expect(!has(v.validate(toolpaths: [side("top"), side("top")]), "same program"))
     #expect(!has(v.validate(toolpaths: [side("bottom"), side(nil)]), "same program"))
 }
+
+// MARK: Peck drilling re-entry
+
+/// Peck drilling feeds a peck, retracts, rapids back down to just above the bottom of the hole and
+/// feeds the next peck. Those rapids only move through air and must not be reported.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
+    let mc = MachineCoordinates(job: PostFixtures.job(zZero: mode))
+    func z(_ depth: Double) -> String { String(format: "%.4f", mc.z(depth: depth)) }
+    let retract = z(-0.05)
+    let pecks = """
+    G0 X1 Y1
+    G0 Z\(retract)
+    G1 Z\(z(0.1)) F30
+    G0 Z\(retract)
+    G0 Z\(z(0.08))
+    G1 Z\(z(0.2)) F30
+    G0 Z\(retract)
+    G0 Z\(z(0.18))
+    G1 Z\(z(0.3)) F30
+    """
+    let issues = validate(program(pecks, safe: String(format: "%.4f", mc.safeZ)), zZero: mode)
+    #expect(issues.isEmpty, "\(issues)")
+}
+
+@Test func rapidDeeperThanTheDrilledHoleStillWarns() {
+    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.12"))
+    #expect(has(issues, "Rapid plunge", .warning))
+}
+
+@Test func rapidIntoTheMaterialAtAnotherXYStillWarns() {
+    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nG0 X2\nG0 Z-0.08"))
+    #expect(has(issues, "Rapid plunge", .warning))
+}
+
+@Test func onlyPlungesCountAsDrilledHoles() {
+    // A horizontal cut through X2 does not make X2 a hole a rapid may drop into.
+    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nX2 F100\nG0 Z0.2\nG0 Z-0.05"))
+    #expect(has(issues, "Rapid plunge", .warning))
+}
+
+@Test func toolChangeForgetsDrilledHoles() {
+    let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\nM5\nT2 M6\nM3 S18000\nG0 Z0.05\nG0 Z-0.08"))
+    #expect(has(issues, "Rapid plunge", .warning))
+}
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func toolpathValidatorAcceptsPeckDrillingAndRejectsADeeperRapid(mode: ZZeroMode) {
+    let job = PostFixtures.job(zZero: mode)
+    let mc = MachineCoordinates(job: job)
+    let p = Vec2(2, 2), retract = mc.z(aboveTop: 0.05)
+    func at(_ depth: Double) -> Vec3 { Vec3(p.x, p.y, mc.z(depth: depth)) }
+    var moves: [Move] = [
+        .rapid(to: Vec3(p.x, p.y, mc.safeZ)), .rapid(to: Vec3(p.x, p.y, retract)),
+        .linear(to: at(0.1), feed: 30), .rapid(to: Vec3(p.x, p.y, retract)),
+        .rapid(to: at(0.08)), .linear(to: at(0.2), feed: 30), .rapid(to: Vec3(p.x, p.y, mc.safeZ)),
+    ]
+    let validator = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    func issues(_ moves: [Move]) -> [GCodeIssue] {
+        validator.validate(toolpaths: [Toolpath(name: "Drill", kind: .drill, tool: PostFixtures.endMill, moves: moves)])
+    }
+    #expect(issues(moves).isEmpty, "\(issues(moves))")
+    moves.insert(contentsOf: [.rapid(to: Vec3(p.x, p.y, retract)), .rapid(to: at(0.25))], at: moves.count - 1)
+    #expect(has(issues(moves), "Rapid plunge", .warning))
+}

@@ -14,6 +14,11 @@ struct MotionChecker {
     var issues = IssueCollector()
     private var minP = Vec3(.infinity, .infinity, .infinity)
     private var maxP = Vec3(-.infinity, -.infinity, -.infinity)
+    /// Deepest Z a straight-down feed reached at each XY (quantised to `eps`) since the last tool
+    /// change: a hole the current tool has already cut, which a later rapid may re-enter down to
+    /// that depth. Only plunges are recorded, so the table stays small on long programs.
+    private var drilledZ: [Cell: Double] = [:]
+    private struct Cell: Hashable { let x: Int, y: Int }
 
     /// `job` is in `jobUnits`; everything is converted to `units`.
     init(profile: PostProfile, job: JobSetup, jobUnits: LengthUnit, units: LengthUnit) {
@@ -33,6 +38,10 @@ struct MotionChecker {
     var allowedMinZ: Double { coords.materialBottomZ - limits.maxSpoilboardCut }
 
     private func f(_ v: Double) -> String { NumberFormat.fixed(v, decimals: units == .inch ? 4 : 3) }
+    private func cell(_ p: Vec3) -> Cell { Cell(x: Int((p.x / eps).rounded()), y: Int((p.y / eps).rounded())) }
+
+    /// Forget the holes cut so far: a different tool may not fit them.
+    mutating func toolChanged() { drilledZ.removeAll() }
 
     // MARK: Rules
 
@@ -53,7 +62,10 @@ struct MotionChecker {
                 issues.add("rapid-below-safe", .warning, line: line,
                            "Rapid XY move below safe Z (Z\(f(low)) < Z\(f(safeZ)))")
             }
-        } else if let s = start, target.z < s.z - eps, target.z < topZ - eps {
+        } else if let s = start, target.z < s.z - eps, target.z < topZ - eps,
+                  !(drilledZ[cell(target)].map { target.z >= $0 - eps } ?? false) {
+            // A rapid straight down into a hole this tool has already drilled, stopping at or above
+            // its bottom, only moves through air (peck drilling re-enters every hole that way).
             issues.add("rapid-plunge", .warning, line: line,
                        "Rapid plunge below the material top to Z\(f(target.z)); use a feed move")
         }
@@ -75,6 +87,10 @@ struct MotionChecker {
         let low = ([start?.z].compactMap { $0 } + path.map(\.z)).min() ?? .infinity
         if !spindleOn, low < topZ - eps {
             issues.add("spindle-off", .error, line: line, "Cutting move with the spindle off (no M3 before cutting)")
+        }
+        if let s = start, let end = path.last, path.allSatisfy({ $0.xy.distance(to: s.xy) <= eps }) {
+            let c = cell(end)
+            drilledZ[c] = min(drilledZ[c] ?? .infinity, min(s.z, low))
         }
         path.forEach { visit($0, line: line) }
     }

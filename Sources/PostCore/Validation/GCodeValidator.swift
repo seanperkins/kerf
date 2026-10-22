@@ -59,6 +59,7 @@ public struct GCodeValidator: Sendable {
                 continue
             }
             check.rpm(tp.spindleRPM, min: profile.minRPM, max: profile.maxRPM, line: nil)
+            check.toolChanged()   // each toolpath may post with a different tool
             for move in tp.moves {
                 switch move {
                 case .dwell: continue
@@ -170,6 +171,7 @@ public struct GCodeValidator: Sendable {
                 case 5: spindleOn = false
                 case 0, 1: stop = Int(m)
                 case 6:
+                    check.toolChanged()
                     if spindleOn {
                         carried.add("toolchange-spindle-on", .warning, line: b.line,
                                     "Tool change (M6) with the spindle running; stop it (M5) first")
