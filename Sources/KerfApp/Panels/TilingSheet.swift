@@ -16,6 +16,8 @@ struct TilingSheet: View {
     @State private var calculatingCount = 0
     @State private var confirmErrors = false
     @State private var replaceRequest: ReplaceRequest?
+    /// Why the last save failed, shown above the buttons (an alert on the document would sit under this sheet).
+    @State private var failure: String?
 
     /// Validator errors, which "Save Anyway" may override.
     private var hasErrors: Bool { files.contains { $0.result.hasErrors } }
@@ -43,6 +45,7 @@ struct TilingSheet: View {
             } else {
                 List(Array(files.enumerated()), id: \.offset) { _, f in row(f) }
             }
+            SheetErrorRow(message: failure)
             HStack {
                 Text("\(files.count) file\(files.count == 1 ? "" : "s")").foregroundStyle(.secondary)
                 Spacer()
@@ -118,6 +121,7 @@ struct TilingSheet: View {
     }
 
     private func save() {
+        failure = nil
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -138,13 +142,8 @@ struct TilingSheet: View {
     /// Writes the whole set (or nothing), then closes the sheet. A failure closes it too, so the
     /// alert that names the file is seen.
     private func finishSaving(_ write: () throws -> Void) {
-        do {
-            try write()
-            dismiss()
-        } catch {
-            dismiss()
-            let message = error.localizedDescription
-            Task { @MainActor in document.alert = AlertMessage(title: "Could not save G-code", message: message) }
-        }
+        failure = SheetError.attempt("Could not save G-code", write)
+        guard failure == nil else { return }
+        dismiss()
     }
 }

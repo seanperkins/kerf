@@ -21,6 +21,8 @@ struct SaveAllToolpathsSheet: View {
     @State private var replaceRequest: ReplaceRequest?
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
+    /// Why the last save failed, shown above the buttons (an alert on the document would sit under this sheet).
+    @State private var failure: String?
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
@@ -51,6 +53,7 @@ struct SaveAllToolpathsSheet: View {
             } else {
                 List(Array(posted.enumerated()), id: \.offset) { _, item in fileRow(item.file, item.result) }
             }
+            SheetErrorRow(message: failure)
             HStack {
                 Button("Check Toolpaths…") { document.sheet = .validation }
                 Spacer()
@@ -143,6 +146,7 @@ struct SaveAllToolpathsSheet: View {
     }
 
     private func save() {
+        failure = nil
         if mode.isSingleFile {
             guard let item = posted.first, let text = item.result.text else { return }
             let panel = NSSavePanel()
@@ -177,14 +181,9 @@ struct SaveAllToolpathsSheet: View {
     /// closes the sheet too, so the alert that names the file is seen (an alert under an open sheet
     /// is not).
     private func finishSaving(_ write: () throws -> Void) {
-        do {
-            try write()
-            if profileID != initialProfileID { document.setPostProfile(profileID) }
-            dismiss()
-        } catch {
-            dismiss()
-            let message = error.localizedDescription
-            Task { @MainActor in document.alert = AlertMessage(title: "Could not save G-code", message: message) }
-        }
+        failure = SheetError.attempt("Could not save G-code", write)
+        guard failure == nil else { return }
+        if profileID != initialProfileID { document.setPostProfile(profileID) }
+        dismiss()
     }
 }

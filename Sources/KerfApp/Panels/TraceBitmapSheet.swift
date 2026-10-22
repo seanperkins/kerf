@@ -19,6 +19,8 @@ struct TraceBitmapSheet: View {
     @State private var traceTask: Task<Void, Never>?
     @State private var generation = 0
     @State private var busy = false
+    /// Why the image could not be used, shown above the buttons (an alert on the document would sit under this sheet).
+    @State private var failure: String?
 
     init(document: KerfDocument) {
         self.document = document
@@ -59,6 +61,7 @@ struct TraceBitmapSheet: View {
                 Text("Choose a PNG, JPEG, TIFF or other image. Dark areas become filled regions (closed vectors) ready for pocketing, V-carving or profiling.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
+            SheetErrorRow(message: failure)
             HStack {
                 Spacer()
                 Button("Cancel") { traceTask?.cancel(); dismiss() }.keyboardShortcut(.cancelAction)
@@ -100,11 +103,17 @@ struct TraceBitmapSheet: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.png, .jpeg, .tiff, .bmp, .gif, .heic, .image]
         panel.message = "Choose an image to trace"
-        guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        failure = nil
+        let data: Data
+        do { data = try Data(contentsOf: url) } catch {
+            failure = SheetError.message("Could not read \(url.lastPathComponent)", error)
+            return
+        }
         sourceData = data
         fileName = url.lastPathComponent
         reload()
-        if image == nil { document.alert = AlertMessage(title: "Trace Bitmap", message: "\(fileName) could not be read as an image.") }
+        if image == nil { failure = "\(fileName) could not be read as an image." }
     }
 
     private func reload() {
