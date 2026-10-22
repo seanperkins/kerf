@@ -10,8 +10,8 @@ final class ToolLibraryModel: ObservableObject {
     @Published private(set) var revision = 0
     /// How many times tools.json was written successfully (what the tests count).
     private(set) var writes = 0
-    /// True while tools.json is behind the library (the last save failed, or the file was unreadable),
-    /// so the next change retries the save even when it changes nothing.
+    /// True while tools.json is behind the library because the last save failed, so the next change,
+    /// or an editor save of an unchanged tool, retries it even when it changes nothing.
     private var unsaved = false
     /// The Tool Database editor's text edit that the library has not heard about yet; duplicate, export
     /// and import flush it first.
@@ -28,7 +28,6 @@ final class ToolLibraryModel: ObservableObject {
         self.store = store
         do { library = try store.load() } catch {
             library = .seeded
-            unsaved = true
             // The next edit saves the seeded library over the file; keep the user's copy first.
             let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
             let backup = store.fileURL.deletingPathExtension().appendingPathExtension("unreadable-\(stamp).json")
@@ -100,17 +99,27 @@ final class ToolLibraryModel: ObservableObject {
     func update(_ tool: Tool) { mutate { $0.upsert(tool) } }
 
     /// Saves an edit from the Tool Database editor when it differs from the stored tool.
-    /// A tool deleted meanwhile is not brought back. Returns whether anything was written.
+    /// A tool deleted meanwhile is not brought back. Returns whether the library changed.
     @discardableResult
     func commitEdit(_ tool: Tool) -> Bool {
         if draft?.id == tool.id { draft = nil }
         guard let stored = library.tool(id: tool.id) else { return false }
         guard stored != tool else {
-            mutate { _ in }   // nothing to change; still retries a save that failed
+            retryFailedSave()
             return false
         }
         update(tool)
         return true
+    }
+
+    /// Writes the library again if the last save failed; does nothing otherwise.
+    private func retryFailedSave() { mutate { _ in } }
+
+    /// The library's copy of `tool`, when something other than the editor holding `tool` changed it
+    /// (an import with Replace) and no text edit of its own is still held: the editor shows that version.
+    func replacement(for tool: Tool) -> Tool? {
+        guard draft?.id != tool.id, let stored = library.tool(id: tool.id), stored != tool else { return nil }
+        return stored
     }
 
     /// Notes a text edit the editor is still typing, so the library actions below see it.
@@ -151,6 +160,7 @@ final class ToolLibraryModel: ObservableObject {
     /// Tools in a `.kerftools`/`tools.json`/`.csv` file, and which of them would overwrite a
     /// different library tool with the same id.
     func readImport(_ url: URL) throws -> (tools: [Tool], conflicts: [Tool]) {
+        flushDraft()   // conflicts are judged against the tool as typed, as the merge will see it
         let tools = try ToolLibraryExchange.read(url)
         return (tools, library.conflicts(with: tools))
     }

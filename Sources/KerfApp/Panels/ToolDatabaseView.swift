@@ -169,23 +169,17 @@ struct ToolEditor: View {
     /// every update.
     let original: Tool
     @State private var tool: Tool
-    /// The library copy `tool` was last in step with: what this editor last saved or adopted.
-    @State private var base: Tool
     @FocusState private var typing: ToolEditorField?
 
     /// Edits the library has not been told about yet (a text field is still being typed in).
     private var unsaved: Bool { tool != original }
 
     /// Saves the draft (a no-op when it matches the library).
-    private func commit() {
-        library.commitEdit(tool)
-        base = tool
-    }
+    private func commit() { library.commitEdit(tool) }
 
     init(original: Tool) {
         self.original = original
         _tool = State(initialValue: original)
-        _base = State(initialValue: original)
     }
 
     private var isAngled: Bool { tool.kind == .vBit || tool.kind == .engraving }
@@ -272,11 +266,8 @@ struct ToolEditor: View {
         // Something other than this editor changed the tool in the library (an import with Replace; any
         // text typed before it was saved first): show that version, whether or not a field has focus,
         // so a later save does not write the draft back over it.
-        .onChange(of: original) { _, latest in
-            guard latest != base else { return }
-            tool = latest
-            base = latest
-            library.commitEdit(latest)
+        .onChange(of: library.library) { _, _ in
+            if let replaced = library.replacement(for: tool) { tool = replaced }
         }
         .onChange(of: typing) { _, _ in commit() }
         .onSubmit { commit() }

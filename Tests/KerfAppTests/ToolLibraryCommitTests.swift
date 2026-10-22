@@ -260,4 +260,44 @@ import Testing
         model.configure(job: job, toolpaths: [path], rapidRate: 180, units: .inch)
         #expect(model.time == model.totalTime)
     }
+
+    /// An import with Replace that puts the editor's own starting version back still has to reach the
+    /// editor: the typed text was saved first, then replaced, so the library differs from the draft.
+    @Test func anImportThatReplacesTheToolIsShownEvenWhenItRestoresTheStartingVersion() throws {
+        let lib = AppTestSupport.library()
+        let start = try #require(lib.tools.first)
+        let file = AppTestSupport.tempDir().appendingPathComponent("one.kerftools")
+        try lib.export(ids: [start.id], to: file)
+        var typed = start
+        typed.name = "Half typed"
+        lib.hold(typed)
+        #expect(lib.replacement(for: typed) == nil)   // its own held edit is not a replacement
+        let (tools, conflicts) = try lib.readImport(file)
+        #expect(conflicts.count == 1)                 // judged against the tool as typed
+        _ = lib.importTools(tools, policy: .replace)
+        #expect(lib.library.tool(id: start.id) == start)
+        #expect(lib.replacement(for: typed) == start)
+        #expect(lib.replacement(for: start) == nil)
+    }
+
+    /// Browsing the Tool Database must not rewrite a tools.json that could not be read.
+    @Test func anUnreadableToolFileIsLeftAloneUntilARealChange() throws {
+        let dir = AppTestSupport.tempDir()
+        let file = dir.appendingPathComponent("tools.json")
+        try Data("not json".utf8).write(to: file)
+        let lib = ToolLibraryModel(store: ToolLibraryStore(fileURL: file))
+        #expect(lib.lastError != nil)
+        let first = try #require(lib.tools.first)
+        #expect(!lib.commitEdit(first))   // leaving a tool in the editor, nothing edited
+        lib.restoreDefaults()
+        #expect(try Data(contentsOf: file) == Data("not json".utf8))
+        #expect(lib.lastError != nil)
+        #expect(lib.writes == 0)
+        var edited = first
+        edited.feedRate += 1
+        #expect(lib.commitEdit(edited))
+        #expect(lib.writes == 1)
+        #expect(lib.lastError == nil)
+        #expect(ToolLibraryModel(store: lib.store).tools.first?.feedRate == edited.feedRate)
+    }
 }
