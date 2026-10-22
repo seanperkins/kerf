@@ -107,6 +107,16 @@ extension KerfDocument {
         TimeEstimateSettings.load().estimate(toolpaths, rapidRate: rapidRateInDocumentUnits, units: units, toolChanges: false)
     }
 
+    /// The job summary of the output project with `settings` (the live store's, so the sidebar and
+    /// the preview agree), timed over the toolpaths in program order and reused until something it
+    /// is made from changes.
+    func jobSummary(groupByTool: Bool, settings: TimeEstimateSettings) -> JobSummary {
+        let operations = outputProject.operations
+        let key = JobSummary.Key(operations: operations, results: results, groupByTool: groupByTool, settings: settings,
+                                 rapidRate: rapidRateInDocumentUnits, units: units)
+        return jobSummaryMemo.summary(operations: operations, results: results, key: key, motion: motionSeconds)
+    }
+
     /// Recomputes the stored per-operation estimates (after the settings or machine change).
     func refreshTimeEstimates() {
         let s = TimeEstimateSettings.load()

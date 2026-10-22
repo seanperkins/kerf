@@ -101,9 +101,12 @@ struct JobSheet: Equatable {
 
     /// - Parameters:
     ///   - sheets: one entry per piece of material; nil = one sheet with every visible shape.
+    ///   - toolChangeSeconds: the allowance per stop (the user's time-estimate setting).
+    ///   - motion: times toolpaths in order without that allowance (the document's estimate), so the
+    ///     sheet's total is the sidebar's and the preview's.
     static func make(project: KerfProject, results: [UUID: ToolpathResult], profile: PostProfile,
                      groupByTool: Bool, rapidRate: Double, date: Date = Date(),
-                     sheets: [Sheet]? = nil) -> JobSheet {
+                     sheets: [Sheet]? = nil, toolChangeSeconds: TimeInterval, motion: ([Toolpath]) -> TimeInterval) -> JobSheet {
         let doc = project.document
         let job = doc.job
         let u = doc.units
@@ -167,7 +170,11 @@ struct JobSheet: Equatable {
         let defaultParts = partList(visible, in: doc)
         let defaultSheet = Sheet(title: "Sheet 1", shapes: visible, partNames: defaultParts.map(\.name),
                                  partCentres: defaultParts.map(\.centre))
-        let total = ToolpathStats.estimatedSeconds(toolpaths, rapidRate: rapidRate, toolChangeSeconds: 90)
+        // The same total as the sidebar and the 3D preview: the program's motion in order plus one
+        // allowance per stop (a tool change or an operator pause).
+        var stops = 0
+        for (i, tp) in toolpaths.enumerated() where i > 0 && ToolpathStats.stopsBefore(tp, after: toolpaths[i - 1]) { stops += 1 }
+        let total = motion(toolpaths) + Double(stops) * toolChangeSeconds
         let deepest = toolpaths.compactMap(\.minZ).min().map { z -> String in
             let depth = coords.depth(ofMachineZ: z)
             return DeepestCut(machineZ: z, depthBelowTop: depth, belowBottom: depth - job.thickness).text(units: u)

@@ -77,7 +77,7 @@ import Testing
         setPause(doc, ids[0], PauseStep(message: "Flip the part"))
         setPause(doc, ids[1], PauseStep(message: "Never written", isOptionalStop: true))
         let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
-                                  groupByTool: false, rapidRate: 600)
+                                  groupByTool: false, rapidRate: 600, toolChangeSeconds: 90, motion: doc.motionSeconds)
         #expect(sheet.steps.map(\.pauseAfter) == ["Flip the part", nil])
         #expect(sheet.pauses == 1)
         let html = JobSheetHTML.render(sheet)
@@ -90,7 +90,7 @@ import Testing
         let (doc, _, ids) = makeDoc()
         setPause(doc, ids[0], PauseStep(isOptionalStop: true))
         let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
-                                  groupByTool: false, rapidRate: 600)
+                                  groupByTool: false, rapidRate: 600, toolChangeSeconds: 90, motion: doc.motionSeconds)
         #expect(sheet.steps[0].pauseAfter == "Paused after Profile 1 (optional stop, M1)")
     }
 

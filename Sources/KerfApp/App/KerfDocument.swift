@@ -112,6 +112,8 @@ final class KerfDocument: ReferenceFileDocument {
     let expressionRecorder = ExpressionRecorder()
     @Published var showToolpaths = true
     @Published var results: [UUID: ToolpathResult] = [:]
+    /// The last job summary, rebuilt only when what it is made from changes (`jobSummary(groupByTool:settings:)`).
+    let jobSummaryMemo = JobSummary.Memo()
     @Published var calculating: Set<UUID> = []
     /// Operations asked to recalculate while already calculating.
     private var pendingRecalculation: Set<UUID> = []

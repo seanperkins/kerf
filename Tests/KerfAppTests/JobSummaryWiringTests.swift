@@ -8,7 +8,8 @@ import Testing
 /// The sidebar total through the app's own wiring (issue #27): the document's motion estimate over
 /// the program the summary orders, against the 3D preview's estimate of the same toolpaths.
 @Suite struct JobSummaryWiringTests {
-    /// A document with two profile toolpaths on the same vectors, both calculated.
+    /// A document with a profile and a pocket on the same vectors, on two different tools so the
+    /// program has a tool change, both calculated.
     @MainActor
     private func makeDoc(units: LengthUnit) -> KerfDocument {
         var p = AppTestSupport.project()
@@ -20,6 +21,12 @@ import Testing
         let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
         doc.selectAll()
         doc.addOperation(.profile); doc.addOperation(.pocket)
+        var pocket = doc.project.operations[1]
+        var setup = pocket.editableSetup
+        setup.toolID = ToolLibrary.seeded.tools[1].id   // 1/8 in end mill; the profile keeps the 1/4 in
+        pocket.editableSetup = setup
+        let changed = pocket
+        doc.perform("Tool") { $0.upsertOperation(changed) }
         doc.calculateNow(doc.project.operations.map(\.id))
         return doc
     }
@@ -30,8 +37,8 @@ import Testing
         let doc = makeDoc(units: units)
         let settings = TimeEstimateSettings.load()
         #expect(doc.results.count == 2 && doc.results.values.allSatisfy(\.isOK))
-        let s = JobSummary.make(operations: doc.outputProject.operations, results: doc.results, groupByTool: groupByTool,
-                                toolChangeSeconds: settings.toolChangeSeconds, motion: doc.motionSeconds)
+        let s = doc.jobSummary(groupByTool: groupByTool, settings: settings)
+        #expect(s.stops == 1 && s.toolChangeAllowance == settings.toolChangeSeconds)
         // What the preview shows for "All Toolpaths": the same list, timed with the post's rapid rate
         // in document units and the tool-change allowance.
         let shown = PreviewScope.all.toolpaths(operations: doc.outputProject.operations, results: doc.results,
@@ -43,16 +50,20 @@ import Testing
         // The program's motion is more than the operations' own by the rapids between them.
         let separate = doc.results.values.map { doc.motionSeconds($0.toolpaths) }.reduce(0, +)
         #expect(s.machiningSeconds > separate)
+        // The job sheet prints the same total.
+        let sheet = doc.makeJobSheet()
+        #expect(sheet.totalTime == ToolpathCalculator.formatDuration(s.totalSeconds))
     }
 
     @MainActor
     @Test func summaryIsRebuiltOnlyWhenItsInputsChange() {
         let doc = makeDoc(units: .inch)
-        let memo = ToolChangeSummaryView.SummaryMemo()
+        let memo = JobSummary.Memo()
         var timed = 0
         func summary(groupByTool: Bool = false, settings: TimeEstimateSettings = TimeEstimateSettings(), rapid: Double = 200) -> JobSummary {
-            memo.summary(operations: doc.outputProject.operations, results: doc.results, groupByTool: groupByTool,
-                         settings: settings, rapidRate: rapid, units: .inch) { timed += 1; return doc.motionSeconds($0) }
+            let key = JobSummary.Key(operations: doc.outputProject.operations, results: doc.results, groupByTool: groupByTool,
+                                     settings: settings, rapidRate: rapid, units: .inch)
+            return memo.summary(operations: doc.outputProject.operations, results: doc.results, key: key) { timed += 1; return doc.motionSeconds($0) }
         }
         let first = summary()
         #expect(summary() == first && timed == 1)

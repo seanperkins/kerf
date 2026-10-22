@@ -31,7 +31,8 @@ extension KerfDocument {
     func makeJobSheet(date: Date = Date()) -> JobSheet {
         var sheet = JobSheet.make(project: outputProject, results: results, profile: postProfile,
                                   groupByTool: UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey),
-                                  rapidRate: rapidRateInDocumentUnits, date: date, sheets: JobSheet.sheets(of: project))
+                                  rapidRate: rapidRateInDocumentUnits, date: date, sheets: JobSheet.sheets(of: project),
+                                  toolChangeSeconds: TimeEstimateSettings.load().toolChangeSeconds, motion: motionSeconds)
         // Multi-sheet and two-sided jobs (io): say which material sheet and side this sheet is for.
         sheet.jobName = document.name + (document.isMultiSheet ? " – \(document.currentSheetName)" : "")
             + (isTwoSided ? " (\(activeSide.displayName) side)" : "")

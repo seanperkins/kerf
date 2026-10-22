@@ -10,12 +10,9 @@ struct ToolChangeSummaryView: View {
     @ObservedObject private var timeStore = TimeEstimateStore.shared
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var expanded = false
-    @State private var memo = SummaryMemo()
 
     var body: some View {
-        let s = memo.summary(operations: document.outputProject.operations, results: document.results, groupByTool: groupByTool,
-                             settings: timeStore.settings, rapidRate: document.rapidRateInDocumentUnits, units: document.units,
-                             motion: document.motionSeconds)
+        let s = document.jobSummary(groupByTool: groupByTool, settings: timeStore.settings)
         VStack(alignment: .leading, spacing: 4) {
             if s.hasEstimate {
                 // Longest wording that fits the sidebar; "4 tools · 3 changes" shortens before the time does.
@@ -59,34 +56,6 @@ struct ToolChangeSummaryView: View {
             } label: {
                 Text("Tool changes").font(.caption)
             }
-        }
-    }
-
-    /// The last summary and what it was made from. Timing the program is a motion solve over
-    /// every move, and this view is always on screen and redraws with every document change, so
-    /// the summary is rebuilt only when its inputs change: the operations, the results (their
-    /// toolpaths are new objects after each calculation, their estimates after a settings change),
-    /// the grouping, the settings, and the machine's rapid rate.
-    final class SummaryMemo {
-        private var key: Int?
-        private var summary: JobSummary?
-
-        func summary(operations: [AnyOperation], results: [UUID: ToolpathResult], groupByTool: Bool,
-                     settings: TimeEstimateSettings, rapidRate: Double, units: LengthUnit,
-                     motion: ([Toolpath]) -> TimeInterval) -> JobSummary {
-            var h = Hasher()
-            h.combine(operations)
-            for (id, r) in results.sorted(by: { $0.key.uuidString < $1.key.uuidString }) {
-                h.combine(id); h.combine(r.toolpaths.map(\.id)); h.combine(r.toolpaths.map(\.pauseAfter))
-                h.combine(r.estimatedSeconds); h.combine(r.error)
-            }
-            h.combine(groupByTool); h.combine(settings); h.combine(rapidRate); h.combine(units)
-            let k = h.finalize()
-            if let summary, key == k { return summary }
-            let s = JobSummary.make(operations: operations, results: results, groupByTool: groupByTool,
-                                    toolChangeSeconds: settings.toolChangeSeconds, motion: motion)
-            key = k; summary = s
-            return s
         }
     }
 
