@@ -136,9 +136,11 @@ public enum Polygon2D {
                 let box = boxes[j].insetBy(-tolerance)
                 guard box.contains(boxes[i].min), box.contains(boxes[i].max) else { return false }
                 let outside = GeomKernel.boolean(.difference, subject: [loops[i]], clip: [loops[j]], fillRule: .nonZero)
-                // Signed: a hole in the difference (j wholly inside i) takes its area away.
+                // Signed: a hole in the difference (j wholly inside i) takes its area away. Most of the
+                // loop must lie inside too, or a sliver thinner than the tolerance would be within
+                // whatever it touches.
                 let area = abs(outside.reduce(0) { $0 + signedArea($1) })
-                return area <= tolerance * length(loops[i], closed: true)
+                return area <= tolerance * length(loops[i], closed: true) && area < abs(signedArea(loops[i])) / 2
             }
         }
     }

@@ -296,6 +296,20 @@ func onTheLineNestingTellsHolesFromDuplicatesOverlapsAndNotches(direction: CutDi
     }
 }
 
+@Test func holesAreDecidedByAreaWithinTheTolerance() {
+    // The nesting rule on its own, for shapes a profile cannot read back: a sliver thinner than the
+    // tolerance that touches an outer is not within it (most of it lies outside), a chain of near
+    // copies is one loop, and a hole touching the outer edge is still a hole.
+    let tol = 0.0005
+    func loops(_ paths: [Path]) -> [[Vec2]] { paths.map { $0.flattened(tolerance: tol) } }
+    #expect(Polygon2D.holes(in: loops([F.rect(0, 0, 10, 10), F.rect(10, 1, 0.0004, 1)]), tolerance: tol) == [false, false])
+    #expect(Polygon2D.holes(in: loops([F.rect(0, 0, 10, 10), F.rect(9.9998, 1, 0.0004, 1)]), tolerance: tol) == [false, false])
+    #expect(Polygon2D.holes(in: loops([F.rect(1, 1, 3, 2), F.rect(1, 1, 3.0004, 2), F.rect(1, 1, 3.0008, 2), F.rect(2, 1.5, 1, 1)]),
+                            tolerance: tol) == [false, false, false, true])
+    #expect(Polygon2D.holes(in: loops([F.rect(0, 0, 6, 4), F.rect(1, 0, 2, 2), F.rect(4, 1, 1, 1)]), tolerance: tol) == [false, true, true])
+    #expect(Polygon2D.holes(in: loops([F.rect(0, 0, 6, 4), F.rect(1, 1, 4, 2), F.rect(2, 1.5, 2, 1)]), tolerance: tol) == [false, true, false])
+}
+
 @Test(arguments: CutDirection.allCases)
 func prismCarvesAHoleInTheSameSenseAsTheOuterEdge(direction: CutDirection) throws {
     // A prism carve runs the V-bit's tip on the line round every loop of a region, holes included
