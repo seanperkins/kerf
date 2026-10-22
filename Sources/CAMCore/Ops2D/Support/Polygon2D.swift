@@ -102,4 +102,24 @@ public enum Polygon2D {
     public static func region(fromLoops loops: [[Vec2]]) -> [[Vec2]] {
         GeomKernel.boolean(.union, subject: loops.filter { $0.count > 2 }, clip: [], fillRule: .evenOdd)
     }
+
+    /// `within[i][j]`: loop i lies within loop j, judged by area rather than by vertices (unlike
+    /// `PathGeometry.nestingDepths`, which probes one vertex and is right for well-formed drawings):
+    /// the part of i outside j has no more area than a `tolerance`-wide strip along i. So a part
+    /// sitting in another part's notch or bridging it is not within it, a hole touching its outer
+    /// edge is, and identical or near-identical outlines lie within each other. One Clipper
+    /// difference per pair whose bounding boxes nest.
+    public static func containment(_ loops: [[Vec2]], tolerance: Double) -> [[Bool]] {
+        let boxes = loops.map { Rect2(points: $0) }
+        return loops.indices.map { i in
+            loops.indices.map { j in
+                guard i != j, loops[i].count > 2, loops[j].count > 2 else { return false }
+                let box = boxes[j].insetBy(-tolerance)
+                guard box.contains(boxes[i].min), box.contains(boxes[i].max) else { return false }
+                let outside = GeomKernel.boolean(.difference, subject: [loops[i]], clip: [loops[j]], fillRule: .nonZero)
+                let area = outside.reduce(0) { $0 + abs(signedArea($1)) }
+                return area <= tolerance * length(loops[i], closed: true)
+            }
+        }
+    }
 }

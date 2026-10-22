@@ -233,42 +233,19 @@ public enum ProfileGeometry {
     /// Miter limit (multiple of the offset) for sharp corners; sharper corners are squared off there.
     public static let sharpMiterLimit = 4.0
 
-    /// `within[i][j]`: loop i lies within loop j, by area rather than by vertices, so a part sitting
-    /// in another part's notch or bridging it is not within it while a hole touching its outer edge
-    /// is: the part of i outside j has no more area than a `tolerance`-wide strip along i. Identical
-    /// outlines lie within each other.
-    static func containment(_ loops: [[Vec2]], tolerance: Double) -> [[Bool]] {
-        let boxes = loops.map { Rect2(points: $0) }
-        return loops.indices.map { i in
-            loops.indices.map { j in
-                guard i != j, loops[i].count > 2, loops[j].count > 2 else { return false }
-                let box = boxes[j].insetBy(-tolerance)
-                guard box.contains(boxes[i].min), box.contains(boxes[i].max) else { return false }
-                let outside = GeomKernel.boolean(.difference, subject: [loops[i]], clip: [loops[j]], fillRule: .nonZero)
-                let area = outside.reduce(0) { $0 + abs(Polygon2D.signedArea($1)) }
-                return area <= tolerance * Polygon2D.length(loops[i], closed: true)
-            }
-        }
-    }
-
     public static func loops(closed: [[Vec2]], side: ProfileSide, offset: Double, direction: CutDirection,
                              tolerance: Double, join: GeomKernel.Join = .round) -> Plan {
         let region = Polygon2D.region(fromLoops: closed)
         var loops: [[Vec2]]
         switch side {
         case .on:
-            // Each vector as drawn (no union, so overlapping vectors each get their own cut), oriented
-            // the way the region's loops come back: a loop that lies within an odd number of other
-            // distinct loops is a hole and runs clockwise, so the part is on the same side of travel
-            // at a hole as at the outer edge and a ring cut on the line is climb all round. A set of
-            // identical outlines counts as one container and never as a hole, and a loop that only
-            // partly overlaps or abuts another is not within it, so duplicates and overlaps are cut
-            // like outer loops, as they were before holes were told apart.
-            let within = Self.containment(closed, tolerance: tolerance)
+            // Each vector as drawn (no union), oriented like a region's loops: outer loops
+            // counter-clockwise, loops within an odd number of other distinct loops clockwise, so a
+            // ring's hole keeps the part on the same side of travel as its outer edge.
+            let within = Polygon2D.containment(closed, tolerance: tolerance)
             loops = closed.indices.map { i in
                 let loop = closed[i]
-                guard loop.count > 2 else { return loop }
-                var containers: [Int] = []
+                var containers: [Int] = []   // identical outlines count as one container
                 for j in closed.indices where j != i && within[i][j] && !within[j][i] {
                     if !containers.contains(where: { within[j][$0] && within[$0][j] }) { containers.append(j) }
                 }
