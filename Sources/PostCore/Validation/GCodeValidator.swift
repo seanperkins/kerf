@@ -66,8 +66,10 @@ public struct GCodeValidator: Sendable {
             previous = tp
             for move in tp.moves {
                 switch move {
-                case .dwell:
-                    check.leaveHole()   // posts as G4, which is not a plain move in the G-code check
+                case .dwell(let seconds):
+                    // Posts as G4, which is not a plain move in the G-code check; the writer drops a
+                    // dwell of no length, so it does not forget the hole here either.
+                    if seconds > 0 { check.leaveHole() }
                     continue
                 case .rapid(let p):
                     // The post retracts before a toolpath's first rapid, so an unknown start is fine.

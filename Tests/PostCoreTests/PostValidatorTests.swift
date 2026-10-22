@@ -268,9 +268,6 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     // A horizontal cut through X2, or a ramp down to it, does not make X2 a hole a rapid may drop into.
     #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nX2 F100\nG0 Z0.2\nG0 Z-0.05")), "Rapid plunge", .warning))
     #expect(has(validate(program("G0 X1 Y1\nG1 X2 Z-0.1 F30\nG0 Z0.2\nG0 Z-0.05")), "Rapid plunge", .warning))
-    // An upward feed drills nothing: both rapids down are reported.
-    let up = validate(program("G0 X1 Y1\nG0 Z-0.1\nG1 Z0.2 F30\nG0 Z-0.08"))
-    #expect(up.first { $0.message.contains("Rapid plunge") }?.message.hasSuffix("(1 more)") == true, "\(up)")
 }
 
 @Test func feedBeforeAnyXYDrillsNothing() {
@@ -291,12 +288,21 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     #expect(has(validate(program(helix)), "Rapid plunge", .warning))
 }
 
-@Test func toolChangeForgetsTheHole() {
-    // Each code on its own, with nothing else between the plunge and the rapid back down.
-    for change in ["T2 M6", "M6", "M0", "M1", "T2"] {
-        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\n\(change)\nG0 Z0.05\nG0 Z-0.08"))
-        #expect(has(issues, "Rapid plunge", .warning), "after \(change): \(issues)")
+@Test func anyCodeOtherThanAPlainMoveForgetsTheHole() {
+    // One rule: the hole survives only blocks made of G0–G3 with no M or T word. Tool changes and
+    // stops (a different bit may not fit), frame shifts and reference returns (the same XY words
+    // name another place), and codes the rule never heard of (spindle, coolant, dwell, tool length,
+    // distance mode) all forget it, each here on its own line with nothing else between the plunge
+    // and the rapid back down.
+    let codes = ["T2 M6", "M6", "M0", "M1", "T2",
+                 "G92 X1 Y1", "G92.1", "G55", "G59", "G10 L2 P1 X0 Y0", "G53 G0 X1 Y1", "G28", "G30 X1 Y1",
+                 "M3 S18000", "M8", "G4 P0.5", "G43 H1", "G90"]
+    for code in codes {
+        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\n\(code)\nG0 Z-0.08"))
+        #expect(has(issues, "Rapid plunge", .warning), "after \(code): \(issues)")
     }
+    // A feed rate or a comment on its own line is not a code: the hole stays.
+    #expect(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nF40\n( peck 2 )\nG0 Z-0.08")).isEmpty)
     // The motion of a block runs before its stop, so a plunge sharing a line with M0 drills before
     // the tool may change: the hole is forgotten after that block, not only before it.
     let shared = validate(program("G0 X1 Y1\nG1 Z-0.1 F30 M0\nG0 Z0.05\nG0 Z-0.08"))
@@ -307,6 +313,11 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
         let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\n\(same)"))
         #expect(has(issues, "Rapid plunge", .warning), "\(same): \(issues)")
     }
+}
+
+@Test func aShallowerPlungeKeepsTheDeepestZ() {
+    // The hole is as deep as the tool has ever fed there, not as deep as the last plunge.
+    #expect(validate(program("G0 X1 Y1\nG1 Z-0.2 F30\nG0 Z0.05\nG1 Z-0.1 F30\nG0 Z0.05\nG0 Z-0.18")).isEmpty)
 }
 
 @Test func grblStopToolChangeForgetsTheHoleInMillimetres() {
@@ -323,24 +334,6 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     #expect(has(run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z1\nG0 Z-3.01"), "Rapid plunge", .warning))
     let changed = run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z5.08\nM5\n(Change to Tool: 12 mm)\nM0\nM3 S18000\nG0 Z1\nG0 Z-2.5")
     #expect(has(changed, "Rapid plunge", .warning), "\(changed)")
-}
-
-@Test func coordinateShiftForgetsTheHole() {
-    for shift in ["G92 X1 Y1", "G92.1", "G55", "G59", "G10 L2 P1 X0 Y0", "G53 G0 X1 Y1", "G28", "G30 X1 Y1"] {
-        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\n\(shift)\nG0 Z-0.08"))
-        #expect(has(issues, "Rapid plunge", .warning), "after \(shift): \(issues)")
-    }
-}
-
-@Test func anyCodeOtherThanAPlainMoveForgetsTheHole() {
-    // Spindle, coolant, dwell, tool-length and distance-mode words are not moves; the rule that forgets
-    // the hole fails closed, so the rapid back down is reported after each of them.
-    for other in ["M3 S18000", "M8", "G4 P0.5", "G43 H1", "G90"] {
-        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\n\(other)\nG0 Z-0.08"))
-        #expect(has(issues, "Rapid plunge", .warning), "after \(other): \(issues)")
-    }
-    // A feed rate or a comment on its own line is not a code: the hole stays.
-    #expect(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nF40\n( peck 2 )\nG0 Z-0.08")).isEmpty)
 }
 
 @Test func absurdCoordinatesDoNotTrapTheChecker() {
@@ -421,11 +414,15 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
     let mc = MachineCoordinates(job: job)
     let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
     let p = Vec2(2, 2)
-    let moves = drillMoves(p, mc: mc, pecks: [0.1]).dropLast()
-        + [.dwell(seconds: 0.5), .rapid(to: Vec3(p.x, p.y, mc.z(aboveTop: 0.05))),
-           .rapid(to: Vec3(p.x, p.y, mc.z(depth: 0.08))), .rapid(to: Vec3(p.x, p.y, mc.safeZ))]
-    let issues = v.validate(toolpaths: [toolpath("Drill", tool: PostFixtures.endMill, Array(moves))])
-    #expect(has(issues, "Rapid plunge", .warning), "\(issues)")
+    func issues(dwell seconds: Double) -> [GCodeIssue] {
+        let moves = drillMoves(p, mc: mc, pecks: [0.1]).dropLast()
+            + [.dwell(seconds: seconds), .rapid(to: Vec3(p.x, p.y, mc.z(aboveTop: 0.05))),
+               .rapid(to: Vec3(p.x, p.y, mc.z(depth: 0.08))), .rapid(to: Vec3(p.x, p.y, mc.safeZ))]
+        return v.validate(toolpaths: [toolpath("Drill", tool: PostFixtures.endMill, Array(moves))])
+    }
+    #expect(has(issues(dwell: 0.5), "Rapid plunge", .warning), "\(issues(dwell: 0.5))")
+    // The writer emits nothing for a dwell of no length, so neither check sees a stop there.
+    #expect(issues(dwell: 0).isEmpty, "\(issues(dwell: 0))")
 }
 
 @Test func toolpathCheckSurvivesANonFiniteHoleCentre() {

@@ -14,14 +14,11 @@ struct MotionChecker {
     var issues = IssueCollector()
     private var minP = Vec3(.infinity, .infinity, .infinity)
     private var maxP = Vec3(-.infinity, -.infinity, -.infinity)
-    /// The hole the tool is standing in: the XY of the straight-down feed that cut it and its deepest Z.
-    /// Kept through Z-only rapids and deepened by further plunges there; dropped by any XY move, any
-    /// other feed (sideways, upward, helical, or one that cannot run for want of a feed rate), and by
-    /// whatever the caller reports through `leaveHole()`: a tool change, a stop, a coordinate shift, and
-    /// in G-code any block that is not a plain move. A rapid back down into it, stopping at or above its
-    /// bottom, only moves through air, which is how peck drilling re-enters every hole. One slot is
-    /// enough: nothing returns to a hole after visiting another, and the old warning is the safe answer
-    /// if something does.
+    /// The hole the tool is standing in: the XY of the straight-down feed that cut it and the deepest Z
+    /// the tool has fed to there. Kept through Z-only rapids; dropped by any XY move, any other feed,
+    /// and `leaveHole()`. A rapid back down into it, stopping at or above its bottom, only moves through
+    /// air, which is how peck drilling re-enters every hole. One slot is enough: nothing returns to a
+    /// hole after visiting another, and the old warning is the safe answer if something does.
     private var hole: (xy: Vec2, z: Double)?
 
     /// `job` is in `jobUnits`; everything is converted to `units`.
@@ -42,9 +39,8 @@ struct MotionChecker {
     var allowedMinZ: Double { coords.materialBottomZ - limits.maxSpoilboardCut }
 
     private func f(_ v: Double) -> String { NumberFormat.fixed(v, decimals: units == .inch ? 4 : 3) }
-    /// Forget the hole the tool is in. Callers say so at anything that could put a different tool in the
-    /// spindle (a tool change, a stop) or move the frame (a coordinate shift); the G-code check says so
-    /// at any block that is not a plain move, which fails closed for codes nobody listed.
+    /// Forget the hole: the caller saw something that may have changed the bit or the frame (the
+    /// G-code check: any block that is not a plain move; the toolpath check: a stop or a dwell).
     mutating func leaveHole() { hole = nil }
 
     // MARK: Rules
