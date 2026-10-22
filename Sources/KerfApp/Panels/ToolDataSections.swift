@@ -39,12 +39,14 @@ enum ToolGrouping {
 struct ToolGroupSection: View {
     @Binding var tool: Tool
     var existingGroups: [String]
+    var typing: FocusState<ToolEditorField?>.Binding
 
     var body: some View {
         Section("Organization") {
             HStack {
                 TextField("Group", text: Binding(get: { tool.group ?? "" }, set: { tool.group = $0.isEmpty ? nil : $0 }),
                           prompt: Text(tool.kind.displayName))
+                    .focused(typing, equals: .group)
                 if !existingGroups.isEmpty {
                     Menu {
                         ForEach(existingGroups, id: \.self) { g in Button(g) { tool.group = g } }
@@ -135,6 +137,7 @@ struct FeedsCalculatorSection: View {
 struct MaterialDataSection: View {
     @Binding var tool: Tool
     var knownMaterials: [String]
+    var typing: FocusState<ToolEditorField?>.Binding
 
     private var list: [MaterialCuttingData] { tool.materials ?? [] }
 
@@ -171,6 +174,7 @@ struct MaterialDataSection: View {
                     }
                 } label: {
                     TextField("Material", text: binding(i, \.material))
+                        .focused(typing, equals: .material(i))
                 }
             }
             Menu {

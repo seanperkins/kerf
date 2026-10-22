@@ -14,6 +14,13 @@ public struct ToolLibrary: Codable, Hashable, Sendable {
 
     public mutating func remove(id: UUID) { tools.removeAll { $0.id == id } }
 
+    /// True when toolpaths calculated from `old` could differ from ones calculated from this
+    /// library: a tool was added or removed, or one changed in more than its name, notes or folder.
+    public func changesToolpaths(from old: ToolLibrary) -> Bool {
+        guard Set(tools.map(\.id)) == Set(old.tools.map(\.id)) else { return true }
+        return tools.contains { t in old.tool(id: t.id).map { !t.cutsSameToolpaths(as: $0) } ?? true }
+    }
+
     /// Seed library: conservative feeds/speeds for hardwood / softwood / plastics on a
     /// 2.2 kW router spindle. Tool numbers are unique. Inch units.
     public static var seeded: ToolLibrary {

@@ -139,11 +139,22 @@ extension ToolDatabaseView {
     }
 }
 
+/// The text fields of the tool editor. They write into the editor as you type, but the library
+/// (and tools.json) only hears about it when the field loses focus or Return is pressed.
+enum ToolEditorField: Hashable {
+    case name, group, notes
+    case material(Int)
+}
+
 struct ToolEditor: View {
     @EnvironmentObject var library: ToolLibraryModel
     /// The tool as it was when this editor opened (what Revert goes back to).
     let original: Tool
     @State private var tool: Tool
+    @FocusState private var typing: ToolEditorField?
+
+    /// Edits the library has not been told about yet (a text field is still being typed in).
+    private var unsaved: Bool { library.library.tool(id: tool.id).map { $0 != tool } ?? false }
 
     init(original: Tool) {
         self.original = original
@@ -157,6 +168,7 @@ struct ToolEditor: View {
         Form {
             Section {
                 TextField("Name", text: $tool.name)
+                    .focused($typing, equals: .name)
                 Picker("Type", selection: $tool.kind) {
                     ForEach(ToolKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
@@ -206,15 +218,17 @@ struct ToolEditor: View {
             }
             ToolShapeSection(tool: $tool)
             FeedsCalculatorSection(tool: $tool, jobMaterial: library.jobMaterial)
-            MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools))
-            ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted())
+            MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools), typing: $typing)
+            ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted(),
+                             typing: $typing)
             Section("Notes") {
                 TextEditor(text: $tool.notes).frame(minHeight: 60)
+                    .focused($typing, equals: .notes)
             }
             Section {
                 HStack {
                     Spacer()
-                    Text(tool == original ? "Changes save automatically." : "Changes saved.")
+                    Text(unsaved ? "Saves when you leave this field." : tool == original ? "Changes save automatically." : "Changes saved.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Revert Changes") { tool = original }
                         .help("Go back to the settings this tool had when you selected it")
@@ -226,7 +240,14 @@ struct ToolEditor: View {
         .onChange(of: tool.kind) { _, k in
             if (k == .vBit || k == .engraving) && tool.angle == nil { tool.angle = 60 }
         }
-        .onChange(of: tool) { _, t in library.commitEdit(t) }
+        // A picker or number is one edit and saves at once; text waits until the field is left
+        // (focus moves on or Return), the editor closes, or the app quits.
+        .onChange(of: tool) { _, t in if typing == nil { library.commitEdit(t) } }
+        .onChange(of: typing) { _, _ in library.commitEdit(tool) }
+        .onSubmit { library.commitEdit(tool) }
         .onDisappear { library.commitEdit(tool) }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            library.commitEdit(tool)
+        }
     }
 }

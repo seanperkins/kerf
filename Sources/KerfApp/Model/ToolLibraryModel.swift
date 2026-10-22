@@ -5,8 +5,11 @@ import Foundation
 /// The shared, persisted tool database (CRUD + autosave). One instance per app.
 final class ToolLibraryModel: ObservableObject {
     @Published private(set) var library: ToolLibrary
-    /// Bumped on every change so documents can mark toolpaths stale.
+    /// Bumped when a change can alter toolpaths (a tool added or removed, or edited in more than
+    /// its name, notes or folder), so documents mark their toolpaths stale.
     @Published private(set) var revision = 0
+    /// How many times tools.json was written (what the tests count).
+    private(set) var writes = 0
     @Published var lastError: String?
     /// The material of the job whose window opened the Tool Database last, so the feeds calculator
     /// can start from its preset (the database window has no document of its own).
@@ -145,9 +148,15 @@ final class ToolLibraryModel: ObservableObject {
         try ToolLibraryExchange.write(tools, to: url)
     }
 
+    /// Applies `change`; a change that leaves the library as it was writes nothing.
     private func mutate(_ change: (inout ToolLibrary) -> Void) {
-        change(&library)
-        revision += 1
+        var next = library
+        change(&next)
+        guard next != library else { return }
+        let alters = next.changesToolpaths(from: library)
+        library = next
+        if alters { revision += 1 }
+        writes += 1
         do { try store.save(library); lastError = nil } catch {
             lastError = "Could not save tools: \(error.localizedDescription)"
         }

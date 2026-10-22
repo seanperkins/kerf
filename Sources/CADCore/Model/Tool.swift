@@ -65,6 +65,14 @@ public struct Tool: Codable, Hashable, Identifiable, Sendable {
 
     public var radius: Double { diameter / 2 }
 
+    /// True when `other` would cut the same toolpaths: the name, notes and folder only label a
+    /// tool, every other field (geometry, feeds, number, per-material data) reaches the program.
+    public func cutsSameToolpaths(as other: Tool) -> Bool {
+        var t = other
+        t.name = name; t.notes = notes; t.group = group
+        return t == self
+    }
+
     /// Same tool with all lengths/feeds converted to `target` units.
     public func converted(to target: LengthUnit) -> Tool {
         guard target != units else { return self }
