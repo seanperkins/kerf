@@ -42,8 +42,9 @@ struct GCodeFileSet {
                 let dir = try Folder(of: url)
                 let fd = openat(dir.fd, dir.name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o644)
                 guard fd >= 0 else { throw posixError(errno, url.path) }
-                defer { close(fd) }
-                try FileHandle(fileDescriptor: fd, closeOnDealloc: false).write(contentsOf: Data(text.utf8))
+                let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+                try handle.write(contentsOf: Data(text.utf8))
+                try handle.close()   // a network volume can report a failed write-behind only here
             },
             moveItem: { from, to in
                 let source = try Folder(of: from), destination = try Folder(of: to)
@@ -147,12 +148,6 @@ struct GCodeFileSet {
     func links(in directory: URL) -> [String] {
         let found = (try? inspect(directory)) ?? [:]
         return files.map(\.fileName).filter { found[$0] == .typeSymbolicLink }
-    }
-
-    /// Planned names that are directories in `directory`. A directory is never replaced.
-    func directories(in directory: URL) -> [String] {
-        let found = (try? inspect(directory)) ?? [:]
-        return files.map(\.fileName).filter { found[$0] == .typeDirectory }
     }
 
     /// True when writing into `directory` would replace a file that is there now.

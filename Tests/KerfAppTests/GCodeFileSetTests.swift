@@ -87,7 +87,6 @@ import Testing
         try fm.createSymbolicLink(at: dir.appendingPathComponent("c.tap"), withDestinationURL: elsewhere.appendingPathComponent("real.tap"))
         let set = GCodeFileSet(files: [file("a.tap", "A"), file("b.tap", "B"), file("c.tap", "C")])
         // A directory stops the save before anything changes; links, dangling or live, are asked about.
-        #expect(set.directories(in: dir) == ["a.tap"])
         #expect(set.existing(in: dir) == ["b.tap", "c.tap"])
         #expect(set.links(in: dir) == ["b.tap", "c.tap"])
         let m = message { try set.write(to: dir, replacing: ["b.tap", "c.tap"]) }
@@ -301,6 +300,7 @@ import Testing
         let live = GCodeFileSet.FileOperations.live
         try live.writeText("one", dir.appendingPathComponent("a.tap"))
         #expect(throws: (any Error).self) { try live.writeText("two", dir.appendingPathComponent("a.tap")) }
+        #expect(throws: (any Error).self) { try live.writeText("twin", dir.appendingPathComponent("A.TAP")) }
         #expect(try content(dir, "a.tap") == "one")
         let elsewhere = AppTestSupport.tempDir()
         try write("pointed at", elsewhere, "real.tap")
