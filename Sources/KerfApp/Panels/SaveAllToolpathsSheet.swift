@@ -17,12 +17,16 @@ struct SaveAllToolpathsSheet: View {
     @State private var initialProfileID = ""
     @State private var posted: [(file: PlannedGCodeFile, result: GCodeExportResult)] = []
     @State private var confirmErrors = false
+    /// A folder save waiting for the user to agree to replace the files already there.
+    @State private var replaceRequest: ReplaceRequest?
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
     private var hasErrors: Bool { posted.contains { $0.result.hasErrors || $0.result.text == nil } }
+    /// A set with a program missing is never written (see `GCodeFileSet`), so the save waits.
+    private var hasUnposted: Bool { posted.contains { $0.result.text == nil } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -54,11 +58,19 @@ struct SaveAllToolpathsSheet: View {
                     if hasErrors { confirmErrors = true } else { save() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(posted.allSatisfy { $0.result.text == nil })
+                .disabled(posted.isEmpty || hasUnposted)
+                .help(hasUnposted ? "A program could not be generated; fix it before saving, so no file is left out." : "")
             }
         }
         .padding(20)
         .frame(width: 620, height: 600)
+        .alert(replaceRequest.map { "Replace \($0.names.count) file\($0.names.count == 1 ? "" : "s")?" } ?? "",
+               isPresented: Binding(get: { replaceRequest != nil }, set: { if !$0 { replaceRequest = nil } })) {
+            Button("Replace", role: .destructive) { if let r = replaceRequest { finishSaving { try r.set.write(to: r.directory) } } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The folder already has \(replaceRequest?.names.joined(separator: ", ") ?? ""). Saving writes the whole set over them.")
+        }
         .onAppear {
             profileID = document.postProfile.id
             initialProfileID = profileID
@@ -153,10 +165,15 @@ struct SaveAllToolpathsSheet: View {
             panel.canCreateDirectories = true
             panel.prompt = "Save Here"
             panel.message = "Choose a folder for \(posted.count) G-code files"
-            let files = posted
+            let set = GCodeFileSet(posted: posted)
             PanelRunner.present(panel) { response in
                 guard response == .OK, let dir = panel.url else { return }
-                finishSaving { try GCodeBatchExport.write(files, to: dir) }
+                let names = set.existing(in: dir)
+                if names.isEmpty {
+                    finishSaving { try set.write(to: dir) }
+                } else {
+                    replaceRequest = ReplaceRequest(set: set, directory: dir, names: names)
+                }
             }
         }
     }
@@ -171,4 +188,11 @@ struct SaveAllToolpathsSheet: View {
             document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)
         }
     }
+}
+
+/// A folder save held until the user agrees to replace the files already there.
+struct ReplaceRequest {
+    var set: GCodeFileSet
+    var directory: URL
+    var names: [String]
 }

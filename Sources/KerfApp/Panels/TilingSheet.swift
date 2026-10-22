@@ -15,8 +15,11 @@ struct TilingSheet: View {
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
     @State private var confirmErrors = false
+    @State private var replaceRequest: ReplaceRequest?
 
     private var hasErrors: Bool { files.contains { $0.result.hasErrors || $0.result.text == nil } }
+    /// A tile set with a program missing is never written (see `GCodeFileSet`), so the save waits.
+    private var hasUnposted: Bool { files.contains { $0.result.text == nil } }
 
     var body: some View {
         let u = document.units
@@ -45,11 +48,19 @@ struct TilingSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Choose Folder…") { if hasErrors { confirmErrors = true } else { save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(files.allSatisfy { $0.result.text == nil })
+                    .disabled(files.isEmpty || hasUnposted)
+                    .help(hasUnposted ? "A tile could not be generated; fix it before saving, so no tile is left out." : "")
             }
         }
         .padding(20)
         .frame(width: 600, height: 560)
+        .alert(replaceRequest.map { "Replace \($0.names.count) file\($0.names.count == 1 ? "" : "s")?" } ?? "",
+               isPresented: Binding(get: { replaceRequest != nil }, set: { if !$0 { replaceRequest = nil } })) {
+            Button("Replace", role: .destructive) { if let r = replaceRequest { finishSaving { try r.set.write(to: r.directory) } } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The folder already has \(replaceRequest?.names.joined(separator: ", ") ?? ""). Saving writes the whole set over them.")
+        }
         .onAppear {
             settings = TiledExport.defaultSettings(profile: document.postProfile, units: document.units)
             run()
@@ -117,12 +128,22 @@ struct TilingSheet: View {
         panel.canCreateDirectories = true
         panel.prompt = "Save Here"
         panel.message = "Choose a folder for \(files.count) tile programs"
-        guard panel.runModal() == .OK, let dir = panel.url else { return }
-        do {
-            for f in files {
-                guard let text = f.result.text else { continue }
-                try text.write(to: dir.appendingPathComponent(f.fileName), atomically: true, encoding: .utf8)
+        let set = GCodeFileSet(tiles: files)
+        PanelRunner.present(panel) { response in
+            guard response == .OK, let dir = panel.url else { return }
+            let names = set.existing(in: dir)
+            if names.isEmpty {
+                finishSaving { try set.write(to: dir) }
+            } else {
+                replaceRequest = ReplaceRequest(set: set, directory: dir, names: names)
             }
+        }
+    }
+
+    /// Writes the whole set (or nothing), then closes the sheet.
+    private func finishSaving(_ write: () throws -> Void) {
+        do {
+            try write()
             dismiss()
         } catch {
             document.alert = AlertMessage(title: "Could not save G-code", message: error.localizedDescription)

@@ -102,17 +102,10 @@ enum GCodeBatchExport {
         files.map { ($0, GCodeExporter.export(project: project, toolpaths: $0.toolpaths, profile: profile, jobName: jobName)) }
     }
 
-    /// Writes every posted program into `directory`. Returns the written URLs; files whose post
-    /// failed are skipped.
+    /// Writes every posted program into `directory`, all or none (`GCodeFileSet`): a program whose
+    /// post failed stops the whole save, and a failure part way through leaves the folder as it was.
     @discardableResult
     static func write(_ posted: [(file: PlannedGCodeFile, result: GCodeExportResult)], to directory: URL) throws -> [URL] {
-        var urls: [URL] = []
-        for (file, result) in posted {
-            guard let text = result.text else { continue }
-            let url = directory.appendingPathComponent(file.fileName)
-            try text.write(to: url, atomically: true, encoding: .utf8)
-            urls.append(url)
-        }
-        return urls
+        try GCodeFileSet(posted: posted).write(to: directory)
     }
 }
