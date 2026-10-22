@@ -1,0 +1,19 @@
+{
+  "name": "Job Setup: an expression typed after changing the thickness uses the new thickness",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "sheet", "value": "jobSetup"},
+    {"op": "press", "name": "Thickness (Z)", "value": "AXTextField"},
+    {"op": "key", "value": "selectAll"},
+    {"op": "type", "value": "0.5"},
+    {"op": "key", "value": "return"},
+    {"op": "press", "name": "Safe Z", "value": "AXTextField"},
+    {"op": "key", "value": "selectAll"},
+    {"op": "type", "value": "=thickness/2"},
+    {"op": "key", "value": "return"},
+    {"op": "wait", "seconds": 0.5},
+    {"op": "captureSheet", "name": "job-setup-expression"},
+    {"op": "closeSheet"}
+  ]
+}

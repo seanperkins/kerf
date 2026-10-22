@@ -123,6 +123,12 @@ struct JobSetupSheet: View {
         }
         .padding(20)
         .frame(width: 900)
+        // Expressions in these fields see the form's own values, not the saved job's.
+        .environment(\.documentVariables, form.variableTable(in: document.document))
+        .environment(\.expressionUnits, form.units)
+        // Only expressions typed into this sheet can be linked by its Apply: whatever a field
+        // noted before it opened was consumed by that edit or belongs to nothing.
+        .onAppear { _ = document.expressionRecorder.take() }
     }
 }
 

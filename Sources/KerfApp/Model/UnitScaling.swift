@@ -221,6 +221,7 @@ extension Document {
         d.units = target
         d.job = job.scaled(by: f)
         d.gridSpacing = gridSpacing * f
+        // User variables are plain numbers (a count or a ratio as often as a length) and keep their value.
         d.shapes = shapes.map { $0.transformed(.scale(f, f)) }
         d.models = models.map { $0.scaled(by: f) }
         d.keepOutZones = keepOutZones?.map { z in

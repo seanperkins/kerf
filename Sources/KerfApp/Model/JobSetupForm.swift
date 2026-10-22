@@ -17,10 +17,18 @@ struct JobSetupForm: Equatable {
     /// (a form made from a document alone, or a project whose post matches no known machine).
     var machineID: String?
     var postID: String?
+    /// The job and grid as the document had them, in its units. A field the user has not touched
+    /// is always converted from here in one step, so switching units back and forth leaves it
+    /// exactly what a single conversion gives, which is what the saved project's own conversion
+    /// gives too; the link reconciliation can then tell a touched field from an untouched one
+    /// to the bit.
+    private var base: Base
+    private struct Base: Equatable { var units: LengthUnit; var job: JobSetup; var gridSpacing: Double }
 
     init(document: Document) {
         units = document.units; job = document.job; gridSpacing = document.gridSpacing; name = document.name
         sheetName = document.currentSheetName; isMultiSheet = document.isMultiSheet
+        base = Base(units: document.units, job: document.job, gridSpacing: document.gridSpacing)
     }
 
     init(project: KerfProject, machines: [MachineDefinition]) {
@@ -39,9 +47,29 @@ struct JobSetupForm: Equatable {
     mutating func setUnits(_ new: LengthUnit) {
         guard new != units else { return }
         let f = units.factor(to: new)
-        job = job.scaled(by: f)
-        gridSpacing *= f
+        let wasUntouched = base.job.scaled(by: base.units.factor(to: units))
+        let untouched = base.job.scaled(by: base.units.factor(to: new))
+        var scaled = job.scaled(by: f)
+        for k in Self.lengths where job[keyPath: k] == wasUntouched[keyPath: k] { scaled[keyPath: k] = untouched[keyPath: k] }
+        if let g = job.plungeGap, g == wasUntouched.plungeGap { scaled.plungeGap = untouched.plungeGap }
+        if let d = job.datumOffset, d == wasUntouched.datumOffset { scaled.datumOffset = untouched.datumOffset }
+        job = scaled
+        gridSpacing = gridSpacing == base.gridSpacing * base.units.factor(to: units)
+            ? base.gridSpacing * base.units.factor(to: new) : gridSpacing * f
         units = new
+    }
+
+    /// The job's plain length fields (the optionals are handled beside them).
+    private static let lengths: [WritableKeyPath<JobSetup, Double>] = [\.width, \.height, \.thickness, \.safeZ, \.homeZ, \.home.x, \.home.y]
+
+    /// The names an expression typed into this form can use: the material as the form shows it
+    /// (the draft job, in the form's units) with `document`'s user variables, which are plain
+    /// numbers and do not convert, so `=thickness/2` sees the thickness on screen rather than the
+    /// saved one. Applying links the expression to the committed job and evaluates it there.
+    func variableTable(in document: Document) -> [String: Double] {
+        var d = document
+        d.job = job
+        return d.variableTable
     }
 
     /// Problems that block applying (empty = valid).
