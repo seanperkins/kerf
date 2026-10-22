@@ -62,36 +62,26 @@ public struct ProfileOperation: ToolpathOperation {
         // loop this toolpath would cut for the anchor's part passes it, at this pass's offset. The
         // part is the anchor's vector with every selected closed vector whose offset at that pass
         // joins it (a hole drawn as its own shape, two shapes that overlap, two parts closer than
-        // the tool), offset together, so the loop is the one the toolpath cuts. Each vector offsets
-        // on the side its nesting in the selection puts it, as the even-odd plan does.
+        // the tool), offset together, so the loop is the one the toolpath cuts. For the grouping
+        // each vector offsets alone on the side its nesting in the selection puts it, as the
+        // even-odd plan does.
         let manual = params.tabs.isEnabled && !(params.tabs.manualTabs ?? []).isEmpty
         let holes = manual ? Polygon2D.holes(in: closed, tolerance: tol) : []
         var vectorIndex: [UUID: [Int: Int]] = [:]
         for (i, v) in vectors.enumerated() { vectorIndex[v.shapeID, default: [:]][v.pathIndex] = i }
-        func side(ofHole hole: Bool) -> ProfileSide {
-            switch params.side {
-            case .outside: hole ? .inside : .outside
-            case .inside: hole ? .outside : .inside
-            case .on: .on
-            }
-        }
         func ownLoops(at offset: Double) -> (TabAnchor) -> TabAnchors.OwnLoops {
             let offset = max(offset, 0)   // a negative allowance beyond the tool radius cuts on the line, as ProfileGeometry does
-            let none = TabAnchors.OwnLoops(outline: [], part: [], vector: [], reach: 0)
+            let none = TabAnchors.OwnLoops(outline: [], part: [], offset: 0)
             guard manual else { return { _ in none } }
-            let parts = Polygon2D.parts(of: closed, offsets: holes.map { side(ofHole: $0) == .outside ? offset : side(ofHole: $0) == .inside ? -offset : 0 },
-                                        join: join, tolerance: tol)
-            func offsetLoops(_ loops: [[Vec2]], side: ProfileSide) -> [ArcLengthChain] {
-                ProfileGeometry.loops(closed: loops, side: side, offset: offset, direction: params.direction, tolerance: tol, join: join)
-                    .chains.map { ArcLengthChain($0) }
-            }
+            let grow: Double = params.side == .outside ? offset : params.side == .inside ? -offset : 0
+            let parts = Polygon2D.parts(of: closed, offsets: holes.map { $0 ? -grow : grow }, join: join, tolerance: tol)
             return { anchor in
                 guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex] else { return none }
                 let part = closed.indices.filter { parts[$0] == parts[k] }.map { closed[$0] }
+                let loops = ProfileGeometry.loops(closed: part, side: params.side, offset: offset, direction: params.direction,
+                                                  tolerance: tol, join: join).chains
                 return TabAnchors.OwnLoops(outline: Polygon2D.region(fromLoops: part).map { ArcLengthChain(Chain2D(points: $0, isClosed: true)) },
-                                           part: offsetLoops(part, side: params.side),
-                                           vector: offsetLoops([closed[k]], side: side(ofHole: holes[k])),
-                                           reach: ProfileGeometry.sharpMiterLimit * offset)
+                                           part: loops.map { ArcLengthChain($0) }, offset: offset)
             }
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,

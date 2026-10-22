@@ -43,27 +43,24 @@ public enum TabAnchors {
     }
 
     /// What a manual anchor is judged against. `outline` is the anchor's part as drawn (its vector
-    /// and whatever selected vectors the offset joins it to, united), `part` what the toolpath cuts
-    /// for it (the outline offset), `vector` the anchor's vector offset alone on the side its part
-    /// puts it (a hole's loop moves into the hole), and `reach` how far from the anchor its stretch's
-    /// loop may lie: one offset straight across, more where a corner trims or extends it, up to the
-    /// miter limit's multiple of the offset.
+    /// and whatever selected vectors the offset joins it to, as the even-odd region the toolpath
+    /// offsets), `part` what the toolpath cuts for it (the outline offset by `offset`).
     public struct OwnLoops {
         public var outline: [ArcLengthChain]
         public var part: [ArcLengthChain]
-        public var vector: [ArcLengthChain]
-        public var reach: Double
-        public init(outline: [ArcLengthChain], part: [ArcLengthChain], vector: [ArcLengthChain], reach: Double) {
-            self.outline = outline; self.part = part; self.vector = vector; self.reach = reach
+        public var offset: Double
+        public init(outline: [ArcLengthChain], part: [ArcLengthChain], offset: Double) {
+            self.outline = outline; self.part = part; self.offset = offset
         }
     }
 
     /// Tab centre parameters for each closed loop. An anchor travels with its vector, so it is used
     /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
-    /// cuts), the anchor lies on its part's outline (`ownLoops`: not on a stretch another selected
-    /// vector covers), the part's loop runs nearest it within reach at a point the vector's own loop
-    /// also runs through, and one of `loops` runs through that point; it goes onto that loop there.
-    /// One on another part however near, on an open vector, on a vector that no longer exists, on a
+    /// cuts), the anchor lies on its part's outline (`ownLoops`; an edge two vectors share is inside
+    /// the part), the part's loop runs nearest it at a point one offset from the anchor's own vector
+    /// (straight across from its stretch, or at the corner that trims or extends it, within the miter
+    /// limit's reach), and one of `loops` runs through that point; it goes onto that loop there. One
+    /// on another part however near, on an open vector, on a vector that no longer exists, on a
     /// stretch the toolpath does not cut, or whose own loop the offset swallowed (a hole smaller than
     /// the tool, in a part whose other loops survive) is never attached to whatever loop happens to
     /// be nearest; `ignored` counts them so the operation can say so.
@@ -89,8 +86,8 @@ public enum TabAnchors {
             }()
             let slack = 8 * tolerance + 1e-6
             guard (nearest(p, on: mine.outline)?.distance ?? .infinity) <= slack,
-                  let site = nearest(p, on: mine.part), site.distance <= mine.reach + slack,
-                  (nearest(site.point, on: mine.vector)?.distance ?? .infinity) <= slack else {
+                  let site = nearest(p, on: mine.part), site.distance <= ProfileGeometry.sharpMiterLimit * mine.offset + slack,
+                  abs(vector.project(site.point).distance - mine.offset) <= slack else {
                 ignored += 1
                 continue
             }

@@ -298,8 +298,8 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
                               direction: .climb, tolerance: 0.001, join: join).chains.map { ArcLengthChain($0) }
     }
     // Each shape here is a part of its own.
-    func alone(_ a: TabAnchor, _ l: [ArcLengthChain], reach: Double) -> TabAnchors.OwnLoops {
-        TabAnchors.OwnLoops(outline: [TabAnchors.chain(for: a, in: doc, tolerance: 0.001)!], part: l, vector: l, reach: reach)
+    func alone(_ a: TabAnchor, _ l: [ArcLengthChain], offset: Double) -> TabAnchors.OwnLoops {
+        TabAnchors.OwnLoops(outline: [TabAnchors.chain(for: a, in: doc, tolerance: 0.001)!], part: l, offset: offset)
     }
     let gone = TabAnchor(shapeID: UUID(), fraction: 0.25)
     let anchors = [TabAnchor(shapeID: near.id, fraction: 0.25), TabAnchor(shapeID: other.id, fraction: 0.25),
@@ -309,7 +309,7 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     // the line is open, the last vector is gone. Selection alone is not enough; so with miter joins.
     for join in [GeomKernel.Join.round, .miter(limit: ProfileGeometry.sharpMiterLimit)] {
         let loop = loops([near], offset: 0.125, join: join)
-        let r = TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.125, join: join), reach: 0.5) },
+        let r = TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.125, join: join), offset: 0.125) },
                                    document: doc, tolerance: 0.001)
         #expect(r.centers.map(\.count) == [1] && r.ignored == 3)
         #expect(abs(r.centers[0][0] - loop[0].project(Vec2(3, 0)).s) < 1e-6)
@@ -317,11 +317,11 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     // Loops of another offset are not this toolpath's; a loop two vectors merged into is both
     // vectors' offset, and an anchor on the swallowed stretch between them has no loop to go to.
     let loop = loops([near], offset: 0.125)
-    #expect(TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.25), reach: 1) }, document: doc, tolerance: 0.001).ignored == 4)
+    #expect(TabAnchors.centers(for: anchors, loops: loop, shapeIDs: all, ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.25), offset: 0.25) }, document: doc, tolerance: 0.001).ignored == 4)
     let merged = loops([near, other], offset: 0.2)
     #expect(merged.count == 1)
     let r = TabAnchors.centers(for: anchors + [TabAnchor(shapeID: near.id, fraction: 0.4)], loops: merged, shapeIDs: all,
-                               ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.2), reach: 0.8) }, document: doc, tolerance: 0.001)
+                               ownLoops: { alone($0, loops([doc.shape(id: $0.shapeID)!], offset: 0.2), offset: 0.2) }, document: doc, tolerance: 0.001)
     #expect(r.centers.map(\.count) == [2] && r.ignored == 3)   // near 0.25, other 0.25; near 0.4 faces the gap
 }
 
@@ -348,14 +348,30 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: fraction)])
     }
     #expect(tabCount(over, ctx) == 2 && over.metadata["warning"] == nil)
-    // An anchor on a stretch of A that B covers (A's right edge runs through B) is on a vector the
-    // toolpath cuts, but not on a stretch it cuts: reported, not moved to A's nearest cut edge.
-    for lastPass in [nil, ProfileLastPass(allowance: 0.1)] {
-        let (covered, ctxC) = try tabbedProfile([a, F.rect(1, 0, 3, 2)], select: [1], lastPass: lastPass) { ids in
-            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: onA.project(Vec2(2, 1)).s / onA.length)])
+    // Where two selected vectors cross, the even-odd region makes their overlap a hole, so a stretch
+    // of A inside B is still an edge the toolpath cuts, on the far side: its anchor is placed. A's
+    // right edge through a wider B (two slabs either side of the overlap), A and B crossing at a
+    // corner, and a circle notching a rectangle, outside and inside.
+    let crossings: [(String, [Path], Vec2, ProfileSide)] = [
+        ("slab", [a, F.rect(1, 0, 3, 2)], Vec2(2, 1), .outside),
+        ("corner out", [F.rect(0, 0, 4, 2), F.rect(2, 1, 4, 2)], Vec2(4, 1.5), .outside),
+        ("corner in", [F.rect(0, 0, 4, 2), F.rect(2, 1, 4, 2)], Vec2(3, 2), .inside),
+        ("notch", [outer, ShapeFactory.circle(center: Vec2(3, 4), radius: 1)], Vec2(3, 4), .outside),
+    ]
+    for (name, paths, at, side) in crossings {
+        for lastPass in [nil, ProfileLastPass(allowance: 0.1)] {
+            let chain = try #require(TabAnchors.chain(paths[0], tolerance: 0.001))
+            let (crossed, ctxX) = try tabbedProfile(paths, select: [1], side: side, lastPass: lastPass) { ids in
+                TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: chain.project(at).s / chain.length)])
+            }
+            #expect(tabCount(crossed, ctxX) == (lastPass == nil ? 1 : 2) && crossed.metadata["warning"] == nil, "\(name) \(String(describing: lastPass))")
         }
-        #expect(tabCount(covered, ctxC) == 0 && covered.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true, "\(String(describing: lastPass))")
     }
+    // An anchor on the edge two touching parts share is inside the joined part: reported, not moved.
+    let (shared, ctxS) = try tabbedProfile([a, F.rect(2, 0, 2, 1)], select: [1]) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: onA.project(Vec2(2, 0.5)).s / onA.length)])
+    }
+    #expect(tabCount(shared, ctxS) == 0 && shared.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true)
     // Two parts the roughing offset joins (touching, 0.001 in apart, 0.1 in apart) but the last
     // pass does not: an anchor on A's edge just above B's top sits at the joined loop's inner corner
     // on the roughing pass and on A's own stretch on the last pass; both passes hold it.
