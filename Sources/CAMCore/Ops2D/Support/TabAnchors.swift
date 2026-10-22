@@ -63,20 +63,17 @@ public enum TabAnchors {
     /// on another part however near, on an open vector, on a vector that no longer exists, on a
     /// stretch the toolpath does not cut, or whose own loop the offset swallowed (a hole smaller than
     /// the tool, in a part whose other loops survive) is never attached to whatever loop happens to
-    /// be nearest; `ignored` counts them so the operation can say so.
+    /// be nearest; the result says which anchors were placed, so the operation can say so.
     public static func centers(for anchors: [TabAnchor], loops: [ArcLengthChain], shapeIDs: Set<UUID>,
                                ownLoops: (TabAnchor) -> OwnLoops, document: Document,
-                               tolerance: Double) -> (centers: [[Double]], ignored: Int) {
+                               tolerance: Double) -> Resolution {
         var out = Array(repeating: [Double](), count: loops.count)
-        var ignored = 0
+        var placed = Array(repeating: false, count: anchors.count), cut = placed
         var own: [UUID: [Int: OwnLoops]] = [:]
-        for a in anchors {
+        for (n, a) in anchors.enumerated() {
             guard shapeIDs.contains(a.shapeID), let shape = document.shape(id: a.shapeID),
                   shape.paths.indices.contains(a.pathIndex), shape.paths[a.pathIndex].isClosed,
-                  let vector = chain(for: a, in: document, tolerance: tolerance) else {
-                ignored += 1
-                continue
-            }
+                  let vector = chain(for: a, in: document, tolerance: tolerance) else { continue }
             let p = vector.point(at: min(max(a.fraction, 0), 1) * vector.length)
             // Where the tab would sit on the part's own loop, then the toolpath loop through there.
             let mine = own[a.shapeID]?[a.pathIndex] ?? {
@@ -84,21 +81,33 @@ public enum TabAnchors {
                 own[a.shapeID, default: [:]][a.pathIndex] = l
                 return l
             }()
+            cut[n] = !mine.part.isEmpty
             let slack = 8 * tolerance + 1e-6
             guard (nearest(p, on: mine.outline)?.distance ?? .infinity) <= slack,
                   let site = nearest(p, on: mine.part), site.distance <= ProfileGeometry.sharpMiterLimit * mine.offset + slack,
-                  abs(vector.project(site.point).distance - mine.offset) <= slack else {
-                ignored += 1
-                continue
-            }
+                  abs(vector.project(site.point).distance - mine.offset) <= slack else { continue }
             var best: (index: Int, s: Double, d: Double)?
             for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
                 let pr = loop.project(site.point)
                 if pr.distance <= slack, pr.distance < (best?.d ?? .infinity) { best = (i, pr.s, pr.distance) }
             }
-            if let b = best { out[b.index].append(b.s) } else { ignored += 1 }
+            if let b = best {
+                out[b.index].append(b.s)
+                placed[n] = true
+            }
         }
-        return (out.map { $0.sorted() }, ignored)
+        return Resolution(centers: out.map { $0.sorted() }, placed: placed, cut: cut)
+    }
+
+    /// What became of each anchor on one pass: `centers` per loop, and per anchor whether it was
+    /// `placed` and whether its part was `cut` on this pass at all (false for a vector that is gone,
+    /// not selected, open, or whose whole part the offset swallowed).
+    public struct Resolution {
+        public var centers: [[Double]]
+        public var placed: [Bool]
+        public var cut: [Bool]
+        /// Anchors that got no tab.
+        public var ignored: Int { placed.filter { !$0 }.count }
     }
 
     private static func nearest(_ p: Vec2, on loops: [ArcLengthChain]) -> (point: Vec2, distance: Double)? {

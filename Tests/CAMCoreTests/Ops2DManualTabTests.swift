@@ -367,6 +367,25 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
             #expect(tabCount(crossed, ctxX) == (lastPass == nil ? 1 : 2) && crossed.metadata["warning"] == nil, "\(name) \(String(describing: lastPass))")
         }
     }
+    // A cut on the line follows each vector as drawn, so an anchor on a stretch two vectors share
+    // is placed, and anchors on a cut on the line are judged at no offset at all.
+    for (name, paths, at) in [("alone", [outer], Vec2(3, 0)), ("shared", [F.rect(0, 0, 4, 2), F.rect(1, 0, 2, 2)], Vec2(2, 0))] {
+        let chain = try #require(TabAnchors.chain(paths[0], tolerance: 0.001))
+        let (onLine, ctxO) = try tabbedProfile(paths, select: paths.count == 2 ? [1] : [], side: .on) { ids in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: chain.project(at).s / chain.length)])
+        }
+        #expect(tabCount(onLine, ctxO) == 1 && onLine.metadata["warning"] == nil, Comment(rawValue: name))
+    }
+    // An anchor the roughing pass cannot hold but the last pass can: a 0.3 in slot in a 4x2 part
+    // cut outside, which the roughing offset (0.225 a side) fills and the last pass (0.125) enters.
+    // The roughing passes cut round the part with no tab at the anchor, so it is reported.
+    let slotted = Path(points: [Vec2(0, 0), Vec2(4, 0), Vec2(4, 2), Vec2(2.15, 2), Vec2(2.15, 1), Vec2(1.85, 1), Vec2(1.85, 2), Vec2(0, 2)], closed: true)
+    let slotChain = try #require(TabAnchors.chain(slotted, tolerance: 0.001))
+    let (unheld, ctxU) = try tabbedProfile([slotted], lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: slotChain.project(Vec2(2, 1)).s / slotChain.length)])
+    }
+    #expect(tabCount(unheld, ctxU) == 1)
+    #expect(unheld.metadata["warning"] == "1 tab anchor(s) hold only on the last pass; the roughing passes cut through there and the part may come free")
     // An anchor on the edge two touching parts share is inside the joined part: reported, not moved.
     let (shared, ctxS) = try tabbedProfile([a, F.rect(2, 0, 2, 1)], select: [1]) { ids in
         TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: onA.project(Vec2(2, 0.5)).s / onA.length)])
