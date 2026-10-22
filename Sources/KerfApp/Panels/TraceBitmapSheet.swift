@@ -107,7 +107,7 @@ struct TraceBitmapSheet: View {
         failure = nil
         let data: Data
         do { data = try Data(contentsOf: url) } catch {
-            failure = SheetError.message("Could not read \(url.lastPathComponent)", error)
+            failure = "Could not read \(url.lastPathComponent): \(error.localizedDescription)"
             return
         }
         sourceData = data

@@ -80,6 +80,7 @@ struct ProductionPlatesSheet: View {
         }
         .padding(20)
         .frame(width: 480)
+        .onChange(of: csvText) { _, _ in failure = nil }
     }
 
     private func csvSummary(_ t: CSVTable, unmatched: [String]) -> String {
@@ -102,7 +103,7 @@ struct ProductionPlatesSheet: View {
             csvText = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
             fileName = url.lastPathComponent
         } catch {
-            failure = SheetError.message("Could not read \(url.lastPathComponent)", error)
+            failure = "Could not read \(url.lastPathComponent): \(error.localizedDescription)"
         }
     }
 
@@ -126,11 +127,11 @@ struct ProductionPlatesSheet: View {
             }
             // The notes are reported once the sheet has closed (a sheet and an alert cannot show together).
             if !notes.isEmpty {
-                document.deferredAlert = AlertMessage(title: r.summary, message: notes.joined(separator: "\n\n"))
+                document.report(AlertMessage(title: r.summary, message: notes.joined(separator: "\n\n")))
             }
             dismiss()
         } catch {
-            failure = SheetError.message("Plates not made", ImportService.describe(error))
+            failure = "Plates not made: \(ImportService.describe(error))"
         }
     }
 }

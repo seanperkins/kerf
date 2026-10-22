@@ -67,18 +67,19 @@ struct PartLabelsSheet: View {
         } catch {
             failure = error
         }
-        dismiss()
+        // Reported before the sheet closes, so the alert waits for it (an alert cannot show over a sheet).
         if let failure {
-            document.alert = AlertMessage(title: "Labels not added", message: ImportService.describe(failure))
+            document.report(AlertMessage(title: "Labels not added", message: ImportService.describe(failure)))
         } else if let r = report {
             if let id = r.operationID {
                 document.sidebarTab = .toolpaths
                 document.selectedOperationID = id
             }
             if r.skipped > 0 {
-                document.alert = AlertMessage(title: "Some parts were not labeled",
-                                              message: "\(r.skipped) part(s) had no room for a label of the smallest text height.")
+                document.report(AlertMessage(title: "Some parts were not labeled",
+                                             message: "\(r.skipped) part(s) had no room for a label of the smallest text height."))
             }
         }
+        dismiss()
     }
 }

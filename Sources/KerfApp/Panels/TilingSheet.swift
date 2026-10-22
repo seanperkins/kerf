@@ -100,6 +100,7 @@ struct TilingSheet: View {
     }
 
     private func run() {
+        failure = nil
         calcTask?.cancel()
         calcTask = nil
         let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
@@ -115,6 +116,7 @@ struct TilingSheet: View {
     }
 
     private func post() {
+        failure = nil
         guard settings.tileWidth > 0, settings.tileHeight > 0 else { files = []; return }
         files = TiledExport.files(project: document.outputProject, results: document.results, profile: document.postProfile,
                                   groupByTool: groupByTool, settings: settings)
@@ -139,11 +141,14 @@ struct TilingSheet: View {
         }
     }
 
-    /// Writes the whole set (or nothing), then closes the sheet. A failure closes it too, so the
-    /// alert that names the file is seen.
+    /// Writes the whole set (or nothing), then closes the sheet. A failure stays in the sheet, above
+    /// its buttons (an alert on the document would sit under the sheet), so another folder can be chosen.
     private func finishSaving(_ write: () throws -> Void) {
-        failure = SheetError.attempt("Could not save G-code", write)
-        guard failure == nil else { return }
-        dismiss()
+        do {
+            try write()
+            dismiss()
+        } catch {
+            failure = "Could not save G-code: \(error.localizedDescription)"
+        }
     }
 }

@@ -67,7 +67,7 @@ struct TextOnCurveSheet: View {
                               let updated = p
                               document.perform("Text on Curve") { $0 = updated }
                           } catch {
-                              document.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
+                              document.report(AlertMessage(title: "Text", message: ImportService.describe(error)))
                           }
                           if let id = newID { document.setSelection([id]) }
                       }) {

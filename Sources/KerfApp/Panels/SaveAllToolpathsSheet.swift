@@ -116,6 +116,7 @@ struct SaveAllToolpathsSheet: View {
     }
 
     private func run() {
+        failure = nil
         calcTask?.cancel()
         calcTask = nil
         let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
@@ -178,12 +179,15 @@ struct SaveAllToolpathsSheet: View {
     }
 
     /// Runs the write chosen in the panel, then remembers the post and closes the sheet. A failure
-    /// closes the sheet too, so the alert that names the file is seen (an alert under an open sheet
-    /// is not).
+    /// stays in the sheet, above its buttons (an alert on the document would sit under the sheet),
+    /// so another file or folder can be chosen.
     private func finishSaving(_ write: () throws -> Void) {
-        failure = SheetError.attempt("Could not save G-code", write)
-        guard failure == nil else { return }
-        if profileID != initialProfileID { document.setPostProfile(profileID) }
-        dismiss()
+        do {
+            try write()
+            if profileID != initialProfileID { document.setPostProfile(profileID) }
+            dismiss()
+        } catch {
+            failure = "Could not save G-code: \(error.localizedDescription)"
+        }
     }
 }

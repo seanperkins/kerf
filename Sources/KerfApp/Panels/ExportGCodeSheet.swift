@@ -127,6 +127,7 @@ struct ExportGCodeSheet: View {
     /// Recalculates stale toolpaths in the background (exported toolpaths must reflect the
     /// current parameters), then posts.
     private func run() {
+        failure = nil
         calcTask?.cancel()
         calcTask = nil
         let stale = targetOperations().filter { document.isStale($0) }
@@ -171,10 +172,13 @@ struct ExportGCodeSheet: View {
         panel.canCreateDirectories = true
         PanelRunner.present(panel) { response in
             guard response == .OK, let url = panel.url else { return }
-            failure = SheetError.attempt("Could not save G-code") { try text.write(to: url, atomically: true, encoding: .utf8) }
-            guard failure == nil else { return }
-            if profileID != initialProfileID { document.setPostProfile(profileID) }
-            dismiss()
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+                if profileID != initialProfileID { document.setPostProfile(profileID) }
+                dismiss()
+            } catch {
+                failure = "Could not save G-code: \(error.localizedDescription)"
+            }
         }
     }
 }

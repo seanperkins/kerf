@@ -134,6 +134,8 @@ final class KerfDocument: ReferenceFileDocument {
     /// Side shown and edited in a two-sided job.
     @Published var activeSide: JobSide = .top
     @Published var sheet: DocumentSheet?
+    /// Shown by ContentView on the document window. Never set it while a sheet is up: SwiftUI drops an
+    /// alert under a sheet. A sheet shows its own failure (`SheetErrorRow`) or reports with `report(_:)`.
     @Published var alert: AlertMessage?
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
     /// Cursor position in document units (for the status bar).
@@ -693,6 +695,18 @@ final class KerfDocument: ReferenceFileDocument {
             deferredAlert = message
             showDesignCanvas()
             showNextPlacement()
+        }
+    }
+
+    /// Reports a result to the user: at once, or after the open sheet closes (`sheetDismissed()` shows
+    /// it), because an alert cannot show over a sheet. Reports made while a sheet is up are joined.
+    func report(_ message: AlertMessage) {
+        guard sheet != nil else { alert = message; return }
+        if var held = deferredAlert {
+            held.message += "\n\n" + message.message
+            deferredAlert = held
+        } else {
+            deferredAlert = message
         }
     }
 
