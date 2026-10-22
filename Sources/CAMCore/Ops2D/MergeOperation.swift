@@ -2,7 +2,8 @@ import CADCore
 import Foundation
 
 /// Several toolpaths cut as one: the children are generated in order and consecutive results
-/// that use the same tool are joined into a single toolpath (one tool load, no tool change).
+/// that use the same tool, and have the same material cleared above them, are joined into a
+/// single toolpath (one tool load, no tool change).
 public struct MergeOperation: ToolpathOperation {
     public static let kind = OperationKind.merge
     public var setup: OperationSetup
@@ -25,7 +26,11 @@ public struct MergeOperation: ToolpathOperation {
         }
         var out: [Toolpath] = []
         for tp in pieces {
-            if var last = out.last, last.tool.id == tp.tool.id, last.spindleRPM == tp.spindleRPM {
+            // Pieces join only when the material cleared above them is the same: a joined toolpath
+            // carries one cleared depth, and a tiled export may later keep only some of its moves,
+            // so a value true of the whole but of no one piece would misjudge the tiles.
+            if var last = out.last, last.tool.id == tp.tool.id, last.spindleRPM == tp.spindleRPM,
+               abs((last.clearedDepth ?? 0) - (tp.clearedDepth ?? 0)) < 1e-9 {
                 last.moves += tp.moves
                 // A profile inside the merge keeps the "cut last" ordering protection.
                 if tp.kind == .profile { last.kind = .profile }

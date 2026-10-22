@@ -8,14 +8,16 @@ struct DepthForm: View {
     @Binding var depth: DepthSettings
     var units: LengthUnit
     var showFinalPass = true
-    /// The tool's stepdown in document units (for the pass list; nil = unknown).
-    var toolStepdown: Double? = nil
     /// The material thickness, when the form offers to keep the cut depth following it.
     var materialThickness: Double? = nil
+    /// The selected tool in document units: its stepdown for the pass list, its flute length for
+    /// the note under the cut depth (nil = unknown).
+    var tool: Tool? = nil
 
     var body: some View {
         LengthField("Start depth", value: $depth.startDepth, units: units, help: "Depth below the material top where cutting starts")
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
+        FluteLengthNote(tool: tool, cutDepth: depth.cutDepth, startDepth: depth.startDepth, units: units)
         if let thickness = materialThickness {
             Toggle("Follow the material thickness", isOn: Binding(get: { depth.followsThickness == true }, set: { on in
                 depth.followsThickness = on ? true : nil
@@ -31,9 +33,23 @@ struct DepthForm: View {
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
-        PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: toolStepdown)
+        PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: tool?.stepdown)
         if depth.cutDepth <= depth.startDepth {
             Text("Cut depth must be deeper than the start depth.").font(.caption).foregroundStyle(Color.warningText)
+        }
+    }
+}
+
+/// "Deeper than the flutes" under a cut-depth field, when it is.
+struct FluteLengthNote: View {
+    var tool: Tool?
+    var cutDepth: Double
+    var startDepth: Double
+    var units: LengthUnit
+
+    var body: some View {
+        if let problem = OperationHints.fluteLengthProblem(tool: tool, cutDepth: cutDepth, startDepth: startDepth, units: units) {
+            Text(problem).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -124,9 +140,10 @@ struct ProfileForm: View {
     /// The operation's vectors (to seed manual tabs).
     var shapes: [Shape] = []
     var isEditingTabs: Binding<Bool> = .constant(false)
-    var toolStepdown: Double? = nil
     /// The material thickness, so the Tabs section can say what a tab really holds.
     var materialThickness: Double? = nil
+    /// The selected tool in document units.
+    var tool: Tool? = nil
 
     private var manualBinding: Binding<Bool> {
         Binding(get: { params.tabs.isManual }, set: { manual in
@@ -137,7 +154,7 @@ struct ProfileForm: View {
 
     var body: some View {
         InspectorSection(title: "Cutting Depths") {
-            DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown, materialThickness: materialThickness)
+            DepthForm(depth: $params.depth, units: units, materialThickness: materialThickness, tool: tool)
         }
         Divider()
         InspectorSection(title: "Machine Vectors") {
@@ -247,10 +264,11 @@ struct PocketForm: View {
     var units: LengthUnit
     var library: ToolLibrary
     var finishToolID: UUID?
-    var toolStepdown: Double? = nil
+    /// The finish tool in document units.
+    var tool: Tool? = nil
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, toolStepdown: toolStepdown) }
+        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, tool: tool) }
         Divider()
         InspectorSection(title: "Clearing") {
             PocketStrategyForm(strategy: $params.strategy, profileFirst: $params.profilePassFirst)
@@ -269,11 +287,14 @@ struct PocketForm: View {
 struct DrillForm: View {
     @Binding var params: DrillParameters
     var units: LengthUnit
+    /// The drill in document units.
+    var tool: Tool? = nil
 
     var body: some View {
         InspectorSection(title: "Drilling") {
             LengthField("Start depth", value: $params.startDepth, units: units)
             LengthField("Cut depth", value: $params.cutDepth, units: units)
+            FluteLengthNote(tool: tool, cutDepth: params.cutDepth, startDepth: params.startDepth, units: units)
             Toggle("Peck drilling", isOn: Binding(get: { params.peckDepth > 0 }, set: { on in
                 params.peckDepth = on ? (units == .inch ? 0.125 : 3) : 0
             }))
@@ -445,9 +466,11 @@ struct InlayForm: View {
 struct FlutingForm: View {
     @Binding var params: FlutingParameters
     var units: LengthUnit
+    /// The selected tool in document units.
+    var tool: Tool? = nil
 
     var body: some View {
-        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, showFinalPass: false) }
+        InspectorSection(title: "Cutting Depths") { DepthForm(depth: $params.depth, units: units, showFinalPass: false, tool: tool) }
         Divider()
         InspectorSection(title: "Fluting") {
             Picker("Ramp", selection: $params.ramp) {

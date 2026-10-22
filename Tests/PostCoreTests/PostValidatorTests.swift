@@ -168,6 +168,28 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
     #expect(has(issues, "X travel"))
 }
 
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func toolpathValidationRefusesCutsDeeperThanTheFlutes(mode: ZZeroMode) {
+    // The 1/8 in end mill has a 0.5 in flute: a 0.6 in cut rubs the shank on the wall and is an
+    // error, whatever a hand-edited tool or depth says; 0.5 in is fine.
+    let job = PostFixtures.job(zZero: mode)
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    let eighth = ToolLibrary.seeded.tools[1]
+    let c = MachineCoordinates(job: job)
+    func tp(_ depth: Double) -> Toolpath {
+        Toolpath(name: "deep", kind: .pocket, tool: eighth, moves: [
+            .rapid(to: Vec3(1, 1, c.safeZ)), .linear(to: Vec3(1, 1, c.z(depth: depth)), feed: 30),
+            .linear(to: Vec3(2, 1, c.z(depth: depth)), feed: 60), .rapid(to: Vec3(2, 1, c.safeZ)),
+        ])
+    }
+    let issues = v.validate(toolpaths: [tp(0.6)])
+    #expect(has(issues, "Toolpath 'deep' cuts 0.6000 in below the material top with a 0.5000 in flute (\(eighth.name)); the shank rubs the wall above the flutes"))
+    #expect(!v.validate(toolpaths: [tp(0.5)]).contains { $0.message.contains("flute") })
+    // Material already cleared above the cut counts: a 0.9 in cut from a 0.5 in start depth fits.
+    var cleared = tp(0.9); cleared.clearedDepth = 0.5
+    #expect(!v.validate(toolpaths: [cleared]).contains { $0.message.contains("flute") })
+}
+
 @Test func toolpathValidationChecksRPMAndFeedAndUnits() {
     let mm = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job().scaled(by: 25.4),
                             units: .millimeter)
@@ -180,6 +202,12 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
     #expect(has(issues, "S26000"))
     #expect(has(issues, "zero or negative feed"))
     #expect(!has(issues, "allowed depth"))
+    // The tool's 1 in flute is 25.4 mm here: 19.5 mm fits, 30 mm does not.
+    #expect(!has(issues, "flute"))
+    let deep = Toolpath(name: "deep", kind: .profile, tool: PostFixtures.endMill, moves: [
+        .rapid(to: Vec3(0, 0, 5)), .linear(to: Vec3(0, 0, -30), feed: 500), .rapid(to: Vec3(0, 0, 5)),
+    ])
+    #expect(has(mm.validate(toolpaths: [deep]), "cuts 30.000 mm below the material top with a 25.400 mm flute"))
 }
 
 @Test func flagsInlayPocketAndPlugInOneProgram() {
