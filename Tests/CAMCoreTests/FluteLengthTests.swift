@@ -87,6 +87,55 @@ private typealias F = Ops2DFixture
     }
 
     @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+    func mergeKeepsEachPiecesClearedMaterial(mode: ZZeroMode) throws {
+        // A pocket from 0.5 to 0.9 in joined with a profile to 0.3 in, both with a 0.75 in flute:
+        // neither piece overruns, and nor does the joined toolpath, in either order.
+        let (seeded, ids) = F.document([F.rect(1, 1, 4, 3), F.rect(6, 1, 2, 2)], zZero: mode)
+        let tool = Self.tool(0, flute: 0.75)
+        let ctx = CAMContext(document: seeded.document, tools: ToolLibrary(tools: [tool]))
+        let pocket = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "Deep", toolID: tool.id, shapeIDs: [ids[0]]),
+                                                         params: PocketParameters(depth: DepthSettings(startDepth: 0.5, cutDepth: 0.9))))
+        let profile = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "Edge", toolID: tool.id, shapeIDs: [ids[1]]),
+                                                            params: ProfileParameters(depth: DepthSettings(cutDepth: 0.3))))
+        for children in [[pocket, profile], [profile, pocket]] {
+            let merged = try AnyOperation.merge(MergeOperation(setup: OperationSetup(name: "M", toolID: tool.id), params: MergeParameters(children: children)))
+                .generate(in: ctx)
+            #expect(merged.count == 1)
+            let tp = try #require(merged.first)
+            #expect(tp.metadata["warning"] == nil)
+            #expect(tp.cutBeyondFlute(coords: ctx.coords, units: .inch, tolerance: 0.0005) == nil)
+            #expect(abs((tp.clearedDepth ?? 0) - 0.5) < 1e-9)
+        }
+        // A piece that overruns on its own still shows through the join.
+        let deeper = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "Deeper", toolID: tool.id, shapeIDs: [ids[0]]),
+                                                         params: PocketParameters(depth: DepthSettings(startDepth: 0.5, cutDepth: 1.3))))
+        let bad = try AnyOperation.merge(MergeOperation(setup: OperationSetup(name: "M", toolID: tool.id), params: MergeParameters(children: [profile, deeper])))
+            .generate(in: ctx)[0]
+        #expect(bad.cutBeyondFlute(coords: ctx.coords, units: .inch, tolerance: 0.0005).map { abs($0.depth - $0.cleared - 0.8) < 1e-9 } == true)
+    }
+
+    @Test func photoVCarveIsJudgedBelowItsStartDepth() throws {
+        // 20 x 10 px, left half black: 0.1 in grooves with a 60° bit reach 0.05 / tan 30° deep.
+        var px = [UInt8](repeating: 255, count: 200)
+        for y in 0..<10 { for x in 0..<10 { px[y * 20 + x] = 0 } }
+        let image = GrayImage(width: 20, height: 10, pixels: Data(px))
+        let tool = Self.tool(5, flute: 0.05)
+        let ctx = CAMContext(document: Document(units: .inch), tools: ToolLibrary(tools: [tool]))
+        func photo(startDepth: Double) throws -> Toolpath {
+            try AnyOperation.photoVCarve(PhotoVCarveOperation(setup: OperationSetup(name: "Photo", toolID: tool.id),
+                                                               params: PhotoVCarveParameters(image: image, origin: Vec2(1, 1), width: 4, lineSpacing: 0.1, startDepth: startDepth)))
+                .generate(in: ctx)[0]
+        }
+        let fromTop = try photo(startDepth: 0)
+        #expect(fromTop.metadata["warning"]?.contains("below the material top with a 0.0500 in flute") == true)
+        // Started 0.5 in down in a cleared pocket, the grooves are still 0.087 in: the 0.05 in
+        // flute is told the groove, not the pocket.
+        let lowered = try photo(startDepth: 0.5)
+        #expect(lowered.clearedDepth == 0.5)
+        #expect(lowered.metadata["warning"]?.contains("deeper than the 0.5000 in already cleared with a 0.0500 in flute") == true)
+    }
+
+    @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
     func startDepthCountsAsClearedMaterial(mode: ZZeroMode) throws {
         // A pocket from 0.5 to 0.9 in with a 0.75 in flute: the material above 0.5 in is already
         // gone, so the flutes reach. From 0.5 to 1.3 in they do not, and the note says what was
