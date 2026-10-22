@@ -260,16 +260,31 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
 }
 
 @Test func feedBeforeAnyXYDrillsNothing() {
-    // The start XY of the first feed is a guess (the program never set X or Y), so it is no hole.
-    let issues = validate(program("G1 Z-0.1 F30\nG0 Z0.2\nG0 X0 Y0\nG0 Z-0.08"))
-    #expect(has(issues, "Rapid plunge", .warning))
+    // The start XY of the first feed is a guess (the program never set X or Y), so it is no hole,
+    // whether the feed is a line or an arc.
+    #expect(has(validate(program("G1 Z-0.1 F30\nG0 Z0.2\nG0 Z-0.08")), "Rapid plunge", .warning))
+    #expect(has(validate(program("G2 Z-0.1 I0.1 F30\nG0 Z0.2\nG0 Z-0.08")), "Rapid plunge", .warning))
+}
+
+@Test func feedsThatCannotRunOrGoUpLeaveTheHole() {
+    // A plunge without a feed rate, or with F0, is an error and drills nothing; an upward feed and an
+    // arc leave the hole too, so the rapid back down is reported.
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1\nG0 Z0.2\nG0 Z-0.08")), "Rapid plunge", .warning))
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F0\nG0 Z0.2\nG0 Z-0.08")), "Rapid plunge", .warning))
+    #expect(has(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG1 Z0.1 F30\nG0 Z-0.08")), "Rapid plunge", .warning))
+    let arc = "G0 X1 Y1\nG1 Z-0.1 F30\nG3 X1 Y1 I0.5 J0 F60\nG0 Z0.2\nG0 Z-0.08"
+    #expect(has(validate(program(arc)), "Rapid plunge", .warning))
 }
 
 @Test func toolChangeForgetsTheHole() {
-    for change in ["M5\nT2 M6\nM3 S18000", "M5\nM0\nM3 S18000", "T2"] {
+    for change in ["M5\nT2 M6\nM3 S18000", "M5\nM0\nM3 S18000", "M5\nM1\nM3 S18000", "T2"] {
         let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\n\(change)\nG0 Z0.05\nG0 Z-0.08"))
         #expect(has(issues, "Rapid plunge", .warning), "after \(change): \(issues)")
     }
+    // The motion of a block runs before its stop, so a plunge sharing a line with M0 drills before
+    // the tool may change: the hole is forgotten after it.
+    let shared = validate(program("G0 X1 Y1\nG1 Z-0.1 F30 M0\nM3 S18000\nG0 Z0.05\nG0 Z-0.08"))
+    #expect(has(shared, "Rapid plunge", .warning), "\(shared)")
 }
 
 @Test func grblStopToolChangeForgetsTheHoleInMillimetres() {
@@ -281,19 +296,33 @@ func allowsRapidReEntryIntoADrilledHole(mode: ZZeroMode) {
     }
     let pecks = "G0 X25 Y25\nG0 Z1\nG1 Z-3 F500\nG0 Z1\nG0 Z-2.5\nG1 Z-6 F500"
     #expect(run(pecks).isEmpty, "\(run(pecks))")
+    // eps is 0.01 mm here: the bottom itself is allowed, 0.02 mm past it is not.
+    #expect(run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z1\nG0 Z-3").isEmpty)
+    #expect(has(run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z1\nG0 Z-3.02"), "Rapid plunge", .warning))
     let changed = run("G0 X25 Y25\nG1 Z-3 F500\nG0 Z5.08\nM5\n(Change to Tool: 12 mm)\nM0\nM3 S18000\nG0 Z1\nG0 Z-2.5")
     #expect(has(changed, "Rapid plunge", .warning), "\(changed)")
 }
 
 @Test func coordinateShiftForgetsTheHole() {
-    for shift in ["G92 X1 Y1", "G55", "G10 L2 P1 X0 Y0"] {
+    for shift in ["G92 X1 Y1", "G92.1", "G55", "G59", "G10 L2 P1 X0 Y0", "G53 G0 X1 Y1", "G28", "G30 X1 Y1"] {
         let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.2\n\(shift)\nG0 Z-0.08"))
         #expect(has(issues, "Rapid plunge", .warning), "after \(shift): \(issues)")
     }
 }
 
+@Test func anyCodeOtherThanAPlainMoveForgetsTheHole() {
+    // Spindle, coolant, dwell, tool-length and distance-mode words are not moves; the rule that forgets
+    // the hole fails closed, so the rapid back down is reported after each of them.
+    for other in ["M3 S18000", "M8", "G4 P0.5", "G43 H1", "G90"] {
+        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\n\(other)\nG0 Z-0.08"))
+        #expect(has(issues, "Rapid plunge", .warning), "after \(other): \(issues)")
+    }
+    // A feed rate or a comment on its own line is not a code: the hole stays.
+    #expect(validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG0 Z0.05\nF40\n( peck 2 )\nG0 Z-0.08")).isEmpty)
+}
+
 @Test func absurdCoordinatesDoNotTrapTheChecker() {
-    // A coordinate the parser accepts but no grid could hold: the checker must answer, not crash.
+    // Nothing in the checker may trap on a coordinate the parser accepts, however large.
     let issues = validate(program("G0 X10000000000000000000 Y0\nG1 Z-0.1 F30\nG0 Z0.2\nG0 Z-0.05"))
     #expect(has(issues, "X travel"))
 }
@@ -340,9 +369,10 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
     #expect(has(issues, "Rapid plunge", .warning), "\(issues)")
 }
 
-@Test func toolpathCheckForgetsTheHoleWhenTheToolChanges() {
-    // The post writes a tool change only where the tool differs, so the check forgets the hole there
-    // and only there: the same tool may come back down its own hole from the next toolpath.
+@Test func toolpathCheckForgetsTheHoleWhenTheToolChangesOrTheMachineStops() {
+    // The post writes a tool change only where the tool differs, and a stop where a toolpath pauses
+    // after itself; the check forgets the hole there and only there, so the same tool may come back
+    // down its own hole from the next toolpath.
     let job = PostFixtures.job()
     let mc = MachineCoordinates(job: job)
     let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
@@ -356,10 +386,15 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
     let otherTool = v.validate(toolpaths: [toolpath("A", tool: PostFixtures.endMill, first),
                                            toolpath("B", tool: PostFixtures.vBit, reenter)])
     #expect(has(otherTool, "Rapid plunge", .warning), "\(otherTool)")
+    var paused = toolpath("A", tool: PostFixtures.endMill, first)
+    paused.pauseAfter = PauseStep(message: "Add clamps")
+    let afterPause = v.validate(toolpaths: [paused, toolpath("B", tool: PostFixtures.endMill, reenter)])
+    #expect(has(afterPause, "Rapid plunge", .warning), "\(afterPause)")
 }
 
 @Test func toolpathCheckSurvivesANonFiniteHoleCentre() {
-    // The exporter validates toolpaths before the post refuses a NaN move; the checker must not trap.
+    // The exporter validates toolpaths before the post refuses a NaN move, so nothing in the checker
+    // may trap on a non-finite coordinate either.
     let job = PostFixtures.job()
     let mc = MachineCoordinates(job: job)
     let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)

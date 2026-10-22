@@ -42,6 +42,7 @@ public struct GCodeValidator: Sendable {
         var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units)
         var pos: Vec3?
         var toolID: UUID?
+        var pausedBefore = false
         // Two different tools with one T number post as one tool: the controller sees no change
         // and the second geometry cuts with the first bit in the spindle.
         var byNumber: [Int: [Tool]] = [:]
@@ -60,8 +61,10 @@ public struct GCodeValidator: Sendable {
                 continue
             }
             check.rpm(tp.spindleRPM, min: profile.minRPM, max: profile.maxRPM, line: nil)
-            if tp.tool.id != toolID { check.leaveHole() }   // where the post puts its tool change
+            // Where the post writes a tool change or an operator stop, either of which can change the bit.
+            if tp.tool.id != toolID || pausedBefore { check.leaveHole() }
             toolID = tp.tool.id
+            pausedBefore = tp.pauseAfter != nil
             for move in tp.moves {
                 switch move {
                 case .dwell: continue
@@ -73,12 +76,12 @@ public struct GCodeValidator: Sendable {
                         check.visit(p, line: nil)
                     }
                 case .linear(let p, let feed):
-                    check.feedMove(from: pos, path: [p], feed: feed, spindleOn: true, line: nil)
+                    check.feedMove(from: pos, path: [p], feed: feed, spindleOn: true, line: nil, startKnown: true)
                 case .arcCW(let p, let c, let feed), .arcCCW(let p, let c, let feed):
                     let path = pos.map {
                         ArcGeometry.points(from: $0, to: p, center: c, clockwise: isCW(move), tolerance: check.eps)
                     } ?? [p]
-                    check.feedMove(from: pos, path: path, feed: feed, spindleOn: true, line: nil)
+                    check.feedMove(from: pos, path: path, feed: feed, spindleOn: true, line: nil, startKnown: true)
                 }
                 pos = move.target ?? pos
             }
@@ -153,19 +156,24 @@ public struct GCodeValidator: Sendable {
                     carried.add("incremental", .warning, line: b.line, "Incremental positioning (G91) in program")
                 case 0, 1, 2, 3: motion = Int(g)
                 case 4, 28, 30: nonMotion = true
-                case 54, 55, 56, 57, 58, 59:
-                    check.leaveHole()   // the same XY words now name another place
                 case 10, 53, 92, 92.1, 92.2:
                     // The controller now interprets every later coordinate in a frame this
                     // validator cannot see, so the depth checks below say nothing about it.
                     nonMotion = true
-                    check.leaveHole()
                     carried.add("coordinate-shift", .warning, line: b.line,
                                 "G\(NumberFormat.compact(g, maxDecimals: 1)) changes the coordinate system; depth checks no longer apply")
                 default: break
                 }
             }
             var stop: Int?
+            // The remembered hole survives only plain moves: any other G code may have moved the tool
+            // or changed what the coordinates mean, and a stop, M6 or T word may have changed the bit.
+            // One rule that fails closed, applied before the block's motion (a frame change applies to
+            // it) and after (a controller moves before it stops). An unlisted code costs a warning,
+            // never a missed one.
+            let plainMove = b.values("G").allSatisfy { [0, 1, 2, 3].contains($0) }
+                && b.values("M").isEmpty && b.value("T") == nil
+            if !plainMove { check.leaveHole() }
             for m in b.values("M") {
                 if !Self.knownM.contains(m) {
                     carried.add("unknown-m", .warning, line: b.line,
@@ -174,11 +182,8 @@ public struct GCodeValidator: Sendable {
                 switch m {
                 case 3, 4: spindleOn = true
                 case 5: spindleOn = false
-                case 0, 1:
-                    stop = Int(m)
-                    check.leaveHole()   // a post without M6 changes tools at a stop
+                case 0, 1: stop = Int(m)
                 case 6:
-                    check.leaveHole()
                     if spindleOn {
                         carried.add("toolchange-spindle-on", .warning, line: b.line,
                                     "Tool change (M6) with the spindle running; stop it (M5) first")
@@ -192,7 +197,6 @@ public struct GCodeValidator: Sendable {
                 default: break
                 }
             }
-            if b.value("T") != nil { check.leaveHole() }
             if let s = b.value("S") { sawSpeed = sawSpeed || s > 0 }
             if (b.has("M", 3) || b.has("M", 4)), !sawSpeed, b.value("S") == nil {
                 carried.add("spindle-no-speed", .warning, line: b.line, "Spindle started (M3/M4) with no speed (S) set")
@@ -248,7 +252,8 @@ public struct GCodeValidator: Sendable {
                                                           tolerance: check.eps)
                             }
                         }
-                        check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleOn, line: b.line)
+                        check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleOn, line: b.line,
+                                       startKnown: xyKnown)
                     }
                     x = tx ?? x; y = ty ?? y; z = tz ?? z
                 } else {
@@ -260,6 +265,7 @@ public struct GCodeValidator: Sendable {
             // word order (LinuxCNC's order of execution; Mach follows it), so the stop is judged on
             // the state at the end of the block. An unknown Z (nothing moved yet) is not a problem;
             // a custom post's pause template might be.
+            if !plainMove { check.leaveHole() }
             if let stop {
                 if spindleOn {
                     carried.add("stop-spindle-on", .warning, line: b.line,
