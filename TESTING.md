@@ -79,7 +79,11 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    same folder again: "Replace N files?" names the files; Cancel leaves them. If a program failed to
    generate, the Save button is disabled (a set with a file missing is never written).
 9. **Tool Database** (⇧⌘T): add or edit a tool. Tools are stored in
-   `~/Library/Application Support/Kerf/`.
+   `~/Library/Application Support/Kerf/`. Type a long name and watch `tools.json`'s modified time:
+   it changes once, when you press Return or click another field, not per letter. With a toolpath
+   calculated, renaming the tool leaves the toolpath unfaded and the new name shows in the sidebar
+   summary; changing the diameter fades it. Click Duplicate straight after typing a name (no Return):
+   the copy carries the new name.
 10. **Round trip.** Save the document as a `.kerf` file, close it and open it again.
 
 ### More file and job features

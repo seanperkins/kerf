@@ -241,7 +241,9 @@ final class SimulationPreviewModel: ObservableObject {
                    timeSettings: TimeEstimateSettings = TimeEstimateSettings()) {
         let motion = timeSettings.motion(units: units)
         var hasher = Hasher()
-        hasher.combine(job); hasher.combine(toolpaths); hasher.combine(rapidRate)
+        hasher.combine(job); hasher.combine(rapidRate)
+        // A tool renamed in the database is renamed in place in its toolpaths; that is not a new simulation.
+        for var tp in toolpaths { tp.tool.name = ""; hasher.combine(tp) }
         hasher.combine(motion); hasher.combine(timeSettings.toolChangeSeconds)
         let key = hasher.finalize()
         guard key != configuredKey else { return }
