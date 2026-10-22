@@ -60,6 +60,14 @@ public struct GCodeValidator: Sendable {
                 continue
             }
             check.rpm(tp.spindleRPM, min: profile.minRPM, max: profile.maxRPM, line: nil)
+            // Deeper than the flutes: the shank rubs the wall. An error, so a hand-edited tool or a
+            // depth typed past the flute length cannot reach the machine.
+            if let over = tp.cutBeyondFlute(coords: check.coords, tolerance: check.eps) {
+                let d = units == .inch ? 4 : 3
+                check.issues.add("flute-\(tp.id)", .error, line: nil,
+                                 "Toolpath '\(tp.name)' cuts \(NumberFormat.fixed(over.depth, decimals: d)) \(units.abbreviation) below the material top "
+                                     + "with a \(NumberFormat.fixed(over.flute, decimals: d)) \(units.abbreviation) flute (\(tp.tool.name)); the shank rubs the wall")
+            }
             // Where the post writes a tool change or an operator stop, either of which can change the bit
             // (the same stops the time estimate counts).
             if let previous, ToolpathStats.stopsBefore(tp, after: previous) { check.leaveHole() }

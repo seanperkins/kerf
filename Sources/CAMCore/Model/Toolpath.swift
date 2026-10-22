@@ -34,6 +34,15 @@ public struct Toolpath: Codable, Hashable, Identifiable, Sendable {
     /// Lowest Z reached by any move (most negative = deepest).
     public var minZ: Double? { moves.compactMap { $0.target?.z }.min() }
 
+    /// The deepest cut below the material top and the tool's flute length, when the cut goes
+    /// past the flutes: the shank then rubs the wall above them, which burns the material and
+    /// can snap the bit. Nil when the tool's flute length is unknown or long enough.
+    public func cutBeyondFlute(coords: MachineCoordinates, tolerance: Double) -> (depth: Double, flute: Double)? {
+        guard let flute = tool.fluteLength, flute > 0, let z = minZ else { return nil }
+        let depth = coords.depth(ofMachineZ: z)
+        return depth > flute + tolerance ? (depth, flute) : nil
+    }
+
     /// XY bounds of everything the moves reach, including the bulge of arcs (the quadrant points
     /// an arc passes through). Used to decide whether two toolpaths can be reordered safely, so
     /// it must never be smaller than the truth.

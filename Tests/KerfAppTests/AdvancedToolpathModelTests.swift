@@ -386,6 +386,18 @@ private enum Job {
                     .hasPrefix("Single plunge"))
     }
 
+    @Test func fluteLengthProblemNamesTheToolAndItsFlutes() {
+        let eighth = ToolLibrary.seeded.tools[1]   // 0.5 in flute
+        #expect(OperationHints.fluteLengthProblem(tool: eighth, cutDepth: 0.75, units: .inch)
+                    == "Deeper than the 0.5 in flutes of \(eighth.name); the shank will rub the wall above them.")
+        #expect(OperationHints.fluteLengthProblem(tool: eighth, cutDepth: 0.5, units: .inch) == nil)
+        #expect(OperationHints.fluteLengthProblem(tool: nil, cutDepth: 0.75, units: .inch) == nil)
+        var unknown = eighth; unknown.fluteLength = nil
+        #expect(OperationHints.fluteLengthProblem(tool: unknown, cutDepth: 0.75, units: .inch) == nil)
+        let mm = eighth.converted(to: .millimeter)
+        #expect(OperationHints.fluteLengthProblem(tool: mm, cutDepth: 20, units: .millimeter)?.contains("12.7 mm flutes") == true)
+    }
+
     @Test func clearanceToolMustBeLargerThanFinishTool() {
         let lib = ToolLibrary.seeded
         let quarter = lib.tools[0], eighth = lib.tools[1], half = lib.tools[2]

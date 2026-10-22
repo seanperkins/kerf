@@ -168,6 +168,25 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
     #expect(has(issues, "X travel"))
 }
 
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func toolpathValidationRefusesCutsDeeperThanTheFlutes(mode: ZZeroMode) {
+    // The 1/8 in end mill has a 0.5 in flute: a 0.6 in cut rubs the shank on the wall and is an
+    // error, whatever a hand-edited tool or depth says; 0.5 in is fine.
+    let job = PostFixtures.job(zZero: mode)
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: job, units: .inch)
+    let eighth = ToolLibrary.seeded.tools[1]
+    let c = MachineCoordinates(job: job)
+    func tp(_ depth: Double) -> Toolpath {
+        Toolpath(name: "deep", kind: .pocket, tool: eighth, moves: [
+            .rapid(to: Vec3(1, 1, c.safeZ)), .linear(to: Vec3(1, 1, c.z(depth: depth)), feed: 30),
+            .linear(to: Vec3(2, 1, c.z(depth: depth)), feed: 60), .rapid(to: Vec3(2, 1, c.safeZ)),
+        ])
+    }
+    let issues = v.validate(toolpaths: [tp(0.6)])
+    #expect(has(issues, "Toolpath 'deep' cuts 0.6000 in below the material top with a 0.5000 in flute (\(eighth.name)); the shank rubs the wall"))
+    #expect(!v.validate(toolpaths: [tp(0.5)]).contains { $0.message.contains("flute") })
+}
+
 @Test func toolpathValidationChecksRPMAndFeedAndUnits() {
     let mm = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job().scaled(by: 25.4),
                             units: .millimeter)
