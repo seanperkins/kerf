@@ -82,6 +82,12 @@ public struct FacingOperation: ToolpathOperation {
         guard flat.allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else {
             throw CAMError.invalidGeometry("The area to face is too large")
         }
+        // The lead-in (and a raster's lead-out) must really put the cutter clear of the area: far from the origin a lead
+        // of a tool radius can round away to nothing.
+        let leads = params.pattern == .spiral ? [flat[0]] : [flat[0], flat[flat.count - 1]]
+        guard leads.allSatisfy({ Self.isClear($0, of: area, toolRadius: r, tolerance: tol) }) else {
+            throw CAMError.invalidGeometry("The area to face is too far from the origin to lead the tool in")
+        }
         guard flat.count * passes.count <= Self.maxPoints else {
             throw CAMError.invalidParameter("Too many passes: raise the stepover or the depth per pass")
         }
@@ -163,6 +169,13 @@ public struct FacingOperation: ToolpathOperation {
         if faced.isEmpty { return true }
         return reach.min.x < faced.min.x - tolerance || reach.min.y < faced.min.y - tolerance
             || reach.max.x > faced.max.x + tolerance || reach.max.y > faced.max.y + tolerance
+    }
+
+    /// Whether a cutter centered at `p` touches none of `area`.
+    static func isClear(_ p: Vec2, of area: Rect2, toolRadius r: Double, tolerance: Double) -> Bool {
+        // Differences, not `area.min.x - r` compared with `p.x`: far from the origin both would round to the same number.
+        area.min.x - p.x >= r - tolerance || p.x - area.max.x >= r - tolerance
+            || area.min.y - p.y >= r - tolerance || p.y - area.max.y >= r - tolerance
     }
 
     /// How far to lead from `p` along the axis direction `dir` (a unit vector) before the cutter is clear of `area`: a
