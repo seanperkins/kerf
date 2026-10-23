@@ -40,19 +40,30 @@ for id in ${(f)ids}; do
   done
 done
 (( failed == 0 )) || exit 1
-# Every post and sample made a program: a short set must never replace, or pass for, the committed one.
+# Every post and sample made a program of its own: a short or muddled set must never replace, or pass for, the committed one.
+for id in ${(f)ids}; do
+  (( $(find "$work/$id" -type f | wc -l) == ${#samples} )) || { echo "FAIL: $id did not make ${#samples} programs" >&2; exit 1; }
+  for sample in $samples; do
+    stem="${sample:t:r}"
+    ls "$work/$id/$stem".* > /dev/null 2>&1 || { echo "FAIL: no program for $stem with $id" >&2; exit 1; }
+  done
+done
 (( $(find "$work" -type f | wc -l) == expected_count )) || { echo "FAIL: expected $expected_count programs" >&2; exit 1; }
 
 if (( update )); then
+  # Staged next to the committed set and swapped in whole, so a failed copy leaves the committed programs as they were.
+  stage="$(mktemp -d samples/.expected-new.XXXXXX)"
+  trap 'rm -rf "$work" "$stage"' EXIT
+  cp -R "$work"/. "$stage"/
+  (( $(find "$stage" -type f | wc -l) == expected_count )) || { echo "FAIL: the copy is short" >&2; exit 1; }
   rm -rf samples/expected
-  mkdir -p samples/expected
-  cp -R "$work"/. samples/expected/
-  echo "samples/expected rewritten: $(find samples/expected -type f | wc -l | tr -d ' ') programs"
+  mv "$stage" samples/expected
+  echo "samples/expected rewritten: $expected_count programs"
   exit 0
 fi
 
 if diff -ru samples/expected "$work"; then
-  echo "samples/expected matches: $(find samples/expected -type f | wc -l | tr -d ' ') programs"
+  echo "samples/expected matches: $expected_count programs"
 else
   echo "FAIL: the programs above differ from samples/expected (scripts/check-samples.sh --update after an intended change)" >&2
   exit 1

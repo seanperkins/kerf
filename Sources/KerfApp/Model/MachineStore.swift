@@ -8,12 +8,15 @@ import PostCore
 /// ~/Library/Application Support/Kerf/machines/*.json (a user file with a built-in's id overrides it).
 struct MachineStore {
     var directory: URL
+    /// False = the built-ins only, whatever is in `directory` (the command line's `--builtin-only`).
+    var readsUserFiles = true
 
     init(directory: URL = ToolLibraryStore.supportDirectory.appendingPathComponent("machines", isDirectory: true)) {
         self.directory = directory
     }
 
     func userMachines() -> [MachineDefinition] {
+        guard readsUserFiles else { return [] }
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension.lowercased() == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }

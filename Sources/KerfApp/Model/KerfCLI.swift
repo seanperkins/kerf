@@ -41,7 +41,8 @@ enum KerfCLI {
           --name <text>        job name in the program header (default: the project's name)
           --group-by-tool      order the program by tool, as the Export sheet's option does
           --builtin-only       ignore the user's posts and machines in Application Support (for CI)
-          --force              write the program even when the validator reports errors (the status stays 1)
+          --force              write the program even when the validator reports errors (the status stays 1); never
+                       when a toolpath failed to calculate
           --quiet              do not print the written file's name
 
         With --out - the program is written to standard output exactly as the post made it.
@@ -143,11 +144,14 @@ enum KerfCLI {
         init(_ message: String) { self.message = message }
     }
 
-    /// The post and machine stores: the user's folders, or a folder that is not there when only built-ins are wanted.
+    /// The post and machine stores: the user's folders, or the built-ins alone.
     private static func stores(builtinOnly: Bool) -> (posts: PostProfileStore, machines: MachineStore) {
-        guard builtinOnly else { return (PostProfileStore(), MachineStore()) }
-        let none = FileManager.default.temporaryDirectory.appendingPathComponent("kerf-cli-no-user-files-\(UUID().uuidString)")
-        return (PostProfileStore(directory: none), MachineStore(directory: none))
+        var posts = PostProfileStore(), machines = MachineStore()
+        if builtinOnly {
+            posts.readsUserFiles = false
+            machines.readsUserFiles = false
+        }
+        return (posts, machines)
     }
 
     // MARK: posts
@@ -212,7 +216,8 @@ enum KerfCLI {
                                      message: "The project's post \"\(id)\" is not installed; \"\(fallback.name)\" is used instead. Pick a post before saving."))
         }
         func effective(_ id: String?) -> PostProfile {
-            let profile = profiles.first { $0.id == id } ?? profiles.first { $0.id == PostProfileStore.defaultID(for: units) }
+            // A post that is not installed falls back as the app's catalog does (`PostProfileCatalog.profile(id:)`).
+            let profile = profiles.first { $0.id == id } ?? profiles.first { $0.id == PostProfileStore.defaultProfileID }
                 ?? BuiltInPosts.avidMach4Inch
             return MachineResolver.effectiveProfile(profile, machine: MachineResolver.machine(for: project, machines: machines))
         }
@@ -264,7 +269,8 @@ enum KerfCLI {
             setup.isEnabled = true
             return op.with(setup: setup)
         }
-        result.issues.insert(contentsOf: issues + GCodeExporter.missingOperationIssues(asked, results: results), at: 0)
+        let missing = GCodeExporter.missingOperationIssues(asked, results: results)
+        result.issues.insert(contentsOf: issues + missing, at: 0)
 
         for issue in result.issues {
             output.standardError("\(issue.severity.rawValue): \(issue.line.map { "line \($0): " } ?? "")\(issue.message)\n")
@@ -274,6 +280,12 @@ enum KerfCLI {
             return 1
         }
         let status: Int32 = result.hasErrors ? 1 : 0
+        // A toolpath that did not calculate is a step missing from the program: `--force` is for the validator's errors and
+        // never writes a program that is short of one.
+        if !missing.isEmpty {
+            output.standardError("error: \(missing.count) toolpath\(missing.count == 1 ? "" : "s") missing from the program: nothing written\n")
+            return 1
+        }
         if result.hasErrors, !options.force {
             let n = result.issues.filter { $0.severity == .error }.count
             output.standardError("error: \(n) validator error\(n == 1 ? "" : "s"): nothing written (--force writes it anyway)\n")

@@ -107,6 +107,55 @@ import Testing
         #expect(all.status == 0, "\(all.err)")
     }
 
+    @Test @MainActor func aPostThatIsNotInstalledFallsBackAsTheAppDoes() throws {
+        // A millimeter project whose saved post is gone: the app's catalog falls back to the default post (the inch Avid),
+        // not to the millimeter one; the command line must write what the sheet would (the missing post is an error: forced).
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        project = project.converted(to: .millimeter)
+        project.postProfileID = "no-such-post"
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("gone.kerf")
+        try project.encoded().write(to: file)
+        let refused = Self.run(["export", file.path, "--out", "-", "--builtin-only"])
+        #expect(refused.status == 1 && refused.err.contains("post \"no-such-post\" is not installed") && refused.out.isEmpty)
+        let r = Self.run(["export", file.path, "--out", "-", "--builtin-only", "--force"])
+        #expect(r.status == 1)
+        #expect(r.out == (try Self.appExport(project)))
+        // The inch Avid post, though the project is in millimeters (the header names the post's own units).
+        #expect(r.out.contains("Post: Avid PRO6096 Mach4 [inch]"))
+    }
+
+    @Test func forceNeverWritesAProgramThatIsShortOfAToolpath() throws {
+        // An enabled toolpath that cannot calculate is a step missing from the program, whatever --force is for.
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        let i = try #require(project.operations.firstIndex { $0.setup.name == "Profile 1" })
+        var setup = project.operations[i].editableSetup
+        setup.shapeIDs = []
+        project.operations[i] = project.operations[i].with(setup: setup)
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("short.kerf")
+        try project.encoded().write(to: file)
+        for flags in [[String](), ["--force"]] {
+            let r = Self.run(["export", file.path, "--out", folder.path] + flags)
+            #expect(r.status == 1 && r.err.contains("Profile 1 is missing from the program") && r.err.contains("nothing written"))
+            #expect(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("short.tap").path))
+        }
+    }
+
+    @Test func builtinOnlyStoresDoNotReadTheUsersFiles() throws {
+        let folder = Self.folder()
+        var override = BuiltInPosts.avidMach4Inch
+        override.name = "A user's Avid"
+        try override.toJSON().write(to: folder.appendingPathComponent("avid.json"))
+        var store = PostProfileStore(directory: folder)
+        #expect(store.allProfiles().first { $0.id == override.id }?.name == "A user's Avid")
+        store.readsUserFiles = false
+        #expect(store.allProfiles() == BuiltInPosts.all)
+        var machines = MachineStore(directory: folder)
+        machines.readsUserFiles = false
+        #expect(machines.allMachines() == BuiltInMachines.all)
+    }
+
     @Test func aPostIsChosenByIdAndListed() throws {
         let posts = Self.run(["posts", "--builtin-only"])
         #expect(posts.status == 0)
