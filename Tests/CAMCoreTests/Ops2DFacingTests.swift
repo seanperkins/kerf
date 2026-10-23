@@ -110,7 +110,8 @@ func ops2DFacingEnterAndLeaveClearOfTheStock(pattern: FacingPattern, overhang: D
     let plunge = try #require(firstPlunge)
     #expect(clearance(plunge) >= r - 1e-9, "\(pattern), overhang \(String(describing: overhang)): plunges at \(plunge), inside the stock")
     if pattern != .spiral {
-        // The last cut ends clear of the stock too, where the cutter lifts out.
+        // A raster's last cut ends clear of the stock too, where the cutter lifts out (a spiral ends in the middle of the
+        // faced floor and lifts there).
         let last = try #require(F.densePoints(tp.moves).last)
         #expect(clearance(last.xy) >= r - 1e-9, "lifts out at \(last.xy)")
     }

@@ -239,6 +239,16 @@ struct FacingForm: View {
     @Binding var params: FacingParameters
     var units: LengthUnit
     var tool: Tool?
+    /// The document has other sheets, or machines both sides (a toolpath without vectors cannot say which it is for).
+    var multiSheet = false
+    var twoSided = false
+
+    /// Why a facing of the whole material may not be where it is expected: with no vectors it belongs to the first
+    /// sheet and the top side, as a 3D relief does. nil when there is nothing to say.
+    static func scopeNote(area: FacingArea, multiSheet: Bool, twoSided: Bool) -> String? {
+        guard area == .material, multiSheet || twoSided else { return nil }
+        return "With no vectors this facing belongs to the first sheet and the top side. To face another sheet or the bottom side, draw a rectangle on it and choose Selected vectors."
+    }
 
     var body: some View {
         InspectorSection(title: "Cutting Depths") {
@@ -266,9 +276,12 @@ struct FacingForm: View {
                                 defaultValue: tool?.radius ?? (units == .inch ? 0.125 : 3))
             if params.pattern == .spiral { DirectionPicker(direction: $params.direction) }
             Text(params.area == .material
-                 ? "Takes a layer off the top of the whole material. The tool leaves the stock at the end of every pass, and the first pass is led in from outside."
+                 ? "Takes a layer off the top of the whole material. The first pass is led in from outside; a raster runs out past the material before it lifts, a spiral lifts in the middle."
                  : "Takes a layer off the top of the box round the selected vectors. The cutter reaches past the box by the overhang, so face the whole material if the stock continues beyond it.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let note = Self.scopeNote(area: params.area, multiSheet: multiSheet, twoSided: twoSided) {
+                Text(note).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

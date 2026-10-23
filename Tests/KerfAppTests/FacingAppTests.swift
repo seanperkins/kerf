@@ -74,4 +74,14 @@ import Testing
         let moved = DepthFollow.adjusted(p.operations, thicknessFrom: 0.75, to: 0.5)
         #expect(moved.first?.editableDepth?.cutDepth == 0.5)
     }
+
+    @Test func aWholeMaterialFacingSaysWhichSheetAndSideItBelongsTo() {
+        #expect(FacingForm.scopeNote(area: .material, multiSheet: false, twoSided: false) == nil)
+        for (sheets, sides) in [(true, false), (false, true), (true, true)] {
+            let note = FacingForm.scopeNote(area: .material, multiSheet: sheets, twoSided: sides)
+            #expect(note?.contains("first sheet and the top side") == true)
+            // With vectors the sheet and side come from them.
+            #expect(FacingForm.scopeNote(area: .vectors, multiSheet: sheets, twoSided: sides) == nil)
+        }
+    }
 }

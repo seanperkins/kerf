@@ -164,7 +164,8 @@ struct OperationEditor: View {
                          units: units, tool: primaryTool)
         case .facing(let o):
             FacingForm(params: paramsBinding(o.params) { .facing(FacingOperation(setup: draft.setup, params: $0)) },
-                       units: units, tool: primaryTool)
+                       units: units, tool: primaryTool, multiSheet: document.document.isMultiSheet,
+                       twoSided: document.document.job.isTwoSided)
         case .prism(let o):
             PrismForm(params: paramsBinding(o.params) { .prism(PrismOperation(setup: draft.setup, params: $0)) },
                       units: units)
