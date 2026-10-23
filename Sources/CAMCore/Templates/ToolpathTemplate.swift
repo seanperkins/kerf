@@ -41,7 +41,7 @@ public struct VectorSelector: Codable, Hashable, Sendable {
 /// A saved set of toolpaths that can be re-applied to another design: every operation keeps its
 /// parameters and tools, and picks its vectors again with a `VectorSelector`.
 public struct ToolpathTemplate: Codable, Hashable, Sendable {
-    public static let fileExtension = "kerftoolpaths"
+    public static let fileExtension = "loftlinetoolpaths"
     public static let currentFormatVersion = 1
 
     public struct Entry: Codable, Hashable, Sendable {
@@ -67,7 +67,7 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
     }
 
     /// Template from `project`'s operations (all, or those in `operationIDs`, in project order).
-    public static func make(from project: KerfProject, operationIDs: Set<UUID>? = nil, library: ToolLibrary) -> ToolpathTemplate {
+    public static func make(from project: LoftLineProject, operationIDs: Set<UUID>? = nil, library: ToolLibrary) -> ToolpathTemplate {
         let doc = project.document
         let lib = project.mergedTools(with: library)
         var entries: [Entry] = []
@@ -125,7 +125,7 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
     public static func decode(from data: Data) throws -> ToolpathTemplate {
         let t = try JSONDecoder().decode(ToolpathTemplate.self, from: data)
         guard t.formatVersion <= currentFormatVersion else {
-            throw CAMError.invalidParameter("This toolpath template was saved by a newer version of Kerf")
+            throw CAMError.invalidParameter("This toolpath template was saved by a newer version of LoftLine")
         }
         return t
     }

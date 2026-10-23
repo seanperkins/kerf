@@ -46,9 +46,9 @@ final class SVGNode {
         parser.shouldResolveExternalEntities = false
         guard parser.parse(), let root = builder.root else {
             let msg = parser.parserError.map { "\($0.localizedDescription)" } ?? "no root element"
-            throw KerfIOError.malformed("SVG: \(msg)")
+            throw LoftLineIOError.malformed("SVG: \(msg)")
         }
-        guard root.name == "svg" else { throw KerfIOError.malformed("SVG: root element is <\(root.name)>") }
+        guard root.name == "svg" else { throw LoftLineIOError.malformed("SVG: root element is <\(root.name)>") }
         return root
     }
 

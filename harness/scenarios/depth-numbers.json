@@ -52,7 +52,7 @@
     },
     {
       "op": "project",
-      "name": "harness/projects/sign-overcut.kerf"
+      "name": "harness/projects/sign-overcut.loftline"
     },
     {
       "op": "tab",

@@ -42,7 +42,7 @@ import Testing
 
     @Test func unknownFontThrows() {
         #expect(throws: TextOutliner.TextError.self) {
-            try outliner.outlines(for: "A", fontName: "No Such Font Kerf 123", size: 1, origin: .zero)
+            try outliner.outlines(for: "A", fontName: "No Such Font LoftLine 123", size: 1, origin: .zero)
         }
     }
 

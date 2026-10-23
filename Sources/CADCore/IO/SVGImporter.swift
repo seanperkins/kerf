@@ -261,7 +261,7 @@ public struct SVGImporter: VectorImporter {
         return nil
     }
 
-    /// A shape name from an SVG element id. Kerf's own export writes ids as "Name-<8 hex digits>" to keep
+    /// A shape name from an SVG element id. LoftLine's own export writes ids as "Name-<8 hex digits>" to keep
     /// them unique; the hash is dropped so a round trip (and the sample files) keep readable names.
     /// Only a suffix with at least one letter a–f counts, so "Rev-20240101" keeps its date.
     public static func displayName(forID id: String) -> String {

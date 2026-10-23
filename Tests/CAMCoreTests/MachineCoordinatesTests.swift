@@ -35,9 +35,9 @@ import Testing
     let doc = Document()
     let tool = ToolLibrary.seeded.tools[0]
     let op = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "Cut out", toolID: tool.id)))
-    let project = KerfProject(document: doc, operations: [op, .pocket(PocketOperation(setup: OperationSetup(name: "P", toolID: tool.id)))],
+    let project = LoftLineProject(document: doc, operations: [op, .pocket(PocketOperation(setup: OperationSetup(name: "P", toolID: tool.id)))],
                               tools: [tool], postProfileID: "avid-pro6096-mach4-inch")
-    let back = try KerfProject.decode(from: project.encoded())
+    let back = try LoftLineProject.decode(from: project.encoded())
     #expect(back == project)
     #expect(back.operations.map(\.kind) == [.profile, .pocket])
 }

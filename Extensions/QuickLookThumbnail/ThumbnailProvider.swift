@@ -2,11 +2,11 @@ import AppKit
 import ImageIO
 import QuickLookThumbnailing
 
-/// Quick Look / Finder thumbnail for `.kerf` files: draws the design picture Kerf embeds at the
+/// Quick Look / Finder thumbnail for `.loftline` files: draws the design picture LoftLine embeds at the
 /// start of every saved file (`QuickLookThumbnailData`, compiled in alongside this file by
 /// scripts/bundle.sh). Files saved before thumbnails existed get the generic icon.
-@objc(KerfThumbnailProvider)
-final class KerfThumbnailProvider: QLThumbnailProvider {
+@objc(LoftLineThumbnailProvider)
+final class LoftLineThumbnailProvider: QLThumbnailProvider {
     struct NoThumbnail: Error {}
 
     override func provideThumbnail(for request: QLFileThumbnailRequest,

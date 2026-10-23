@@ -57,10 +57,10 @@ private func asciiSTL(_ tris: [(Vec3, Vec3, Vec3)]) -> Data {
 }
 
 @Test func stlRejectsGarbage() {
-    #expect(throws: KerfIOError.self) {
+    #expect(throws: LoftLineIOError.self) {
         try STLImporter().importMesh(from: Data("hello world".utf8), targetUnits: .inch)
     }
-    #expect(throws: KerfIOError.self) {
+    #expect(throws: LoftLineIOError.self) {
         try STLImporter().importMesh(from: Data("solid empty\nendsolid\n".utf8), targetUnits: .inch)
     }
 }

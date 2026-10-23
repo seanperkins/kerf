@@ -25,10 +25,10 @@ public struct PDFImporter: VectorImporter {
     public func importPage(from data: Data, targetUnits: LengthUnit,
                            includeImages: Bool) throws -> (result: ImportResult, images: [EmbeddedImage]) {
         guard let provider = CGDataProvider(data: data as CFData), let pdf = CGPDFDocument(provider) else {
-            throw KerfIOError.malformed("PDF: not a readable PDF document")
+            throw LoftLineIOError.malformed("PDF: not a readable PDF document")
         }
-        if pdf.isEncrypted && !pdf.isUnlocked { throw KerfIOError.malformed("PDF: the document is password protected") }
-        guard pdf.numberOfPages >= 1, let page = pdf.page(at: 1) else { throw KerfIOError.malformed("PDF: no pages") }
+        if pdf.isEncrypted && !pdf.isUnlocked { throw LoftLineIOError.malformed("PDF: the document is password protected") }
+        guard pdf.numberOfPages >= 1, let page = pdf.page(at: 1) else { throw LoftLineIOError.malformed("PDF: no pages") }
 
         let state = ScanState()
         state.includeImages = includeImages

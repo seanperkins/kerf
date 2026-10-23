@@ -1,7 +1,7 @@
 import CADCore
 import Foundation
 
-/// Profiles shipped with Kerf. Users can add more as JSON (see docs/specs).
+/// Profiles shipped with LoftLine. Users can add more as JSON (see docs/specs).
 public enum BuiltInPosts {
     /// G91.1: arc centres (I/J) relative to the arc start, which is what these posts write. Mach4
     /// keeps the IJ mode as a controller setting, so the program states it rather than trusting it.

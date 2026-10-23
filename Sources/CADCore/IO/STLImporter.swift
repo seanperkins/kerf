@@ -20,9 +20,9 @@ public struct STLImporter: MeshImporter {
                   text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix("solid") {
             triangles = try Self.parseASCII(text)
         } else {
-            throw KerfIOError.malformed("Not a binary or ASCII STL file")
+            throw LoftLineIOError.malformed("Not a binary or ASCII STL file")
         }
-        guard !triangles.isEmpty else { throw KerfIOError.malformed("STL contains no triangles") }
+        guard !triangles.isEmpty else { throw LoftLineIOError.malformed("STL contains no triangles") }
         let f = sourceUnits.factor(to: targetUnits)
         return Self.indexed(triangles, scale: f)
     }
@@ -40,7 +40,7 @@ public struct STLImporter: MeshImporter {
     static func parseBinary(_ data: Data) throws -> [(Vec3, Vec3, Vec3)] {
         try data.withUnsafeBytes { raw -> [(Vec3, Vec3, Vec3)] in
             let n = Int(raw.loadUnaligned(fromByteOffset: 80, as: UInt32.self).littleEndian)
-            guard 84 + n * 50 <= raw.count else { throw KerfIOError.malformed("Truncated binary STL") }
+            guard 84 + n * 50 <= raw.count else { throw LoftLineIOError.malformed("Truncated binary STL") }
             func vertex(_ off: Int) -> Vec3 {
                 func f(_ o: Int) -> Double {
                     Double(Float(bitPattern: raw.loadUnaligned(fromByteOffset: o, as: UInt32.self).littleEndian))
@@ -53,7 +53,7 @@ public struct STLImporter: MeshImporter {
                 let base = 84 + i * 50 + 12 // skip the facet normal
                 let tri = (vertex(base), vertex(base + 12), vertex(base + 24))
                 guard tri.0.isFinite, tri.1.isFinite, tri.2.isFinite else {
-                    throw KerfIOError.malformed("Binary STL: triangle \(i + 1) has a non-finite vertex")
+                    throw LoftLineIOError.malformed("Binary STL: triangle \(i + 1) has a non-finite vertex")
                 }
                 tris.append(tri)
             }
@@ -71,7 +71,7 @@ public struct STLImporter: MeshImporter {
             case "vertex":
                 guard parts.count >= 4, let x = Double(parts[1]), let y = Double(parts[2]), let z = Double(parts[3]),
                       x.isFinite, y.isFinite, z.isFinite
-                else { throw KerfIOError.malformed("Bad vertex line: \(line)") }
+                else { throw LoftLineIOError.malformed("Bad vertex line: \(line)") }
                 pending.append(Vec3(x, y, z))
             case "endloop":
                 // Polygons with more than 3 vertices (rare, non-standard) are fanned.

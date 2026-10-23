@@ -1,27 +1,27 @@
-# Testing Kerf
+# Testing LoftLine
 
 ## 1. Open the app
 
-- The app is at `dist/Kerf.app`. To rebuild it, run `scripts/bundle.sh` (release build, ad-hoc signed).
-- **First launch:** the app is ad-hoc signed, not notarised. Right-click `Kerf.app` → **Open** → **Open**.
+- The app is at `dist/LoftLine.app`. To rebuild it, run `scripts/bundle.sh` (release build, ad-hoc signed).
+- **First launch:** the app is ad-hoc signed, not notarised. Right-click `LoftLine.app` → **Open** → **Open**.
   If macOS still blocks it, go to System Settings → Privacy & Security → "Open Anyway".
-- The **Welcome** window opens at launch (Help ▸ Welcome to Kerf reopens it). "Open the Sample Sign" opens an
-  untitled copy of `sign.kerf`; Help ▸ Kerf Help (⌘?) has a topic for every form.
+- The **Welcome** window opens at launch (Help ▸ Welcome to LoftLine reopens it). "Open the Sample Sign" opens an
+  untitled copy of `sign.loftline`; Help ▸ LoftLine Help (⌘?) has a topic for every form.
 - Sample files are in `samples/`:
 
 | File | What it is |
 |---|---|
-| `sign.kerf` | 24 × 12 × 0.75 in sign with Pocket, V-Carve, Drilling and Profile toolpaths already set up |
+| `sign.loftline` | 24 × 12 × 0.75 in sign with Pocket, V-Carve, Drilling and Profile toolpaths already set up |
 | `sign.tap` | The G-code for that sign, from the "Avid PRO6096 Mach4 (inch)" post, with no validator errors |
 | `sign.svg` | The sign's vectors on four layers (Outline, Pocket, Text, Drill) |
 | `bracket-plate.dxf` | 8 × 5 in plate with bolt holes, a slot and a bore |
 | `relief.stl` | 75 mm square relief (dome and waves) for the 3D toolpath |
 
-To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles`.
+To regenerate the samples, run `LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles`.
 
 ## 2. Ten-minute test script
 
-1. **Open the sample.** File → Open `samples/sign.kerf`. Toolpath results are not saved in the
+1. **Open the sample.** File → Open `samples/sign.loftline`. Toolpath results are not saved in the
    file, so run Toolpaths → **Calculate All** (⌘R). The four toolpaths appear in the sidebar with
    their tools and estimated times, and the toolpaths are drawn over the design.
 2. **Job Setup** (⇧⌘J). Switch the Z zero between Material top and Spoilboard, and try a few XY
@@ -96,12 +96,12 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    G-code and Check Toolpaths….
 9. **Toolpath form warnings.** Select a toolpath and set its cut depth well below the material bottom, a tab height equal to the cut depth, a tool with feed 0 or a spindle speed of 60000: each shows an orange line under the tool picker, and clears when it is put right. A through-cut at the material thickness (or within the machine's spoilboard allowance) shows nothing.
 9. **Tool Database** (⇧⌘T): type `1/4`, `60°`, `T3` or a material name in the search field and the list narrows to the tools that match every word. Give a tool a description (the Description box): its first line shows under the name and in the operation's tool picker. The wand button next to Name names the tool from its size. Give two tools the same Tool number: both rows get a warning badge naming the other, and the editor says so with a "Use T…" button for the smallest free number. Add and Duplicate take a free number. Add or edit a tool. Tools are stored in
-   `~/Library/Application Support/Kerf/`. Type a long name and watch `tools.json`'s modified time:
+   `~/Library/Application Support/LoftLine/`. Type a long name and watch `tools.json`'s modified time:
    it changes once, when you press Return or click another field, not per letter. With a toolpath
    calculated, renaming the tool leaves the toolpath unfaded and the new name shows in the sidebar
    summary; changing the diameter fades it. Click Duplicate straight after typing a name (no Return):
    the copy carries the new name.
-10. **Round trip.** Save the document as a `.kerf` file, close it and open it again.
+10. **Round trip.** Save the document as a `.loftline` file, close it and open it again.
 
 ### More file and job features
 
@@ -118,11 +118,11 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
   size (Inkscape 1.x, CorelDRAW) imports at once. Measure the imported shape in the inspector against
   the size you drew it at.
 - **A failed save keeps your work.** Save a document into a folder, then in Terminal make the file and folder
-  read-only (`chmod 444 file.kerf && chmod 555 folder`). Change something and press ⌘S: macOS refuses the save (a
+  read-only (`chmod 444 file.loftline && chmod 555 folder`). Change something and press ⌘S: macOS refuses the save (a
   permission or "could not be saved" alert, or a "locked" sheet offering Duplicate: choose Cancel) and the window
   stays edited (dot in the close button). Wait for the recovery interval (Preferences)
-  and check `~/Library/Application Support/Kerf/Recovery/` still holds a copy. Then `chmod 755 folder && chmod 644
-  file.kerf`, press ⌘S, and the copy goes away at the next interval. (An untitled document keeps its copy until it
+  and check `~/Library/Application Support/LoftLine/Recovery/` still holds a copy. Then `chmod 755 folder && chmod 644
+  file.loftline`, press ⌘S, and the copy goes away at the next interval. (An untitled document keeps its copy until it
   has been saved to a file.)
 - **Templates:** File → Save as Template…, then File → New from Template.
 - **Job Setup:** Plunge Z, datum offset, and a two-sided job (Design → Show Bottom Side, ⇧⌘B).
@@ -132,7 +132,7 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
 ## 3. New since first build
 
 The first test build was commit `2ea022c`. These steps cover what was added after it; each takes a
-minute or two. Use `samples/sign.kerf` (or a new document) unless a step says otherwise.
+minute or two. Use `samples/sign.loftline` (or a new document) unless a step says otherwise.
 
 1. **More toolpaths.** Toolpaths → New Toolpath now also has Quick Engrave, Chamfer, Hole Milling
    (helical bore; turn on threads), Prism Carve, Photo V-Carve (needs a tracing image), Straight-Wall
@@ -167,7 +167,7 @@ minute or two. Use `samples/sign.kerf` (or a new document) unless a step says ot
    stopwatch calibration, camera presets, toolpath lines/rapids/vectors, and the pencil and arrow tools
    for drawing and selecting vectors in 3D. View → Show 2D and 3D Side by Side.
 10. **Gadgets and help.** Gadgets menu: run a bundled gadget and open the Gadget API Reference. Help →
-    Kerf Help (⌘?), Keyboard Shortcuts, Welcome to Kerf. File → Recover Unsaved Work… after a force-quit.
+    LoftLine Help (⌘?), Keyboard Shortcuts, Welcome to LoftLine. File → Recover Unsaved Work… after a force-quit.
 11. **Job sheet.** File → Export Job Sheet… and check the tools, times, part labels and picture. Change
     the calibration Scale in the time-estimate popover and export again: the step times and the total
     both follow it, and the line under the toolpath table says what the total holds beyond the steps.
@@ -200,11 +200,11 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 ## 5. Known limitations and stubs
 
 - The app is ad-hoc signed and not notarised (Gatekeeper warns on first launch). It has no app icon.
-- Finder / Quick Look thumbnails of `.kerf` files come from the bundled extension
-  (`Contents/PlugIns/KerfThumbnail.appex`). macOS picks it up once the app has been launched from
-  its final place (e.g. /Applications); `pluginkit -m -i com.seanperkins.kerf.thumbnail` shows whether
+- Finder / Quick Look thumbnails of `.loftline` files come from the bundled extension
+  (`Contents/PlugIns/LoftLineThumbnail.appex`). macOS picks it up once the app has been launched from
+  its final place (e.g. /Applications); `pluginkit -m -i com.seanperkins.loftline.thumbnail` shows whether
   it is registered. Only files saved by this version carry the picture.
-- Toolpath results are not stored in `.kerf` files. After opening a file, run Calculate All
+- Toolpath results are not stored in `.loftline` files. After opening a file, run Calculate All
   (export also recalculates automatically).
 - 3D roughing needs an end mill in the library.
 - EPS import only handles a minimal set of path operators (no PostScript programs). PDF-based `.ai`
@@ -219,15 +219,30 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
   still length / feed.
 - The GRBL profile is untested on real hardware.
 
-## Command line (kerf-cli)
+## Command line (loftline-cli)
 
-1. `swift run kerf-cli export samples/sign.kerf --out .tmp/cli`: writes `.tmp/cli/sign.tap`. Export the same file from the app
+1. `swift run loftline-cli export samples/sign.loftline --out .tmp/cli`: writes `.tmp/cli/sign.tap`. Export the same file from the app
    (File → Export G-code with the same post): the two programs are byte-for-byte the same.
-2. `swift run kerf-cli export samples/sign.kerf --operation "Pocket 1" --out -` prints only that toolpath's program.
+2. `swift run loftline-cli export samples/sign.loftline --operation "Pocket 1" --out -` prints only that toolpath's program.
 3. Cut the sign's profile deeper than the material plus the spoilboard allowance and save a copy: `export` prints
    `error:` lines and exits 1 without writing; with `--force` it writes the file and still exits 1.
 4. `scripts/check-samples.sh` passes on a clean checkout. Change a feed rate in `Sources/PostCore/Profiles/BuiltInPosts.swift` and
    it fails with the diff (undo the change; `--update` is for intended changes only).
+
+## Migrating from Kerf
+
+1. Make sure LoftLine has not been run on this account: `~/Library/Application Support/LoftLine` does not exist and
+   `defaults delete com.seanperkins.loftline loftline.migratedFromKerf` reports nothing to delete. Put a `tools.json` in
+   `~/Library/Application Support/Kerf/` (copy one from a Kerf install) and run `defaults write com.seanperkins.kerf kerf.groupByTool -bool true`.
+2. Launch LoftLine. Toolpaths ▸ Tool Database lists the tools from that file, not the seeded ones, and Export G-code groups the program
+   by tool. A `kerf.*` setting you changed in Kerf (Settings ▸ General, window positions) is back.
+3. Quit and launch again: nothing is copied twice and no alert appears.
+4. The failure path: delete `~/Library/Application Support/LoftLine` and the `loftline.migratedFromKerf` default, then run
+   `touch ~/Library/Application\ Support/LoftLine` (a file where the folder must go). Launch: an alert names the reason and offers
+   Retry or Continue Without Importing, before any window opens. Remove the file, choose Retry: the first window already has the
+   imported tools and settings (change a setting, then check the others kept their Kerf values). Run it again and
+   choose Continue Without Importing instead: LoftLine starts with the seeded tools and never asks again.
+5. After you have checked that your data came across, delete the old `Kerf.app` by hand: it stays installed and keeps registering `.kerf`.
 
 ## A heavy SVG
 

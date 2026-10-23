@@ -4,7 +4,7 @@
   "steps": [
     {"op": "sample", "name": "sign"},
     {"op": "calculate"},
-    {"op": "fileTarget", "name": "/nonexistent-kerf-folder/out.tap"},
+    {"op": "fileTarget", "name": "/nonexistent-loftline-folder/out.tap"},
     {"op": "sheet", "value": "exportGCode"},
     {"op": "wait", "seconds": 1},
     {"op": "press", "name": "Save…", "value": "AXButton"},

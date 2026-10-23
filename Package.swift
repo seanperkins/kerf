@@ -4,11 +4,11 @@ import PackageDescription
 let swift5: [SwiftSetting] = [.swiftLanguageMode(.v5)]
 
 let package = Package(
-    name: "Kerf",
+    name: "LoftLine",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Kerf", targets: ["KerfApp"]),
-        .executable(name: "kerf-cli", targets: ["KerfApp"]),
+        .executable(name: "LoftLine", targets: ["LoftLineApp"]),
+        .executable(name: "loftline-cli", targets: ["LoftLineApp"]),
         .library(name: "CADCore", targets: ["CADCore"]),
         .library(name: "CAMCore", targets: ["CAMCore"]),
         .library(name: "PostCore", targets: ["PostCore"]),
@@ -37,7 +37,7 @@ let package = Package(
         .target(name: "CAMCore", dependencies: ["CADCore", "CGeom"], swiftSettings: swift5),
         .target(name: "PostCore", dependencies: ["CADCore", "CAMCore"], swiftSettings: swift5),
         .executableTarget(
-            name: "KerfApp",
+            name: "LoftLineApp",
             dependencies: ["CADCore", "CAMCore", "PostCore"],
             swiftSettings: swift5
         ),
@@ -45,7 +45,7 @@ let package = Package(
         .testTarget(name: "CADCoreTests", dependencies: ["CADCore"], swiftSettings: swift5),
         .testTarget(name: "CAMCoreTests", dependencies: ["CAMCore", "CADCore"], swiftSettings: swift5),
         .testTarget(name: "PostCoreTests", dependencies: ["PostCore", "CAMCore", "CADCore"], swiftSettings: swift5),
-        .testTarget(name: "KerfAppTests", dependencies: ["KerfApp", "PostCore", "CAMCore", "CADCore"],
+        .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "PostCore", "CAMCore", "CADCore"],
                     swiftSettings: swift5),
     ],
     cxxLanguageStandard: .cxx17

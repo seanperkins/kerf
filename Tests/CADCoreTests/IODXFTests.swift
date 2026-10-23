@@ -227,7 +227,7 @@ func dxf(header: [(Int, String)] = [], entities: [(Int, String)]) -> Data {
     }
 
     @Test func rejectsGarbage() {
-        #expect(throws: KerfIOError.self) { try DXFImporter().importVectors(from: Data("hello\nworld\n".utf8), targetUnits: .inch) }
+        #expect(throws: LoftLineIOError.self) { try DXFImporter().importVectors(from: Data("hello\nworld\n".utf8), targetUnits: .inch) }
     }
 }
 

@@ -10,7 +10,7 @@ public struct DAEImporter: MeshImporter {
 
     public func importMesh(from data: Data, targetUnits: LengthUnit) throws -> Mesh3D {
         let tris = try parts(from: data, targetUnits: targetUnits, split: false).flatMap(\.triangles)
-        guard !tris.isEmpty else { throw KerfIOError.malformed("the COLLADA file contains no triangles") }
+        guard !tris.isEmpty else { throw LoftLineIOError.malformed("the COLLADA file contains no triangles") }
         return STLImporter.indexed(tris, scale: 1)
     }
 
@@ -22,7 +22,7 @@ public struct DAEImporter: MeshImporter {
             .filter { !$0.triangles.isEmpty }
             .map { MeshPart(name: $0.name, mesh: STLImporter.indexed($0.triangles, scale: 1)) }
             .filter { $0.mesh.triangleCount > 0 }
-        guard !parts.isEmpty else { throw KerfIOError.malformed("the COLLADA file contains no triangles") }
+        guard !parts.isEmpty else { throw LoftLineIOError.malformed("the COLLADA file contains no triangles") }
         return parts
     }
 
@@ -30,7 +30,7 @@ public struct DAEImporter: MeshImporter {
 
     private func parts(from data: Data, targetUnits: LengthUnit, split: Bool) throws -> [RawPart] {
         let root = try XMLTree.parse(data)
-        guard root.name == "COLLADA" else { throw KerfIOError.malformed("not a COLLADA document") }
+        guard root.name == "COLLADA" else { throw LoftLineIOError.malformed("not a COLLADA document") }
         var ids: [String: XMLTree] = [:]
         root.forEach { if let id = $0.attributes["id"] { ids[id] = $0 } }
         func ref(_ url: String?) -> XMLTree? { url.flatMap { ids[String($0.dropFirst())] } }
@@ -206,7 +206,7 @@ struct Matrix4 {
     static func scale(_ x: Double, _ y: Double, _ z: Double) -> Matrix4 {
         Matrix4(rowMajor: [x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1])
     }
-    /// (x, y, z) → (x, −z, y): Y-up models stand on Kerf's XY plane with +Y becoming +Z.
+    /// (x, y, z) → (x, −z, y): Y-up models stand on LoftLine's XY plane with +Y becoming +Z.
     static let yUpToZUp = Matrix4(rowMajor: [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1])
     /// COLLADA X_UP (right = −Y, up = +X) → Z-up: (x, y, z) → (−y, −z, x).
     static let xUpToZUp = Matrix4(rowMajor: [0, -1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0, 0, 0, 0, 1])
@@ -265,7 +265,7 @@ final class XMLTree {
         parser.delegate = b
         parser.shouldResolveExternalEntities = false
         guard parser.parse(), let root = b.root else {
-            throw KerfIOError.malformed(parser.parserError?.localizedDescription ?? "unreadable XML")
+            throw LoftLineIOError.malformed(parser.parserError?.localizedDescription ?? "unreadable XML")
         }
         return root
     }

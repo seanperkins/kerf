@@ -8,7 +8,7 @@
   "steps": [
     {
       "op": "project",
-      "name": "harness/projects/reel-sign.kerf"
+      "name": "harness/projects/reel-sign.loftline"
     },
     {
       "op": "select",

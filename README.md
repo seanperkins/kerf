@@ -1,14 +1,14 @@
-# Kerf
+# LoftLine
 
 **CAD/CAM for CNC routers, native on the Mac.** Draw or import a design, set up toolpaths, watch the
 cut in 3D, and export G-code that is checked before it reaches the machine.
 
-Kerf is built for the Avid CNC PRO6096 (Mach4) and replaces VCarve Pro for that machine. It covers 2D,
+LoftLine is built for the Avid CNC PRO6096 (Mach4) and replaces VCarve Pro for that machine. It covers 2D,
 2.5D and basic 3D routing on Apple Silicon Macs with macOS 14 or later.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.png">
-  <img alt="Kerf's document window: the sample sign's toolpaths drawn over the design on the left, and the carved sign in the 3D preview on the right" src="docs/images/hero-light.png">
+  <img alt="LoftLine's document window: the sample sign's toolpaths drawn over the design on the left, and the carved sign in the 3D preview on the right" src="docs/images/hero-light.png">
 </picture>
 
 ## See the cut before the router does
@@ -16,7 +16,7 @@ Kerf is built for the Avid CNC PRO6096 (Mach4) and replaces VCarve Pro for that 
 <img alt="The 3D preview cutting the sample sign (the pocket, then the V-carved letters, then the cut-out), followed by the design and the simulation side by side" src="docs/images/preview.gif">
 
 The 3D preview removes material move by move and estimates the run time. This is the sample sign
-(`samples/sign.kerf`): a pocket, V-carved letters, then the cut-out with tabs, about 13 minutes of
+(`samples/sign.loftline`): a pocket, V-carved letters, then the cut-out with tabs, about 13 minutes of
 machine time. Scrub it, step it one move at a time, or run to the next retract.
 
 ## From design to G-code
@@ -89,7 +89,7 @@ machine time. Scrub it, step it one move at a time, or run to the next retract.
 - **Production runs.** True-shape nesting across sheets, production plates (one design per CSV row),
   and tiled G-code for jobs bigger than the bed.
 - **Gadgets.** JavaScript add-ons that draw vectors and set up toolpaths (Gadgets > Gadget API Reference).
-- **A real Mac app.** SwiftUI and AppKit, light and dark mode, and Finder thumbnails for `.kerf` files.
+- **A real Mac app.** SwiftUI and AppKit, light and dark mode, and Finder thumbnails for `.loftline` files.
 
 <details>
 <summary><b>Full feature list</b></summary>
@@ -126,10 +126,10 @@ first test build.
 
 ## Machine safety
 
-Kerf drives a real 60 × 96 in router, so G-code is treated as safety-critical.
+LoftLine drives a real 60 × 96 in router, so G-code is treated as safety-critical.
 
 - Every program goes through the G-code validator before it is saved.
-- The post's output is pinned by golden files: `samples/sign.kerf` must post byte-for-byte to
+- The post's output is pinned by golden files: `samples/sign.loftline` must post byte-for-byte to
   `samples/sign.tap`, and every sample posted with every built-in post must match `samples/expected/`
   (`scripts/check-samples.sh`, also run by CI).
 - Programs retract to safe Z before XY rapids. Keep-out zones and the move home are checked on export.
@@ -141,29 +141,29 @@ Requires an Apple Silicon Mac on macOS 14+ with Swift 6 (Command Line Tools are 
 Xcode works too). Install the tools with `xcode-select --install` if `swift --version` fails.
 
 ```sh
-git clone https://github.com/seanperkins/kerf.git && cd kerf
-scripts/bundle.sh && open dist/Kerf.app
+git clone https://github.com/seanperkins/loftline.git && cd loftline
+scripts/bundle.sh && open dist/LoftLine.app
 ```
 
 The bundle is ad-hoc signed, so macOS treats a copy downloaded from elsewhere as unverified.
 A locally built one opens normally. The Welcome window has a button that opens the sample sign, and
-Help > Kerf Help (⌘?) has a topic for every form.
+Help > LoftLine Help (⌘?) has a topic for every form.
 
 ```sh
 scripts/build.sh            # debug build
 scripts/test.sh             # swift-testing suite
-scripts/bundle.sh           # release build → dist/Kerf.app (ad-hoc signed)
+scripts/bundle.sh           # release build → dist/LoftLine.app (ad-hoc signed)
 scripts/run.sh              # debug bundle + launch
 ```
 
 ## Command line
 
-`kerf-cli` posts a project exactly as the Export G-code sheet does, with the same validator, and needs no window:
+`loftline-cli` posts a project exactly as the Export G-code sheet does, with the same validator, and needs no window:
 
 ```sh
-swift run kerf-cli export samples/sign.kerf --out out        # out/sign.tap
-swift run kerf-cli export samples/sign.kerf --post generic-grbl-mm --operation "Pocket 1" --out -
-swift run kerf-cli posts                                      # the installed post processors
+swift run loftline-cli export samples/sign.loftline --out out        # out/sign.tap
+swift run loftline-cli export samples/sign.loftline --post generic-grbl-mm --operation "Pocket 1" --out -
+swift run loftline-cli posts                                      # the installed post processors
 ```
 
 Validator errors and warnings go to standard error. The exit status is 0 when the program is clean (warnings
@@ -172,7 +172,7 @@ export, and 2 for a usage or file error. `--builtin-only` ignores the posts and 
 the result is the same on every Mac; `--name` sets the job name in the header (the project's by default).
 `scripts/check-samples.sh` runs it over `samples/` with every built-in post and diffs the programs against the
 committed ones in `samples/expected/` (`--update` after an intended change). The same code answers to
-`Kerf export …`; `kerf-cli` is a second product of the app's target, so it starts the command line whatever it is given.
+`LoftLine export …`; `loftline-cli` is a second product of the app's target, so it starts the command line whatever it is given.
 
 ## How it's built
 
@@ -181,7 +181,7 @@ committed ones in `samples/expected/` (`--update` after an intended change). The
   [docs/DECISIONS.md](docs/DECISIONS.md). [AGENTS.md](AGENTS.md) holds the rules they work by.
 - **SwiftPM only.** It builds with the Command Line Tools, with no Xcode project. There are five modules:
   `CGeom` (vendored Clipper2 and Boost.Polygon Voronoi), `CADCore`, `CAMCore`, `PostCore` and the
-  `KerfApp` itself.
+  `LoftLineApp` itself.
 - **Over 1,000 tests** in swift-testing, including the golden G-code above.
 - **A UI harness.** `scripts/ui.sh` drives the app through a scripted scenario and saves each window as
   a PNG with its accessibility tree, in light or dark mode. The screenshots and clips on this page are

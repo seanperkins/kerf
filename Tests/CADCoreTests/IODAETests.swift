@@ -63,6 +63,6 @@ import Testing
     }
 
     @Test func rejectsNonCollada() {
-        #expect(throws: KerfIOError.self) { try DAEImporter().importMesh(from: Data("<svg/>".utf8), targetUnits: .inch) }
+        #expect(throws: LoftLineIOError.self) { try DAEImporter().importMesh(from: Data("<svg/>".utf8), targetUnits: .inch) }
     }
 }

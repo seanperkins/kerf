@@ -14,7 +14,7 @@
     },
     {
       "op": "project",
-      "name": "harness/projects/sign-pause.kerf"
+      "name": "harness/projects/sign-pause.loftline"
     },
     {
       "op": "tab",

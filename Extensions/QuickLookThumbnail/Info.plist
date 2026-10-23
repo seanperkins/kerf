@@ -2,10 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>KerfThumbnail</string>
-  <key>CFBundleDisplayName</key><string>Kerf Thumbnails</string>
-  <key>CFBundleIdentifier</key><string>com.seanperkins.kerf.thumbnail</string>
-  <key>CFBundleExecutable</key><string>KerfThumbnail</string>
+  <key>CFBundleName</key><string>LoftLineThumbnail</string>
+  <key>CFBundleDisplayName</key><string>LoftLine Thumbnails</string>
+  <key>CFBundleIdentifier</key><string>com.seanperkins.loftline.thumbnail</string>
+  <key>CFBundleExecutable</key><string>LoftLineThumbnail</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
   <key>CFBundleShortVersionString</key><string>0.1</string>
   <key>CFBundleVersion</key><string>__VERSION__</string>
@@ -13,10 +13,10 @@
   <key>NSExtension</key>
   <dict>
     <key>NSExtensionPointIdentifier</key><string>com.apple.quicklook.thumbnail</string>
-    <key>NSExtensionPrincipalClass</key><string>KerfThumbnailProvider</string>
+    <key>NSExtensionPrincipalClass</key><string>LoftLineThumbnailProvider</string>
     <key>NSExtensionAttributes</key>
     <dict>
-      <key>QLSupportedContentTypes</key><array><string>com.seanperkins.kerf.project</string></array>
+      <key>QLSupportedContentTypes</key><array><string>com.seanperkins.loftline.project</string></array>
       <key>QLThumbnailMinimumDimension</key><integer>0</integer>
     </dict>
   </dict>
