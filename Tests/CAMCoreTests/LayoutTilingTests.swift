@@ -143,7 +143,10 @@ private typealias Cell = ToolpathTiling.Cell
         #expect(cells.count <= 16, "overlap \(overlap) made \(cells.count) tiles")
         #expect(cells.allSatisfy { $0.region.width <= 60 + 1e-9 && $0.region.height <= 60 + 1e-9 })
     }
-    #expect(ToolpathTiling.overlapIsUsable(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 29)))
-    #expect(!ToolpathTiling.overlapIsUsable(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 30)))
-    #expect(ToolpathTiling.overlapIsUsable(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 0)))
+    // The warning names the axis that ignores the overlap: 30 in is half of the 60 in tile but under half of the 96 in one.
+    let ignored = ToolpathTiling.axesIgnoringOverlap
+    #expect(ignored(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 29)) == (false, false))
+    #expect(ignored(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 30)) == (true, false))
+    #expect(ignored(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 48)) == (true, true))
+    #expect(ignored(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 0)) == (false, false))
 }

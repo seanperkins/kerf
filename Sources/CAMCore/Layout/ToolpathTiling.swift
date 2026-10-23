@@ -51,9 +51,10 @@ public enum ToolpathTiling {
         overlap > 0 && overlap < largest / 2 ? overlap : 0
     }
 
-    /// False when `settings` asks for an overlap that is ignored on some axis (half a tile or more).
-    public static func overlapIsUsable(_ s: TilingSettings) -> Bool {
-        s.overlap <= 0 || (usableOverlap(s.overlap, largest: s.tileWidth) > 0 && usableOverlap(s.overlap, largest: s.tileHeight) > 0)
+    /// The axes along which `settings` asks for an overlap that is ignored (half a tile or more).
+    public static func axesIgnoringOverlap(_ s: TilingSettings) -> (x: Bool, y: Bool) {
+        guard s.overlap > 0 else { return (false, false) }
+        return (usableOverlap(s.overlap, largest: s.tileWidth) == 0, usableOverlap(s.overlap, largest: s.tileHeight) == 0)
     }
 
     /// How many equal tiles cover `extent` when none may reach further than `largest`, counting the overlap: the

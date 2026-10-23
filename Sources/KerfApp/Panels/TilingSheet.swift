@@ -45,8 +45,10 @@ struct TilingSheet: View {
                 LengthField("Largest tile height (Y)", value: $settings.tileHeight, units: u)
                 LengthField("Overlap at seams", value: $settings.overlap, units: u)
             }
-            if !ToolpathTiling.overlapIsUsable(settings) {
-                Label("An overlap of half a tile or more is ignored.", systemImage: "info.circle")
+            let ignored = ToolpathTiling.axesIgnoringOverlap(settings)
+            if ignored.x || ignored.y {
+                Label("An overlap of half a tile or more is ignored" + (ignored.x && ignored.y ? "." : ignored.x ? " along X." : " along Y."),
+                      systemImage: "info.circle")
                     .font(.callout).foregroundStyle(.secondary)
             }
             if calcTask != nil {
