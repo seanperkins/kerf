@@ -81,7 +81,7 @@ public struct DrillOperation: ToolpathOperation {
 
     /// One hole per closed path (centre of its bounds; exact for circles) and per point-like
     /// path (zero-length or single point), de-duplicated (concentric circles = one hole).
-    static func holeCentres(_ shapes: [Shape], tolerance: Double) -> [Vec2] {
+    public static func holeCentres(_ shapes: [Shape], tolerance: Double) -> [Vec2] {
         var out: [Vec2] = []
         for s in shapes {
             for path in s.paths {

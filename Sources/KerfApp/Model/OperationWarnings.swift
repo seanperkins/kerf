@@ -45,6 +45,8 @@ enum OperationWarnings {
             }
         }
 
+        if case .holeMill(let h) = op { out += holeMillProblems(h, in: project, tool: tool, job: job, units: units) }
+
         // Tabs that the generator will place: on, and on a closed vector it cuts (an open vector has none, and a manual
         // anchor counts only on a selected closed vector that still exists).
         if case .profile(let p) = op, p.params.tabs.isEnabled, tabsWillBePlaced(p, in: project.document) {
@@ -55,6 +57,58 @@ enum OperationWarnings {
             }
         }
         return out
+    }
+
+    /// Hole milling: a through hole bored with a helix leaves a free slug inside it, and a thread assumes a pilot
+    /// hole. Both depend on what the job does at the same centre, so they are judged here, not by the generator.
+    static func holeMillProblems(_ op: HoleMillOperation, in project: KerfProject, tool: Tool, job: JobSetup,
+                                 units: LengthUnit) -> [String] {
+        let tol = 3 * CAMContext.defaultTolerance(units)
+        let u = units.abbreviation
+        var holes = HoleMillOperation.holes(project.document.shapes(ids: op.setup.shapeIDs), tolerance: tol)
+        if let d = op.params.holeDiameter { holes = holes.map { HoleMillOperation.Hole(centre: $0.centre, diameter: d) } }
+        holes = holes.filter { $0.diameter >= tool.diameter - tol }     // the generator skips the smaller ones
+        let earlier = Array(project.operations.prefix { $0.id != op.setup.id })
+        func made(at c: Vec2, drillOnly: Bool) -> Bool {
+            earlier.contains { makesHole($0, at: c, document: project.document, tolerance: tol, drillOnly: drillOnly) }
+        }
+        var out: [String] = []
+        switch op.params.mode {
+        case .thread:
+            let bare = holes.filter { $0.diameter > tool.diameter + tol && !made(at: $0.centre, drillOnly: false) }
+            if !bare.isEmpty {
+                out.append("\(bare.count) hole(s) in thread mode have no pilot hole: no earlier toolpath in the list drills, bores or "
+                           + "pockets at the center, so the thread mill would plunge into solid material.")
+            }
+        case .helical:
+            // The ring the helix sweeps leaves a core of diameter D - 2d; cut through, it comes loose.
+            guard op.params.cutDepth >= job.thickness - tol else { break }
+            let slugs = holes.filter { $0.diameter - 2 * tool.diameter > tool.diameter + tol && !made(at: $0.centre, drillOnly: true) }
+            if let widest = slugs.map({ $0.diameter - 2 * tool.diameter }).max() {
+                out.append("\(slugs.count) through hole(s) leave a free slug up to \(RulerTicks.label((widest * 1000).rounded() / 1000)) \(u) wide "
+                           + "inside the helix: it can jam against the tool when it comes loose. Drill the center out with an earlier "
+                           + "Drill toolpath, or stop the cut short of the bottom.")
+            }
+        }
+        return out
+    }
+
+    /// Whether `other` makes a hole at `c`: a Drill there; unless `drillOnly`, also a helical bore there, a pocket
+    /// whose vectors enclose it, or a profile cut inside a vector that encloses it.
+    private static func makesHole(_ other: AnyOperation, at c: Vec2, document: Document, tolerance tol: Double, drillOnly: Bool) -> Bool {
+        guard other.setup.isEnabled else { return false }
+        let shapes = document.shapes(ids: other.setup.shapeIDs)
+        func encloses() -> Bool {
+            Polygon2D.regionContains(Polygon2D.region(fromLoops: ShapeGeometry.loops(of: shapes, tolerance: tol).closed), c)
+        }
+        switch other {
+        case .drill: return DrillOperation.holeCentres(shapes, tolerance: tol).contains { $0.distance(to: c) <= tol }
+        case .holeMill(let h) where !drillOnly && h.params.mode == .helical:
+            return HoleMillOperation.holes(shapes, tolerance: tol).contains { $0.centre.distance(to: c) <= tol }
+        case .pocket where !drillOnly: return encloses()
+        case .profile(let p) where !drillOnly && p.params.side == .inside: return encloses()
+        default: return false
+        }
     }
 
     /// Whether the profile's tabs land anywhere: automatic tabs need a closed vector among the selected ones, manual

@@ -99,3 +99,68 @@ func ops2DHoleMillHelicalBoreStaysOnTheHoleRadius(mode: ZZeroMode) throws {
     }
     #expect(!centre.isEmpty)
 }
+
+// MARK: Helix angle and the peck fallback (issue #12)
+
+/// The steepest descent, in degrees from horizontal, over the segments of `tp` that move sideways while going down.
+private func steepestHelixAngle(_ tp: Toolpath, _ ctx: CAMContext) -> Double {
+    let pts = F.densePoints(tp.moves)
+    var worst = 0.0
+    for (a, b) in zip(pts, pts.dropFirst()) {
+        let dz = a.z - b.z                       // down is positive
+        let across = a.xy.distance(to: b.xy)
+        guard dz > 1e-9, across > 1e-9 else { continue }
+        worst = max(worst, atan2(dz, across) * 180 / .pi)
+    }
+    return worst
+}
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DHoleMillHelixNeverDescendsSteeperThanTheRampAngle(mode: ZZeroMode) throws {
+    // 1/4 in tool in holes 0.06 to 0.5 in larger, 0.5 deep at the tool's 0.125 pitch: the small ones would ask for a
+    // far steeper helix than the ramp angle allows and turn more often instead.
+    for extra in [0.06, 0.08, 0.12, 0.25, 0.5] {
+        let r = (0.25 + extra) / 2
+        let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.5), paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: r)], zZero: mode)
+        #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty, "extra \(extra)")
+        #expect(steepestHelixAngle(tp, ctx) <= HoleMillOperation.maxHelixAngle + 0.1, "extra \(extra): \(steepestHelixAngle(tp, ctx))°")
+        #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.5)) < 1e-9)
+        // Held to the angle where the asked-for pitch is steeper: those say so; the roomy ones do not.
+        let clamped = tp.metadata["warning"]?.contains("ramp") == true
+        #expect(clamped == (extra < 0.2), "extra \(extra): \(tp.metadata["warning"] ?? "nil")")
+    }
+}
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) throws {
+    // 0.01 in larger than the tool and the size of the tool itself: no helix, pecks at the centre with retracts.
+    for extra in [0.01, 0.0] {
+        let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.5), paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: (0.25 + extra) / 2)], zZero: mode)
+        #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty, "extra \(extra)")
+        #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.5)) < 1e-9)
+        #expect(tp.metadata["warning"]?.contains("peck-drilled instead") == true, "extra \(extra)")
+        // Nothing moves sideways while cutting: every cut is straight down at the centre.
+        let cut = F.densePoints(tp.moves).filter { ctx.coords.depth(ofMachineZ: $0.z) > 1e-9 }
+        #expect(cut.allSatisfy { $0.xy.distance(to: Vec2(3, 3)) < 1e-9 })
+        // 0.5 in at the 0.125 in pitch: four pecks, so three retracts to safe Z between them.
+        let retracts = zip(tp.moves, tp.moves.dropFirst()).filter { a, b in
+            if case .linear = a, case .rapid(let to) = b { return abs(to.z - ctx.coords.safeZ) < 1e-9 }
+            return false
+        }.count
+        #expect(retracts >= 3, "extra \(extra): \(retracts)")
+    }
+}
+
+@Test func ops2DHoleMillRoomyHolesAreUnchanged() throws {
+    // The 1 in hole of the first test: a 3° helix at the tool's pitch, no warning.
+    let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.3))
+    #expect(tp.metadata["warning"] == nil)
+    #expect(steepestHelixAngle(tp, ctx) < 4)
+}
+
+@Test func ops2DHoleMillThreadSaysWhenAHoleLeavesNoRoomForIt() throws {
+    var p = HoleMillParameters(mode: .thread, cutDepth: 0.5, threadPitch: 0.1)
+    p.holeDiameter = 0.25            // as large as the 1/4 in tool
+    let (tp, _) = try holeMill(p, paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.5), ShapeFactory.circle(center: Vec2(6, 3), radius: 0.5)])
+    #expect(tp.metadata["warning"]?.contains("2 hole(s) are as large as the tool: no room to mill a thread") == true)
+}

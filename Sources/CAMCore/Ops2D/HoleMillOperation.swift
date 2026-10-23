@@ -13,10 +13,19 @@ public struct HoleMillOperation: ToolpathOperation {
         self.params = params
     }
 
+    /// The steepest a boring helix may descend, in degrees from horizontal: the default ramp angle. A hole barely
+    /// larger than the tool has a helix so small that the pitch would make it a straight drop at the feed rate.
+    public static let maxHelixAngle = RampSettings().maxAngle
+    /// More turns than this at the steepest allowed angle and the helix is a drill in all but name: the hole is
+    /// peck-drilled instead.
+    static let maxHelixTurns = 50.0
+
     /// A hole to mill: centre and finished diameter.
     public struct Hole: Hashable, Sendable {
         public var centre: Vec2
         public var diameter: Double
+
+        public init(centre: Vec2, diameter: Double) { self.centre = centre; self.diameter = diameter }
     }
 
     public func generate(in context: CAMContext) throws -> [Toolpath] {
@@ -42,16 +51,34 @@ public struct HoleMillOperation: ToolpathOperation {
         let order = ChainOrdering.nearestNeighbour(holes.map { Chain2D(points: [$0.centre], isClosed: false) }, from: home)
             .map(\.start)
         var builder = ToolpathBuilder(coords: coords, tool: tool, units: context.units, tolerance: tol, fitArcs: true)
+        var clamped = 0, pecked = 0, noRoom = 0
         for c in order {
             guard let hole = holes.first(where: { $0.centre.distance(to: c) <= tol }) else { continue }
             let radius = (hole.diameter - tool.diameter) / 2
             switch params.mode {
-            case .helical: bore(hole, radius: radius, tool: tool, tolerance: tol, builder: &builder)
-            case .thread: thread(hole, radius: radius, tolerance: tol, builder: &builder)
+            case .helical:
+                switch bore(hole, radius: radius, tool: tool, tolerance: tol, builder: &builder) {
+                case .helix: break
+                case .clamped: clamped += 1
+                case .pecked: pecked += 1
+                }
+            case .thread:
+                if !thread(hole, radius: radius, tolerance: tol, builder: &builder) { noRoom += 1 }
             }
         }
         var meta = ["holes": "\(order.count)"]
-        if tooSmall > 0 { meta["warning"] = "\(tooSmall) hole(s) smaller than the tool skipped" }
+        var warnings: [String] = []
+        if tooSmall > 0 { warnings.append("\(tooSmall) hole(s) smaller than the tool skipped") }
+        if clamped > 0 {
+            warnings.append("\(clamped) hole(s) are barely larger than the tool: the helix is held to a \(Int(Self.maxHelixAngle))° ramp, "
+                            + "so it turns more often than the pitch asks")
+        }
+        if pecked > 0 {
+            warnings.append("\(pecked) hole(s) are too close to the tool's size for a helix (it would drop almost straight down): "
+                            + "peck-drilled instead")
+        }
+        if noRoom > 0 { warnings.append("\(noRoom) hole(s) are as large as the tool: no room to mill a thread, skipped") }
+        if !warnings.isEmpty { meta["warning"] = warnings.joined(separator: "; ") }
         return [Toolpath(name: setup.name, operationID: setup.id, kind: .holeMill, tool: tool,
                          moves: builder.finish(), metadata: meta)]
     }
@@ -59,16 +86,30 @@ public struct HoleMillOperation: ToolpathOperation {
     /// Helix down at `radius` around the centre and a flat lap at the bottom. When the tool path
     /// clears the whole hole (diameter up to twice the tool) the tool then moves to the centre to lift
     /// clear of the wall; for bigger holes a core is left standing in the middle, so it lifts in place.
-    private func bore(_ hole: Hole, radius: Double, tool: Tool, tolerance tol: Double, builder: inout ToolpathBuilder) {
+    ///
+    /// The helix descends no steeper than `maxHelixAngle`: where the pitch asked for would be steeper (a small
+    /// radius, a big pitch) it turns more often. Where that takes more than `maxHelixTurns` turns, or the hole is
+    /// the size of the tool, there is no helix to make and the hole is peck-drilled at its centre.
+    private enum Bore { case helix, clamped, pecked }
+
+    private func bore(_ hole: Hole, radius: Double, tool: Tool, tolerance tol: Double, builder: inout ToolpathBuilder) -> Bore {
         let c = hole.centre
-        guard radius > tol else {
-            // Hole the size of the tool: a straight plunge.
-            builder.cutChain([CutPoint(c, depth: params.startDepth), CutPoint(c, depth: params.cutDepth)])
-            return
-        }
         let pitch = max(params.helixPitch ?? tool.stepdown, tol)
         let drop = params.cutDepth - params.startDepth
-        let turns = max(1, ceil(drop / pitch - 1e-9))
+        let steepest = 2 * Double.pi * max(radius, 0) * tan(Self.maxHelixAngle * .pi / 180)   // most it may drop per turn
+        let allowed = min(pitch, steepest)
+        let turns = max(1, ceil(drop / max(allowed, 1e-12) - 1e-9))
+        guard radius > tol, turns <= Self.maxHelixTurns else {
+            builder.travel(to: c)
+            var cleared = min(params.startDepth, 0)
+            let pecks = DrillOperation.peckDepths(start: params.startDepth, end: params.cutDepth, peck: pitch)
+            for d in pecks {
+                builder.plunge(to: d, clearedDepth: cleared)
+                cleared = d
+                if d < pecks.last! - 1e-12 { builder.retract() }
+            }
+            return .pecked
+        }
         // Climb inside a hole (clockwise spindle) = counter-clockwise.
         let ccw = params.direction == .climb
         var pts = Self.helix(centre: c, radius: radius, fromDepth: params.startDepth, toDepth: params.cutDepth,
@@ -77,14 +118,16 @@ public struct HoleMillOperation: ToolpathOperation {
                           turns: 1, ccw: ccw, tolerance: tol).dropFirst()
         if Self.leavesNoCore(hole, tool: tool, tolerance: tol) { pts.append(CutPoint(c, depth: params.cutDepth)) }
         builder.cutChain(pts)
+        return allowed < pitch - 1e-12 ? .clamped : .helix
     }
 
     /// Thread milling: plunge at the centre (pilot hole), out to the radius, one helix turn per
     /// pitch over the thread length, back to the centre. Climb right-hand threads go up
     /// counter-clockwise; conventional ones go down clockwise; left-hand threads mirror that.
-    private func thread(_ hole: Hole, radius: Double, tolerance tol: Double, builder: inout ToolpathBuilder) {
+    /// Whether the thread was milled (false: the hole is as large as the tool, so there is nothing to thread).
+    private func thread(_ hole: Hole, radius: Double, tolerance tol: Double, builder: inout ToolpathBuilder) -> Bool {
         let c = hole.centre
-        guard radius > tol else { return }
+        guard radius > tol else { return false }
         let length = params.cutDepth - params.startDepth
         let turns = max(1, ceil(length / params.threadPitch - 1e-9))
         let climb = params.direction == .climb
@@ -96,6 +139,7 @@ public struct HoleMillOperation: ToolpathOperation {
         builder.cutChain([CutPoint(c, depth: from)])
         let pts = Self.helix(centre: c, radius: radius, fromDepth: from, toDepth: to, turns: turns, ccw: ccw, tolerance: tol)
         builder.feed(to: pts + [CutPoint(c, depth: to)])
+        return true
     }
 
     /// True when a ring at radius (D - d)/2 sweeps the whole hole, so nothing is left at the centre.

@@ -309,4 +309,90 @@ import Testing
         #expect(own.minRPM == 100 && own.maxRPM == 500)
         #expect(OperationWarnings.rpmProblem(300, profile: own) == nil && OperationWarnings.rpmProblem(1000, profile: own) != nil)
     }
+
+    // MARK: Hole milling (issue #12)
+
+    /// A job 0.75 in thick with circles at (3, 3) and (7, 3), and a 1/4 in end mill.
+    func holes() throws -> (project: KerfProject, mill: Tool, library: ToolLibrary, centre: Shape, other: Shape) {
+        var p = AppTestSupport.project()
+        p.document.job.thickness = 0.75
+        let library = AppTestSupport.library().library
+        let mill = try #require(library.tools.first { $0.kind == .endMill && abs($0.diameter - 0.25) < 1e-9 })
+        let a = Shape(name: "hole A", layerID: p.document.defaultLayerID, paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.75)])
+        let b = Shape(name: "hole B", layerID: p.document.defaultLayerID, paths: [ShapeFactory.circle(center: Vec2(7, 3), radius: 0.75)])
+        p.document.add(a); p.document.add(b)
+        return (p, mill, library, a, b)
+    }
+
+    func holeMill(_ mill: Tool, _ shape: Shape, mode: HoleMillMode = .helical, depth: Double = 0.75, diameter: Double? = nil) -> HoleMillOperation {
+        HoleMillOperation(setup: OperationSetup(name: "H", toolID: mill.id, shapeIDs: [shape.id]),
+                          params: HoleMillParameters(mode: mode, cutDepth: depth, holeDiameter: diameter, threadPitch: 0.1))
+    }
+
+    func drill(_ mill: Tool, _ shape: Shape, enabled: Bool = true) -> AnyOperation {
+        .drill(DrillOperation(setup: OperationSetup(name: "D", isEnabled: enabled, toolID: mill.id, shapeIDs: [shape.id]), params: DrillParameters(cutDepth: 0.75)))
+    }
+
+    @Test func aThroughHoleBoredWithAHelixWarnsAboutTheFreeSlug() throws {
+        var (p, mill, lib, a, b) = try holes()
+        // 1.5 in hole, 1/4 in tool: the ring leaves a 1 in core, and the cut reaches the 0.75 in bottom.
+        let bore = holeMill(mill, a)
+        p.operations = [.holeMill(bore)]
+        let w = warnings(.holeMill(bore), p, lib)
+        #expect(w.count == 1 && w[0].contains("1 through hole(s)") && w[0].contains("free slug up to 1 in wide") && w[0].contains("Drill the center out"))
+        // Stopped short of the bottom, or a core no wider than the tool: nothing to jam.
+        #expect(warnings(.holeMill(holeMill(mill, a, depth: 0.5)), p, lib).isEmpty)
+        #expect(warnings(.holeMill(holeMill(mill, a, diameter: 0.7)), p, lib).isEmpty)           // core 0.2 in
+        #expect(!warnings(.holeMill(holeMill(mill, a, diameter: 0.8)), p, lib).isEmpty)          // core 0.3 in
+        // Two holes are counted, the widest named.
+        var two = bore
+        two.setup.shapeIDs = [a.id, b.id]
+        #expect(warnings(.holeMill(two), p, lib).first?.contains("2 through hole(s)") == true)
+        // An earlier Drill at the centre is the drill-out; one elsewhere, a disabled one, a later one are not.
+        let withDrill = [drill(mill, a), .holeMill(bore)]
+        p.operations = withDrill
+        #expect(warnings(.holeMill(bore), p, lib).isEmpty)
+        p.operations = [drill(mill, b), .holeMill(bore)]
+        #expect(warnings(.holeMill(bore), p, lib).count == 1)
+        p.operations = [drill(mill, a, enabled: false), .holeMill(bore)]
+        #expect(warnings(.holeMill(bore), p, lib).count == 1)
+        p.operations = [.holeMill(bore), drill(mill, a)]
+        #expect(warnings(.holeMill(bore), p, lib).count == 1)
+        // Holes smaller than the tool are skipped by the generator and not counted.
+        two.params.holeDiameter = 0.2
+        p.operations = [.holeMill(two)]
+        #expect(warnings(.holeMill(two), p, lib).isEmpty)
+        _ = b
+    }
+
+    @Test func aThreadWithNoPilotHoleBeforeItIsReported() throws {
+        var (p, mill, lib, a, b) = try holes()
+        let thread = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 1.0)
+        p.operations = [.holeMill(thread)]
+        let w = warnings(.holeMill(thread), p, lib)
+        #expect(w.count == 1 && w[0].contains("1 hole(s) in thread mode have no pilot hole"))
+        // Any earlier toolpath that makes a hole there is a pilot: a drill, a helical bore, a pocket, an inside profile.
+        let bore = AnyOperation.holeMill(holeMill(mill, a, depth: 0.5, diameter: 0.9))
+        let pocket = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "P", toolID: mill.id, shapeIDs: [a.id]), params: PocketParameters()))
+        let inside = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "I", toolID: mill.id, shapeIDs: [a.id]),
+                                                           params: ProfileParameters(side: .inside)))
+        for pilot in [drill(mill, a), bore, pocket, inside] {
+            p.operations = [pilot, .holeMill(thread)]
+            #expect(warnings(.holeMill(thread), p, lib).isEmpty, "\(pilot.kind)")
+        }
+        // But not one that is later in the list, disabled, elsewhere, or itself a thread or an outside profile.
+        let outside = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "O", toolID: mill.id, shapeIDs: [a.id]), params: ProfileParameters(side: .outside)))
+        let anotherThread = AnyOperation.holeMill(holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 1.0))
+        for notPilot in [drill(mill, b), drill(mill, a, enabled: false), outside, anotherThread] {
+            p.operations = [notPilot, .holeMill(thread)]
+            #expect(warnings(.holeMill(thread), p, lib).count == 1, "\(notPilot.kind)")
+        }
+        p.operations = [.holeMill(thread), drill(mill, a)]
+        #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        // A thread in a hole as large as the tool is skipped by the generator, and not reported here.
+        let tiny = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.25)
+        p.operations = [.holeMill(tiny)]
+        #expect(warnings(.holeMill(tiny), p, lib).isEmpty)
+        _ = b
+    }
 }
