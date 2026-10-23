@@ -153,7 +153,7 @@ import Testing
         let ok = TabSettings(isEnabled: true, length: 0.25, thickness: 0.125)
         #expect(warnings(profile(op, depth: 0.5, tabs: ok), p, lib).isEmpty)
         let tall = TabSettings(isEnabled: true, length: 0.25, thickness: 0.5)
-        #expect(warnings(profile(op, depth: 0.5, tabs: tall), p, lib).contains { $0.contains("tabs") && $0.contains("as tall as the cut") })
+        #expect(warnings(profile(op, depth: 0.5, tabs: tall), p, lib).contains { $0.contains("tabs") && $0.contains("as tall as the cut") && $0.contains("wherever a tab is placed") })
         #expect(warnings(profile(op, depth: 0.4, tabs: ok), p, lib).isEmpty)
         // The cut is measured from the start depth.
         #expect(warnings(profile(op, depth: 0.5, start: 0.45, tabs: ok), p, lib).contains { $0.contains("tabs") })
