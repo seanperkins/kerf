@@ -191,6 +191,12 @@ final class ToolLibraryModel: ObservableObject {
     private func mutate(_ change: (inout ToolLibrary) -> Void) {
         var next = library
         change(&next)
+        // A tool with no name (cleared in the editor, or in an imported file) is named from its geometry.
+        for t in next.tools where t.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            var named = t
+            named.name = ToolNaming.name(for: t)
+            next.upsert(named)
+        }
         if next != library {
             let alters = next.changesToolpaths(from: library)
             library = next

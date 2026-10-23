@@ -1,0 +1,16 @@
+{
+  "name": "Tool Database: search, a description under the name, and Name from geometry",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "calculate"},
+    {"op": "editTool", "value": "rename"},
+    {"op": "editTool", "value": "describe"},
+    {"op": "press", "name": "Tool Database", "value": "AXButton"},
+    {"op": "searchTools", "value": "1/4"},
+    {"op": "selectTool", "name": "1/4\" End Mill (2 flute) (renamed)"},
+    {"op": "captureWindow", "name": "tool-search-quarter", "value": "Tool Database"},
+    {"op": "searchTools", "value": "v-bit 60"},
+    {"op": "captureWindow", "name": "tool-search-vbit", "value": "Tool Database"}
+  ]
+}

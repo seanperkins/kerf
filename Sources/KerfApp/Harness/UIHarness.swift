@@ -330,6 +330,7 @@ final class UIHarness {
             }
             switch step.value {
             case "rename": tool.name += " (renamed)"
+            case "describe": tool.notes = "Roughing, upcut\nSecond line of notes"
             case "number":
                 guard let other = doc.toolLibrary.library.tools.first(where: { $0.id != tool.id }) else {
                     throw HarnessError(message: "there is no other tool to share a number with")
@@ -341,6 +342,9 @@ final class UIHarness {
             await settle(1.0)
         case "selectTool":
             NotificationCenter.default.post(name: .harnessSelectTool, object: step.name)
+            await settle(0.8)
+        case "searchTools":
+            NotificationCenter.default.post(name: .harnessSearchTools, object: step.value ?? "")
             await settle(0.8)
         case "captureWindow":
             let title = step.value ?? ""

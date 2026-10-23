@@ -13,19 +13,29 @@ struct ToolDatabaseView: View {
     @State private var pendingImport: [Tool]?
     @State private var pendingConflicts = 0
     @State private var importMessage: String?
+    @State private var query = ""
 
     var body: some View {
         let clashes = ToolNumbers.clashes(in: library.tools)
         NavigationSplitView {
             List(selection: $selectedID) {
-                ForEach(ToolGrouping.sections(library.tools), id: \.title) { section in
+                let shown = ToolSearch.filter(library.tools, query: query)
+                if shown.isEmpty {
+                    Text(library.tools.isEmpty ? "No tools" : "No tool matches \"\(query)\"").foregroundStyle(.secondary)
+                }
+                ForEach(ToolGrouping.sections(shown), id: \.title) { section in
                     let tools = section.tools
                     if !tools.isEmpty {
                         Section(section.title) {
                             ForEach(tools) { t in
                                 HStack {
                                     Text("T\(t.number)").monospacedDigit().foregroundStyle(.secondary).frame(width: 30, alignment: .leading)
-                                    Text(t.name).lineLimit(1)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(t.name).lineLimit(1)
+                                        if let d = ToolSearch.description(of: t) {
+                                            Text(d).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                        }
+                                    }
                                     if let shared = clashes[t.number] {
                                         // A badge on every tool that has the number, naming the others.
                                         let others = ToolNumbers.names(shared.filter { $0.id != t.id })
@@ -42,6 +52,7 @@ struct ToolDatabaseView: View {
                     }
                 }
             }
+            .searchable(text: $query, placement: .sidebar, prompt: "Search tools")
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .toolbar {
                 ToolbarItem {
@@ -107,6 +118,9 @@ struct ToolDatabaseView: View {
         .onReceive(NotificationCenter.default.publisher(for: .harnessSelectTool)) { note in
             if let name = note.object as? String, let tool = library.tools.first(where: { $0.name == name }) { selectedID = tool.id }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .harnessSearchTools)) { note in
+            query = note.object as? String ?? ""
+        }
         #endif
     }
 }
@@ -115,6 +129,8 @@ struct ToolDatabaseView: View {
 extension Notification.Name {
     /// Posted by the UI harness's `selectTool` step with the tool's name.
     static let harnessSelectTool = Notification.Name("kerf.harness.selectTool")
+    /// Posted by the UI harness's `searchTools` step with the text to search for.
+    static let harnessSearchTools = Notification.Name("kerf.harness.searchTools")
 }
 #endif
 
@@ -228,8 +244,14 @@ struct ToolEditor: View {
         let u = tool.units
         Form {
             Section {
-                TextField("Name", text: $tool.name)
-                    .focused($typing, equals: .name)
+                HStack {
+                    TextField("Name", text: $tool.name)
+                        .focused($typing, equals: .name)
+                    Button { tool.name = ToolNaming.name(for: tool) } label: { Image(systemName: "wand.and.stars") }
+                        .buttonStyle(.borderless)
+                        .help("Name from geometry: \"\(ToolNaming.name(for: tool))\"")
+                        .accessibilityLabel("Name from geometry")
+                }
                 Picker("Type", selection: Binding(get: { tool.kind }, set: { tool.setKind($0) })) {
                     ForEach(ToolKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
@@ -283,9 +305,11 @@ struct ToolEditor: View {
             MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools), typing: $typing)
             ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted(),
                              typing: $typing)
-            Section("Notes") {
+            Section("Description") {
                 TextEditor(text: $tool.notes).frame(minHeight: 60)
                     .focused($typing, equals: .notes)
+                Text("The first line shows in the tool list and in the tool pickers; search looks through all of it.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 HStack {

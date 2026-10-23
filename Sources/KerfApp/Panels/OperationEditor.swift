@@ -244,7 +244,7 @@ struct ToolPicker: View {
         HStack {
             Picker(title, selection: $toolID) {
                 if library.tool(id: toolID) == nil { Text("Missing tool").tag(toolID) }
-                ForEach(sorted) { t in Text("T\(t.number) · \(t.name)").tag(t.id) }
+                ForEach(sorted) { t in Text(ToolSearch.pickerLabel(t)).tag(t.id) }
             }
             Button {
                 ToolLibraryModel.shared.jobMaterial = jobMaterial
@@ -276,7 +276,7 @@ struct OptionalToolPicker: View {
     var body: some View {
         Picker(title, selection: $toolID) {
             Text("None").tag(UUID?.none)
-            ForEach(library.tools.filter { kinds.contains($0.kind) }) { t in Text("T\(t.number) · \(t.name)").tag(Optional(t.id)) }
+            ForEach(library.tools.filter { kinds.contains($0.kind) }) { t in Text(ToolSearch.pickerLabel(t)).tag(Optional(t.id)) }
         }
     }
 }
