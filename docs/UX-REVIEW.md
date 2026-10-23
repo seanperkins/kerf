@@ -1,20 +1,20 @@
-# Kerf UI/UX review against Apple's Human Interface Guidelines
+# LoftLine UI/UX review against Apple's Human Interface Guidelines
 
-Date: 2026-10-20. Scope: `Sources/KerfApp` and the running app (window shell, sidebar, inspector, toolbar, menus, Job Setup and Export sheets, 3D preview, Welcome window, accessibility tree).
+Date: 2026-10-20. Scope: `Sources/LoftLineApp` and the running app (window shell, sidebar, inspector, toolbar, menus, Job Setup and Export sheets, 3D preview, Welcome window, accessibility tree).
 
 ## Method and limits
 
-- **Code review plus a visual pass.** I ran `dist/Kerf.app` (built 09:38 the same day) on a scratch copy of `samples/sign.kerf`, at the default window size of 1000 × 692 pt, in **dark mode only**. I drove it through the accessibility tree and captured only Kerf's own windows. Screenshots and tree dumps are in `.tmp/ux-review.kQoFUj/` (git-ignored): `01-main` to `09-export` `.png`, `tree-*.txt`.
+- **Code review plus a visual pass.** I ran `dist/LoftLine.app` (built 09:38 the same day) on a scratch copy of `samples/sign.loftline`, at the default window size of 1000 × 692 pt, in **dark mode only**. I drove it through the accessibility tree and captured only LoftLine's own windows. Screenshots and tree dumps are in `.tmp/ux-review.kQoFUj/` (git-ignored): `01-main` to `09-export` `.png`, `tree-*.txt`.
 - **Not checked:** light mode, Increase Contrast, a window wider than 1000 pt, Preferences, the Tool Database, the Clipart browser, VoiceOver itself (I read the accessibility tree but did not listen to it), and the file panels. Findings marked *(code)* come from reading the source only.
 - **HIG sources.** I fetched the *Keyboards* and *Accessibility* pages and quote them. Other HIG topics are cited by name from my knowledge of the guidelines and were not re-fetched.
-- **Side effects:** Kerf restored two "Untitled" windows from your earlier session; I did not touch them. I quit Kerf at the end (no save prompt) and handed focus back to the terminal.
+- **Side effects:** LoftLine restored two "Untitled" windows from your earlier session; I did not touch them. I quit LoftLine at the end (no save prompt) and handed focus back to the terminal.
 - **Scope labels** (one line / one file / several files) replace time estimates.
 
 ## Fix first
 
 ### 1. 3D and split modes overflow the window
 - **HIG:** Windows, Layout (adapt to the window size), Toolbars.
-- **Where:** `ContentView.swift:74-86`, `KerfApp.swift:32`, `SimulationPreviewView.swift:219` (the playback bar).
+- **Where:** `ContentView.swift:74-86`, `LoftLineApp.swift:32`, `SimulationPreviewView.swift:219` (the playback bar).
 - **Evidence:**
   - The default window is the minimum width, 1000 pt.
   - In **3D** mode the split view is laid out at **1695 pt** wide inside that 1000 pt window (accessibility frame `[-83,152 1695x692]` against a window at x = 264). The sidebar starts 347 pt left of the window edge, the inspector is off the right edge, and the playback bar and status bar are clipped on the left (`08-3d.png`). The centre pane is 1213 pt wide, and the playback bar (a dozen or more controls) runs from its left edge to its right edge, so it is apparently what refuses to shrink.
@@ -76,13 +76,13 @@ Date: 2026-10-20. Scope: `Sources/KerfApp` and the running app (window shell, si
 ### 7. Shortcuts that shadow standard macOS ones
 - **HIG:** Keyboards. The page says: "In general, don't repurpose standard keyboard shortcuts for custom actions."
 
-| Kerf | Binding | HIG table entry |
+| LoftLine | Binding | HIG table entry |
 |---|---|---|
-| Show Toolpaths (`KerfCommands.swift:209`) | ⌥⌘T | Show or hide a toolbar |
+| Show Toolpaths (`LoftLineCommands.swift:209`) | ⌥⌘T | Show or hide a toolbar |
 | Import (`:28`) | ⌘I | Italicize / Display an Info window |
 | Rotate 90° (`:135`, `:137`) | ⌘[ ⌘] | Left-align / right-align |
 | Show Bottom Side (`:68`) | ⌥⌘F | Jump to the search field |
-| Group (`:91`) | ⌘G | Find next (conventional in drawing apps and Kerf has no Find, so low risk) |
+| Group (`:91`) | ⌘G | Find next (conventional in drawing apps and LoftLine has no Find, so low risk) |
 
 - **Problem:** The shortcuts clash with the system convention. I first guessed that ⌥⌘T would also collide with a Hide Toolbar item in the View menu, but I checked the running app and its View menu has no such item, so there is no duplicate menu item.
 - **Fix:** Rebind the first four to unused keys (for example ⇧⌘I for Import).
@@ -117,14 +117,14 @@ Date: 2026-10-20. Scope: `Sources/KerfApp` and the running app (window shell, si
 
 ### 11. File panels and alerts are app-modal *(code)*
 - **HIG:** Sheets, Panels, Alerts.
-- **Where:** about 20 `NSOpenPanel` / `NSSavePanel` `.runModal()` calls, several launched from inside a sheet (`ExportGCodeSheet.swift:165`, `SaveAllToolpathsSheet.swift:131`). `KerfDocument+Sheets.swift:40-45` runs a Delete Sheet alert with `runModal()`.
-- **Problems:** Panels float over the whole app instead of attaching to the document window. In that alert, **Delete** is the first and therefore default button (undoable, so minor). Export Vectors asks people to pick the format by typing an extension (`KerfCommands.swift:238-243`).
+- **Where:** about 20 `NSOpenPanel` / `NSSavePanel` `.runModal()` calls, several launched from inside a sheet (`ExportGCodeSheet.swift:165`, `SaveAllToolpathsSheet.swift:131`). `LoftLineDocument+Sheets.swift:40-45` runs a Delete Sheet alert with `runModal()`.
+- **Problems:** Panels float over the whole app instead of attaching to the document window. In that alert, **Delete** is the first and therefore default button (undoable, so minor). Export Vectors asks people to pick the format by typing an extension (`LoftLineCommands.swift:238-243`).
 - **Fix:** Use `beginSheetModal(for:)` or `.fileExporter` / `.fileImporter`. Set `hasDestructiveAction` on Delete. Add a format pop-up to the Export Vectors panel. The RecoveryPrompt alerts are app-level, so app-modal is fine there.
 - **Scope:** several files; one shared helper.
 
 ### 12. Menus: one overloaded menu, and items stay enabled with nothing to act on *(code)*
 - **HIG:** Menus, The menu bar.
-- **Where:** `KerfCommands.swift:62-164`. The **Design** menu has about 25 entries covering drawing, alignment, booleans and layout. Mirror, Rotate, Combine, Break Apart, Join, Close Open Vectors and the Align submenu are not `.disabled` when nothing is selected (Group, Ungroup and Offset are). The single-key tool shortcuts (V, R, C…) do not appear next to the Draw submenu items (`:74-78`).
+- **Where:** `LoftLineCommands.swift:62-164`. The **Design** menu has about 25 entries covering drawing, alignment, booleans and layout. Mirror, Rotate, Combine, Break Apart, Join, Close Open Vectors and the Align submenu are not `.disabled` when nothing is selected (Group, Ungroup and Offset are). The single-key tool shortcuts (V, R, C…) do not appear next to the Draw submenu items (`:74-78`).
 - **Fix:** Split into **Design** and **Arrange** (or **Object**) menus. Disable items when the selection is empty. Show the tool key in the menu where possible.
 - **Scope:** one file.
 

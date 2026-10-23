@@ -13,8 +13,8 @@ same module) — never renames, removals or signature changes. Anything else: no
 | **cam-vcarve** | `Sources/CAMCore/OpsVCarve/` (VCarve, Inlay, medial axis) | `Tests/CAMCoreTests/` files prefixed `VCarve` |
 | **cam-3d** | `Sources/CAMCore/Ops3D/`, `Sources/CADCore/IO/STLImporter.swift` | `Tests/CAMCoreTests/` files prefixed `Relief`, `Tests/CADCoreTests/STL*` |
 | **post** | `Sources/PostCore/` | `Tests/PostCoreTests/` |
-| **preview** | `Sources/CAMCore/Simulation/`, `Sources/KerfApp/Preview/` | `Tests/CAMCoreTests/` files prefixed `Sim` |
-| **app-shell** | `Sources/KerfApp/App/`, `Sources/KerfApp/Canvas/`, `Sources/KerfApp/Panels/`, `scripts/bundle.sh`, `scripts/run.sh`, `Resources/` | — (logic that needs tests goes in the owning core module) |
+| **preview** | `Sources/CAMCore/Simulation/`, `Sources/LoftLineApp/Preview/` | `Tests/CAMCoreTests/` files prefixed `Sim` |
+| **app-shell** | `Sources/LoftLineApp/App/`, `Sources/LoftLineApp/Canvas/`, `Sources/LoftLineApp/Panels/`, `scripts/bundle.sh`, `scripts/run.sh`, `Resources/` | — (logic that needs tests goes in the owning core module) |
 
 Rules:
 * `Package.swift` changes (new targets/deps) go through the integrator only.

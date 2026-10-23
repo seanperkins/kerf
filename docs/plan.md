@@ -1,4 +1,4 @@
-# Kerf work plan
+# LoftLine work plan
 
 Ordered by dependency; items in the same phase run in parallel (see `OWNERSHIP.md`).
 Every item: TDD where practical, `swift build` + `scripts/test.sh` green, conventional commit.
@@ -39,7 +39,7 @@ post profile types, minimal app, bundle script, docs.
 3. SceneKit material view. 4. 2D toolpath overlay renderer (Core Graphics paths for canvas).
 
 **app-shell**
-1. Document window model (`KerfProject` + undo manager), open/save `.kerf`.
+1. Document window model (`LoftLineProject` + undo manager), open/save `.loftline`.
 2. Canvas: pan/zoom, grid, snapping, selection, move/scale/rotate/mirror.
 3. Drawing tools (rect, rounded rect, circle, ellipse, polygon, star, polyline, Bézier, text).
 4. Layers panel, Job Setup sheet, tool database editor.

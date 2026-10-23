@@ -1,7 +1,7 @@
 # UI harness
 
 A scripted way to look at the running app without a person (or an agent) driving the screen:
-`scripts/ui.sh <scenario>` builds a debug Kerf, runs a short list of steps against a real document
+`scripts/ui.sh <scenario>` builds a debug LoftLine, runs a short list of steps against a real document
 window, and writes PNGs and text dumps. It exists so a UI change can be checked in light and dark mode, at
 any window size, in states that are tedious to reach by hand (a calculated job, a sheet open, a toolpath
 selected), and so a reviewer can read the result as an image and as an accessibility tree.
@@ -28,9 +28,9 @@ Output goes to `.tmp/ui/<scenario>-<time>/` (git-ignored):
 
 ## How it works
 
-`Kerf --ui-scenario file.json --ui-out dir` (debug builds only, `#if DEBUG`) skips the Welcome window,
+`LoftLine --ui-scenario file.json --ui-out dir` (debug builds only, `#if DEBUG`) skips the Welcome window,
 the recovery timer and prompt, opens an untitled document, and runs the steps from inside the process
-(`Sources/KerfApp/Harness/`). The window is drawn into a bitmap by the app itself, so **no Screen Recording
+(`Sources/LoftLineApp/Harness/`). The window is drawn into a bitmap by the app itself, so **no Screen Recording
 permission is needed**, the window does not have to be in front, and the display can be asleep. SwiftUI
 only builds its accessibility nodes for an attached client, so the `.ax.txt` dump and the `press` step read
 the app's own tree through the Accessibility API from a background thread; that needs your terminal to be
@@ -64,7 +64,7 @@ minimum is 1000 x 640). Steps run in order and the run stops at the first error,
 | op | arguments | does |
 |---|---|---|
 | `sample` | `name`: `sign` | loads the sample project into the document |
-| `project` | `name`: a `.kerf` path relative to the repo root | loads that project; `harness/projects/` holds variants of the sample |
+| `project` | `name`: a `.loftline` path relative to the repo root | loads that project; `harness/projects/` holds variants of the sample |
 | `appearance` | `value`: light / dark / system | changes appearance mid-run |
 | `size` | `size`: `[w, h]` | resizes the window |
 | `mode` | `value`: 2d / split / 3d | centre view |
@@ -134,7 +134,7 @@ there parses).
 ## Limits
 
 - The window is drawn inactive unless you pass `--active` (grey traffic lights, grey selection). `--active`
-  asks to bring Kerf to the front for the run; macOS may not grant it.
+  asks to bring LoftLine to the front for the run; macOS may not grant it.
 - `menus` lists the menu bar's structure, titles and key equivalents. Items that depend on the focused document
   (Group, Mirror, Align…) show as disabled, because SwiftUI's menu focus does not reach the document in this
   setup, so check enablement in the running app. Every harness flag takes a value (`--ui-active 1`): a bare

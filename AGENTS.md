@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for coding agents working on Kerf. Read [README.md](README.md) for what the app does.
+Guidance for coding agents working on LoftLine. Read [README.md](README.md) for what the app does.
 
 ## Commands
 
@@ -8,13 +8,13 @@ Guidance for coding agents working on Kerf. Read [README.md](README.md) for what
 scripts/build.sh                     # debug build (swift build; works in a sandboxed agent shell)
 scripts/test.sh                      # full swift-testing suite (~1,200 tests, ~70 s)
 scripts/test.sh --filter Ops2D       # subset
-scripts/bundle.sh                    # release build → dist/Kerf.app (ad-hoc signed)
+scripts/bundle.sh                    # release build → dist/LoftLine.app (ad-hoc signed)
 scripts/run.sh                       # debug bundle + launch
-swift run kerf-cli export samples/sign.kerf --out .tmp/out   # post a project headless (see README "Command line")
+swift run loftline-cli export samples/sign.loftline --out .tmp/out   # post a project headless (see README "Command line")
 scripts/check-samples.sh             # post every sample with every built-in post, diff against samples/expected/ (--update after an intended change)
 scripts/ui.sh main --light           # UI harness: screenshots + accessibility tree, no permissions (docs/UI-HARNESS.md)
-KERF_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
-KERF_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
+LOFTLINE_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
+LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
 ```
 
 Done means `scripts/build.sh` and `scripts/test.sh` are both green (the suite includes the samples check; a change that moves
@@ -42,7 +42,7 @@ a byte of any sample's G-code needs `scripts/check-samples.sh --update` and a lo
 | `Sources/CADCore` | Geometry, `Document` model, importers/exporters (SVG, DXF, EPS, PDF, STL/OBJ/DAE), text outlines. |
 | `Sources/CAMCore` | Toolpath operations (pure functions of shapes + tool + parameters), simulation, time estimates. |
 | `Sources/PostCore` | Template-driven post processor (JSON `PostProfile`s) and `GCodeValidator`. |
-| `Sources/KerfApp` | SwiftUI/AppKit app: document, canvas, inspector, dialogs, 3D preview. |
+| `Sources/LoftLineApp` | SwiftUI/AppKit app: document, canvas, inspector, dialogs, 3D preview. |
 
 Each module has a matching test target in `Tests/`. Fixtures and golden `.tap` files live in
 `Tests/Fixtures/`.
