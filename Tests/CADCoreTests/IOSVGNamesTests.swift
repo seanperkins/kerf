@@ -89,5 +89,16 @@ import Testing
         #expect(ids.count == 40 && Set(ids).count == 40)
         #expect(try SVGImporter().importVectors(from: data, targetUnits: .inch).shapes.map(\.name) == Array(repeating: "Hole", count: 40))
     }
+
+    /// A shape named "layer" whose mapped suffix equals a layer's own id suffix must not share the layer's id.
+    @Test func aShapeNeverTakesALayersID() throws {
+        let layer = Layer(id: try #require(UUID(uuidString: "a0000000-0000-0000-0000-000000000000")), name: "Drill")
+        let id = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000000"))
+        let shape = Shape(id: id, name: "layer", layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(1, 1), radius: 0.125)])
+        let text = String(decoding: try SVGExporter().export(shapes: [shape], layers: [layer], units: .inch), as: UTF8.self)
+        let ids = text.components(separatedBy: "id=\"").dropFirst().compactMap { $0.split(separator: "\"").first.map(String.init) }
+            .filter { $0.hasPrefix("layer-") }
+        #expect(ids.count == 2 && Set(ids).count == 2, Comment(rawValue: "\(ids)"))
+    }
 }
 

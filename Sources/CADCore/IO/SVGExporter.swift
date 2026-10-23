@@ -33,7 +33,8 @@ public struct SVGExporter: VectorExporter {
         for id in Set(byLayer.keys).subtracting(layers.map(\.id)).sorted(by: { $0.uuidString < $1.uuidString }) {
             ordered.append(Layer(id: id, name: "Layer"))
         }
-        var usedIDs = Set<String>()
+        // The layers' own ids are taken before any shape's: a shape named "layer" could otherwise land on one.
+        var usedIDs = Set(ordered.map(layerID))
         for layer in ordered {
             let color = layer.colorHex.isEmpty ? "#000000" : layer.colorHex
             out += "  <g id=\"\(xmlEscape(layerID(layer)))\" inkscape:label=\"\(xmlEscape(layer.name))\" inkscape:groupmode=\"layer\""
