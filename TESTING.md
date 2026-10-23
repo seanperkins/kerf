@@ -233,4 +233,3 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 
 1. Import an SVG with thousands of paths (a traced drawing; `File → Import…`): the window stays responsive, every new shape is selected and drawn in the selection color, and zooming and panning keep up (a drawing over 5,000 segments is drawn as one-point lines: they look slightly thinner than the shapes of a small drawing).
 2. Edit → Select All, then move the selection with the inspector's Move field and group it (⌘G): each takes a moment, not minutes.
-
