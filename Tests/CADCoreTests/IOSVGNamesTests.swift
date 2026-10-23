@@ -28,4 +28,76 @@ import Testing
         let result = try SVGImporter().importVectors(from: data, targetUnits: .inch)
         #expect(result.shapes.map(\.name) == ["Hole"])
     }
+
+    /// A shape whose random UUID happens to start with eight decimal digits (about 2 exports in 100) used to come
+    /// back named "Hole-12345678", because an all-digit suffix reads as a date or revision to the importer.
+    @Test func aShapeWhoseIDStartsWithEightDigitsKeepsItsName() throws {
+        let layer = Layer(name: "Drill")
+        let id = try #require(UUID(uuidString: "12345678-1234-1234-1234-123456789012"))
+        let hole = Shape(id: id, name: "Hole", layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(1, 1), radius: 0.125)])
+        let data = try SVGExporter().export(shapes: [hole], layers: [layer], units: .inch)
+        let result = try SVGImporter().importVectors(from: data, targetUnits: .inch)
+        #expect(result.shapes.map(\.name) == ["Hole"])
+    }
+
+    @Test func everyExportedSuffixIsOneTheImporterDrops() {
+        // All-digit prefixes (the failing case), all-letter ones, and a spread of random ones.
+        var ids = ["00000000", "12345678", "99999999", "01234567", "abcdef01", "ffffffff"]
+            .compactMap { UUID(uuidString: $0 + "-0000-0000-0000-000000000000") }
+        ids += (0..<2000).map { _ in UUID() }
+        for id in ids {
+            let suffix = SVGExporter.hashSuffix(of: id)
+            #expect(suffix.count == 8, Comment(rawValue: "\(id)"))
+            #expect(SVGImporter.displayName(forID: "Part-" + suffix) == "Part", Comment(rawValue: "\(id) -> \(suffix)"))
+        }
+        // Different shapes still get different suffixes (the point of the suffix).
+        let a = UUID(uuidString: "12345678-0000-0000-0000-000000000001")!, b = UUID(uuidString: "12345679-0000-0000-0000-000000000001")!
+        #expect(SVGExporter.hashSuffix(of: a) != SVGExporter.hashSuffix(of: b))
+    }
+
+    /// A prefix turned into letters can land on another shape's unchanged prefix ("00000000" gives "a0000000"):
+    /// the ids in one file must still be distinct, or a <use> would resolve to the wrong shape.
+    @Test func idsInOneFileStayDistinctWhenTheMappedSuffixesClash() throws {
+        let layer = Layer(name: "Drill")
+        func shape(_ prefix: String) throws -> Shape {
+            let id = try #require(UUID(uuidString: prefix + "-0000-0000-0000-000000000000"))
+            return Shape(id: id, name: "Hole", layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(1, 1), radius: 0.125)])
+        }
+        // 00000000 maps to a0000000, which is exactly the second shape's own suffix; 60000000 maps there too.
+        let shapes = [try shape("00000000"), try shape("a0000000"), try shape("60000000"), try shape("a0000000")]
+        let data = try SVGExporter().export(shapes: shapes, layers: [layer], units: .inch)
+        let text = String(decoding: data, as: UTF8.self)
+        let ids = text.components(separatedBy: "id=\"").dropFirst().compactMap { $0.split(separator: "\"").first.map(String.init) }
+            .filter { $0.hasPrefix("Hole-") }
+        #expect(ids.count == 4 && Set(ids).count == 4, Comment(rawValue: "\(ids)"))
+        let result = try SVGImporter().importVectors(from: data, targetUnits: .inch)
+        #expect(result.shapes.map(\.name) == ["Hole", "Hole", "Hole", "Hole"])
+    }
+
+    /// More shapes than one stepped suffix has room for in a small range still get distinct ids (the search is not
+    /// bounded): 40 shapes with the same name whose UUIDs all start with the same eight digits.
+    @Test func manyShapesWithTheSamePrefixStillGetDistinctIDs() throws {
+        let layer = Layer(name: "Drill")
+        let shapes = (0..<40).map { i in
+            Shape(id: UUID(uuidString: "abcdef00-0000-0000-0000-0000000000\(String(format: "%02x", i))")!, name: "Hole",
+                  layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(Double(i), 1), radius: 0.125)])
+        }
+        let data = try SVGExporter().export(shapes: shapes, layers: [layer], units: .inch)
+        let text = String(decoding: data, as: UTF8.self)
+        let ids = text.components(separatedBy: "id=\"").dropFirst().compactMap { $0.split(separator: "\"").first.map(String.init) }
+            .filter { $0.hasPrefix("Hole-") }
+        #expect(ids.count == 40 && Set(ids).count == 40)
+        #expect(try SVGImporter().importVectors(from: data, targetUnits: .inch).shapes.map(\.name) == Array(repeating: "Hole", count: 40))
+    }
+
+    /// A shape named "layer" whose mapped suffix equals a layer's own id suffix must not share the layer's id.
+    @Test func aShapeNeverTakesALayersID() throws {
+        let layer = Layer(id: try #require(UUID(uuidString: "a0000000-0000-0000-0000-000000000000")), name: "Drill")
+        let id = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000000"))
+        let shape = Shape(id: id, name: "layer", layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(1, 1), radius: 0.125)])
+        let text = String(decoding: try SVGExporter().export(shapes: [shape], layers: [layer], units: .inch), as: UTF8.self)
+        let ids = text.components(separatedBy: "id=\"").dropFirst().compactMap { $0.split(separator: "\"").first.map(String.init) }
+            .filter { $0.hasPrefix("layer-") }
+        #expect(ids.count == 2 && Set(ids).count == 2, Comment(rawValue: "\(ids)"))
+    }
 }
