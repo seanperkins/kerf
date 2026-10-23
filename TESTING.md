@@ -160,7 +160,9 @@ minute or two. Use `samples/sign.kerf` (or a new document) unless a step says ot
    for drawing and selecting vectors in 3D. View → Show 2D and 3D Side by Side.
 10. **Gadgets and help.** Gadgets menu: run a bundled gadget and open the Gadget API Reference. Help →
     Kerf Help (⌘?), Keyboard Shortcuts, Welcome to Kerf. File → Recover Unsaved Work… after a force-quit.
-11. **Job sheet.** File → Export Job Sheet… and check the tools, times, part labels and picture.
+11. **Job sheet.** File → Export Job Sheet… and check the tools, times, part labels and picture. Change
+    the calibration Scale in the time-estimate popover and export again: the step times and the total
+    both follow it, and the line under the toolpath table says what the total holds beyond the steps.
 
 Every toolpath in steps 1–8 should calculate without an error, and Check Toolpaths… (⇧⌘K) should
 report no errors for the sample. The status of every VCarve Pro feature is in `docs/PARITY.md`.
