@@ -41,29 +41,52 @@ public struct EngraveParameters: Codable, Hashable, Sendable {
     }
 }
 
+/// What a chamfer's depth and width are measured from when its start depth is not 0 (issue #51).
+public enum ChamferBasis: String, Codable, Hashable, Sendable {
+    /// The surface at the start depth, where the material above is already gone (every other operation's meaning).
+    case startSurface
+    /// The material top: the depth is the tip's depth below it, the width is on it, and the start depth only skips
+    /// the passes above it. What files saved before the basis was chosen mean, so they cut as they always did.
+    case materialTop
+}
+
 /// Chamfer: a V-bit run along the vector edges so its cone cuts a bevel of `width` into the part.
 public struct ChamferParameters: Codable, Hashable, Sendable {
     /// Which side of closed vectors is the part edge to bevel (outside = the part is inside the vector).
     public var side: ProfileSide
-    /// Chamfer width on the surface at the start depth (the material top when that is 0), measured from the
+    /// Chamfer width on the `basis` surface (the material top when the start depth is 0), measured from the
     /// vector into the part.
     public var width: Double
-    /// When set, how far the tip goes below the start depth's surface, and the width follows from the bit angle.
+    /// When set, how far the tip goes below the `basis` surface, and the width follows from the bit angle.
     public var depth: Double?
     /// Extra distance the bit tip runs into the waste past the edge (keeps the tip off the wall;
     /// the cut gets deeper to keep the same width).
     public var tipClearance: Double
-    /// Depth below the material top of the surface the chamfer is measured from; the material above it is
-    /// taken as already removed, as for every operation's start depth.
     public var startDepth: Double
+    /// What the depth and width are measured from. A file without the key predates the choice and keeps the
+    /// material top; new chamfers measure from the start depth's surface.
+    public var basis: ChamferBasis
     /// Max depth per pass; nil = the tool's stepdown.
     public var passDepth: Double?
     public var direction: CutDirection
 
     public init(side: ProfileSide = .outside, width: Double = 0.125, depth: Double? = nil, tipClearance: Double = 0,
-                startDepth: Double = 0, passDepth: Double? = nil, direction: CutDirection = .climb) {
+                startDepth: Double = 0, basis: ChamferBasis = .startSurface, passDepth: Double? = nil,
+                direction: CutDirection = .climb) {
         self.side = side; self.width = width; self.depth = depth; self.tipClearance = tipClearance
-        self.startDepth = startDepth; self.passDepth = passDepth; self.direction = direction
+        self.startDepth = startDepth; self.basis = basis; self.passDepth = passDepth; self.direction = direction
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        side = try c.decode(ProfileSide.self, forKey: .side)
+        width = try c.decode(Double.self, forKey: .width)
+        depth = try c.decodeIfPresent(Double.self, forKey: .depth)
+        tipClearance = try c.decode(Double.self, forKey: .tipClearance)
+        startDepth = try c.decode(Double.self, forKey: .startDepth)
+        basis = try c.decodeIfPresent(ChamferBasis.self, forKey: .basis) ?? .materialTop
+        passDepth = try c.decodeIfPresent(Double.self, forKey: .passDepth)
+        direction = try c.decode(CutDirection.self, forKey: .direction)
     }
 }
 

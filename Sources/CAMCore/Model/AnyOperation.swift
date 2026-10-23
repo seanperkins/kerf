@@ -46,8 +46,9 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     /// Depth below the material top where the operation starts cutting because an earlier operation
     /// removed the material above it (0 = the top); the flute check measures the cut from there.
     /// Only a start depth with that meaning counts: moulding's is an offset into solid material,
-    /// the inlay's male start depth is where the plug's cone starts in solid stock, and the rest
-    /// have none.
+    /// the inlay's male start depth is where the plug's cone starts in solid stock, a chamfer's counts only
+    /// when it is measured from the start depth's surface (an older one is measured from the top), and the
+    /// rest have none.
     private var startDepth: Double {
         switch self {
         case .profile(let o): o.params.depth.startDepth
@@ -58,7 +59,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .holeMill(let o): o.params.startDepth
         case .vcarve(let o): o.params.startDepth
         case .photoVCarve(let o): o.params.startDepth
-        case .chamfer(let o): o.params.startDepth
+        case .chamfer(let o): o.params.basis == .startSurface ? o.params.startDepth : 0
         case .inlay, .texture, .relief3D, .prism, .merge, .straightInlay, .moulding: 0
         }
     }

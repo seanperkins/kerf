@@ -185,6 +185,13 @@ private typealias F = Ops2DFixture
             let w = tp.metadata["warning"] ?? ""
             #expect(w.contains("cuts \(String(format: "%.4f", depth - 0.2)) in deeper than the 0.2000 in already cleared with a 0.1000 in flute"), "\(name): \(w)")
         }
+        // A chamfer that predates the basis (measured from the material top) is not credited.
+        let (chamfered, chamferIDs) = F.document([F.rect(1, 1, 4, 3)])
+        let vbit = Self.tool(6, flute: 2)
+        let chamfer = try AnyOperation.chamfer(ChamferOperation(setup: OperationSetup(name: "C", toolID: vbit.id, shapeIDs: chamferIDs),
+                                                                params: ChamferParameters(depth: 0.24, startDepth: 0.2, basis: .materialTop)))
+            .generate(in: CAMContext(document: chamfered.document, tools: ToolLibrary(tools: [vbit])))[0]
+        #expect(chamfer.clearedDepth == nil)
         // Moulding's start depth is an offset into solid material, not cleared material.
         let rail = Path(points: [Vec2(1, 1), Vec2(9, 1)], closed: false)
         let section = Path(points: [Vec2(20, 10), Vec2(20.5, 10), Vec2(20.5, 9.75), Vec2(21, 9.75)], closed: false)

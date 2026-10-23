@@ -115,12 +115,61 @@ func ops2DChamferWidthAndDepthAreMeasuredFromTheStartDepthSurface(mode: ZZeroMod
     #expect(abs(tpWidth.minZ! - ctxWidth.coords.z(depth: 0.44)) < 1e-9)
     // The start depth shifts the cut and nothing else: the same size at the top is the same bevel.
     let atTop = try ChamferOperation.size(tool: vBit90, params: ChamferParameters(depth: 0.24))
-    #expect(atTop == size)
+    #expect(atTop.depth == size.depth && atTop.width == size.width && atTop.height == size.height)
+    #expect(abs(size.tipDepth - atTop.tipDepth - 0.2) < 1e-12)
     // Nothing is cut at or above the start depth: a depth of 0 below it, or less, is refused.
     #expect(throws: CAMError.self) { try ChamferOperation.size(tool: vBit90, params: ChamferParameters(depth: 0, startDepth: 0.2)) }
     #expect(throws: CAMError.self) { try ChamferOperation.size(tool: vBit90, params: ChamferParameters(depth: -0.1, startDepth: 0.2)) }
     // Too wide for the bit is judged on the same surface: 0.3 wide on a 1/2 in bit, whatever the start depth.
     #expect(throws: CAMError.self) { try ChamferOperation.size(tool: vBit90, params: ChamferParameters(width: 0.3, startDepth: 0.2)) }
+}
+
+/// A chamfer saved before the basis was chosen has no `basis` key and keeps cutting from the material top, so
+/// reopening a job never changes its G-code (issue #51).
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DChamferSavedWithoutABasisKeepsTheMaterialTop(mode: ZZeroMode) throws {
+    let current = ChamferParameters(depth: 0.24, startDepth: 0.2)
+    #expect(current.basis == .startSurface)
+    var json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(current)) as? [String: Any])
+    #expect(json["basis"] as? String == "startSurface")
+    json.removeValue(forKey: "basis")
+    let old = try JSONDecoder().decode(ChamferParameters.self, from: JSONSerialization.data(withJSONObject: json))
+    #expect(old.basis == .materialTop && old.depth == 0.24 && old.startDepth == 0.2)
+    #expect(try JSONDecoder().decode(ChamferParameters.self, from: JSONEncoder().encode(current)) == current)
+    // The tip goes 0.24 below the material top and the width is taken there, as it always was.
+    let size = try ChamferOperation.size(tool: vBit90, params: old)
+    #expect(abs(size.tipDepth - 0.24) < 1e-12 && abs(size.width - (vBit90.tipDiameter / 2 + 0.24)) < 1e-12)
+    let (tp, ctx) = try chamfer(old, zZero: mode)
+    #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.24)) < 1e-9)
+    // Its start depth is not credited to the flute check, as before.
+    let rect = F.document([F.rect(2, 2, 4, 3)])
+    let op = AnyOperation.chamfer(ChamferOperation(setup: OperationSetup(name: "C", toolID: vBit90.id, shapeIDs: rect.1), params: old))
+    #expect(try op.generate(in: rect.0).first?.clearedDepth == nil)
+}
+
+/// "Measure from the start depth's surface" keeps the cut: the tip is as deep as it was, whether the chamfer was
+/// sized by depth or by width.
+@Test func ops2DChamferMeasuredFromTheStartSurfaceCutsTheSameThing() throws {
+    for old in [ChamferParameters(depth: 0.24, startDepth: 0.2, basis: .materialTop),
+                ChamferParameters(width: 0.1, tipClearance: 0.02, startDepth: 0.05, basis: .materialTop, passDepth: 0.03)] {
+        let moved = try ChamferOperation.measuredFromStartSurface(old, tool: vBit90)
+        #expect(moved.basis == .startSurface && moved.depth != nil)
+        #expect(abs(try ChamferOperation.size(tool: vBit90, params: moved).tipDepth - ChamferOperation.size(tool: vBit90, params: old).tipDepth) < 1e-12)
+        let (before, _) = try chamfer(old)
+        let (after, _) = try chamfer(moved)
+        #expect(before.moves == after.moves)
+    }
+    let current = ChamferParameters(depth: 0.24, startDepth: 0.2)
+    #expect(try ChamferOperation.measuredFromStartSurface(current, tool: vBit90) == current)
+}
+
+@Test func ops2DChamferRefusesNegativeAndNonNumericSizes() {
+    for p in [ChamferParameters(depth: 0.1, startDepth: -0.1), ChamferParameters(depth: 0.1, startDepth: .nan),
+              ChamferParameters(depth: 0.1, tipClearance: .infinity), ChamferParameters(depth: 0.1, tipClearance: .nan),
+              ChamferParameters(width: .nan), ChamferParameters(depth: .nan), ChamferParameters(depth: .infinity),
+              ChamferParameters(depth: 0.1, startDepth: -0.1, basis: .materialTop)] {
+        #expect(throws: CAMError.self, "\(p)") { try ChamferOperation.size(tool: vBit90, params: p) }
+    }
 }
 
 @Test func ops2DChamferRejectsWrongToolsAndOversizedChamfers() {
