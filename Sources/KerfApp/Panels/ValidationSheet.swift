@@ -7,11 +7,19 @@ import SwiftUI
 /// combined program, with a shortcut to select the offending toolpath.
 struct ValidationSheet: View {
     @ObservedObject var document: KerfDocument
+    /// Watched so that reloading the post profiles or editing a machine reaches `currentInputs`.
+    @ObservedObject var catalog = PostProfileCatalog.shared
+    @ObservedObject var machines = MachineCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @State private var report: ValidationReport?
+    /// What the document was made of when `report` was made.
+    @State private var checkedFrom: KerfDocument.PostedInputs?
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
+
+    /// What a program posted now is made from: the document's inputs, the post processor and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.stamped(profile: document.postProfile, groupedByTool: groupByTool) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -65,7 +73,7 @@ struct ValidationSheet: View {
         .frame(width: 640, height: 560)
         .onAppear { run() }
         .onDisappear { calcTask?.cancel() }
-        .onChange(of: groupByTool) { _, _ in run() }
+        .onChange(of: currentInputs) { _, now in if now != checkedFrom { run() } }
     }
 
     private func summary(_ r: ValidationReport) -> some View {
@@ -86,6 +94,7 @@ struct ValidationSheet: View {
         calcTask = nil
         let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
         guard !stale.isEmpty else { check(); return }
+        report = nil   // the last report is of toolpaths that are being replaced
         calculatingCount = stale.count
         calcTask = Task { @MainActor in
             let done = await document.calculateAndWait(stale)
@@ -96,6 +105,7 @@ struct ValidationSheet: View {
     }
 
     private func check() {
+        checkedFrom = currentInputs
         report = ValidationReport.make(project: document.outputProject, results: document.results,
                                        profile: document.postProfile, groupByTool: groupByTool)
     }

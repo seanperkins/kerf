@@ -162,6 +162,8 @@ final class KerfDocument: ReferenceFileDocument {
     var fileURL: URL?
     /// Bumped by every undoable change (including undo/redo).
     private var editSerial = 0
+    /// Bumped whenever `project` or an entry of `results` changes, by any path (see `postedInputs`).
+    private var outputSerial = 0
     /// The operation whose live edits are being merged into the current undo step.
     private var liveOperationEdit: (id: UUID, serial: Int)?
     let toolLibrary: ToolLibraryModel
@@ -365,6 +367,7 @@ final class KerfDocument: ReferenceFileDocument {
 
     private func replaceProject(_ new: KerfProject, actionName: String) {
         editSerial += 1
+        outputSerial += 1
         let old = project
         if old.document != new.document { designRevision += 1 }
         project = new
@@ -598,6 +601,7 @@ final class KerfDocument: ReferenceFileDocument {
             VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
             guard p != project else { return }
             project = p  // the open undo step already restores the state before the first edit
+            outputSerial += 1
             return
         }
         perform("Edit Toolpath") { $0.upsertOperation(op) }
@@ -690,6 +694,33 @@ final class KerfDocument: ReferenceFileDocument {
         if hiddenToolpaths.contains(id) { hiddenToolpaths.remove(id) } else { hiddenToolpaths.insert(id) }
     }
 
+    /// What a program posted from this document is made from. An export sheet keeps the value it posted
+    /// with and posts again when the document's differs: an edit or an undo, a design or Tool Database
+    /// change (the Tool Database is a window of its own, open while a sheet is), or a toolpath result that
+    /// was stored or took a renamed tool.
+    struct PostedInputs: Equatable {
+        var serial = 0, design = 0
+        var side: JobSide = .top
+        /// What a sheet posts with besides the document: the post processor in force (reloading the catalog, or a
+        /// machine, changes it) and the app-wide group-by-tool preference, which sets the order. A sheet stamps
+        /// them on with `stamped(profile:groupedByTool:)`.
+        var profile: PostProfile?
+        var groupedByTool = false
+
+        func stamped(profile: PostProfile, groupedByTool: Bool = false) -> PostedInputs {
+            var copy = self
+            copy.profile = profile
+            copy.groupedByTool = groupedByTool
+            return copy
+        }
+
+        /// Shown by a sheet that would not write a program posted before the document changed: the save panel is
+        /// document-modal, the Tool Database window is not, so an edit can land while the panel is up.
+        static let changedWhileSaving = "The job changed while you were choosing where to save, so the program was posted again. Save once more."
+    }
+
+    var postedInputs: PostedInputs { PostedInputs(serial: outputSerial, design: designRevision, side: activeSide) }
+
     /// True when the operation has no result or was edited after its last calculation.
     func isStale(_ id: UUID) -> Bool {
         guard let r = results[id], let op = operation(id) else { return true }
@@ -770,6 +801,7 @@ final class KerfDocument: ReferenceFileDocument {
         guard operation(id) != nil, generation > resultGeneration[id] ?? 0 else { return }
         results[id] = r.renamingTools(from: toolLibrary.library) ?? r
         resultGeneration[id] = generation
+        outputSerial += 1
     }
 
     /// A rename in the Tool Database does not make toolpaths stale (the name is a label), so the
@@ -777,7 +809,7 @@ final class KerfDocument: ReferenceFileDocument {
     /// program comments, the job sheet and the checks then read the current name.
     private func showToolNames(of library: ToolLibrary) {
         for (id, r) in results {
-            if let renamed = r.renamingTools(from: library) { results[id] = renamed }
+            if let renamed = r.renamingTools(from: library) { results[id] = renamed; outputSerial += 1 }
         }
     }
 

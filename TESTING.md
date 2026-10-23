@@ -82,6 +82,11 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    File ▸ Export G-code… ▸ Save… into it: a red line "Could not save G-code: …" appears above the
    buttons and the sheet stays open; choose a writable folder and it saves and closes. Same for
    Save All Toolpaths (one file, and per-toolpath into the folder) and Save Tiled G-code.
+   **Edits under an open sheet.** With File ▸ Export G-code… open, open the Tool Database (⇧⌘T, a
+   window of its own) and change the diameter of a tool the job uses: Save… greys out for a moment and
+   the program and the validator list below it are posted again (the tool table in the header shows the
+   new diameter). Renaming the tool updates the names at once. Same for Save All Toolpaths, Save Tiled
+   G-code and Check Toolpaths….
 9. **Tool Database** (⇧⌘T): add or edit a tool. Tools are stored in
    `~/Library/Application Support/Kerf/`. Type a long name and watch `tools.json`'s modified time:
    it changes once, when you press Return or click another field, not per letter. With a toolpath

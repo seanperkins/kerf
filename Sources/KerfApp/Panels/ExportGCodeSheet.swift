@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 struct ExportGCodeSheet: View {
     @ObservedObject var document: KerfDocument
     @ObservedObject var catalog = PostProfileCatalog.shared
+    @ObservedObject var machines = MachineCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @State var scope: GCodeExportScope
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
@@ -16,11 +17,16 @@ struct ExportGCodeSheet: View {
     /// The id shown on open; the project keeps its own reference unless the user picks another.
     @State private var initialProfileID: String = ""
     @State private var result: GCodeExportResult?
+    /// What the document was made of when `result` was posted; Save waits while the document has moved on.
+    @State private var postedFrom: KerfDocument.PostedInputs?
     @State private var confirmErrors = false
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
     /// Why the last Save failed, shown above the buttons (an alert on the document would sit under this sheet).
     @State private var failure: String?
+
+    /// What a program posted now is made from: the document's inputs, the post processor and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.stamped(profile: profile, groupedByTool: groupByTool) }
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
@@ -62,7 +68,7 @@ struct ExportGCodeSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save…") { if result?.hasErrors == true { confirmErrors = true } else { save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(result?.text == nil || calcTask != nil)
+                    .disabled(result?.text == nil || calcTask != nil || postedFrom != currentInputs)
             }
         }
         .padding(20)
@@ -74,8 +80,7 @@ struct ExportGCodeSheet: View {
         }
         .onDisappear { calcTask?.cancel() }
         .onChange(of: scope) { _, _ in run() }
-        .onChange(of: groupByTool) { _, _ in run() }
-        .onChange(of: profileID) { _, _ in run() }
+        .onChange(of: currentInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
@@ -156,11 +161,13 @@ struct ExportGCodeSheet: View {
                                      jobName: document.document.name)
         r.issues.insert(contentsOf: document.postProfileIssues + missing, at: 0)
         result = r
+        postedFrom = currentInputs
     }
 
     private func save() {
         guard let text = result?.text else { return }
         failure = nil
+        let inputs = postedFrom
         let panel = PanelRunner.makeSavePanel()
         var opName: String?
         if case .operation(let id) = scope { opName = document.operation(id)?.setup.name }
@@ -172,9 +179,11 @@ struct ExportGCodeSheet: View {
         panel.canCreateDirectories = true
         PanelRunner.present(panel) { response in
             guard response == .OK, let url = panel.url else { return }
+            guard inputs == currentInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
             do {
                 try text.write(to: url, atomically: true, encoding: .utf8)
                 if profileID != initialProfileID { document.setPostProfile(profileID) }
+                postedFrom = currentInputs  // the post just written already used that profile
                 dismiss()
             } catch {
                 failure = "Could not save G-code: \(error.localizedDescription)"
