@@ -112,32 +112,41 @@ enum PreflightChecks {
         }
     }
 
-    /// Every length written in a tool name, in inches: 1/4", 1/4 in, .25", 0.25in, 6mm, 3.175 mm.
+    /// Every length written in a tool name, in inches: 1/4", 1/4 in, .25", 0.25in, 6mm, 3.175 mm, and mixed numbers
+    /// (1-1/4", and 1 1/4 in as the tool library names its own tools).
     /// A bare fraction (1/4) is inches; a bare decimal is not a size (2 flute, 60 deg, #3).
     static func sizesInInches(inName name: String) -> [Double] {
         var sizes: [Double] = []
+        let unit = #"(?:"|”|in\b|inch(?:es)?\b)"#
+        func mixed(_ m: NSTextCheckingResult, _ s: String) -> Double? {
+            guard let w = Double(group(m, 1, s)), let a = Double(group(m, 2, s)), let b = Double(group(m, 3, s)), b > 0
+            else { return nil }
+            return w + a / b
+        }
+        // Earlier patterns take precedence: text one of them read is not read again by a later one, so the fraction
+        // inside "1-1/4" is not also a size of its own, while "1/8-1/4" still gives both of its fractions.
         let patterns: [(String, (NSTextCheckingResult, String) -> Double?)] = [
-            // 1-1/4", 1-1/2 in: a mixed number is one size, so the fraction after "1-" is not read on its own below
-            (#"(?<![\d./])(\d+)\s*-\s*(\d+)\s*/\s*(\d+)\s*(?:"|”|in\b|inch(?:es)?\b)?"#, { m, s in
-                guard let w = Double(group(m, 1, s)), let a = Double(group(m, 2, s)), let b = Double(group(m, 3, s)), b > 0
-                else { return nil }
-                return w + a / b
-            }),
+            // 1-1/4", 1-1/2 in: hyphenated, so the unit may be left out
+            (#"(?<![\d./])(\d+)\s*-\s*(\d+)\s*/\s*(\d+)\s*"# + unit + "?", mixed),
+            // 1 1/4 in: spaced, so the unit is required (and a tool number before the fraction is not a whole part)
+            (#"(?<![\w#./-])(\d+)\s+(\d+)\s*/\s*(\d+)\s*"# + unit, mixed),
             // 1/4", 1/4 in, 1/4in, 1/4 inch, or a bare 1/4
-            (#"(?<![\d.])(?<!\d-)(\d+)\s*/\s*(\d+)\s*(?:"|”|in\b|inch(?:es)?\b)?"#, { m, s in
+            (#"(?<![\d.])(\d+)\s*/\s*(\d+)\s*"# + unit + "?", { m, s in
                 guard let a = Double(group(m, 1, s)), let b = Double(group(m, 2, s)), b > 0 else { return nil }
                 return a / b
             }),
             // 0.25", .25in, 0.5 inch
-            (#"(?<![\d./])(\d*\.\d+|\d+)\s*(?:"|”|in\b|inch(?:es)?\b)"#, { m, s in Double(group(m, 1, s)) }),
+            (#"(?<![\d./])(\d*\.\d+|\d+)\s*"# + unit, { m, s in Double(group(m, 1, s)) }),
             // 6mm, 3.175 mm
             (#"(?<![\d./])(\d*\.\d+|\d+)\s*mm\b"#, { m, s in Double(group(m, 1, s)).map { $0 / 25.4 } }),
         ]
         let range = NSRange(name.startIndex..., in: name)
+        var read: [NSRange] = []
         for (pattern, value) in patterns {
             guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
-            for m in re.matches(in: name, options: [], range: range) {
-                if let v = value(m, name), v > 0 { sizes.append(v) }
+            for m in re.matches(in: name, options: [], range: range)
+            where !read.contains(where: { NSIntersectionRange($0, m.range).length > 0 }) {
+                if let v = value(m, name), v > 0 { sizes.append(v); read.append(m.range) }
             }
         }
         return sizes

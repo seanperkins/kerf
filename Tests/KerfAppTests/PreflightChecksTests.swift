@@ -113,6 +113,13 @@ import Testing
         ("1-1/2 in Spoilboard Cutter", [1.5]),
         ("2-3/8 inch Bit", [2.375]),
         ("2-flute 1/4\" End Mill", [0.25]),
+        // The tool library names a 1.25 in cutter "1 1/4 in ...": a spaced mixed number needs its unit.
+        ("1 1/4 in 1-flute end mill", [1.25]),
+        ("2 3/8\" Ball Nose", [2.375]),
+        ("#3 1/4\" Drill", [0.25]),
+        ("T3 1/4 in Router", [0.25]),
+        // A range keeps both of its fractions; only text read as a mixed number is not read again.
+        ("1/8-1/4\" Tapered Ball", [0.125, 0.25]),
     ]
 
     @Test(arguments: nameCases)
@@ -183,4 +190,12 @@ import Testing
                                   groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
         #expect(sheet.warnings.contains { $0.contains("with tabs off") })
     }
+}
+
+/// A tool named by the library's own naming is never reported as a mismatch against its own diameter.
+@Test(arguments: [0.25, 0.125, 1.25, 1.5, 2.375, 0.0625, 3.0])
+func aToolNamedByTheLibraryMatchesItsDiameter(diameter: Double) {
+    var t = Tool(name: "x", kind: .endMill, number: 1, diameter: diameter, stepdown: 0.1, stepover: 0.1, feedRate: 100, plungeRate: 30)
+    t.name = ToolNaming.name(for: t)
+    #expect(PreflightChecks.toolNameMismatches([t]).isEmpty, "\(t.name)")
 }
