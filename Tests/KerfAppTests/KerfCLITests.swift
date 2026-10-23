@@ -29,8 +29,9 @@ import Testing
     static func folder() -> URL { AppTestSupport.tempDir() }
 
     /// What the Export G-code sheet makes of `project`: calculate, collect, post (`ExportGCodeSheet.post`).
-    @MainActor static func appExport(_ project: KerfProject, scope: GCodeExportScope = .all) throws -> String {
-        let doc = KerfDocument(project: project, toolLibrary: AppTestSupport.library())
+    @MainActor static func appExport(_ project: KerfProject, scope: GCodeExportScope = .all,
+                                     library: ToolLibraryModel = AppTestSupport.library()) throws -> String {
+        let doc = KerfDocument(project: project, toolLibrary: library)
         doc.calculateNow(doc.outputProject(for: scope).operations.filter(\.setup.isEnabled).map(\.id))
         let tps = GCodeExporter.toolpaths(scope: scope, operations: doc.outputProject.operations, results: doc.results,
                                           groupByTool: false)
@@ -64,6 +65,46 @@ import Testing
         let pocket = try #require(project.operations.first { $0.setup.name == "Pocket 1" })
         #expect(written == (try Self.appExport(project, scope: .operation(pocket.id))))
         #expect(written.contains("Pocket 1") && !written.contains("Profile 1"))
+    }
+
+    @Test @MainActor func aToolEditedInTheProjectIsThePostedTool() throws {
+        // A seeded tool edited in the app is saved in the project's snapshot; the command line must cut with that tool, not
+        // with the seeded original of the same id (library entries win over a snapshot in `mergedTools`).
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        let id = ToolLibrary.seeded.tools[0].id
+        let at = try #require(project.tools.firstIndex { $0.id == id })
+        project.tools[at].feedRate = 55
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("edited.kerf")
+        try project.encoded().write(to: file)
+        let r = Self.run(["export", file.path, "--out", "-", "--builtin-only"])
+        #expect(r.status == 0, "\(r.err)")
+        #expect(r.out.contains("F55.0"))
+        // The app with that edit in its library posts the same program.
+        let library = AppTestSupport.library()
+        library.update(project.tools[at])
+        #expect(r.out == (try Self.appExport(project, library: library)))
+        // And the unedited sample does not have that feed.
+        let plain = Self.run(["export", Self.sign, "--out", "-", "--builtin-only"])
+        #expect(!plain.out.contains("F55.0"))
+    }
+
+    @Test func aSwitchedOffToolpathThatFailsIsReportedWhenAskedFor() throws {
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        let i = try #require(project.operations.firstIndex { $0.setup.name == "Profile 1" })
+        var setup = project.operations[i].editableSetup
+        setup.isEnabled = false
+        setup.shapeIDs = []   // nothing to cut: the toolpath fails to calculate
+        project.operations[i] = project.operations[i].with(setup: setup)
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("failing.kerf")
+        try project.encoded().write(to: file)
+        let r = Self.run(["export", file.path, "--operation", "Profile 1", "--out", folder.path])
+        #expect(r.status == 1)
+        #expect(r.err.contains("Profile 1 is missing from the program"))
+        // Left out of the whole program, as the Export sheet leaves out a switched-off toolpath.
+        let all = Self.run(["export", file.path, "--out", folder.path, "--quiet"])
+        #expect(all.status == 0, "\(all.err)")
     }
 
     @Test func aPostIsChosenByIdAndListed() throws {

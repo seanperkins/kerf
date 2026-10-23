@@ -23,9 +23,15 @@ mkdir -p .tmp
 work="$(mktemp -d .tmp/check-samples.XXXXXX)"
 trap 'rm -rf "$work"' EXIT
 
+# Assigned first, so that a failing `posts` stops the script (a failure inside a for loop's word list would not).
+ids="$("$cli" posts --builtin-only | cut -f1)"
+samples=(samples/*.kerf)
+[[ -n "$ids" && -e "${samples[1]}" ]] || { echo "FAIL: no posts or no samples found" >&2; exit 1; }
+expected_count=$(( $(echo "$ids" | wc -l) * ${#samples} ))
+
 failed=0
-for id in $("$cli" posts --builtin-only | cut -f1); do
-  for sample in samples/*.kerf; do
+for id in ${(f)ids}; do
+  for sample in $samples; do
     # --builtin-only: the posts and machines of whoever runs this must not change the result.
     if ! "$cli" export "$sample" --post "$id" --builtin-only --out "$work/$id" --quiet; then
       echo "FAIL: $sample did not post cleanly with $id" >&2
@@ -34,6 +40,8 @@ for id in $("$cli" posts --builtin-only | cut -f1); do
   done
 done
 (( failed == 0 )) || exit 1
+# Every post and sample made a program: a short set must never replace, or pass for, the committed one.
+(( $(find "$work" -type f | wc -l) == expected_count )) || { echo "FAIL: expected $expected_count programs" >&2; exit 1; }
 
 if (( update )); then
   rm -rf samples/expected

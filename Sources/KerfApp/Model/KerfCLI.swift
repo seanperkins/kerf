@@ -44,6 +44,8 @@ enum KerfCLI {
           --force              write the program even when the validator reports errors (the status stays 1)
           --quiet              do not print the written file's name
 
+        With --out - the program is written to standard output exactly as the post made it.
+
         exit status: 0 ok, 1 validator errors or nothing to export, 2 usage or file error
         """
 
@@ -242,8 +244,11 @@ enum KerfCLI {
         case .operation: targets = outputProject.operations
         }
 
-        // Calculate what is exported, against the project as a whole (each toolpath uses its own sheet and side).
-        let library = ToolLibrary.seeded
+        // Calculate what is exported, against the project as a whole (each toolpath uses its own sheet and side). The tools
+        // are the ones the project was saved with (its snapshot, which holds any edit to a seeded tool), over the seeded
+        // defaults for any it does not mention: never the library of the Mac it runs on.
+        var library = ToolLibrary.seeded
+        for tool in project.tools { library.upsert(tool) }
         var results: [UUID: ToolpathResult] = [:]
         for op in targets {
             results[op.id] = ToolpathCalculator.calculate(op, project: project, library: library, designRevision: 0,
@@ -253,7 +258,13 @@ enum KerfCLI {
                                           groupByTool: options.groupByTool)
         let jobName = options.name ?? project.document.name
         var result = GCodeExporter.export(project: outputProject, toolpaths: tps, profile: profile, jobName: jobName)
-        result.issues.insert(contentsOf: issues + GCodeExporter.missingOperationIssues(targets, results: results), at: 0)
+        // A toolpath asked for by name is judged even when it is switched off, as the one that is missing from this program.
+        let asked = targets.map { op -> AnyOperation in
+            var setup = op.editableSetup
+            setup.isEnabled = true
+            return op.with(setup: setup)
+        }
+        result.issues.insert(contentsOf: issues + GCodeExporter.missingOperationIssues(asked, results: results), at: 0)
 
         for issue in result.issues {
             output.standardError("\(issue.severity.rawValue): \(issue.line.map { "line \($0): " } ?? "")\(issue.message)\n")
