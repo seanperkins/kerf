@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 struct SaveAllToolpathsSheet: View {
     @ObservedObject var document: KerfDocument
     @ObservedObject var catalog = PostProfileCatalog.shared
+    @ObservedObject var machines = MachineCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @State private var mode: SaveAllMode = .oneFileInOrder
     @State private var profileID = ""

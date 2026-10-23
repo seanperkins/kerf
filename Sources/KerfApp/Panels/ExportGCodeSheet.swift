@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 struct ExportGCodeSheet: View {
     @ObservedObject var document: KerfDocument
     @ObservedObject var catalog = PostProfileCatalog.shared
+    @ObservedObject var machines = MachineCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @State var scope: GCodeExportScope
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false

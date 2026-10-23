@@ -7,8 +7,9 @@ import SwiftUI
 /// combined program, with a shortcut to select the offending toolpath.
 struct ValidationSheet: View {
     @ObservedObject var document: KerfDocument
-    /// Watched so that reloading the post profiles reaches `currentInputs`.
+    /// Watched so that reloading the post profiles or editing a machine reaches `currentInputs`.
     @ObservedObject var catalog = PostProfileCatalog.shared
+    @ObservedObject var machines = MachineCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @State private var report: ValidationReport?
     /// What the document was made of when `report` was made.

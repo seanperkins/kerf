@@ -8,8 +8,9 @@ import SwiftUI
 /// program each, zeroed at the tile's lower-left corner on the material.
 struct TilingSheet: View {
     @ObservedObject var document: KerfDocument
-    /// Watched so that reloading the post profiles reaches `currentInputs`.
+    /// Watched so that reloading the post profiles or editing a machine reaches `currentInputs`.
     @ObservedObject var catalog = PostProfileCatalog.shared
+    @ObservedObject var machines = MachineCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var settings = TilingSettings(tileWidth: 60, tileHeight: 96)
