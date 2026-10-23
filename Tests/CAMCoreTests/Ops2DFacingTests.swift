@@ -314,3 +314,51 @@ func ops2DFacingAVeryLongNarrowAreaStaysSmall(pattern: FacingPattern) throws {
     #expect(!FacingOperation.isClear(Vec2(-0.2, 2), of: box, toolRadius: r, tolerance: tol))
     #expect(!FacingOperation.isClear(Vec2(3, 2), of: box, toolRadius: r, tolerance: tol))
 }
+
+@Test(arguments: [0.95, 0.85, 0.7, 0.5])
+func ops2DFacingSpiralLeavesNoCoreAtAnyStepover(stepover: Double) throws {
+    // Sizes whose last ring is anywhere from nothing to nearly two steps wide, square and long: the interval where the rings
+    // alone leave a core wider than the cutter (between a diameter and two steps) is swept at every stepover.
+    var sizes: [Vec2] = []
+    var w = 0.8
+    while w <= 4.2 { sizes.append(Vec2(w, w)); sizes.append(Vec2(w, 2.6)); w += 0.11 }
+    for size in sizes {
+        let box = Rect2(x: 0.5, y: 0.5, width: size.x, height: size.y)
+        var p = FacingParameters(area: .vectors, pattern: .spiral)
+        p.stepover = stepover
+        let (tp, ctx) = try facing(p, paths: [F.rect(box.min.x, box.min.y, size.x, size.y)], sheet: Vec2(8, 6))
+        let gap = worstGap(cuts(tp, at: 0.0625, coords: ctx.coords), over: box, grid: 0.1)
+        #expect(gap <= F.bigEndMill.radius + 1e-6, "stepover \(stepover), \(size.x) x \(size.y): an uncut spot \(gap) from the path")
+        // Above the cap the rings are held at it, and the program says so.
+        #expect((tp.metadata["warning"]?.contains("rings") == true) == (stepover > FacingOperation.maxSpiralStepover))
+    }
+}
+
+@Test func ops2DFacingLaterLayersGoDownWhereThePreviousLayerCut() throws {
+    // Each layer repeats the pattern from the same lead-in point, so the column there is cut to the previous floor and the
+    // rapid down may stop a gap above it. That holds beside an area inside the stock too.
+    var p = FacingParameters(area: .vectors, pattern: .rasterX, depth: DepthSettings(cutDepth: 0.5))
+    p.overhang = nil
+    let (tp, ctx) = try facing(p, paths: [F.rect(1, 1, 3, 2)])
+    let gap = 0.05   // the plunge gap the job's default gives
+    var visited: [(Vec2, Double)] = []
+    var cur: Vec3?
+    var rapidsDown = 0
+    for m in tp.moves {
+        if case .rapid(let q) = m, let c = cur, q.xy.distance(to: c.xy) < 1e-9, q.z < c.z - 1e-9, q.z < ctx.coords.safeZ - 1e-9 {
+            // A rapid down from safe Z stops above the top on the first layer (nothing to credit); on a later one the column
+            // was cut at least to a gap below where it stops.
+            let stops = ctx.coords.depth(ofMachineZ: q.z)
+            if stops < 0 { continue }
+            rapidsDown += 1
+            #expect(visited.contains { $0.0.distance(to: q.xy) < 1e-9 && $0.1 >= stops + gap - 1e-9 },
+                    "rapid down at \(q.xy) to depth \(stops) over uncut stock")
+        }
+        if let t = m.target {
+            if case .linear = m { visited.append((t.xy, ctx.coords.depth(ofMachineZ: t.z))) }
+            cur = t
+        }
+    }
+    // Two later layers (0.5 in at a 0.2 in stepdown is three).
+    #expect(rapidsDown == 2)
+}

@@ -17,6 +17,10 @@ public struct FacingOperation: ToolpathOperation {
 
     /// Widest stepover allowed, as a fraction of the diameter: the passes must overlap.
     public static let maxStepover = 0.95
+    /// Widest the rings of a spiral are kept apart, as a fraction of the diameter. At an outside corner of the inner ring the
+    /// round footprint leaves a spot 0.586 × the spacing from the nearest cut, so the spacing may be at most a radius
+    /// over 0.586 (1.707 radii, 85.4% of a diameter); parallel raster passes have no such corner and go to `maxStepover`.
+    public static let maxSpiralStepover = 0.85
     /// Most passes (rows or rings) across the area, and most points in all (one layer's points × depth passes), so a typo
     /// in a stepover cannot ask for an unbounded toolpath.
     static let maxRows = 10_000
@@ -60,6 +64,7 @@ public struct FacingOperation: ToolpathOperation {
         let step = tool.diameter * params.stepover
         let centre = Self.centreRect(area: area, toolRadius: r, overhang: overhang)
 
+        var warnings: [String] = []
         // One layer of the pattern at a depth, as tool-center points; the same XY every layer.
         let flat: [Vec2]
         switch params.pattern {
@@ -71,11 +76,13 @@ public struct FacingOperation: ToolpathOperation {
             }
             flat = Self.raster(centre, rows: rows, alongX: alongX, area: area, toolRadius: r)
         case .spiral:
+            let ringStep = min(step, Self.maxSpiralStepover * tool.diameter)
+            if ringStep < step { warnings.append("the spiral keeps its rings \(Int(Self.maxSpiralStepover * 100))% of the tool apart at most: any more would leave the corners between them uncut") }
             let size = min(centre.width, centre.height)
-            guard size / step <= Double(2 * Self.maxRows) else {
+            guard size / ringStep <= Double(2 * Self.maxRows) else {
                 throw CAMError.invalidParameter("Too many passes across the area: raise the stepover")
             }
-            flat = Self.spiral(centre, step: step, toolRadius: r, clockwise: params.direction == .climb, area: area,
+            flat = Self.spiral(centre, step: ringStep, toolRadius: r, clockwise: params.direction == .climb, area: area,
                                tolerance: tol)
         }
         guard flat.count > 1 else { throw CAMError.invalidGeometry("The area to face leaves nothing to cut") }
@@ -99,7 +106,6 @@ public struct FacingOperation: ToolpathOperation {
 
         var meta = ["area": "\(Self.fmt(area.width, units)) × \(Self.fmt(area.height, units))",
                     "note": surfaceNote(job: context.document.job, units: units)]
-        var warnings: [String] = []
         if Self.leavesRoundedCorners(area: area, centre: centre, toolRadius: r, tolerance: tol) {
             warnings.append("the overhang is too small to reach the corners of the area: they are left rounded")
         }
