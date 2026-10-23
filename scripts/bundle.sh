@@ -13,7 +13,7 @@ VERSION=$(git describe --tags --always 2>/dev/null || echo 0.1)
 rm -rf $APP
 mkdir -p $APP/Contents/MacOS $APP/Contents/Resources
 cp "$BIN" $APP/Contents/MacOS/LoftLine
-[[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns $APP/Contents/Resources/
+cp Resources/AppIcon.icns $APP/Contents/Resources/AppIcon.icns
 # Sample files opened from the Welcome window.
 mkdir -p $APP/Contents/Resources/samples
 cp samples/*.loftline samples/*.svg samples/*.dxf samples/*.stl $APP/Contents/Resources/samples/
