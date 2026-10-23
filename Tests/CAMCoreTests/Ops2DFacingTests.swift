@@ -92,29 +92,33 @@ func ops2DFacingCoversAnyAreaTheToolLeavesNothing(pattern: FacingPattern, size: 
     }
 }
 
-@Test func ops2DFacingEnterAndLeaveClearOfTheStock() throws {
-    // The tool goes down outside the material, so the first pass is fed in, not plunged into the surface.
-    for pattern in [FacingPattern.rasterX, .rasterY, .spiral] {
-        let (tp, ctx) = try facing(FacingParameters(pattern: pattern))
-        let r = F.bigEndMill.radius
-        var cur: Vec3?
-        var firstPlunge: Vec2?
-        for m in tp.moves {
-            if case .linear(let p, _) = m, let c = cur, p.z < c.z - 1e-9, firstPlunge == nil { firstPlunge = p.xy }
-            if let t = m.target { cur = t }
-        }
-        let plunge = try #require(firstPlunge)
-        // The cutter at the plunge touches no part of the sheet.
-        let nearest = Vec2(min(max(plunge.x, 0), 6), min(max(plunge.y, 0), 4))
-        #expect(plunge.distance(to: nearest) >= r - 1e-9, "\(pattern) plunges at \(plunge) inside the stock")
-        if pattern != .spiral {
-            // The last cut ends clear of the stock too, where the cutter lifts out.
-            let last = try #require(F.densePoints(tp.moves).last)
-            let nearestToLast = Vec2(min(max(last.x, 0), 6), min(max(last.y, 0), 4))
-            #expect(last.xy.distance(to: nearestToLast) >= r - 1e-9)
-        }
-        #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
+@Test(arguments: [FacingPattern.rasterX, .rasterY, .spiral], [Double?.none, 0.2, 0.1, 0.0, 0.4, 0.8])
+func ops2DFacingEnterAndLeaveClearOfTheStock(pattern: FacingPattern, overhang: Double?) throws {
+    // The tool goes down outside the material, so the first pass is fed in, not plunged into the surface, however
+    // little the cutter's edge is to reach past the area (overhang 0.2 on a 0.25 radius puts the first cut inside it).
+    var p = FacingParameters(pattern: pattern)
+    p.overhang = overhang
+    let (tp, ctx) = try facing(p)
+    let r = F.bigEndMill.radius
+    func clearance(_ q: Vec2) -> Double { q.distance(to: Vec2(min(max(q.x, 0), 6), min(max(q.y, 0), 4))) }
+    var cur: Vec3?
+    var firstPlunge: Vec2?
+    for m in tp.moves {
+        if case .linear(let q, _) = m, let c = cur, q.z < c.z - 1e-9, firstPlunge == nil { firstPlunge = q.xy }
+        if let t = m.target { cur = t }
     }
+    let plunge = try #require(firstPlunge)
+    #expect(clearance(plunge) >= r - 1e-9, "\(pattern), overhang \(String(describing: overhang)): plunges at \(plunge), inside the stock")
+    if pattern != .spiral {
+        // The last cut ends clear of the stock too, where the cutter lifts out.
+        let last = try #require(F.densePoints(tp.moves).last)
+        #expect(clearance(last.xy) >= r - 1e-9, "lifts out at \(last.xy)")
+    }
+    // Still the whole material, whatever the overhang that leaves the corners square.
+    if (overhang ?? r) >= 0.1 {
+        #expect(worstGap(cuts(tp, at: 0.0625, coords: ctx.coords), over: sheet) <= r + 1e-6)
+    }
+    #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
 }
 
 @Test func ops2DFacingSpiralTurnsClockwiseForClimbAndTheOtherWayConventionally() throws {
@@ -160,6 +164,35 @@ func ops2DFacingTakesTheCutInPassesAndKeepsEveryLayerTheSame(mode: ZZeroMode) th
     #expect(abs((ys.max() ?? 0) - 4.15) < 1e-9)
     // A bigger overhang is not a warning when the area is the whole material.
     #expect(tp.metadata["warning"] == nil)
+}
+
+@Test func ops2DFacingWarnsHoweverFarTheOverhangReachesIntoSurroundingStock() throws {
+    // The cutter's edge goes `overhang` past the box and the lead-in a radius further: 0.75 here is three radii.
+    for overhang in [0.0, 0.25, 0.75, 1.5] {
+        var p = FacingParameters(area: .vectors, pattern: .rasterX)
+        p.overhang = overhang
+        let (tp, _) = try facing(p, paths: [F.rect(2, 1.5, 2, 1)])
+        #expect(tp.metadata["warning"]?.contains("not being faced") == true, "overhang \(overhang)")
+    }
+    // On the whole material the same overhangs reach only air.
+    for overhang in [0.25, 0.75, 1.5] {
+        var p = FacingParameters(pattern: .rasterX)
+        p.overhang = overhang
+        let (tp, _) = try facing(p)
+        #expect(tp.metadata["warning"] == nil, "overhang \(overhang)")
+    }
+}
+
+@Test(arguments: [FacingPattern.rasterX, .rasterY, .spiral])
+func ops2DFacingAVeryLongNarrowAreaStaysSmall(pattern: FacingPattern) throws {
+    // A spiral's rings are bounded by the short side (five points each), a raster along the strip's length has a few rows:
+    // a long strip is a handful of passes, however long. Rows across it would be a hundred thousand, which is refused.
+    if pattern == .rasterY {
+        #expect(throws: CAMError.self) { try facing(FacingParameters(pattern: pattern), sheet: Vec2(100_000, 1)) }
+        return
+    }
+    let (tp, _) = try facing(FacingParameters(pattern: pattern), sheet: Vec2(100_000, 1))
+    #expect(tp.moves.count < 200)
 }
 
 @Test func ops2DFacingWarnsWhenOverhangCannotReachTheCorners() throws {

@@ -3,8 +3,8 @@ import Foundation
 
 /// Facing (surfacing): takes a layer off the top of a rectangle, the bounding box of the selected vectors or the
 /// whole material. The tool's center covers the area grown by (overhang − tool radius), so with the default overhang
-/// it rides the area's edge and the cutter's edge reaches a radius past it; the first pass is led in from outside the
-/// area (a radius before the first cut) instead of plunging into the surface.
+/// it rides the area's edge and the cutter's edge reaches a radius past it; the first pass is led in from a point
+/// where the cutter is clear of the area, instead of plunging into the surface, and the last cut runs out the same way.
 public struct FacingOperation: ToolpathOperation {
     public static let kind = OperationKind.facing
     public var setup: OperationSetup
@@ -60,13 +60,13 @@ public struct FacingOperation: ToolpathOperation {
             guard let rows = Self.positions(from: lo, to: hi, step: step, limit: Self.maxRows) else {
                 throw CAMError.invalidParameter("Too many passes across the area: raise the stepover")
             }
-            flat = Self.raster(centre, rows: rows, alongX: alongX, lead: r)
+            flat = Self.raster(centre, rows: rows, alongX: alongX, area: area, toolRadius: r)
         case .spiral:
             let size = min(centre.width, centre.height)
             guard size / step <= Double(2 * Self.maxRows) else {
                 throw CAMError.invalidParameter("Too many passes across the area: raise the stepover")
             }
-            flat = Self.spiral(centre, step: step, toolRadius: r, clockwise: params.direction == .climb, lead: r,
+            flat = Self.spiral(centre, step: step, toolRadius: r, clockwise: params.direction == .climb, area: area,
                                tolerance: tol)
         }
         guard flat.count > 1 else { throw CAMError.invalidGeometry("The area to face leaves nothing to cut") }
@@ -85,7 +85,7 @@ public struct FacingOperation: ToolpathOperation {
         if Self.leavesRoundedCorners(area: area, centre: centre, toolRadius: r, tolerance: tol) {
             warnings.append("the overhang is too small to reach the corners of the area: they are left rounded")
         }
-        if Self.reachesBeyondArea(area: area, centre: centre, toolRadius: r, job: context.document.job, tolerance: tol) {
+        if Self.reachesBeyondArea(area: area, overhang: overhang, toolRadius: r, job: context.document.job, tolerance: tol) {
             warnings.append("the cutter reaches past the area into material that is not being faced "
                             + "(the overhang and the lead-in); face the whole material or lower the overhang")
         }
@@ -133,19 +133,36 @@ public struct FacingOperation: ToolpathOperation {
         }
     }
 
-    /// True when the cutter (with its lead-in) can touch material outside the area.
-    static func reachesBeyondArea(area: Rect2, centre: Rect2, toolRadius r: Double, job: JobSetup, tolerance: Double) -> Bool {
+    /// True when the cutter (with its lead-in and lead-out) can touch material outside the area. The cutter's edge goes
+    /// `overhang` past the area; a lead-in or lead-out puts the center a radius or more outside it (as far as the
+    /// overhang takes it, never less), so its far edge is a radius further. `r + max(overhang, r)` on every side
+    /// bounds every pattern.
+    static func reachesBeyondArea(area: Rect2, overhang: Double, toolRadius r: Double, job: JobSetup,
+                                  tolerance: Double) -> Bool {
         func clipped(_ a: Rect2) -> Rect2 {
             let m = job.materialBounds
             return Rect2(min: Vec2(max(a.min.x, m.min.x), max(a.min.y, m.min.y)),
                          max: Vec2(min(a.max.x, m.max.x), min(a.max.y, m.max.y)))
         }
-        let reach = clipped(Rect2(min: centre.min - Vec2(2 * r, 2 * r), max: centre.max + Vec2(2 * r, 2 * r)))
+        let out = r + max(overhang, r)
+        let reach = clipped(Rect2(min: area.min - Vec2(out, out), max: area.max + Vec2(out, out)))
         guard !reach.isEmpty else { return false }
         let faced = clipped(area)
         if faced.isEmpty { return true }
         return reach.min.x < faced.min.x - tolerance || reach.min.y < faced.min.y - tolerance
             || reach.max.x > faced.max.x + tolerance || reach.max.y > faced.max.y + tolerance
+    }
+
+    /// How far to lead from `p` along the axis direction `dir` (a unit vector) before the cutter is clear of `area`: a
+    /// tool radius at least, and as far as it takes for the center to be a radius outside the area, so the cutter touches
+    /// none of it however small the overhang.
+    static func leadLength(from p: Vec2, toward dir: Vec2, clearOf area: Rect2, toolRadius r: Double) -> Double {
+        let needed: Double
+        if dir.x > 0.5 { needed = area.max.x + r - p.x }
+        else if dir.x < -0.5 { needed = p.x - (area.min.x - r) }
+        else if dir.y > 0.5 { needed = area.max.y + r - p.y }
+        else { needed = p.y - (area.min.y - r) }
+        return max(r, needed)
     }
 
     // MARK: Patterns
@@ -162,25 +179,31 @@ public struct FacingOperation: ToolpathOperation {
     }
 
     /// Passes along an axis at each of `rows`, the first from the low end, each the reverse of the one before and
-    /// joined at the ends (where the cutter has already been). Led in and out by `lead` past the first and last cut.
-    static func raster(_ c: Rect2, rows: [Double], alongX: Bool, lead: Double) -> [Vec2] {
+    /// joined at the ends (where the cutter has already been). Led in before the first cut and out after the last, each
+    /// clear of `area` by a tool radius.
+    static func raster(_ c: Rect2, rows: [Double], alongX: Bool, area: Rect2, toolRadius r: Double) -> [Vec2] {
         let (uLo, uHi) = alongX ? (c.min.x, c.max.x) : (c.min.y, c.max.y)
         func point(_ u: Double, _ v: Double) -> Vec2 { alongX ? Vec2(u, v) : Vec2(v, u) }
-        var out: [Vec2] = [point(uLo - lead, rows[0])]
+        func axis(_ sign: Double) -> Vec2 { alongX ? Vec2(sign, 0) : Vec2(0, sign) }
+        let entry = point(uLo, rows[0])
+        var out: [Vec2] = [entry + axis(-1) * leadLength(from: entry, toward: axis(-1), clearOf: area, toolRadius: r)]
         for (j, v) in rows.enumerated() {
             let forward = j % 2 == 0
             out.append(point(forward ? uLo : uHi, v))
             out.append(point(forward ? uHi : uLo, v))
         }
         let forward = (rows.count - 1) % 2 == 0
-        out.append(point(forward ? uHi + lead : uLo - lead, rows[rows.count - 1]))
+        let exit = point(forward ? uHi : uLo, rows[rows.count - 1])
+        let away = axis(forward ? 1 : -1)
+        out.append(exit + away * leadLength(from: exit, toward: away, clearOf: area, toolRadius: r))
         return out
     }
 
     /// Rectangular rings from the outside in, `step` apart, each started at its lower-left corner and linked to the
     /// next by a diagonal through cut stock; a last pass along the middle when the rings leave a core wider than the
-    /// tool. Led in by `lead` along the line of the first side.
-    static func spiral(_ c: Rect2, step: Double, toolRadius r: Double, clockwise: Bool, lead: Double,
+    /// tool. Led in along the line of the first side from a point a tool radius clear of `area`. The rings are at most
+    /// `size / (2 × step)` of them (the caller bounds that), five points each.
+    static func spiral(_ c: Rect2, step: Double, toolRadius r: Double, clockwise: Bool, area: Rect2,
                        tolerance: Double) -> [Vec2] {
         var out: [Vec2] = []
         var k = 0.0
@@ -213,6 +236,7 @@ public struct FacingOperation: ToolpathOperation {
         let first = out[0]
         let toward = out.dropFirst().first { $0.distance(to: first) > 1e-9 }
         let direction = toward.map { ($0 - first) * (1 / $0.distance(to: first)) } ?? Vec2(1, 0)
+        let lead = leadLength(from: first, toward: direction * -1, clearOf: area, toolRadius: r)
         return [first - direction * lead] + out
     }
 
