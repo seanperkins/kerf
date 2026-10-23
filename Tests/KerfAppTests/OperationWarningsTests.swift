@@ -191,6 +191,48 @@ import Testing
         #expect(OperationWarnings.secondaryToolIDs(of: pocket) == [big.id])
     }
 
+    @Test func onlyToolsThatMakeACutAreJudged() throws {
+        let (p, _, lib) = try setup()
+        var broken = lib
+        let finish = try #require(lib.tools.first { $0.kind == .endMill })
+        var other = try #require(lib.tools.first { $0.kind == .endMill && $0.id != finish.id })
+        other.feedRate = 0
+        broken.upsert(other)
+        let id = p.document.shapes[0].id
+        // A V-carve's clearance tool only cuts with a flat depth.
+        let vbit = try #require(lib.tools.first { $0.kind == .vBit })
+        var carve = VCarveOperation(setup: OperationSetup(name: "V", toolID: vbit.id, shapeIDs: [id]),
+                                    params: VCarveParameters(flatDepth: 0.2, flatClearanceToolID: other.id))
+        #expect(warnings(.vcarve(carve), p, broken).contains { $0.hasPrefix("\(other.name): ") })
+        carve.params.flatDepth = nil
+        #expect(warnings(.vcarve(carve), p, broken).isEmpty)
+        // A relief: the rest tool only says what was finished before, the roughing tool cuts only when roughing is on,
+        // and the primary tool cuts only when finishing is on or it also does the roughing.
+        var bad = finish
+        bad.feedRate = 0
+        var reliefLib = lib
+        reliefLib.upsert(bad)
+        func relief(rough: Bool, roughTool: UUID?, finishing: Bool, rest: UUID?) -> AnyOperation {
+            var params = Relief3DParameters(modelID: UUID(), roughing: RoughingSettings(isEnabled: rough, toolID: roughTool))
+            params.finishing.isEnabled = finishing
+            params.finishing.restToolID = rest
+            return .relief3D(Relief3DOperation(setup: OperationSetup(name: "R", toolID: finish.id), params: params))
+        }
+        // Finish tool broken: judged when finishing runs, or when it also roughs; not when only another tool roughs.
+        #expect(!warnings(relief(rough: false, roughTool: nil, finishing: true, rest: nil), p, reliefLib).isEmpty)
+        #expect(!warnings(relief(rough: true, roughTool: nil, finishing: false, rest: nil), p, reliefLib).isEmpty)
+        #expect(warnings(relief(rough: true, roughTool: other.id, finishing: false, rest: nil), p, reliefLib).isEmpty)
+        #expect(warnings(relief(rough: false, roughTool: nil, finishing: false, rest: nil), p, reliefLib).isEmpty)
+        // The rest tool is never judged; the roughing tool when roughing is on.
+        #expect(warnings(relief(rough: false, roughTool: nil, finishing: true, rest: other.id), p, broken).isEmpty)
+        #expect(warnings(relief(rough: true, roughTool: other.id, finishing: true, rest: nil), p, broken).contains { $0.hasPrefix("\(other.name): ") })
+        #expect(warnings(relief(rough: false, roughTool: other.id, finishing: true, rest: nil), p, broken).isEmpty)
+        // A merge has no tool of its own to judge, whatever its wrapper holds.
+        var merged = MergeOperation(setup: OperationSetup(name: "M", toolID: other.id, shapeIDs: [id]), params: MergeParameters(children: []))
+        merged.setup.toolID = other.id
+        #expect(warnings(.merge(merged), p, broken).isEmpty)
+    }
+
     @Test func theToolDatabaseJudgesSpindleSpeedByThePostAJobWouldStartWith() {
         let machines = BuiltInMachines.all, posts = BuiltInPosts.all
         // Out of the box: the Avid and its post.

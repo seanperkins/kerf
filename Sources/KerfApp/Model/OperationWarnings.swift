@@ -22,7 +22,7 @@ enum OperationWarnings {
         let u = units.abbreviation
 
         if op.kind != .merge {
-            out += toolProblems(tool, profile: profile, overridable: true)
+            if primaryToolCuts(op) { out += toolProblems(tool, profile: profile, overridable: true) }
             // The other tools the operation cuts with (clearance, roughing, rest) are judged the same way, by name.
             var seen: Set<UUID> = [op.setup.toolID]
             for id in secondaryToolIDs(of: op) where seen.insert(id).inserted {
@@ -63,16 +63,23 @@ enum OperationWarnings {
         return out
     }
 
-    /// The tools besides the primary one that the operation cuts with, in the order it uses them: a pocket's and a
-    /// V-carve's or inlay's flat-area clearance tools, a relief's roughing and rest tools.
+    /// Whether the operation's primary tool makes any cut: always, except a relief with finishing off whose
+    /// roughing has a tool of its own (or is off too), when the primary tool does nothing.
+    static func primaryToolCuts(_ op: AnyOperation) -> Bool {
+        guard case .relief3D(let o) = op else { return true }
+        return o.params.finishing.isEnabled || (o.params.roughing.isEnabled && o.params.roughing.toolID == nil)
+    }
+
+    /// The tools besides the primary one that the operation cuts with, in the order it uses them: a pocket's
+    /// clearance tools, the flat-area clearance tools of a V-carve (only with a flat depth) and an inlay, and a
+    /// relief's roughing tool when roughing is on and has one of its own. A relief's rest tool is not here: it
+    /// only says what an earlier tool already finished, and cuts nothing.
     static func secondaryToolIDs(of op: AnyOperation) -> [UUID] {
         switch op {
         case .pocket(let o): return o.params.clearanceTools
-        case .vcarve(let o): return o.params.clearanceTools.map(\.toolID)
+        case .vcarve(let o): return o.params.flatDepth == nil ? [] : o.params.clearanceTools.map(\.toolID)
         case .inlay(let o): return o.params.clearanceToolIDs
-        case .relief3D(let o):
-            return (o.params.roughing.isEnabled ? o.params.roughing.toolID.map { [$0] } ?? [] : [])
-                + (o.params.finishing.restToolID.map { [$0] } ?? [])
+        case .relief3D(let o): return o.params.roughing.isEnabled ? o.params.roughing.toolID.map { [$0] } ?? [] : []
         default: return []
         }
     }

@@ -147,7 +147,9 @@ extension ToolDatabaseView {
     static func defaultPost(prefs: AppPreferences = PreferencesModel.shared.prefs, machines: [MachineDefinition] = MachineCatalog.shared.machines,
                             profiles: [PostProfile] = PostProfileCatalog.shared.profiles) -> PostProfile {
         let project = prefs.newProject(machines: machines, profiles: profiles)
-        let post = profiles.first { $0.id == project.postProfileID } ?? PostProfileCatalog.shared.profile(id: project.postProfileID)
+        // From the profiles given: the one the project names, else the built-in default's, else any, else the Avid's.
+        let post = profiles.first { $0.id == project.postProfileID }
+            ?? profiles.first { $0.id == PostProfileStore.defaultProfileID } ?? profiles.first ?? BuiltInPosts.avidMach4Inch
         return MachineResolver.effectiveProfile(post, machine: machines.first { $0.id == project.machineID })
     }
 
