@@ -43,6 +43,9 @@ public struct FacingOperation: ToolpathOperation {
         let tol = context.tolerance
         let units = context.units
         let area = try facedArea(in: context)
+        guard [area.min.x, area.min.y, area.max.x, area.max.y].allSatisfy(\.isFinite) else {
+            throw CAMError.invalidGeometry("The area to face is not a finite size")
+        }
         guard area.width > tol, area.height > tol else {
             throw CAMError.invalidGeometry("The area to face has no width or no height")
         }

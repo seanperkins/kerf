@@ -270,6 +270,9 @@ func ops2DFacingAVeryLongNarrowAreaStaysSmall(pattern: FacingPattern) throws {
     fails({ $0.area = .vectors })
     // A tiny stepover is a typo, not a request for a million passes.
     fails { $0.stepover = 1e-9 }
+    // Vectors with no finite extent give no area.
+    fails({ $0.area = .vectors }, paths: [F.rect(0, 0, .infinity, 1)])
+    fails({ $0.area = .vectors }, paths: [F.rect(0, 0, .nan, 1)])
 }
 
 @Test func ops2DFacingSurvivesSavingAndCreditsTheStartDepth() throws {
