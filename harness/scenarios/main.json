@@ -5,7 +5,7 @@
     {"op": "sample", "name": "sign"},
     {"op": "capture", "name": "main"},
     {"op": "menus", "name": "no-selection"},
-    {"op": "select", "names": ["KERF"]},
+    {"op": "select", "names": ["LOFTLINE"]},
     {"op": "capture", "name": "shape-selected"},
     {"op": "menus", "name": "one-shape"}
   ]
