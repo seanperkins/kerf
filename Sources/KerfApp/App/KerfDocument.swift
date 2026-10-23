@@ -895,7 +895,8 @@ final class KerfDocument: ReferenceFileDocument {
             showNextPlacement()
         } else if !pendingScales.isEmpty {
             showNextScaleRequest()
-        } else if let a = deferredAlert {
+        } else if sheet == nil, !platformSheetOpen, let a = deferredAlert {
+            // Only when no sheet of either kind is up: closing one of two leaves the report waiting for the other.
             deferredAlert = nil
             alert = a
         }

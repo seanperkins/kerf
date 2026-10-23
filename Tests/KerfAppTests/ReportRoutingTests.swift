@@ -34,6 +34,34 @@ import Testing
         #expect(doc.alert?.message.contains("hello from the gadget") == true)
     }
 
+    /// Closing one of two sheets leaves a held report waiting for the other (the gadget dialog opened from a menu while a
+    /// SwiftUI sheet is up, and the reverse).
+    @Test func aHeldReportWaitsUntilNoSheetOfEitherKindIsUp() throws {
+        let doc = document()
+        let script = GadgetScript.parse(source: "kerf.log('both');", fallbackName: "Talk", origin: .builtIn).script
+        doc.sheet = .jobSetup
+        doc.platformSheetOpen = true
+        _ = doc.runGadget(script, values: [:])
+        #expect(doc.alert == nil && doc.deferredAlert != nil)
+        doc.platformSheetOpen = false                  // the gadget dialog closes, the SwiftUI sheet is still up
+        doc.sheetDismissed()
+        #expect(doc.alert == nil && doc.deferredAlert != nil)
+        doc.sheet = nil                                // now the last sheet closes
+        doc.sheetDismissed()
+        #expect(doc.alert?.message.contains("both") == true && doc.deferredAlert == nil)
+
+        let other = document()                          // and the other order
+        other.sheet = .jobSetup
+        other.platformSheetOpen = true
+        _ = other.runGadget(script, values: [:])
+        other.sheet = nil                               // the SwiftUI sheet closes first
+        other.sheetDismissed()
+        #expect(other.alert == nil && other.deferredAlert != nil)
+        other.platformSheetOpen = false
+        other.sheetDismissed()
+        #expect(other.alert?.message.contains("both") == true)
+    }
+
     @Test func aMessageWithNoSheetUpShowsAtOnce() {
         let doc = document()
         doc.report(AlertMessage(title: "Plain", message: "now"))
