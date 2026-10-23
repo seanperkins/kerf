@@ -161,6 +161,11 @@ func ops2DChamferSavedWithoutABasisKeepsTheMaterialTop(mode: ZZeroMode) throws {
     }
     let current = ChamferParameters(depth: 0.24, startDepth: 0.2)
     #expect(try ChamferOperation.measuredFromStartSurface(current, tool: vBit90) == current)
+    // A tip a hair below the start depth is a valid old chamfer but no cut to measure from: refused, not turned
+    // into a depth the generator would reject.
+    let hair = ChamferParameters(depth: 0.2 + 1e-10, startDepth: 0.2, basis: .materialTop)
+    #expect(try ChamferOperation.size(tool: vBit90, params: hair).tipDepth > 0.2)
+    #expect(throws: CAMError.self) { try ChamferOperation.measuredFromStartSurface(hair, tool: vBit90) }
 }
 
 @Test func ops2DChamferRefusesNegativeAndNonNumericSizes() {

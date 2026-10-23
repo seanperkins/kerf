@@ -29,9 +29,12 @@ public struct ChamferOperation: ToolpathOperation {
     public static func measuredFromStartSurface(_ params: ChamferParameters, tool: Tool) throws -> ChamferParameters {
         guard params.basis == .materialTop else { return params }
         let size = try Self.size(tool: tool, params: params)
+        // A tip a hair below the start depth is no cut to measure from (the generator wants a real depth).
+        let depth = size.tipDepth - params.startDepth
+        guard depth > 1e-9 else { throw CAMError.invalidParameter("The chamfer is no deeper than the start depth") }
         var p = params
         p.basis = .startSurface
-        p.depth = size.tipDepth - params.startDepth
+        p.depth = depth
         return p
     }
 
