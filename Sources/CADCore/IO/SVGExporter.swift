@@ -94,7 +94,19 @@ public struct SVGExporter: VectorExporter {
     private func layerID(_ l: Layer) -> String { "layer-" + l.id.uuidString.prefix(8).lowercased() }
     private func uniqueID(_ s: Shape) -> String {
         let base = s.name.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
-        return (base.isEmpty ? "shape" : base) + "-" + s.id.uuidString.prefix(8).lowercased()
+        return (base.isEmpty ? "shape" : base) + "-" + Self.hashSuffix(of: s.id)
+    }
+
+    /// The first eight hex digits of `id`, lowercased, with at least one letter a-f: that is how `SVGImporter`
+    /// tells this suffix from a date or a revision ("Rev-20240101") and drops it. A UUID that starts with eight
+    /// decimal digits (about 2 in 100) has its first digit turned into a letter, so its name survives a round
+    /// trip; two such ids collide only if the other seven digits match too (one in 270 million).
+    static func hashSuffix(of id: UUID) -> String {
+        var digits = Array(id.uuidString.prefix(8).lowercased())
+        if !digits.contains(where: { "abcdef".contains($0) }), let d = digits[0].wholeNumberValue {
+            digits[0] = Array("abcdef")[d % 6]
+        }
+        return String(digits)
     }
 }
 

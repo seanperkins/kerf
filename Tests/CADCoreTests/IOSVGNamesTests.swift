@@ -28,4 +28,31 @@ import Testing
         let result = try SVGImporter().importVectors(from: data, targetUnits: .inch)
         #expect(result.shapes.map(\.name) == ["Hole"])
     }
+
+    /// A shape whose random UUID happens to start with eight decimal digits (about 2 exports in 100) used to come
+    /// back named "Hole-12345678", because an all-digit suffix reads as a date or revision to the importer.
+    @Test func aShapeWhoseIDStartsWithEightDigitsKeepsItsName() throws {
+        let layer = Layer(name: "Drill")
+        let id = try #require(UUID(uuidString: "12345678-1234-1234-1234-123456789012"))
+        let hole = Shape(id: id, name: "Hole", layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(1, 1), radius: 0.125)])
+        let data = try SVGExporter().export(shapes: [hole], layers: [layer], units: .inch)
+        let result = try SVGImporter().importVectors(from: data, targetUnits: .inch)
+        #expect(result.shapes.map(\.name) == ["Hole"])
+    }
+
+    @Test func everyExportedSuffixIsOneTheImporterDrops() {
+        // All-digit prefixes (the failing case), all-letter ones, and a spread of random ones.
+        var ids = ["00000000", "12345678", "99999999", "01234567", "abcdef01", "ffffffff"]
+            .compactMap { UUID(uuidString: $0 + "-0000-0000-0000-000000000000") }
+        ids += (0..<2000).map { _ in UUID() }
+        for id in ids {
+            let suffix = SVGExporter.hashSuffix(of: id)
+            #expect(suffix.count == 8, Comment(rawValue: "\(id)"))
+            #expect(SVGImporter.displayName(forID: "Part-" + suffix) == "Part", Comment(rawValue: "\(id) -> \(suffix)"))
+        }
+        // Different shapes still get different suffixes (the point of the suffix).
+        let a = UUID(uuidString: "12345678-0000-0000-0000-000000000001")!, b = UUID(uuidString: "12345679-0000-0000-0000-000000000001")!
+        #expect(SVGExporter.hashSuffix(of: a) != SVGExporter.hashSuffix(of: b))
+    }
 }
+
