@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import CADCore
 
-/// Kerf's own SVG export gives each element an id "Name-<8 hex digits>" so ids stay unique; importing
+/// LoftLine's own SVG export gives each element an id "Name-<8 hex digits>" so ids stay unique; importing
 /// that file must not leave the hash on the shape's name.
 @Suite struct IOSVGNamesTests {
     @Test func theExportersHashSuffixIsDropped() {

@@ -73,7 +73,7 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-/// Machines shipped with Kerf. Their limits match the built-in posts, so jobs saved before
+/// Machines shipped with LoftLine. Their limits match the built-in posts, so jobs saved before
 /// machines existed validate exactly as before.
 public enum BuiltInMachines {
     /// Avid CNC PRO6096 running Mach4.

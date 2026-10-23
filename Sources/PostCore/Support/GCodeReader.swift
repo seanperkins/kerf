@@ -195,7 +195,7 @@ public enum GCodeReader {
     public typealias HeaderTool = (name: String, kind: ToolKind, diameter: Double)
 
     /// Tools listed in a header comment like "T1: 1/4in End Mill - End Mill, dia 0.2500 in"
-    /// (Kerf's own posts write this): number → name, kind and diameter in `units`.
+    /// (LoftLine's own posts write this): number → name, kind and diameter in `units`.
     public static func headerTools(_ text: String, units: LengthUnit) -> [Int: HeaderTool] {
         var out: [Int: HeaderTool] = [:]
         let pattern = "T([0-9]+):[ ]*(.+?)[ ]+-[ ]+([A-Za-z -]+?),[ ]*dia[ ]+([0-9.]+)[ ]*(in|mm)"

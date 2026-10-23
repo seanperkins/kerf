@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Posts every samples/*.kerf with every built-in post processor and compares each program with the committed one in
+# Posts every samples/*.loftline with every built-in post processor and compares each program with the committed one in
 # samples/expected/<post id>/<sample>.<extension>. Any difference, a sample that no longer posts cleanly, or a sample with
 # no committed program fails the check, so a change anywhere in the CAM, the posts or the validator that moves a byte of
 # the output is seen (and reviewed) before it lands.
@@ -16,8 +16,8 @@ case "${1:-}" in
   *) echo "usage: scripts/check-samples.sh [--update]" >&2; exit 2 ;;
 esac
 
-swift build "${SWIFTPM_FLAGS[@]}" --product kerf-cli >&2
-cli="$(swift build "${SWIFTPM_FLAGS[@]}" --product kerf-cli --show-bin-path)/kerf-cli"
+swift build "${SWIFTPM_FLAGS[@]}" --product loftline-cli >&2
+cli="$(swift build "${SWIFTPM_FLAGS[@]}" --product loftline-cli --show-bin-path)/loftline-cli"
 
 mkdir -p .tmp
 work="$(mktemp -d .tmp/check-samples.XXXXXX)"
@@ -35,7 +35,7 @@ trap 'exit 143' TERM
 
 # Assigned first, so that a failing `posts` stops the script (a failure inside a for loop's word list would not).
 ids="$("$cli" posts --builtin-only | cut -f1)"
-samples=(samples/*.kerf)
+samples=(samples/*.loftline)
 [[ -n "$ids" && -e "${samples[1]}" ]] || { echo "FAIL: no posts or no samples found" >&2; exit 1; }
 expected_count=$(( $(echo "$ids" | wc -l) * ${#samples} ))
 

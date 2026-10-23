@@ -2,7 +2,7 @@
   "name": "Facing toolpath: the form, its job-sheet note, and the cut in the 2D and 3D previews",
   "window": [1280, 820],
   "steps": [
-    {"op": "project", "name": "samples/faced-board.kerf"},
+    {"op": "project", "name": "samples/faced-board.loftline"},
     {"op": "tab", "value": "toolpaths"},
     {"op": "calculate"},
     {"op": "selectToolpath", "name": "Facing 1"},

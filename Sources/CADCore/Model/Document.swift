@@ -1,7 +1,7 @@
 import Foundation
 
 /// The design: layers, shapes, 3D models, job setup. CAM operations live in
-/// `KerfProject` (CAMCore), which wraps a `Document`.
+/// `LoftLineProject` (CAMCore), which wraps a `Document`.
 public struct Document: Codable, Hashable, Sendable {
     public var name: String
     public var units: LengthUnit
@@ -50,7 +50,7 @@ public struct Document: Codable, Hashable, Sendable {
     /// never empty for a loaded document; an empty `layers` array is still handled.
     public var defaultLayerID: UUID { layers.first?.id ?? repairingLayers().layers[0].id }
 
-    /// The document with at least one layer (a hand-edited or generated `.kerf` may have none).
+    /// The document with at least one layer (a hand-edited or generated `.loftline` may have none).
     /// Shapes whose layer is missing move to that layer so they stay visible and machinable.
     public func repairingLayers() -> Document {
         guard layers.isEmpty else { return self }

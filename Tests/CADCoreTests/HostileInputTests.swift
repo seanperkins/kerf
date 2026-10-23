@@ -113,8 +113,8 @@ import Testing
         for _ in 0..<3 { put(0) }
         for v in [Float(0), 0, 0, 1, 0, 0, .nan, 1, 0] { put(v) }
         d.append(contentsOf: [0, 0])
-        #expect(throws: KerfIOError.self) { try STLImporter.parseBinary(d) }
-        #expect(throws: KerfIOError.self) {
+        #expect(throws: LoftLineIOError.self) { try STLImporter.parseBinary(d) }
+        #expect(throws: LoftLineIOError.self) {
             try OBJImporter().importMesh(from: Data("v 0 0 0\nv 1 0 0\nv nan 1 0\nf 1 2 3\n".utf8), targetUnits: .millimeter)
         }
         // A finite but absurd vertex quantises without trapping the Int64 merge key.

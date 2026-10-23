@@ -11,13 +11,13 @@ public struct EPSImporter: VectorImporter {
 
     public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
         guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
-            throw KerfIOError.malformed("EPS: unreadable text")
+            throw LoftLineIOError.malformed("EPS: unreadable text")
         }
         if text.hasPrefix("%PDF") {
             // Illustrator 9+ .ai files are PDF documents.
             return try PDFImporter().importVectors(from: data, targetUnits: targetUnits)
         }
-        guard text.hasPrefix("%!") || text.contains("%!PS") else { throw KerfIOError.malformed("EPS: missing %!PS header") }
+        guard text.hasPrefix("%!") || text.contains("%!PS") else { throw LoftLineIOError.malformed("EPS: missing %!PS header") }
 
         let ptToUnit = LengthUnit.inch.convert(1.0 / 72, to: targetUnits)
         var bboxOrigin = Vec2.zero

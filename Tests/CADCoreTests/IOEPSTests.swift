@@ -21,7 +21,7 @@ import Testing
     }
 
     @Test func rejectsPDFBasedAI() {
-        #expect(throws: KerfIOError.self) {
+        #expect(throws: LoftLineIOError.self) {
             try EPSImporter().importVectors(from: Data("%PDF-1.5\n".utf8), targetUnits: .inch)
         }
     }

@@ -49,8 +49,8 @@ public struct PDFExporter: VectorExporter {
         var box = CGRect(x: 0, y: 0, width: page.width * page.scale, height: page.height * page.scale)
         guard let consumer = CGDataConsumer(data: out as CFMutableData),
               let ctx = CGContext(consumer: consumer, mediaBox: &box,
-                                  [kCGPDFContextCreator as String: "Kerf"] as CFDictionary) else {
-            throw KerfIOError.malformed("PDF: could not create the document")
+                                  [kCGPDFContextCreator as String: "LoftLine"] as CFDictionary) else {
+            throw LoftLineIOError.malformed("PDF: could not create the document")
         }
         ctx.beginPDFPage(nil)
         ctx.setLineWidth(0.5)
@@ -94,7 +94,7 @@ public struct PDFExporter: VectorExporter {
 }
 
 /// Encapsulated PostScript export (EPSF-3.0). Uses only moveto/lineto/curveto/closepath,
-/// setrgbcolor and stroke, so any EPS reader (and Kerf's own EPS importer) can open it.
+/// setrgbcolor and stroke, so any EPS reader (and LoftLine's own EPS importer) can open it.
 public struct EPSExporter: VectorExporter {
     public static let fileExtension = "eps"
     public init() {}
@@ -109,7 +109,7 @@ public struct EPSExporter: VectorExporter {
         func pt(_ p: Vec2) -> String { let (x, y) = page.point(p); return "\(n(x)) \(n(y))" }
         var out = """
         %!PS-Adobe-3.0 EPSF-3.0
-        %%Creator: Kerf
+        %%Creator: LoftLine
         %%BoundingBox: 0 0 \(Int(ceil(w))) \(Int(ceil(h)))
         %%HiResBoundingBox: 0 0 \(n(w)) \(n(h))
         %%Pages: 1

@@ -3,7 +3,7 @@
   "appearance": "dark",
   "window": [1280, 820],
   "steps": [
-    {"op": "project", "name": "harness/projects/reel-loose.kerf"},
+    {"op": "project", "name": "harness/projects/reel-loose.loftline"},
     {"op": "tab", "value": "toolpaths"},
     {"op": "calculate"},
     {"op": "record", "name": "preflight", "fps": 10},

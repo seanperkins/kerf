@@ -1,6 +1,6 @@
 import Foundation
 
-/// Loads/saves the tool database as JSON (default: ~/Library/Application Support/Kerf/tools.json).
+/// Loads/saves the tool database as JSON (default: ~/Library/Application Support/LoftLine/tools.json).
 public struct ToolLibraryStore: Sendable {
     public var fileURL: URL
 
@@ -9,7 +9,7 @@ public struct ToolLibraryStore: Sendable {
     public static var supportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("Kerf", isDirectory: true)
+        return base.appendingPathComponent("LoftLine", isDirectory: true)
     }
 
     public static var defaultURL: URL { supportDirectory.appendingPathComponent("tools.json") }

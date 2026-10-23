@@ -103,10 +103,10 @@ import Testing
     }
 
     @Test func malformedInputThrows() {
-        #expect(throws: KerfIOError.self) {
+        #expect(throws: LoftLineIOError.self) {
             try SVGImporter().importVectors(from: Data("<html/>".utf8), targetUnits: .inch)
         }
-        #expect(throws: KerfIOError.self) {
+        #expect(throws: LoftLineIOError.self) {
             try SVGImporter().importVectors(from: Data("not xml".utf8), targetUnits: .inch)
         }
     }

@@ -76,7 +76,7 @@ enum PDFFixture {
     }
 
     @Test func garbageThrows() {
-        #expect(throws: KerfIOError.self) {
+        #expect(throws: LoftLineIOError.self) {
             try PDFImporter().importVectors(from: Data("%PDF-1.5\n".utf8), targetUnits: .inch)
         }
     }

@@ -1,11 +1,11 @@
 import Foundation
 
-/// Kerf's built-in single-stroke ("single line") engraving font: each character is a few open
+/// LoftLine's built-in single-stroke ("single line") engraving font: each character is a few open
 /// centre-line strokes, so text engraves in one pass on the line. Original simple letterforms
-/// drawn for Kerf on a cap-height-1 grid. Lowercase letters use the capital forms.
+/// drawn for LoftLine on a cap-height-1 grid. Lowercase letters use the capital forms.
 public enum StrokeFont {
     /// Name shown in font pickers and stored in `TextSpec.fontName`.
-    public static let name = "Kerf Single Line"
+    public static let name = "LoftLine Single Line"
 
     public static func isStrokeFont(_ fontName: String) -> Bool { fontName == name }
 

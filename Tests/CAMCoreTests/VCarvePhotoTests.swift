@@ -67,7 +67,7 @@ func photoVCarveDarkAreasCarveFullWidthLightAreasNothing(zZero: ZZeroMode) throw
 }
 
 @Test func photoImageLoaderReadsPNGAsGrey() throws {
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("kerf-photo-\(UUID().uuidString)")
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("loftline-photo-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
     // 4 x 2 RGB: top row red, bottom row white.

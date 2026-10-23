@@ -33,9 +33,9 @@ struct DXFFile {
 
     init(data: Data) throws {
         guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
-            throw KerfIOError.malformed("DXF: unreadable text encoding")
+            throw LoftLineIOError.malformed("DXF: unreadable text encoding")
         }
-        if text.hasPrefix("AutoCAD Binary DXF") { throw KerfIOError.unsupportedFormat("Binary DXF") }
+        if text.hasPrefix("AutoCAD Binary DXF") { throw LoftLineIOError.unsupportedFormat("Binary DXF") }
         let lines = text.split(omittingEmptySubsequences: false,
                                whereSeparator: { $0 == "\n" || $0 == "\r\n" || $0 == "\r" })
             .map { $0.hasSuffix("\r") ? $0.dropLast() : $0 }
@@ -47,7 +47,7 @@ struct DXFFile {
             // Blank lines after the last pair (editors and some exporters add them) are not a code.
             if codeText.isEmpty, lines[i...].allSatisfy({ $0.allSatisfy(\.isWhitespace) }) { break }
             guard let code = Int(codeText) else {
-                throw KerfIOError.malformed("DXF: bad group code at line \(i + 1)")
+                throw LoftLineIOError.malformed("DXF: bad group code at line \(i + 1)")
             }
             let value = String(lines[i + 1]).trimmingCharacters(in: .whitespaces)
             pairs.append((code, value))
@@ -55,7 +55,7 @@ struct DXFFile {
             if code == 0, value == "EOF" { break }   // anything after EOF is not DXF
         }
         guard pairs.contains(where: { $0.0 == 0 && $0.1 == "SECTION" }) else {
-            throw KerfIOError.malformed("DXF: no SECTION found")
+            throw LoftLineIOError.malformed("DXF: no SECTION found")
         }
         parse(pairs)
     }

@@ -3,7 +3,7 @@
   "appearance": "dark",
   "window": [1280, 820],
   "steps": [
-    {"op": "project", "name": "harness/projects/reel-sign.kerf"},
+    {"op": "project", "name": "harness/projects/reel-sign.loftline"},
     {"op": "tab", "value": "toolpaths"},
     {"op": "calculate"},
     {"op": "record", "name": "preview", "fps": 12},

@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Runs a UI harness scenario against a debug build of Kerf and writes screenshots and dumps.
+# Runs a UI harness scenario against a debug build of LoftLine and writes screenshots and dumps.
 #
 #   scripts/ui.sh main                       # harness/scenarios/main.json, appearance from the file
 #   scripts/ui.sh toolpaths --light          # force light (or --dark) mode
@@ -15,7 +15,7 @@
 # --key      draw the window as key without activating the app (your focus stays put; buttons take clicks, table rows do not)
 # --offscreen park the window just past the edge of its screen for the run
 # --no-build reuse the last build
-# Works inside a sandboxed agent shell (see swiftpm-env.sh); KERF_BUILD_FLAGS adds extra swift build flags.
+# Works inside a sandboxed agent shell (see swiftpm-env.sh); LOFTLINE_BUILD_FLAGS adds extra swift build flags.
 set -euo pipefail
 cd "${0:A:h}/.."
 source scripts/swiftpm-env.sh
@@ -40,8 +40,8 @@ done
 [[ -f "$scenario" ]] || { echo "no such scenario: $scenario (scenarios: $(ls harness/scenarios | sed 's/\.json//' | tr '\n' ' '))" >&2; exit 2; }
 [[ -n "$out" ]] || out=".tmp/ui/$(basename "${scenario%.json}")-$(date +%H%M%S)"
 
-(( build )) && swift build "${SWIFTPM_FLAGS[@]}" -c debug --product Kerf ${=KERF_BUILD_FLAGS:-} 2>&1 | grep -E 'error|Compiling|Build complete' | tail -3
-BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c debug --show-bin-path ${=KERF_BUILD_FLAGS:-})/Kerf"
+(( build )) && swift build "${SWIFTPM_FLAGS[@]}" -c debug --product LoftLine ${=LOFTLINE_BUILD_FLAGS:-} 2>&1 | grep -E 'error|Compiling|Build complete' | tail -3
+BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c debug --show-bin-path ${=LOFTLINE_BUILD_FLAGS:-})/LoftLine"
 mkdir -p "$out/home"
 out="${out:A}"
 echo "scenario: $scenario -> $out"

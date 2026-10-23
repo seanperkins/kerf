@@ -44,8 +44,8 @@ import Testing
     }
 
     @Test func rejectsBadFiles() {
-        #expect(throws: KerfIOError.self) { try OBJImporter().importMesh(from: Data("v 0 0 0\n".utf8), targetUnits: .inch) }
-        #expect(throws: KerfIOError.self) {
+        #expect(throws: LoftLineIOError.self) { try OBJImporter().importMesh(from: Data("v 0 0 0\n".utf8), targetUnits: .inch) }
+        #expect(throws: LoftLineIOError.self) {
             try OBJImporter().importMesh(from: Data("v 0 0 0\nf 1 2 3\n".utf8), targetUnits: .inch)
         }
     }

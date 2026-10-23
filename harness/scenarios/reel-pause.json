@@ -3,7 +3,7 @@
   "appearance": "dark",
   "window": [1280, 820],
   "steps": [
-    {"op": "project", "name": "harness/projects/sign-pause.kerf"},
+    {"op": "project", "name": "harness/projects/sign-pause.loftline"},
     {"op": "tab", "value": "toolpaths"},
     {"op": "calculate"},
     {"op": "record", "name": "pause", "fps": 10},

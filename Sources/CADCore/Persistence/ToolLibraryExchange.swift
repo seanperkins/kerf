@@ -3,12 +3,12 @@ import Foundation
 /// Reading and writing tool lists for sharing between machines (toolpaths-2d addition).
 ///
 /// Two formats:
-/// * `.kerftools` — pretty JSON `{ "formatVersion": 1, "tools": [...] }`. Lossless (groups,
+/// * `.loftlinetools` — pretty JSON `{ "formatVersion": 1, "tools": [...] }`. Lossless (groups,
 ///   per-material data, ids). A plain `tools.json` copied from another Mac is also accepted.
 /// * `.csv` — one tool per row with a header, for spreadsheets. Per-material data and form-tool
 ///   outlines are not included; a missing `id` column gives the tools new ids.
 public enum ToolLibraryExchange {
-    public static let fileExtension = "kerftools"
+    public static let fileExtension = "loftlinetools"
     public static let formatVersion = 1
 
     public enum ExchangeError: Error, LocalizedError, Equatable {
@@ -19,7 +19,7 @@ public enum ToolLibraryExchange {
         public var errorDescription: String? {
             switch self {
             case .unreadable(let why): return "The file is not a tool list: \(why)"
-            case .newerFormat(let v): return "The tool file uses format \(v), which is newer than this version of Kerf."
+            case .newerFormat(let v): return "The tool file uses format \(v), which is newer than this version of LoftLine."
             case .noTools: return "The file contains no tools."
             }
         }
@@ -38,7 +38,7 @@ public enum ToolLibraryExchange {
         return try enc.encode(File(formatVersion: formatVersion, tools: tools))
     }
 
-    /// Reads a `.kerftools` file or a bare `tools.json` library.
+    /// Reads a `.loftlinetools` file or a bare `tools.json` library.
     public static func decodeJSON(_ data: Data) throws -> [Tool] {
         let dec = JSONDecoder()
         if let probe = try? dec.decode(VersionProbe.self, from: data), let v = probe.formatVersion,
@@ -148,7 +148,7 @@ public enum ToolLibraryExchange {
         try data.write(to: url, options: .atomic)
     }
 
-    /// Bull-nose / tapered-ball columns (form tool outlines are only kept in .kerftools).
+    /// Bull-nose / tapered-ball columns (form tool outlines are only kept in .loftlinetools).
     private static func shapeField(_ t: Tool, _ column: Int) -> String {
         switch (t.shape, column) {
         case (.bullNose(let c)?, 0): return num(c)

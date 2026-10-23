@@ -1,6 +1,6 @@
 import Foundation
 
-public enum KerfIOError: Error, Equatable, Sendable {
+public enum LoftLineIOError: Error, Equatable, Sendable {
     case notImplemented(String)
     case unsupportedFormat(String)
     case malformed(String)

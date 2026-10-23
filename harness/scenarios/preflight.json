@@ -14,7 +14,7 @@
     },
     {
       "op": "project",
-      "name": "harness/projects/sign-loose.kerf"
+      "name": "harness/projects/sign-loose.loftline"
     },
     {
       "op": "tab",
