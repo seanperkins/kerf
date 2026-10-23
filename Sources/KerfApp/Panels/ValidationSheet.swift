@@ -15,6 +15,9 @@ struct ValidationSheet: View {
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
 
+    /// What a program posted now is made from: the document's inputs and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.grouped(groupByTool) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -67,8 +70,7 @@ struct ValidationSheet: View {
         .frame(width: 640, height: 560)
         .onAppear { run() }
         .onDisappear { calcTask?.cancel() }
-        .onChange(of: groupByTool) { _, _ in run() }
-        .onChange(of: document.postedInputs) { _, now in if now != checkedFrom { run() } }
+        .onChange(of: currentInputs) { _, now in if now != checkedFrom { run() } }
     }
 
     private func summary(_ r: ValidationReport) -> some View {
@@ -100,7 +102,7 @@ struct ValidationSheet: View {
     }
 
     private func check() {
-        checkedFrom = document.postedInputs
+        checkedFrom = currentInputs
         report = ValidationReport.make(project: document.outputProject, results: document.results,
                                        profile: document.postProfile, groupByTool: groupByTool)
     }

@@ -21,6 +21,9 @@ struct TilingSheet: View {
     /// Why the last save failed, shown above the buttons (an alert on the document would sit under this sheet).
     @State private var failure: String?
 
+    /// What a program posted now is made from: the document's inputs and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.grouped(groupByTool) }
+
     /// Validator errors, which "Save Anyway" may override.
     private var hasErrors: Bool { files.contains { $0.result.hasErrors } }
     /// A tile set with a program missing is never written (see `GCodeFileSet`), so the save waits.
@@ -54,7 +57,7 @@ struct TilingSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Choose Folder…") { if hasErrors { confirmErrors = true } else { save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(files.isEmpty || hasUnposted || postedFrom != document.postedInputs)
+                    .disabled(files.isEmpty || hasUnposted || postedFrom != currentInputs)
                     .help(hasUnposted ? "A tile could not be generated; fix it before saving, so no tile is left out." : "")
                     // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
                     .replaceFilesAlert($replaceRequest) { r in finishSaving(from: r.postedFrom) { try r.set.write(to: r.directory, replacing: r.names) } }
@@ -68,8 +71,7 @@ struct TilingSheet: View {
         }
         .onDisappear { calcTask?.cancel() }
         .onChange(of: settings) { _, _ in if calcTask == nil { post() } }
-        .onChange(of: groupByTool) { _, _ in if calcTask == nil { post() } }
-        .onChange(of: document.postedInputs) { _, now in if now != postedFrom { run() } }
+        .onChange(of: currentInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
@@ -120,7 +122,7 @@ struct TilingSheet: View {
 
     private func post() {
         failure = nil
-        postedFrom = document.postedInputs
+        postedFrom = currentInputs
         guard settings.tileWidth > 0, settings.tileHeight > 0 else { files = []; return }
         files = TiledExport.files(project: document.outputProject, results: document.results, profile: document.postProfile,
                                   groupByTool: groupByTool, settings: settings)
@@ -151,7 +153,7 @@ struct TilingSheet: View {
     /// `inputs` is what the tiles were posted from when the save began: a set posted before an edit made
     /// while the panel or the replace question was up is not written.
     private func finishSaving(from inputs: KerfDocument.PostedInputs?, _ write: () throws -> Void) {
-        guard inputs == document.postedInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
+        guard inputs == currentInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
         do {
             try write()
             dismiss()

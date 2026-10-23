@@ -38,6 +38,14 @@ import Testing
         #expect(doc.postedInputs == before)
     }
 
+    @Test func theGroupByToolPreferenceIsStampedOnWhenASheetReadsIt() throws {
+        let (doc, _, _, _) = try calculatedDoc()
+        let plain = doc.postedInputs
+        #expect(plain.grouped(false) == plain)
+        #expect(plain.grouped(true) != plain)
+        #expect(plain.grouped(true) == doc.postedInputs.grouped(true))
+    }
+
     @Test func aToolEditThatChangesToolpathsChangesIt() throws {
         let (doc, lib, op, _) = try calculatedDoc()
         let before = doc.postedInputs

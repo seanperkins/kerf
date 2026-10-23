@@ -701,6 +701,15 @@ final class KerfDocument: ReferenceFileDocument {
     struct PostedInputs: Equatable {
         var serial = 0, design = 0
         var side: JobSide = .top
+        /// The app-wide group-by-tool preference changes the order a program is posted in; it is not the
+        /// document's, so a sheet that reads it stamps it on with `grouped(_:)`.
+        var groupedByTool = false
+
+        func grouped(_ on: Bool) -> PostedInputs {
+            var copy = self
+            copy.groupedByTool = on
+            return copy
+        }
 
         /// Shown by a sheet that would not write a program posted before the document changed: the save panel is
         /// document-modal, the Tool Database window is not, so an edit can land while the panel is up.

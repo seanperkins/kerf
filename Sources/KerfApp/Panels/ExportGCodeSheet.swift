@@ -24,6 +24,9 @@ struct ExportGCodeSheet: View {
     /// Why the last Save failed, shown above the buttons (an alert on the document would sit under this sheet).
     @State private var failure: String?
 
+    /// What a program posted now is made from: the document's inputs and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.grouped(groupByTool) }
+
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
 
@@ -64,7 +67,7 @@ struct ExportGCodeSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save…") { if result?.hasErrors == true { confirmErrors = true } else { save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(result?.text == nil || calcTask != nil || postedFrom != document.postedInputs)
+                    .disabled(result?.text == nil || calcTask != nil || postedFrom != currentInputs)
             }
         }
         .padding(20)
@@ -76,9 +79,8 @@ struct ExportGCodeSheet: View {
         }
         .onDisappear { calcTask?.cancel() }
         .onChange(of: scope) { _, _ in run() }
-        .onChange(of: groupByTool) { _, _ in run() }
         .onChange(of: profileID) { _, _ in run() }
-        .onChange(of: document.postedInputs) { _, now in if now != postedFrom { run() } }
+        .onChange(of: currentInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
@@ -159,7 +161,7 @@ struct ExportGCodeSheet: View {
                                      jobName: document.document.name)
         r.issues.insert(contentsOf: document.postProfileIssues + missing, at: 0)
         result = r
-        postedFrom = document.postedInputs
+        postedFrom = currentInputs
     }
 
     private func save() {
@@ -177,11 +179,11 @@ struct ExportGCodeSheet: View {
         panel.canCreateDirectories = true
         PanelRunner.present(panel) { response in
             guard response == .OK, let url = panel.url else { return }
-            guard inputs == document.postedInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
+            guard inputs == currentInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
             do {
                 try text.write(to: url, atomically: true, encoding: .utf8)
                 if profileID != initialProfileID { document.setPostProfile(profileID) }
-                postedFrom = document.postedInputs  // the post just written already used that profile
+                postedFrom = currentInputs  // the post just written already used that profile
                 dismiss()
             } catch {
                 failure = "Could not save G-code: \(error.localizedDescription)"
