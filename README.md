@@ -16,15 +16,15 @@ LoftLine is built for the Avid CNC PRO6096 (Mach4) and replaces VCarve Pro for t
 <img alt="The 3D preview cutting the sample sign (the pocket, then the V-carved letters, then the cut-out), followed by the design and the simulation side by side" src="docs/images/preview.gif">
 
 The 3D preview removes material move by move and estimates the run time. This is the sample sign
-(`samples/sign.loftline`): a pocket, V-carved letters, then the cut-out with tabs, about 13 minutes of
-machine time. Scrub it, step it one move at a time, or run to the next retract.
+(`samples/sign.loftline`) without its drill holes: a pocket, V-carved letters, then the cut-out with tabs, about 16 minutes
+of machine time. Scrub it, step it one move at a time, or run to the next retract.
 
 ## From design to G-code
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img alt="The 2D canvas with the KERF text selected" src="docs/images/step-1.png"><br>
+      <img alt="The 2D canvas with the LOFTLINE text selected" src="docs/images/step-1.png"><br>
       <b>1. Draw or import.</b> Shapes, a Bézier pen, text in any installed font, node editing,
       booleans and offsets. Import SVG, DXF, EPS, AI and PDF vectors, trace images, or bring in
       STL/OBJ models.

@@ -1,0 +1,45 @@
+{
+  "name": "the finished 3D cut of the sample sign without toolpath lines, for docs/images/social-preview.png (recipe: docs/brand/README.md)",
+  "appearance": "dark",
+  "window": [
+    1280,
+    820
+  ],
+  "steps": [
+    {
+      "op": "sample",
+      "name": "sign"
+    },
+    {
+      "op": "tab",
+      "value": "toolpaths"
+    },
+    {
+      "op": "calculate"
+    },
+    {
+      "op": "mode",
+      "value": "3d"
+    },
+    {
+      "op": "wait",
+      "seconds": 3
+    },
+    {
+      "op": "view",
+      "value": "threeQuarter"
+    },
+    {
+      "op": "simulate",
+      "seconds": 4
+    },
+    {
+      "op": "wait",
+      "seconds": 3
+    },
+    {
+      "op": "capture",
+      "name": "social-render"
+    }
+  ]
+}
