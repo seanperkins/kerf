@@ -64,8 +64,10 @@ func ops2DFlutingRampsBothEnds(mode: ZZeroMode) throws {
 /// Issue #96. Raster lines are `span / n` apart, a little closer than the spacing, and were grouped by rounding
 /// `offset / spacing`, so two neighbouring lines could land in one group and be cut in the same direction. Each line
 /// is its own run, and the runs alternate direction.
-@Test func textureRowsAreSeparateAndAlternateDirection() {
-    let region = [[Vec2(0, 0.08), Vec2(3, 0.08), Vec2(3, 1.08), Vec2(0, 1.08)]]
+@Test(arguments: [(0.08, 1.08, 6), (0.06, 0.09, 2), (0.0, 0.2, 2)])
+func textureRowsAreSeparateAndAlternateDirection(bottom: Double, top: Double, rowCount: Int) {
+    // The strips narrower than the spacing get a row on each edge, closer together than a quarter of the spacing.
+    let region = [[Vec2(0, bottom), Vec2(3, bottom), Vec2(3, top), Vec2(0, top)]]
     let p = TextureParameters(maxDepth: 0.05, spacing: 0.15, minStrokeLength: 0.3, maxStrokeLength: 0.6,
                               angle: 0, variation: 0, seed: 7)
     let strokes = TextureOperation.strokes(in: region, params: p, tolerance: 0.001)
@@ -81,7 +83,7 @@ func ops2DFlutingRampsBothEnds(mode: ZZeroMode) throws {
             rows.append((y, direction))
         }
     }
-    #expect(rows.count >= 6)
+    #expect(rows.count >= rowCount)
     for (a, b) in zip(rows, rows.dropFirst()) {
         #expect(a.direction != b.direction, "rows at y = \(a.y) and \(b.y) run the same way")
     }

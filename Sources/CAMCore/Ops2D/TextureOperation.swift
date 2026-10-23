@@ -47,57 +47,50 @@ public struct TextureOperation: ToolpathOperation {
         let lines = planner.rasterLines(in: region, angle: p.angle)
         let dir = Vec2(cos(p.angle * .pi / 180), sin(p.angle * .pi / 180))
         let normal = dir.perpendicular
-        // Group clipped segments by their raster line (signed offset along the normal). The lines are span / n
-        // apart, a little closer than the spacing but never closer than half of it, while the pieces of one line
-        // differ by rounding only, so a quarter of the spacing tells them apart.
-        let offsets = lines.map { seg -> (offset: Double, seg: [Vec2]) in
+        // A raster line is a run of clipped pieces at one signed offset along the normal; they differ by clipping
+        // rounding only. The lines themselves can be arbitrarily close in a region narrower than the spacing (a row on
+        // each edge), so what separates two lines is the geometry tolerance, not a fraction of the spacing.
+        let rowGap = min(p.spacing * 0.25, max(tolerance * 0.5, 1e-6))
+        let pieces = lines.map { seg -> (offset: Double, seg: [Vec2]) in
             let mid = seg[0].lerp(to: seg.last!, 0.5)
             let ordered = (seg.last! - seg[0]).dot(dir) >= 0 ? seg : Array(seg.reversed())
             return (mid.dot(normal), ordered)
         }.sorted { $0.offset < $1.offset }
-        var keyed: [(Int, [Vec2])] = []
-        var line = -1
-        var lineOffset = -Double.infinity
-        for item in offsets {
-            if item.offset - lineOffset > p.spacing * 0.25 { line += 1; lineOffset = item.offset }
-            keyed.append((line, item.seg))
+        var rows: [[[Vec2]]] = []
+        var rowOffset = -Double.infinity
+        for piece in pieces {
+            if piece.offset - rowOffset > rowGap { rows.append([]); rowOffset = piece.offset }
+            rows[rows.count - 1].append(piece.seg)
         }
-        keyed.sort { $0.0 != $1.0 ? $0.0 < $1.0 : $0.1[0].dot(dir) < $1.1[0].dot(dir) }
 
+        // Serpentine: every other row is cut back to front.
         var out: [[CutPoint]] = []
-        var lineStrokes: [[CutPoint]] = []
-        var currentKey: Int?
-        var reverse = false
-        func flush() {
-            out += reverse ? lineStrokes.reversed().map { $0.reversed() } : lineStrokes
-            lineStrokes = []
-            reverse.toggle()
-        }
-        for (key, seg) in keyed {
-            if let c = currentKey, c != key { flush() }
-            currentKey = key
-            let a = seg[0], bEnd = seg.last!
-            let segLen = a.distance(to: bEnd)
-            var t = rng.next() * p.spacing * (0.5 + v)
-            while t < segLen {
-                let len = minLen + (p.maxStrokeLength - minLen) * rng.next()
-                let end = min(t + len, segLen)
-                if end - t >= minLen * 0.5 {
-                    let jitter = (rng.next() - 0.5) * v * p.spacing * 0.5
-                    let depth = p.maxDepth * (1 - v * 0.6 * rng.next())
-                    let s0 = a + dir * t + normal * jitter, s1 = a + dir * end + normal * jitter
-                    if Polygon2D.regionContains(region, s0), Polygon2D.regionContains(region, s1) {
-                        let n = 8
-                        lineStrokes.append((0...n).map { i in
-                            let u = Double(i) / Double(n)
-                            return CutPoint(s0.lerp(to: s1, u), depth: depth * sin(.pi * u))
-                        })
+        for (index, row) in rows.enumerated() {
+            var rowStrokes: [[CutPoint]] = []
+            for seg in row.sorted(by: { $0[0].dot(dir) < $1[0].dot(dir) }) {
+                let a = seg[0], bEnd = seg.last!
+                let segLen = a.distance(to: bEnd)
+                var t = rng.next() * p.spacing * (0.5 + v)
+                while t < segLen {
+                    let len = minLen + (p.maxStrokeLength - minLen) * rng.next()
+                    let end = min(t + len, segLen)
+                    if end - t >= minLen * 0.5 {
+                        let jitter = (rng.next() - 0.5) * v * p.spacing * 0.5
+                        let depth = p.maxDepth * (1 - v * 0.6 * rng.next())
+                        let s0 = a + dir * t + normal * jitter, s1 = a + dir * end + normal * jitter
+                        if Polygon2D.regionContains(region, s0), Polygon2D.regionContains(region, s1) {
+                            let n = 8
+                            rowStrokes.append((0...n).map { i in
+                                let u = Double(i) / Double(n)
+                                return CutPoint(s0.lerp(to: s1, u), depth: depth * sin(.pi * u))
+                            })
+                        }
                     }
+                    t = end + p.spacing * (0.25 + v * rng.next())
                 }
-                t = end + p.spacing * (0.25 + v * rng.next())
             }
+            out += index % 2 == 1 ? rowStrokes.reversed().map { $0.reversed() } : rowStrokes
         }
-        if !lineStrokes.isEmpty { flush() }
         return out
     }
 }
