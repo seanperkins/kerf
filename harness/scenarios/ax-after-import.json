@@ -1,0 +1,79 @@
+{
+  "name": "the accessibility tree still answers after a DXF import and inside the Join Open Vectors sheet (the run fails if lookups stay unresponsive through the press's retries, or the watchdog ends it); the gap is closed at a tolerance above its 0.008 in",
+  "window": [
+    1280,
+    820
+  ],
+  "steps": [
+    {
+      "op": "sample",
+      "name": "sign"
+    },
+    {
+      "op": "import",
+      "name": "harness/projects/cabinet-side-gap.dxf"
+    },
+    {
+      "op": "wait",
+      "seconds": 2
+    },
+    {
+      "op": "closeSheet"
+    },
+    {
+      "op": "capture",
+      "name": "after-import"
+    },
+    {
+      "op": "press",
+      "name": "Design",
+      "value": "AXRadioButton"
+    },
+    {
+      "op": "sheet",
+      "value": "joinVectors"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "press",
+      "name": "Join gaps up to",
+      "value": "AXTextField"
+    },
+    {
+      "op": "key",
+      "value": "selectAll"
+    },
+    {
+      "op": "type",
+      "value": "0.01"
+    },
+    {
+      "op": "key",
+      "value": "tab"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "captureSheet",
+      "name": "join-sheet"
+    },
+    {
+      "op": "press",
+      "name": "Join",
+      "value": "AXButton"
+    },
+    {
+      "op": "wait",
+      "seconds": 1
+    },
+    {
+      "op": "capture",
+      "name": "after-join"
+    }
+  ]
+}
