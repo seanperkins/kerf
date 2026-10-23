@@ -8,6 +8,8 @@ import SwiftUI
 /// program each, zeroed at the tile's lower-left corner on the material.
 struct TilingSheet: View {
     @ObservedObject var document: KerfDocument
+    /// Watched so that reloading the post profiles reaches `currentInputs`.
+    @ObservedObject var catalog = PostProfileCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var settings = TilingSettings(tileWidth: 60, tileHeight: 96)
@@ -21,8 +23,8 @@ struct TilingSheet: View {
     /// Why the last save failed, shown above the buttons (an alert on the document would sit under this sheet).
     @State private var failure: String?
 
-    /// What a program posted now is made from: the document's inputs and the group-by-tool preference.
-    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.grouped(groupByTool) }
+    /// What a program posted now is made from: the document's inputs, the post processor and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.stamped(profile: document.postProfile, groupedByTool: groupByTool) }
 
     /// Validator errors, which "Save Anyway" may override.
     private var hasErrors: Bool { files.contains { $0.result.hasErrors } }

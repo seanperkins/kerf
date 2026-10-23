@@ -24,8 +24,8 @@ struct ExportGCodeSheet: View {
     /// Why the last Save failed, shown above the buttons (an alert on the document would sit under this sheet).
     @State private var failure: String?
 
-    /// What a program posted now is made from: the document's inputs and the group-by-tool preference.
-    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.grouped(groupByTool) }
+    /// What a program posted now is made from: the document's inputs, the post processor and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.stamped(profile: profile, groupedByTool: groupByTool) }
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
@@ -79,7 +79,6 @@ struct ExportGCodeSheet: View {
         }
         .onDisappear { calcTask?.cancel() }
         .onChange(of: scope) { _, _ in run() }
-        .onChange(of: profileID) { _, _ in run() }
         .onChange(of: currentInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }

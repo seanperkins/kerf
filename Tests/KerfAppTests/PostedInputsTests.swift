@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import Foundation
+import PostCore
 import Testing
 @testable import KerfApp
 
@@ -38,12 +39,17 @@ import Testing
         #expect(doc.postedInputs == before)
     }
 
-    @Test func theGroupByToolPreferenceIsStampedOnWhenASheetReadsIt() throws {
+    @Test func thePostProcessorAndTheGroupByToolPreferenceAreStampedOn() throws {
         let (doc, _, _, _) = try calculatedDoc()
-        let plain = doc.postedInputs
-        #expect(plain.grouped(false) == plain)
-        #expect(plain.grouped(true) != plain)
-        #expect(plain.grouped(true) == doc.postedInputs.grouped(true))
+        let post = BuiltInPosts.avidMach4Inch
+        var reloaded = post
+        reloaded.name += " (edited)"           // what Reload Post Profiles brings in
+        let stamped = doc.postedInputs.stamped(profile: post)
+        #expect(stamped == doc.postedInputs.stamped(profile: post))
+        #expect(stamped != doc.postedInputs)
+        #expect(stamped != doc.postedInputs.stamped(profile: reloaded))
+        #expect(stamped != doc.postedInputs.stamped(profile: post, groupedByTool: true))
+        #expect(stamped.stamped(profile: post, groupedByTool: true) == doc.postedInputs.stamped(profile: post, groupedByTool: true))
     }
 
     @Test func aToolEditThatChangesToolpathsChangesIt() throws {

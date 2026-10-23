@@ -7,6 +7,8 @@ import SwiftUI
 /// combined program, with a shortcut to select the offending toolpath.
 struct ValidationSheet: View {
     @ObservedObject var document: KerfDocument
+    /// Watched so that reloading the post profiles reaches `currentInputs`.
+    @ObservedObject var catalog = PostProfileCatalog.shared
     @Environment(\.dismiss) private var dismiss
     @State private var report: ValidationReport?
     /// What the document was made of when `report` was made.
@@ -15,8 +17,8 @@ struct ValidationSheet: View {
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
 
-    /// What a program posted now is made from: the document's inputs and the group-by-tool preference.
-    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.grouped(groupByTool) }
+    /// What a program posted now is made from: the document's inputs, the post processor and the group-by-tool preference.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.stamped(profile: document.postProfile, groupedByTool: groupByTool) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

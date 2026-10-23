@@ -701,13 +701,16 @@ final class KerfDocument: ReferenceFileDocument {
     struct PostedInputs: Equatable {
         var serial = 0, design = 0
         var side: JobSide = .top
-        /// The app-wide group-by-tool preference changes the order a program is posted in; it is not the
-        /// document's, so a sheet that reads it stamps it on with `grouped(_:)`.
+        /// What a sheet posts with besides the document: the post processor in force (reloading the catalog, or a
+        /// machine, changes it) and the app-wide group-by-tool preference, which sets the order. A sheet stamps
+        /// them on with `stamped(profile:groupedByTool:)`.
+        var profile: PostProfile?
         var groupedByTool = false
 
-        func grouped(_ on: Bool) -> PostedInputs {
+        func stamped(profile: PostProfile, groupedByTool: Bool = false) -> PostedInputs {
             var copy = self
-            copy.groupedByTool = on
+            copy.profile = profile
+            copy.groupedByTool = groupedByTool
             return copy
         }
 

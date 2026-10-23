@@ -26,6 +26,9 @@ struct SaveAllToolpathsSheet: View {
     /// Why the last save failed, shown above the buttons (an alert on the document would sit under this sheet).
     @State private var failure: String?
 
+    /// What the files posted now are made from: the document's inputs and the post processor.
+    private var currentInputs: KerfDocument.PostedInputs { document.postedInputs.stamped(profile: profile) }
+
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
     /// Validator errors, which "Save Anyway" may override.
@@ -64,7 +67,7 @@ struct SaveAllToolpathsSheet: View {
                     if hasErrors { confirmErrors = true } else { save() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(posted.isEmpty || hasUnposted || postedFrom != document.postedInputs)
+                .disabled(posted.isEmpty || hasUnposted || postedFrom != currentInputs)
                 .help(hasUnposted ? "A program could not be generated; fix it before saving, so no file is left out." : "")
                 // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
                 .replaceFilesAlert($replaceRequest) { r in finishSaving(from: r.postedFrom) { try r.set.write(to: r.directory, replacing: r.names) } }
@@ -79,8 +82,7 @@ struct SaveAllToolpathsSheet: View {
         }
         .onDisappear { calcTask?.cancel() }
         .onChange(of: mode) { _, _ in run() }
-        .onChange(of: profileID) { _, _ in run() }
-        .onChange(of: document.postedInputs) { _, now in if now != postedFrom { run() } }
+        .onChange(of: currentInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
@@ -147,7 +149,7 @@ struct SaveAllToolpathsSheet: View {
                 return (item.file, r)
             }
         }
-        postedFrom = document.postedInputs
+        postedFrom = currentInputs
     }
 
     private func save() {
@@ -189,11 +191,11 @@ struct SaveAllToolpathsSheet: View {
     /// save began: the panel and the replace question are modal to this window only, so a program
     /// posted before an edit made meanwhile is not written.
     private func finishSaving(from inputs: KerfDocument.PostedInputs?, _ write: () throws -> Void) {
-        guard inputs == document.postedInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
+        guard inputs == currentInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
         do {
             try write()
             if profileID != initialProfileID { document.setPostProfile(profileID) }
-            postedFrom = document.postedInputs  // the post just written already used that profile
+            postedFrom = currentInputs  // the post just written already used that profile
             dismiss()
         } catch {
             failure = "Could not save G-code: \(error.localizedDescription)"
