@@ -206,3 +206,15 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
     #expect(throws: CAMError.self) { try holeMill(HoleMillParameters(cutDepth: .infinity)) }
     #expect(throws: CAMError.self) { try holeMill(HoleMillParameters(startDepth: -.infinity, cutDepth: 0.5)) }
 }
+
+@Test func ops2DHoleMillRefusesAHelixPitchThatIsNotAPositiveNumber() throws {
+    for pitch in [Double.nan, .infinity, 0, -0.1] {
+        #expect(throws: CAMError.self, "pitch \(pitch)") { try holeMill(HoleMillParameters(cutDepth: 0.5, helixPitch: pitch)) }
+    }
+    // A flat lap at the bottom of a peck: it moves sideways at the peck's own depth, never down on a slant.
+    let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.5), paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.13)])
+    let pts = F.densePoints(tp.moves)
+    for (a, b) in zip(pts, pts.dropFirst()) where a.xy.distance(to: b.xy) > 1e-9 {
+        #expect(abs(a.z - b.z) < 1e-9 || a.z >= ctx.coords.safeZ - 1e-9 || b.z >= ctx.coords.safeZ - 1e-9, "a sideways move that also changes depth")
+    }
+}

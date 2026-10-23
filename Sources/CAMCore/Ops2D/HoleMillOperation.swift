@@ -38,6 +38,9 @@ public struct HoleMillOperation: ToolpathOperation {
         guard params.cutDepth > params.startDepth + 1e-9, params.cutDepth.isFinite, params.startDepth.isFinite else {
             throw CAMError.invalidParameter("Cut depth must be deeper than start depth")
         }
+        if let pitch = params.helixPitch, !(pitch.isFinite && pitch > 0) {
+            throw CAMError.invalidParameter("Helix pitch must be a positive number")
+        }
         let tol = context.tolerance
         var holes = Self.holes(shapes, tolerance: tol)
         guard !holes.isEmpty else { throw CAMError.invalidGeometry("Hole milling needs closed vectors (circles)") }
@@ -109,6 +112,7 @@ public struct HoleMillOperation: ToolpathOperation {
             builder.travel(to: c)
             var cleared = min(params.startDepth, 0)
             let pecks = DrillOperation.peckDepths(start: params.startDepth, end: params.cutDepth, peck: pitch)
+            let bottom = pecks.last ?? params.cutDepth
             for d in pecks {
                 builder.plunge(to: d, clearedDepth: cleared)
                 cleared = d
@@ -117,7 +121,7 @@ public struct HoleMillOperation: ToolpathOperation {
                     builder.feed(to: Self.helix(centre: c, radius: radius, fromDepth: d, toDepth: d, turns: 1,
                                                 ccw: params.direction == .climb, tolerance: tol) + [CutPoint(c, depth: d)])
                 }
-                if d < pecks.last! - 1e-12 { builder.retract() }
+                if d < bottom - 1e-12 { builder.retract() }
             }
             return .pecked
         }
