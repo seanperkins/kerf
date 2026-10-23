@@ -62,7 +62,16 @@ public struct Document: Codable, Hashable, Sendable {
     }
 
     public func shape(id: UUID) -> Shape? { shapes.first { $0.id == id } }
-    public func shapes(ids: [UUID]) -> [Shape] { ids.compactMap { shape(id: $0) } }
+    /// The shapes with these ids, in the order of `ids` (an unknown id is skipped; a shape that appears twice in the
+    /// document is found at its first place, as `shape(id:)` finds it). Many ids are looked up through an index: a
+    /// selection of thousands of shapes (an imported drawing) would otherwise cost a scan of the document per id.
+    public func shapes(ids: [UUID]) -> [Shape] {
+        guard ids.count > 16 else { return ids.compactMap { shape(id: $0) } }
+        var index: [UUID: Int] = [:]
+        index.reserveCapacity(shapes.count)
+        for (i, s) in shapes.enumerated() where index[s.id] == nil { index[s.id] = i }
+        return ids.compactMap { id in index[id].map { shapes[$0] } }
+    }
     public func shapes(inLayer layerID: UUID) -> [Shape] { shapes.filter { $0.layerID == layerID } }
     public func layer(id: UUID) -> Layer? { layers.first { $0.id == id } }
     public func model(id: UUID) -> PlacedModel? { models.first { $0.id == id } }
