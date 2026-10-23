@@ -87,6 +87,7 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    the program and the validator list below it are posted again (the tool table in the header shows the
    new diameter). Renaming the tool updates the names at once. Same for Save All Toolpaths, Save Tiled
    G-code and Check Toolpaths….
+9. **Toolpath form warnings.** Select a toolpath and set its cut depth well below the material bottom, a tab height equal to the cut depth, a tool with feed 0 or a spindle speed of 60000: each shows an orange line under the tool picker, and clears when it is put right. A through-cut at the material thickness (or within the machine's spoilboard allowance) shows nothing.
 9. **Tool Database** (⇧⌘T): type `1/4`, `60°`, `T3` or a material name in the search field and the list narrows to the tools that match every word. Give a tool a description (the Description box): its first line shows under the name and in the operation's tool picker. The wand button next to Name names the tool from its size. Give two tools the same Tool number: both rows get a warning badge naming the other, and the editor says so with a "Use T…" button for the smallest free number. Add and Duplicate take a free number. Add or edit a tool. Tools are stored in
    `~/Library/Application Support/Kerf/`. Type a long name and watch `tools.json`'s modified time:
    it changes once, when you press Return or click another field, not per letter. With a toolpath

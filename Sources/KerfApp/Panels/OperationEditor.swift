@@ -35,6 +35,7 @@ struct OperationEditor: View {
                 ToolOverrideSection(override: setupBinding(\.toolOverride),
                                     tool: library.tool(id: draft.setup.toolID)?.forMaterial(document.document.job.material)
                                         .converted(to: units), units: units)
+                warnings
             }
             if draft.kind != .relief3D && draft.kind != .photoVCarve && draft.kind != .merge {
                 vectorsRow
@@ -61,6 +62,19 @@ struct OperationEditor: View {
         Divider()
         InspectorSection(title: "Pause") {
             PauseStepForm(pause: setupBinding(\.pauseAfter), toolpathName: draft.setup.name)
+        }
+    }
+
+    /// Settings the export validator would only catch at the last step, shown as they are made.
+    @ViewBuilder private var warnings: some View {
+        let problems = OperationWarnings.make(draft, project: document.project, library: library, profile: document.postProfile, units: units)
+        if !problems.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(problems, id: \.self) { problem in
+                    Label(problem, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 

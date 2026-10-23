@@ -1,5 +1,6 @@
 import CADCore
 import CAMCore
+import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -141,6 +142,11 @@ extension Notification.Name {
 #endif
 
 extension ToolDatabaseView {
+    /// The post new jobs start with: the one chosen in Preferences, else the built-in for the tool's units.
+    static func defaultPost(for units: LengthUnit) -> PostProfile {
+        PostProfileCatalog.shared.profile(id: PreferencesModel.shared.prefs.defaultPostID ?? PostProfileStore.defaultID(for: units))
+    }
+
     private static var exchangeTypes: [UTType] {
         [UTType(filenameExtension: ToolLibraryExchange.fileExtension, conformingTo: .json), .json, .commaSeparatedText]
             .compactMap { $0 }
@@ -302,8 +308,9 @@ struct ToolEditor: View {
                 NumberField("Spindle speed", value: $tool.spindleRPM, unit: "RPM")
                 NumberField("Feed rate", value: $tool.feedRate, unit: u.feedUnit)
                 NumberField("Plunge rate", value: $tool.plungeRate, unit: u.feedUnit)
-                if tool.spindleRPM < 6000 || tool.spindleRPM > 24000 {
-                    Text("The Avid 2.2 kW spindle runs 6000–24000 RPM.").font(.caption).foregroundStyle(Color.warningText)
+                // The range of the post the app starts new jobs with (Preferences), not a constant.
+                if let rpm = OperationWarnings.rpmProblem(tool.spindleRPM, profile: ToolDatabaseView.defaultPost(for: tool.units)) {
+                    Text(rpm).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
                 }
             }
             ToolShapeSection(tool: $tool)

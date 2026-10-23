@@ -331,6 +331,7 @@ final class UIHarness {
             switch step.value {
             case "rename": tool.name += " (renamed)"
             case "describe": tool.notes = "Roughing, upcut\nSecond line of notes"
+            case "rpm": tool.spindleRPM = 60000
             case "number":
                 guard let other = doc.toolLibrary.library.tools.first(where: { $0.id != tool.id }) else {
                     throw HarnessError(message: "there is no other tool to share a number with")
@@ -342,6 +343,22 @@ final class UIHarness {
             await settle(1.0)
         case "selectTool":
             NotificationCenter.default.post(name: .harnessSelectTool, object: step.name)
+            await settle(0.8)
+        case "editToolpath":
+            guard let op = doc.project.operations.first(where: { step.name == nil || $0.setup.name == step.name }) else {
+                throw HarnessError(message: "no toolpath named \"\(step.name ?? "")\"")
+            }
+            var edited = op
+            switch (edited, step.value) {
+            case (.profile(var o), "deeper"): o.params.depth.cutDepth = doc.project.document.job.thickness + 0.5; edited = .profile(o)
+            case (.pocket(var o), "deeper"): o.params.depth.cutDepth = doc.project.document.job.thickness + 0.5; edited = .pocket(o)
+            case (.profile(var o), "tabs"):
+                o.params.tabs.isEnabled = true
+                o.params.tabs.thickness = o.params.depth.cutDepth - o.params.depth.startDepth
+                edited = .profile(o)
+            default: throw HarnessError(message: "\(step.value ?? "") does not apply to a \(op.kind.displayName) toolpath")
+            }
+            doc.updateOperationLive(edited)
             await settle(0.8)
         case "searchTools":
             NotificationCenter.default.post(name: .harnessSearchTools, object: step.value ?? "")
