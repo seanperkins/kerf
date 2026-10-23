@@ -141,8 +141,11 @@ public enum MachiningTimeEstimator {
                            toolChangeSeconds: toolChangeSeconds, arcTolerance: 0.001, motion: motion).totalTime
     }
 
-    /// "1h 05m 12s" / "4m 03s" / "12s".
+    /// "1h 05m 12s" / "4m 03s" / "12s". `Int(_:)` traps beyond its range (a tool-change allowance or a dwell typed as
+    /// 1e300 reached it), so a value no job takes shows "over 1,000,000 h" and none (NaN, below -3.6e9 s) a dash.
     public static func format(_ seconds: TimeInterval) -> String {
+        guard !seconds.isNaN, seconds >= -3_600_000_000 else { return "—" }
+        guard seconds <= 3_600_000_000 else { return "over 1,000,000 h" }
         let s = Int(seconds.rounded())
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
         if h > 0 { return String(format: "%dh %02dm %02ds", h, m, sec) }

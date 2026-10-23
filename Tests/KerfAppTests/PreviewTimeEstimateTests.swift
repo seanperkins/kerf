@@ -67,6 +67,10 @@ import Testing
         let defaults = UserDefaults(suiteName: "kerf-test-\(UUID().uuidString)")!
         defaults.set(1e300, forKey: TimeEstimateSettings.toolChangeKey)
         #expect(TimeEstimateSettings.load(from: defaults).toolChangeSeconds == TimeEstimateSettings.toolChangeRange.upperBound)
+        defaults.set(-Double.infinity, forKey: TimeEstimateSettings.toolChangeKey)
+        #expect(TimeEstimateSettings.load(from: defaults).toolChangeSeconds == 0)
+        defaults.set(Double.infinity, forKey: TimeEstimateSettings.toolChangeKey)
+        #expect(TimeEstimateSettings.load(from: defaults).toolChangeSeconds == TimeEstimateSettings.toolChangeRange.upperBound)
     }
 }
 

@@ -35,7 +35,7 @@ struct TimeEstimateSettings: Hashable, Sendable {
         if defaults.object(forKey: useAccelerationKey) != nil { s.useAcceleration = defaults.bool(forKey: useAccelerationKey) }
         if let v = defaults.object(forKey: accelerationKey) as? Double, v > 0, v.isFinite { s.accelerationInchPerSec2 = v }
         if let v = defaults.object(forKey: scaleKey) as? Double, v.isFinite { s.scale = clampScale(v) }
-        if let v = defaults.object(forKey: toolChangeKey) as? Double, v.isFinite { s.toolChangeSeconds = clampToolChange(v) }
+        if let v = defaults.object(forKey: toolChangeKey) as? Double { s.toolChangeSeconds = clampToolChange(v) }
         return s
     }
 

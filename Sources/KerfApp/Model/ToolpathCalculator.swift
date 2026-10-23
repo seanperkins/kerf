@@ -87,15 +87,5 @@ enum ToolpathCalculator {
     }
 
     /// "1h 02m 05s" / "3m 20s" / "45s".
-    static func formatDuration(_ s: TimeInterval) -> String {
-        // `Int(_:)` traps beyond its range (a tool-change allowance typed as 1e300 reached it): a placeholder for a
-        // value no job takes, and a dash for none (NaN, negative infinity).
-        guard !s.isNaN, s >= -3_600_000_000 else { return "—" }
-        guard s <= 3_600_000_000 else { return "over 1,000,000 h" }
-        let total = Int(s.rounded())
-        let h = total / 3600, m = (total % 3600) / 60, sec = total % 60
-        if h > 0 { return String(format: "%dh %02dm %02ds", h, m, sec) }
-        if m > 0 { return String(format: "%dm %02ds", m, sec) }
-        return "\(sec)s"
-    }
+    static func formatDuration(_ s: TimeInterval) -> String { MachiningTimeEstimator.format(s) }
 }

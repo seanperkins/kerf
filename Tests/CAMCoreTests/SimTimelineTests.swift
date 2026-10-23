@@ -67,6 +67,12 @@ private func slot(tool: Tool) -> Toolpath {
     #expect(MachiningTimeEstimator.format(12) == "12s")
     #expect(MachiningTimeEstimator.format(243) == "4m 03s")
     #expect(MachiningTimeEstimator.format(3912) == "1h 05m 12s")
+    // A dwell or tool-change allowance typed as 1e300 used to trap `Int(_:)` (issue #56): a placeholder instead.
+    #expect(MachiningTimeEstimator.format(1e300) == "over 1,000,000 h")
+    #expect(MachiningTimeEstimator.format(.infinity) == "over 1,000,000 h")
+    #expect(MachiningTimeEstimator.format(.nan) == "—")
+    #expect(MachiningTimeEstimator.format(-1e300) == "—")
+    #expect(MachiningTimeEstimator.format(3_600_000_001) == "over 1,000,000 h")
 }
 
 @Test func simTimelinePositionAndToolPosition() {
