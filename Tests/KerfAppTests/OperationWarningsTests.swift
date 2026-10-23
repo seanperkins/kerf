@@ -482,6 +482,13 @@ import Testing
             other.operations = [.drill(pilot), .holeMill(thread)]
             #expect(warnings(.holeMill(thread), other, lib).count == 1, "a bottom-side drill is not this side's pilot \(i)")
         }
+        // A toolpath whose vectors are on both sides has no side, and nothing is its pilot.
+        var both = other
+        pilot.setup.shapeIDs = [a.id]
+        var spanning = thread
+        spanning.setup.shapeIDs = [a.id, both.document.shapes.last!.id]      // the top-side vector and the bottom-side copy
+        both.operations = [.drill(pilot), .holeMill(spanning)]
+        #expect(warnings(.holeMill(spanning), both, lib).count == 1)
         // A pilot whose own depth is not deeper than its start depth cuts nothing.
         let broken = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(startDepth: 0.75, cutDepth: 0.75))
         p.operations = [.drill(broken), .holeMill(thread)]

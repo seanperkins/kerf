@@ -75,9 +75,11 @@ enum OperationWarnings {
         holes = holes.flatMap { hole in copies.map { HoleMillOperation.Hole(centre: hole.centre + $0, diameter: hole.diameter) } }
         // What runs before this toolpath in the list, on its sheet and side (the others are other programs); a toolpath
         // that is not in the list has nothing before it.
+        // (Vectors on several sheets or sides have no sheet or side, and nothing matches that: the toolpath errors anyway.)
         let thisOp = AnyOperation.holeMill(op)
+        let sheet = project.sheetID(of: thisOp), side = project.side(of: thisOp)
         let earlier = (project.operations.firstIndex { $0.id == op.setup.id }.map { Array(project.operations.prefix($0)) } ?? [])
-            .filter { project.sheetID(of: $0) == project.sheetID(of: thisOp) && project.side(of: $0) == project.side(of: thisOp) }
+            .filter { sheet != nil && side != nil && project.sheetID(of: $0) == sheet && project.side(of: $0) == side }
         /// An earlier toolpath that clears at least `depth` deep and `width` across at `c`, from the material top (a drill,
         /// only, when `drillOnly`): one that starts below the top leaves the material above it for the tool to cut.
         func made(at c: Vec2, depth: Double, width: Double, drillOnly: Bool) -> Bool {
