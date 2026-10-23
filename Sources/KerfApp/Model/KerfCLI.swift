@@ -211,7 +211,8 @@ enum KerfCLI {
         let machines = stores.machines.allMachines()
         let units = project.document.units
         var issues: [GCodeIssue] = []
-        let postID = options.post ?? project.postProfileID
+        // As `KerfDocument.postProfile`: a project that names no post uses the default for its units.
+        let postID = options.post ?? project.postProfileID ?? PostProfileStore.defaultID(for: units)
         if let id = options.post, !profiles.contains(where: { $0.id == id }) {
             output.standardError("error: unknown post \"\(id)\"; installed: \(profiles.map(\.id).joined(separator: ", "))\n")
             return 2

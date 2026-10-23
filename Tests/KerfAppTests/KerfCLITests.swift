@@ -125,6 +125,24 @@ import Testing
         #expect(r.out.contains("Post: Avid PRO6096 Mach4 [inch]"))
     }
 
+    @Test @MainActor func aProjectThatNamesNoPostUsesTheDefaultForItsUnits() throws {
+        // Valid file state (`postProfileID` is optional): a millimeter project gets the millimeter Avid post, as in the app.
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign))).converted(to: .millimeter)
+        project.postProfileID = nil
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("nopost.kerf")
+        try project.encoded().write(to: file)
+        let r = Self.run(["export", file.path, "--out", "-", "--builtin-only"])
+        #expect(r.status == 0, "\(r.err)")
+        #expect(r.out.contains("Post: Avid PRO6096 Mach4 [mm]"))
+        #expect(r.out == (try Self.appExport(project)))
+        // An inch project gets the inch one.
+        project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        project.postProfileID = nil
+        try project.encoded().write(to: file)
+        #expect(Self.run(["export", file.path, "--out", "-", "--builtin-only"]).out.contains("Post: Avid PRO6096 Mach4 [inch]"))
+    }
+
     @Test func anExplicitPostAnswersTheNotInstalledPostError() throws {
         // The saved post is gone: without --post that is an error to settle ("Pick a post before saving"); naming an installed
         // post is the settling, so the run is clean (the file would be saved with the post chosen, as the sheet does).

@@ -70,9 +70,11 @@ if (( update )); then
   old="samples/.expected-old.$$"
   if [[ -e samples/expected ]]; then mv samples/expected "$old"; fi
   mv "$stage" samples/expected || { echo "FAIL: could not put the new programs in place; the committed ones are back" >&2; exit 1; }
+  # The commit point: from here the new set is the corpus, and what is left of the old one is only to be deleted.
+  gone="$old"
   stage=""
-  rm -rf "$old"
   old=""
+  rm -rf "$gone"
   echo "samples/expected rewritten: $expected_count programs"
   exit 0
 fi
