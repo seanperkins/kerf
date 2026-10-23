@@ -54,7 +54,8 @@ private typealias F = Ops2DFixture
                 let depth = ctx.coords.depth(ofMachineZ: try #require(tp.minCutZ))
                 #expect(depth > 0.15, "\(name) cut \(depth)")
                 let w = tp.metadata["warning"] ?? ""
-                #expect(w.contains("with a 0.1000 in flute (\(tool.name)); \(Self.rubs)") == warns, "\(name) flute \(String(describing: flute)): \(w)")
+                #expect(w.contains("with a 0.1000 in flute; \(Self.rubs)") == warns, "\(name) flute \(String(describing: flute)): \(w)")
+                #expect(!w.contains(tool.name), "\(name): the stored note names no tool: \(w)")
                 if warns { #expect(w.contains("cuts \(String(format: "%.4f", depth)) in below the material top"), "\(name): \(w)") }
             }
         }
@@ -62,7 +63,7 @@ private typealias F = Ops2DFixture
 
     @Test func fluteWarningJoinsTheOperationsOwnWarnings() throws {
         // A profile that already warns (its loop too short for four tabs) keeps that warning and
-        // adds the flute note after it, in the one wording every surface uses.
+        // adds the flute note after it (without the tool name: a rename does not recalculate, see FluteOverrun.note).
         let (seeded, ids) = F.document([F.rect(0, 0, 0.3, 0.3)])
         let tool = Self.tool(0, flute: 0.3)
         let ctx = CAMContext(document: seeded.document, tools: ToolLibrary(tools: [tool]))
@@ -72,7 +73,7 @@ private typealias F = Ops2DFixture
             .generate(in: ctx)[0]
         let w = try #require(tp.metadata["warning"])
         #expect(w.contains("fewer tabs than asked"))
-        #expect(w.hasSuffix("; cuts 0.5000 in below the material top with a 0.3000 in flute (\(tool.name)); \(Self.rubs)"))
+        #expect(w.hasSuffix("; cuts 0.5000 in below the material top with a 0.3000 in flute; \(Self.rubs)"))
     }
 
     @Test func mergeNotesEachChildOnce() throws {
@@ -157,7 +158,7 @@ private typealias F = Ops2DFixture
         let fits = try pocket(to: 0.9)
         #expect(fits.metadata["warning"] == nil && fits.clearedDepth == 0.5)
         let deep = try pocket(to: 1.3)
-        #expect(deep.metadata["warning"] == "cuts 0.8000 in deeper than the 0.5000 in already cleared with a 0.7500 in flute (\(tool.name)); \(Self.rubs)")
+        #expect(deep.metadata["warning"] == "cuts 0.8000 in deeper than the 0.5000 in already cleared with a 0.7500 in flute; \(Self.rubs)")
     }
 
     @Test func everyKindWithAStartDepthRecordsIt() throws {

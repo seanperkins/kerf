@@ -41,7 +41,26 @@ private let engraver = ToolLibrary.seeded.tools[7]       // 30° engraving, 0.01
                                   extraClearanceTools: [VCarveClearanceTool(toolID: halfInchMill.id)])
     let tps = try VCarveOperation(setup: setup, params: params).generate(in: ctx)
     #expect(tps.map(\.tool.id) == [eighthMill.id, F.vbit60.id])
-    #expect(tps[0].metadata["warning"]?.contains("no remaining flat area") == true)
+    #expect(tps[0].metadata["warning"]?.contains("Clearance tool 2 has no remaining flat area to clear") == true)
+}
+
+/// The notes are stored with the toolpaths, and a rename in the Tool Database does not recalculate them, so a
+/// clearance tool is named by its place in the list, never by its name (issue #60).
+@Test func vcarveNotesNameAClearanceToolByPositionNotByName() throws {
+    let (ctx, setup) = F.context([F.rect(0, 0, 3, 2)])
+    let tools = [halfInchMill, eighthMill, F.vbit60]
+    let sharpening = VCarveParameters(flatDepth: 0.15, flatClearanceToolID: halfInchMill.id,
+                                      extraClearanceTools: [VCarveClearanceTool(toolID: eighthMill.id, cornerSharpen: true)])
+    let ignored = try VCarveOperation(setup: setup, params: sharpening).generate(in: ctx)
+    let note = try #require(ignored.first?.metadata["warning"])
+    #expect(note.contains("ignored for clearance tool 2"))
+    let nothingLeft = VCarveParameters(flatDepth: 0.15, flatClearanceToolID: eighthMill.id,
+                                       extraClearanceTools: [VCarveClearanceTool(toolID: halfInchMill.id)])
+    let skipped = try VCarveOperation(setup: setup, params: nothingLeft).generate(in: ctx)
+    let skippedNote = try #require(skipped.first?.metadata["warning"])
+    for text in [note, skippedNote] {
+        for tool in tools { #expect(!text.contains(tool.name), "\(text) names \(tool.name)") }
+    }
 }
 
 @Test func vcarveParametersDecodeWithoutNewFields() throws {

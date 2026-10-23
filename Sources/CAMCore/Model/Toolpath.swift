@@ -55,13 +55,22 @@ public struct Toolpath: Codable, Hashable, Identifiable, Sendable {
         public var toolName: String
         public var units: LengthUnit
 
-        /// The one description every surface shows, with both numbers and the tool.
-        public var description: String {
+        /// The wording every surface shows, with both numbers and the tool, for the checks that run on the
+        /// live tool name (the export validator).
+        public var description: String { text(tool: toolName) }
+
+        /// The same without the tool: what is stored with a calculated toolpath (`metadata["warning"]`). A
+        /// rename in the Tool Database is written into the toolpath in place and is not a recalculation, so
+        /// a name in stored text would go stale (issue #60); the step the note is shown under names the tool.
+        public var note: String { text(tool: nil) }
+
+        private func text(tool: String?) -> String {
             let u = units.abbreviation
             let cut = cleared > 0
                 ? "cuts \(f(depth - cleared)) \(u) deeper than the \(f(cleared)) \(u) already cleared"
                 : "cuts \(f(depth)) \(u) below the material top"
-            return "\(cut) with a \(f(flute)) \(u) flute (\(toolName)); the shank rubs the wall above the flutes"
+            let named = tool.map { " (\($0))" } ?? ""
+            return "\(cut) with a \(f(flute)) \(u) flute\(named); the shank rubs the wall above the flutes"
         }
 
         private func f(_ v: Double) -> String { Self.text(v, units: units) }
