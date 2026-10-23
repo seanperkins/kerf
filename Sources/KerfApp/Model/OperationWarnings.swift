@@ -22,10 +22,13 @@ enum OperationWarnings {
         let u = units.abbreviation
 
         if op.kind != .merge {
-            if !(tool.diameter > 0) { out.append("The tool's diameter is not above zero; set it in the Tool Database.") }
-            if !(tool.feedRate > 0) { out.append("The feed rate is zero or less; set it in the Tool Database or override it here.") }
-            if !(tool.plungeRate > 0) { out.append("The plunge rate is zero or less; set it in the Tool Database or override it here.") }
-            if let rpm = rpmProblem(tool.spindleRPM, profile: profile) { out.append(rpm) }
+            out += toolProblems(tool, profile: profile, overridable: true)
+            // The other tools the operation cuts with (clearance, roughing, rest) are judged the same way, by name.
+            var seen: Set<UUID> = [op.setup.toolID]
+            for id in secondaryToolIDs(of: op) where seen.insert(id).inserted {
+                guard let other = library.tool(id: id)?.forMaterial(job.material).converted(to: units) else { continue }
+                out += toolProblems(other, profile: profile, overridable: false).map { "\(other.name): \($0)" }
+            }
         }
 
         if let depth = cutDepth(of: op, tool: tool), op.setup.projectOntoModelID == nil {
@@ -46,6 +49,32 @@ enum OperationWarnings {
             }
         }
         return out
+    }
+
+    /// What is wrong with a tool's own numbers: diameter, feed, plunge and spindle speed. Only the toolpath's
+    /// primary tool can be fixed with the toolpath's override, so only its messages say so.
+    static func toolProblems(_ tool: Tool, profile: PostProfile, overridable: Bool) -> [String] {
+        var out: [String] = []
+        let fix = overridable ? "set it in the Tool Database or override it here" : "set it in the Tool Database"
+        if !(tool.diameter > 0) { out.append("The tool's diameter is not above zero; set it in the Tool Database.") }
+        if !(tool.feedRate > 0) { out.append("The feed rate is zero or less; \(fix).") }
+        if !(tool.plungeRate > 0) { out.append("The plunge rate is zero or less; \(fix).") }
+        if let rpm = rpmProblem(tool.spindleRPM, profile: profile) { out.append(rpm) }
+        return out
+    }
+
+    /// The tools besides the primary one that the operation cuts with, in the order it uses them: a pocket's and a
+    /// V-carve's or inlay's flat-area clearance tools, a relief's roughing and rest tools.
+    static func secondaryToolIDs(of op: AnyOperation) -> [UUID] {
+        switch op {
+        case .pocket(let o): return o.params.clearanceTools
+        case .vcarve(let o): return o.params.clearanceTools.map(\.toolID)
+        case .inlay(let o): return o.params.clearanceToolIDs
+        case .relief3D(let o):
+            return (o.params.roughing.isEnabled ? o.params.roughing.toolID.map { [$0] } ?? [] : [])
+                + (o.params.finishing.restToolID.map { [$0] } ?? [])
+        default: return []
+        }
     }
 
     /// Why `rpm` is outside what `profile`'s spindle runs, or nil. The range is the post's, not a constant.

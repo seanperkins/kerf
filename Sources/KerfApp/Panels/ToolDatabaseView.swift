@@ -142,9 +142,13 @@ extension Notification.Name {
 #endif
 
 extension ToolDatabaseView {
-    /// The post new jobs start with: the one chosen in Preferences, else the built-in for the tool's units.
-    static func defaultPost(for units: LengthUnit) -> PostProfile {
-        PostProfileCatalog.shared.profile(id: PreferencesModel.shared.prefs.defaultPostID ?? PostProfileStore.defaultID(for: units))
+    /// The post a new job starts with, as the job would use it: the machine and post chosen in Preferences (an
+    /// unknown or incompatible post falls back to the machine's) with the machine's limits applied.
+    static func defaultPost(prefs: AppPreferences = PreferencesModel.shared.prefs, machines: [MachineDefinition] = MachineCatalog.shared.machines,
+                            profiles: [PostProfile] = PostProfileCatalog.shared.profiles) -> PostProfile {
+        let project = prefs.newProject(machines: machines, profiles: profiles)
+        let post = profiles.first { $0.id == project.postProfileID } ?? PostProfileCatalog.shared.profile(id: project.postProfileID)
+        return MachineResolver.effectiveProfile(post, machine: machines.first { $0.id == project.machineID })
     }
 
     private static var exchangeTypes: [UTType] {
@@ -309,7 +313,7 @@ struct ToolEditor: View {
                 NumberField("Feed rate", value: $tool.feedRate, unit: u.feedUnit)
                 NumberField("Plunge rate", value: $tool.plungeRate, unit: u.feedUnit)
                 // The range of the post the app starts new jobs with (Preferences), not a constant.
-                if let rpm = OperationWarnings.rpmProblem(tool.spindleRPM, profile: ToolDatabaseView.defaultPost(for: tool.units)) {
+                if let rpm = OperationWarnings.rpmProblem(tool.spindleRPM, profile: ToolDatabaseView.defaultPost()) {
                     Text(rpm).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
                 }
             }

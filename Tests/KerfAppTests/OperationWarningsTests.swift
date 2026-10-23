@@ -151,4 +151,63 @@ import Testing
         off.isEnabled = false
         #expect(warnings(profile(op, depth: 0.5, tabs: off), p, lib).isEmpty)
     }
+
+    @Test func theOtherToolsAnOperationCutsWithAreJudgedTooAndNamed() throws {
+        let (p, _, lib) = try setup()
+        var broken = lib
+        let finish = try #require(lib.tools.first { $0.kind == .endMill })
+        var big = try #require(lib.tools.first { $0.kind == .endMill && $0.id != finish.id })
+        big.feedRate = 0; big.spindleRPM = 40000
+        broken.upsert(big)
+        let id = p.document.shapes[0].id
+        var pocket = try #require(OperationFactory.make(kind: .pocket, project: p, library: broken, shapeIDs: [id]))
+        guard case .pocket(var o) = pocket else { return }
+        o.setup.toolID = finish.id
+        o.params.clearanceToolIDs = [big.id]
+        pocket = .pocket(o)
+        let w = warnings(pocket, p, broken)
+        #expect(w.count == 2 && w.allSatisfy { $0.hasPrefix("\(big.name): ") })
+        #expect(w.contains { $0.contains("feed rate") } && w.contains { $0.contains("40000") })
+        // The toolpath's override is for its primary tool, so the clearance tool's message does not offer it.
+        #expect(w.first { $0.contains("feed rate") }?.contains("override") == false)
+        // The same tool as the primary one is judged once; a missing tool is the picker's business.
+        o.params.clearanceToolIDs = [finish.id, UUID()]
+        #expect(warnings(.pocket(o), p, broken).isEmpty)
+        // V-carve, inlay and relief name theirs too.
+        let vbit = try #require(lib.tools.first { $0.kind == .vBit })
+        var slow = broken
+        var fixed = big
+        fixed.spindleRPM = 18000
+        slow.upsert(fixed)
+        let vcarve = VCarveOperation(setup: OperationSetup(name: "V", toolID: vbit.id, shapeIDs: [id]),
+                                     params: VCarveParameters(flatDepth: 0.2, flatClearanceToolID: big.id))
+        #expect(warnings(.vcarve(vcarve), p, broken).contains { $0.hasPrefix("\(big.name): ") && $0.contains("feed rate") })
+        let inlay = InlayOperation(setup: OperationSetup(name: "I", toolID: vbit.id, shapeIDs: [id]),
+                                   params: InlayParameters(flatClearanceToolID: big.id))
+        #expect(warnings(.inlay(inlay), p, broken).contains { $0.hasPrefix("\(big.name): ") })
+        let relief = Relief3DOperation(setup: OperationSetup(name: "R", toolID: finish.id),
+                                       params: Relief3DParameters(modelID: UUID(), roughing: RoughingSettings(toolID: big.id)))
+        #expect(warnings(.relief3D(relief), p, broken).contains { $0.hasPrefix("\(big.name): ") })
+        #expect(OperationWarnings.secondaryToolIDs(of: pocket) == [big.id])
+    }
+
+    @Test func theToolDatabaseJudgesSpindleSpeedByThePostAJobWouldStartWith() {
+        let machines = BuiltInMachines.all, posts = BuiltInPosts.all
+        // Out of the box: the Avid and its post.
+        let avid = ToolDatabaseView.defaultPost(prefs: AppPreferences(), machines: machines, profiles: posts)
+        #expect(avid.id == BuiltInPosts.avidMach4Inch.id && avid.minRPM == 6000 && avid.maxRPM == 24000)
+        #expect(OperationWarnings.rpmProblem(1000, profile: avid) != nil)
+        // The default machine decides the post when no post is chosen: GRBL runs lower speeds.
+        var grbl = AppPreferences()
+        grbl.defaultMachineID = BuiltInMachines.genericGRBL.id
+        let g = ToolDatabaseView.defaultPost(prefs: grbl, machines: machines, profiles: posts)
+        #expect(g.id == BuiltInPosts.genericGRBLMM.id)
+        #expect(OperationWarnings.rpmProblem(1000, profile: g) == OperationWarnings.rpmProblem(1000, profile: BuiltInPosts.genericGRBLMM))
+        // A machine's own spindle range replaces the post's.
+        var spindle = BuiltInMachines.genericGRBL
+        spindle.minRPM = 100; spindle.maxRPM = 500
+        let own = ToolDatabaseView.defaultPost(prefs: grbl, machines: [spindle], profiles: posts)
+        #expect(own.minRPM == 100 && own.maxRPM == 500)
+        #expect(OperationWarnings.rpmProblem(300, profile: own) == nil && OperationWarnings.rpmProblem(1000, profile: own) != nil)
+    }
 }
