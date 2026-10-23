@@ -50,8 +50,8 @@ enum OperationWarnings {
         if case .profile(let p) = op, p.params.tabs.isEnabled, tabsWillBePlaced(p, in: project.document) {
             let span = p.params.depth.cutDepth - p.params.depth.startDepth
             if p.params.tabs.thickness >= span - CAMContext.defaultTolerance(units), span > 0 {
-                out.append("The tabs (\(RulerTicks.label(p.params.tabs.thickness)) \(u) tall) are as tall as the cut "
-                           + "(\(RulerTicks.label(span)) \(u) deep): the tool does not cut at the middle of a tab.")
+                out.append("The tab height (\(RulerTicks.label(p.params.tabs.thickness)) \(u)) is as tall as the cut "
+                           + "(\(RulerTicks.label(span)) \(u) deep): tabs this tall leave nothing cut where they sit.")
             }
         }
         return out
