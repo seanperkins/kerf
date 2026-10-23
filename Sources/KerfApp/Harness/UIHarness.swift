@@ -328,9 +328,28 @@ final class UIHarness {
             guard let op = doc.project.operations.first, var tool = doc.toolLibrary.library.tool(id: op.setup.toolID) else {
                 throw HarnessError(message: "there is no toolpath whose tool could be edited")
             }
-            if step.value == "rename" { tool.name += " (renamed)" } else { tool.diameter += doc.units == .inch ? 0.0625 : 1.5 }
+            switch step.value {
+            case "rename": tool.name += " (renamed)"
+            case "number":
+                guard let other = doc.toolLibrary.library.tools.first(where: { $0.id != tool.id }) else {
+                    throw HarnessError(message: "there is no other tool to share a number with")
+                }
+                tool.number = other.number
+            default: tool.diameter += doc.units == .inch ? 0.0625 : 1.5
+            }
             doc.toolLibrary.update(tool)
             await settle(1.0)
+        case "selectTool":
+            NotificationCenter.default.post(name: .harnessSelectTool, object: step.name)
+            await settle(0.8)
+        case "captureWindow":
+            let title = step.value ?? ""
+            try await waitUntil("the \(title) window") { NSApp.windows.contains { $0.title == title && $0.isVisible } }
+            guard let other = NSApp.windows.first(where: { $0.title == title && $0.isVisible }) else {
+                throw HarnessError(message: "no window titled \(title)")
+            }
+            await settle(0.8)
+            try await write(window: other, stem: step.name ?? "window")
         case "sheet":
             doc.sheet = try sheet(named: step.value ?? "")
             try await waitUntil("a sheet") { self.window?.attachedSheet != nil }

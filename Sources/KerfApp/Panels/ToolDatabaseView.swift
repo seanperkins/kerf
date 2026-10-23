@@ -15,6 +15,7 @@ struct ToolDatabaseView: View {
     @State private var importMessage: String?
 
     var body: some View {
+        let clashes = ToolNumbers.clashes(in: library.tools)
         NavigationSplitView {
             List(selection: $selectedID) {
                 ForEach(ToolGrouping.sections(library.tools), id: \.title) { section in
@@ -25,6 +26,15 @@ struct ToolDatabaseView: View {
                                 HStack {
                                     Text("T\(t.number)").monospacedDigit().foregroundStyle(.secondary).frame(width: 30, alignment: .leading)
                                     Text(t.name).lineLimit(1)
+                                    if let shared = clashes[t.number] {
+                                        // A badge on every tool that has the number, naming the others.
+                                        let others = ToolNumbers.names(shared.filter { $0.id != t.id })
+                                        Spacer(minLength: 4)
+                                        Image(systemName: "exclamationmark.triangle.fill")
+                                            .foregroundStyle(Color.warningText)
+                                            .help("T\(t.number) is also the number of \(others). A program that uses both gets one tool change for two tools.")
+                                            .accessibilityLabel("Tool number shared with \(others)")
+                                    }
                                 }
                                 .tag(t.id)
                             }
@@ -92,8 +102,21 @@ struct ToolDatabaseView: View {
                 Text(e).font(.caption).foregroundStyle(Color.errorText).padding(6).background(.regularMaterial)
             }
         }
+        #if DEBUG
+        // The UI harness has no way to click a row of this window's list (docs/UI-HARNESS.md): it names the tool.
+        .onReceive(NotificationCenter.default.publisher(for: .harnessSelectTool)) { note in
+            if let name = note.object as? String, let tool = library.tools.first(where: { $0.name == name }) { selectedID = tool.id }
+        }
+        #endif
     }
 }
+
+#if DEBUG
+extension Notification.Name {
+    /// Posted by the UI harness's `selectTool` step with the tool's name.
+    static let harnessSelectTool = Notification.Name("kerf.harness.selectTool")
+}
+#endif
 
 extension ToolDatabaseView {
     private static var exchangeTypes: [UTType] {
@@ -184,6 +207,23 @@ struct ToolEditor: View {
 
     private var isAngled: Bool { tool.kind == .vBit || tool.kind == .engraving }
 
+    /// Says when another tool in the library has this tool's number, and offers the next free one.
+    @ViewBuilder private var numberClash: some View {
+        let others = ToolNumbers.others(using: tool.number, besides: tool.id, in: library.tools)
+        if !others.isEmpty {
+            HStack(alignment: .firstTextBaseline) {
+                Text("T\(tool.number) is also the number of \(ToolNumbers.names(others)).")
+                    .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                if let free = ToolNumbers.nextFree(in: library.tools, besides: tool.id) {
+                    Button("Use T\(free)") { tool.number = free }
+                        .controlSize(.small)
+                        .help("The smallest number no other tool has")
+                }
+            }
+        }
+    }
+
     var body: some View {
         let u = tool.units
         Form {
@@ -194,7 +234,8 @@ struct ToolEditor: View {
                     ForEach(ToolKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                     .fieldHelp("Type")
-                IntField("Tool number", value: $tool.number, range: 0...999)
+                IntField("Tool number", value: $tool.number, range: ToolNumbers.range)
+                numberClash
                 Picker("Units", selection: Binding(get: { tool.units }, set: { tool = tool.converted(to: $0) })) {
                     ForEach(LengthUnit.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }

@@ -39,12 +39,9 @@ final class ToolLibraryModel: ObservableObject {
 
     var tools: [Tool] { library.tools }
 
-    /// Smallest tool number not used yet.
+    /// Smallest tool number not used yet (past the editor's range when the library has a tool of every number in it).
     var nextToolNumber: Int {
-        let used = Set(library.tools.map(\.number))
-        var n = 1
-        while used.contains(n) { n += 1 }
-        return n
+        ToolNumbers.nextFree(in: library.tools) ?? (library.tools.map(\.number).max() ?? 0) + 1
     }
 
     /// A reasonable starting tool of `kind` in `units`.
