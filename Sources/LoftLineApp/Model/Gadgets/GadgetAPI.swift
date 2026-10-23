@@ -134,6 +134,8 @@ enum GadgetAPI {
       };
       return Object.freeze(api);
     })(__loftlineNative);
+    // One-release alias: gadgets written before the rename call kerf.*.
+    var kerf = loftline;
     var console = { log: loftline.log, warn: loftline.log, error: loftline.log };
     """#
 

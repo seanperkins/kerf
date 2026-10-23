@@ -72,6 +72,13 @@ import Testing
                            library: .seeded, timeLimit: timeLimit)
     }
 
+    /// Scripts written before the rename call `kerf.*`; the alias keeps them running for one release.
+    @Test func legacyKerfNamespaceIsAnAliasOfLoftline() throws {
+        let r = try run(#"kerf.log("old"); loftline.log("new");"#)
+        let log = r.log.joined(separator: "\n")
+        #expect(log.contains("old") && log.contains("new"))
+    }
+
     @Test func drawsPrimitivesAsParametricShapes() throws {
         let r = try run("""
         loftline.rectangle(1, 2, 3, 4, { cornerRadius: 0.5, name: "Box" });
