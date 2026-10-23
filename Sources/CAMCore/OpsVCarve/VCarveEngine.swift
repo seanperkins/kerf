@@ -112,7 +112,7 @@ struct VCarveEngine {
         var out: [(tool: Tool, passes: [[VCarveStroke]])] = []
         var cleared: VCarveRegion?
         for (index, clr) in clearanceTools.enumerated() {
-            let reach = Self.wallClearance(of: clr, flatDepth: flatBelowStart, vSlope: vSlope)
+            let reach = Self.wallClearance(of: clr, flatDepth: flatBelowStart, startDepth: startDepth, vSlope: vSlope)
             let foot = Self.floorRadius(of: clr)
             var centres = flatArea.offset(by: -reach, arcTolerance: tolerance)
             if let done = cleared {
@@ -155,7 +155,10 @@ struct VCarveEngine {
     /// Corner sharpening: the medial-axis runs inside the flat area that no clearance tool has
     /// swept, cut with a tapered tool lifted so it never touches the V walls. With the tool's
     /// centre R from the vectors, its cone (tip radius rt, slope tT) stays inside the walls
-    /// (slope tV, measured from the start depth) when depth ≤ (R − rt) / max(tT, tV).
+    /// (slope tV) when its tip is `lift` below the start depth S, with
+    /// lift ≤ ((R − rt) − S · max(0, tT − tV)) / max(tT, tV).
+    /// Carving from a depth leaves the V-bit's cone widening above S, so a wall reaches the
+    /// surface S · tV outside the vector; a wider cone (tT > tV) is closest to it there.
     static func cornerStrokes(axis: VCarveMedialAxis, tool: Tool, vSlope: Double, startDepth: Double, bottom: Double,
                               flatArea: VCarveRegion, cleared: VCarveRegion) -> [VCarveStroke] {
         guard let angle = tool.angle, angle > 0, angle < 180, tool.kind == .vBit || tool.kind == .engraving else { return [] }
@@ -170,7 +173,7 @@ struct VCarveEngine {
                 run = []
             }
             for p in chain {
-                let lift = (p.radius - rt) / max(toolSlope, vSlope)
+                let lift = ((p.radius - rt) - startDepth * max(0, toolSlope - vSlope)) / max(toolSlope, vSlope)
                 let wanted = lift > 1e-6 && grow.contains(p.position) && !cleared.contains(p.position)
                 if wanted {
                     run.append(Vec3(p.position, z: startDepth + min(lift, bottom - startDepth)))
@@ -185,13 +188,15 @@ struct VCarveEngine {
 
     /// How far a clearance tool's centre must stay inside the flat area so no part of it cuts
     /// the V-carved walls: the radius for cylindrical tools; for tapered (V / engraving) tools
-    /// the tip radius plus whatever the taper gains on the walls over the flat depth.
-    static func wallClearance(of tool: Tool, flatDepth: Double, vSlope: Double) -> Double {
+    /// the tip radius plus whatever the taper gains on the walls. The tool's tip is `startDepth +
+    /// flatDepth` below the surface, and the V walls reach the surface (they flare above the start
+    /// depth), so the taper gains over that whole height.
+    static func wallClearance(of tool: Tool, flatDepth: Double, startDepth: Double, vSlope: Double) -> Double {
         guard let angle = tool.angle, angle > 0, angle < 180, tool.kind == .vBit || tool.kind == .engraving else {
             return tool.radius
         }
         let toolSlope = tan(angle / 2 * .pi / 180)
-        return min(tool.radius, max(0, tool.tipDiameter / 2) + flatDepth * max(0, toolSlope - vSlope))
+        return min(tool.radius, max(0, tool.tipDiameter / 2) + (startDepth + flatDepth) * max(0, toolSlope - vSlope))
     }
 
     /// Radius of the flat floor a clearance tool leaves at its tip.
