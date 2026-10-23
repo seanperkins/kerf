@@ -171,6 +171,31 @@ import Testing
         #expect(!f.exists("tools.json"))
     }
 
+    /// An enumerator over an unreadable directory yields nothing and raises nothing, so the walk has to report it: otherwise the
+    /// files are skipped, the flag is written, and restoring access later never imports them.
+    @Test func anUnreadableSourceDirectoryIsAFailureNotACompletion() throws {
+        let f = try Fixture(); defer { f.cleanUp() }
+        try f.write("p", "templates/a.kerf")
+        try f.write("t", "tools.json")
+        let dir = f.oldSupport.appendingPathComponent("templates")
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: dir.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path) }
+        guard case .failed = f.migration().run() else { Issue.record("an unreadable directory must fail"); return }
+        #expect(f.defaults.object(forKey: LegacyKerfMigration.flagKey) == nil)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dir.path)
+        #expect(f.migration().run() == .completed)
+        #expect(f.read("templates/a.loftline") == "p")
+    }
+
+    @Test func renamesExtensionsWhateverTheirCase() throws {
+        let f = try Fixture(); defer { f.cleanUp() }
+        try f.write("p", "templates/Panel.KERF")
+        try f.write("t", "templates/Set.KerfTools")
+        #expect(f.migration().run() == .completed)
+        #expect(f.read("templates/Panel.loftline") == "p")
+        #expect(f.read("templates/Set.loftlinetools") == "t")
+    }
+
     /// A stored-key literal added later (or missed by the rename) must go through the migration, so none may live outside it.
     @Test func noKerfDefaultsKeyLiteralsRemainInSources() throws {
         let sources = URL(fileURLWithPath: #filePath)

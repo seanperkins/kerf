@@ -61,17 +61,23 @@ struct LegacyKerfMigration {
     private func copyFiles() throws {
         let fm = FileManager.default
         var sources: [(relative: String, url: URL)] = []
-        if let walker = fm.enumerator(at: oldSupport, includingPropertiesForKeys: [.isRegularFileKey],
-                                      options: [.skipsHiddenFiles]) {
-            let base = oldSupport.standardizedFileURL.path + "/"
-            for case let url as URL in walker {
-                let relative = String(url.standardizedFileURL.path.dropFirst(base.count))
-                if relative == "Recovery" { walker.skipDescendants(); continue }
-                if (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true {
-                    sources.append((relative, url))
-                }
+        // An enumerator over an unreadable directory yields nothing and raises nothing unless it is given an error handler, so the
+        // walk reports its first error: a partial walk must never end in the completion flag.
+        var walkError: Error?
+        guard let walker = fm.enumerator(at: oldSupport, includingPropertiesForKeys: [.isRegularFileKey],
+                                         options: [.skipsHiddenFiles],
+                                         errorHandler: { _, error in walkError = walkError ?? error; return false }) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+        let base = oldSupport.standardizedFileURL.path + "/"
+        for case let url as URL in walker {
+            let relative = String(url.standardizedFileURL.path.dropFirst(base.count))
+            if relative == "Recovery" { walker.skipDescendants(); continue }
+            if try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true {
+                sources.append((relative, url))
             }
         }
+        if let walkError { throw walkError }
         for (relative, src) in sources.sorted(by: { $0.relative < $1.relative }) {
             let dest = newSupport.appendingPathComponent(Self.renamed(relative))
             if fm.fileExists(atPath: dest.path) { continue }
@@ -92,7 +98,7 @@ struct LegacyKerfMigration {
 
     private static func renamed(_ relative: String) -> String {
         let url = URL(fileURLWithPath: relative)
-        guard let new = extensions[url.pathExtension] else { return relative }
+        guard let new = extensions[url.pathExtension.lowercased()] else { return relative }
         return url.deletingPathExtension().appendingPathExtension(new).relativePath
     }
 
