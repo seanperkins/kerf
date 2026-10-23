@@ -88,13 +88,17 @@ public struct SVGImporter: VectorImporter {
         }
         if ctx.shapes.contains(where: { $0.layerID == defaultLayer.id }) { ctx.layers.insert(defaultLayer, at: 0) }
         // No viewBox and no height: the page height is unknown, so flipping Y about it put everything below the
-        // material. The lowest point of the content is the bottom of the page then.
-        if !Self.pageHeightKnown(root, pixelsPerInch: scale), !ctx.shapes.isEmpty {
-            let bottom = PathGeometry.bounds(of: ctx.shapes).min.y
-            if bottom.isFinite, bottom != 0 {
-                let lift = Transform2D.translation(Vec2(0, -bottom))
-                ctx.shapes = ctx.shapes.map { $0.transformed(lift) }
-                ctx.images = ctx.images.map { var i = $0; i.rect = Rect2(min: i.rect.min + Vec2(0, -bottom), max: i.rect.max + Vec2(0, -bottom)); return i }
+        // material. The lowest point of the content (shapes and embedded pictures) is the bottom of the page then.
+        if !(ctx.viewport.h > 0) {
+            var bottom = ctx.shapes.isEmpty ? Double.infinity : PathGeometry.bounds(of: ctx.shapes).min.y
+            for image in ctx.images { bottom = min(bottom, image.rect.min.y) }
+            if bottom.isFinite {
+                ctx.warnings.append("This SVG gives no page height, so its artwork was placed on the bottom edge of the material.")
+                if bottom != 0 {
+                    let lift = Vec2(0, -bottom)
+                    ctx.shapes = ctx.shapes.map { $0.transformed(.translation(lift)) }
+                    ctx.images = ctx.images.map { var i = $0; i.rect = Rect2(min: i.rect.min + lift, max: i.rect.max + lift); return i }
+                }
             }
         }
         ctx.warnings += ImportGaps.warnings(shapes: ctx.shapes, layers: ctx.layers, units: targetUnits)
@@ -108,13 +112,6 @@ public struct SVGImporter: VectorImporter {
         if vb.count == 4, vb[2] > 0, vb[3] > 0 { return (vb[2], vb[3]) }
         return (SVGAttributes.pixels(root["width"], pixelsPerInch: pixelsPerInch) ?? 0,
                 SVGAttributes.pixels(root["height"], pixelsPerInch: pixelsPerInch) ?? 0)
-    }
-
-    /// Whether the root says how tall the page is: a viewBox, or a height in a unit that is not a percentage.
-    static func pageHeightKnown(_ root: SVGNode, pixelsPerInch: Double) -> Bool {
-        let vb = root["viewBox"].map(SVGNumberScanner.numbers(in:)) ?? []
-        if vb.count == 4, vb[2] > 0, vb[3] > 0 { return true }
-        return (SVGAttributes.pixels(root["height"], pixelsPerInch: pixelsPerInch) ?? 0) > 0
     }
 
     /// Maps root user space → document units with Y flipped (page bottom at y = 0). `pixelsPerInch` is the

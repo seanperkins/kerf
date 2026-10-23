@@ -280,6 +280,30 @@ import Testing
         #expect(approx(high, Rect2(x: 0, y: 1, width: 1, height: 1), 1e-9))
     }
 
+    /// A 1 x 1 in PNG, embedded, with its lower edge at `y` + `height`.
+    static let onePixelPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
+    @Test func anImageCountsTowardsTheBottomEdgeAndIsLiftedWithTheShapes() throws {
+        let img = "<image x=\"0\" y=\"96\" width=\"96\" height=\"96\" href=\"data:image/png;base64,\(Self.onePixelPNG)\"/>"
+        // An image lower than every shape sets the bottom.
+        let mixed = try importInches("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect id=\"r\" x=\"0\" y=\"0\" width=\"96\" height=\"96\"/>\(img)</svg>")
+        let rect = try #require(mixed.shapes.first).bounds()
+        let image = try #require(mixed.images.first).rect
+        #expect(approx(image, Rect2(x: 0, y: 0, width: 1, height: 1), 1e-9))
+        #expect(approx(rect, Rect2(x: 0, y: 1, width: 1, height: 1), 1e-9))
+        // An image alone rests on the edge too.
+        let only = try importInches("<svg xmlns=\"http://www.w3.org/2000/svg\">\(img)</svg>")
+        #expect(only.shapes.isEmpty)
+        #expect(approx(try #require(only.images.first).rect, Rect2(x: 0, y: 0, width: 1, height: 1), 1e-9))
+    }
+
+    @Test func theUserIsToldWhenTheContentWasPlacedOnTheBottomEdge() throws {
+        let r = try importInches(#"<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="96" height="96"/></svg>"#)
+        #expect(r.warnings.contains { $0.contains("no page height") })
+        let known = try importInches(#"<svg xmlns="http://www.w3.org/2000/svg" height="96"><rect x="0" y="0" width="96" height="96"/></svg>"#)
+        #expect(!known.warnings.contains { $0.contains("no page height") })
+    }
+
     @Test func aPageWithAHeightIsNotMoved() throws {
         let r = try importInches(#"<svg xmlns="http://www.w3.org/2000/svg" width="288" height="288"><rect x="96" y="48" width="96" height="96"/></svg>"#)
         let b = try #require(r.shapes.first).bounds()
