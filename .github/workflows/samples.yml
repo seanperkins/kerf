@@ -1,0 +1,17 @@
+name: Samples
+
+# Posts every sample project with every built-in post and fails when a program differs from the committed one in
+# samples/expected. After an intended change to the CAM, the posts or the validator, run
+# `scripts/check-samples.sh --update` locally and commit the new programs with the change.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  post-samples:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Post the samples and compare
+        run: scripts/check-samples.sh

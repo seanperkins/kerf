@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Kerf", targets: ["KerfApp"]),
+        .executable(name: "kerf-cli", targets: ["KerfApp"]),
         .library(name: "CADCore", targets: ["CADCore"]),
         .library(name: "CAMCore", targets: ["CAMCore"]),
         .library(name: "PostCore", targets: ["PostCore"]),

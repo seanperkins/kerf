@@ -1,0 +1,202 @@
+import CADCore
+import CAMCore
+import Foundation
+import PostCore
+import Testing
+@testable import KerfApp
+
+/// The command line posts a project the way the Export G-code sheet does (issue #17). Every test runs the entry point
+/// in-process and reads what it printed.
+@Suite struct KerfCLITests {
+    static let samples = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("samples", isDirectory: true)
+    static var sign: String { samples.appendingPathComponent("sign.kerf").path }
+
+    /// What a run printed and its status.
+    struct Run {
+        var status: Int32
+        var out: String
+        var err: String
+    }
+
+    static func run(_ arguments: [String]) -> Run {
+        var out = "", err = ""
+        let status = KerfCLI.run(arguments, output: KerfCLI.Output(standardOutput: { out += $0 }, standardError: { err += $0 }))
+        return Run(status: status, out: out, err: err)
+    }
+
+    static func folder() -> URL { AppTestSupport.tempDir() }
+
+    /// What the Export G-code sheet makes of `project`: calculate, collect, post (`ExportGCodeSheet.post`).
+    @MainActor static func appExport(_ project: KerfProject, scope: GCodeExportScope = .all) throws -> String {
+        let doc = KerfDocument(project: project, toolLibrary: AppTestSupport.library())
+        doc.calculateNow(doc.outputProject(for: scope).operations.filter(\.setup.isEnabled).map(\.id))
+        let tps = GCodeExporter.toolpaths(scope: scope, operations: doc.outputProject.operations, results: doc.results,
+                                          groupByTool: false)
+        let r = GCodeExporter.export(project: doc.outputProject(for: scope), toolpaths: tps, profile: doc.postProfile,
+                                     jobName: doc.document.name)
+        return try #require(r.text)
+    }
+
+    @Test @MainActor func exportWritesTheBytesTheAppsExportMakes() throws {
+        let folder = Self.folder()
+        let r = Self.run(["export", Self.sign, "--out", folder.path])
+        #expect(r.status == 0, "\(r.err)")
+        let written = try String(contentsOf: folder.appendingPathComponent("sign.tap"), encoding: .utf8)
+        #expect(r.out == "wrote \(folder.appendingPathComponent("sign.tap").path)\n")
+        let project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        #expect(written == (try Self.appExport(project)))
+        // And it is the committed golden program, under the name that program was posted with.
+        let golden = try String(contentsOf: Self.samples.appendingPathComponent("sign.tap"), encoding: .utf8)
+        let named = Self.run(["export", Self.sign, "--name", "Sign", "--out", "-"])
+        #expect(named.status == 0 && named.out == golden)
+        #expect(written != golden)   // the header's job name is the project's: "Untitled"
+    }
+
+    @Test @MainActor func aSingleToolpathIsPostedOnItsOwnLikeTheExportSheetDoes() throws {
+        let folder = Self.folder()
+        // Matches the name without regard to case.
+        let r = Self.run(["export", Self.sign, "--operation", "pocket 1", "--out", folder.path, "--quiet"])
+        #expect(r.status == 0 && r.out.isEmpty, "\(r.err)")
+        let written = try String(contentsOf: folder.appendingPathComponent("sign_Pocket_1.tap"), encoding: .utf8)
+        let project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        let pocket = try #require(project.operations.first { $0.setup.name == "Pocket 1" })
+        #expect(written == (try Self.appExport(project, scope: .operation(pocket.id))))
+        #expect(written.contains("Pocket 1") && !written.contains("Profile 1"))
+    }
+
+    @Test func aPostIsChosenByIdAndListed() throws {
+        let posts = Self.run(["posts", "--builtin-only"])
+        #expect(posts.status == 0)
+        #expect(posts.out.split(separator: "\n").map { $0.split(separator: "\t")[0] }
+                == BuiltInPosts.all.map { Substring($0.id) })
+        let folder = Self.folder()
+        let r = Self.run(["export", Self.sign, "--post", "generic-grbl-mm", "--builtin-only", "--out", folder.path])
+        #expect(r.status == 0 || r.status == 1, "\(r.err)")
+        let text = try String(contentsOf: folder.appendingPathComponent("sign.\(BuiltInPosts.genericGRBLMM.fileExtension)"),
+                              encoding: .utf8)
+        #expect(text.contains("Generic GRBL"))
+        // An unknown post names the ones there are, and writes nothing.
+        let unknown = Self.run(["export", Self.sign, "--post", "nope", "--builtin-only", "--out", Self.folder().path])
+        #expect(unknown.status == 2)
+        #expect(unknown.err.contains("unknown post \"nope\"") && unknown.err.contains("generic-grbl-mm"))
+    }
+
+    /// The sign with its profile cut far past the spoilboard: the validator reports an error.
+    static func deepSign(into folder: URL) throws -> String {
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: sign)))
+        for i in project.operations.indices {
+            guard case .profile(var p) = project.operations[i] else { continue }
+            p.params.depth.cutDepth = project.document.job.thickness + 1
+            project.operations[i] = .profile(p)
+        }
+        let url = folder.appendingPathComponent("deep.kerf")
+        try project.encoded().write(to: url)
+        return url.path
+    }
+
+    @Test func validatorErrorsFailTheRunAndWriteNothingUnlessForced() throws {
+        let folder = Self.folder()
+        let file = try Self.deepSign(into: folder)
+        let out = folder.appendingPathComponent("out")
+        let refused = Self.run(["export", file, "--out", out.path])
+        #expect(refused.status == 1)
+        #expect(refused.err.contains("error:") && refused.err.contains("nothing written"))
+        #expect(!FileManager.default.fileExists(atPath: out.appendingPathComponent("deep.tap").path))
+        // --force writes it and still says it failed.
+        let forced = Self.run(["export", file, "--out", out.path, "--force"])
+        #expect(forced.status == 1)
+        #expect(FileManager.default.fileExists(atPath: out.appendingPathComponent("deep.tap").path))
+    }
+
+    @Test func warningsAreReportedButDoNotFailTheRun() throws {
+        // The sign cut out with its tabs off: a through cut with nothing holding the part is a pre-flight warning.
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        for i in project.operations.indices {
+            guard case .profile(var p) = project.operations[i] else { continue }
+            p.params.tabs.isEnabled = false
+            project.operations[i] = .profile(p)
+        }
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("untabbed.kerf")
+        try project.encoded().write(to: file)
+        let r = Self.run(["export", file.path, "--out", folder.path, "--quiet"])
+        #expect(r.status == 0, "\(r.err)")
+        #expect(r.err.contains("warning:"))
+        #expect(!r.err.contains("error:"))
+        #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("untabbed.tap").path))
+        // Every report line is `severity: message`.
+        for line in r.err.split(separator: "\n") { #expect(line.hasPrefix("warning:") || line.hasPrefix("error:"), "\(line)") }
+    }
+
+    @Test func badInvocationsExitTwoAndSayWhy() throws {
+        let cases: [([String], String)] = [
+            ([], "usage:"),
+            (["frobnicate"], "unknown command"),
+            (["export"], "needs a .kerf file"),
+            (["export", Self.sign, "--side", "middle"], "--side is top or bottom"),
+            (["export", Self.sign, "--bogus"], "unknown option --bogus"),
+            (["export", Self.sign, "--post"], "--post needs a value"),
+            (["export", Self.sign, "--force=yes"], "takes no value"),
+            (["export", Self.sign, "extra.kerf"], "unexpected argument"),
+            (["export", "/nonexistent/none.kerf"], "cannot read"),
+            (["export", Self.sign, "--operation", "Nothing"], "no toolpath named"),
+        ]
+        for (arguments, expected) in cases {
+            let r = Self.run(arguments)
+            #expect(r.status == 2 && r.err.contains(expected), "\(arguments): \(r.status) \(r.err)")
+        }
+        // A file that is not a project.
+        let junk = Self.folder().appendingPathComponent("junk.kerf")
+        try Data("not json".utf8).write(to: junk)
+        let r = Self.run(["export", junk.path])
+        #expect(r.status == 2 && r.err.contains("is not a Kerf project"))
+        // Help is not an error.
+        #expect(Self.run(["help"]).status == 0)
+    }
+
+    /// `scripts/check-samples.sh` in a test: every sample posted with every built-in post is the committed program, so the
+    /// whole app (CAM, posts, validator) is guarded by the suite as well as by CI. After an intended change:
+    /// `scripts/check-samples.sh --update`.
+    @Test func everySampleWithEveryBuiltInPostIsTheCommittedProgram() throws {
+        let expected = Self.samples.appendingPathComponent("expected", isDirectory: true)
+        let sampleNames = try FileManager.default.contentsOfDirectory(atPath: Self.samples.path)
+            .filter { $0.hasSuffix(".kerf") }.map { String($0.dropLast(5)) }.sorted()
+        #expect(sampleNames.count >= 2)
+        var compared = 0
+        for post in BuiltInPosts.all {
+            for name in sampleNames {
+                let r = Self.run(["export", Self.samples.appendingPathComponent(name + ".kerf").path, "--post", post.id,
+                                  "--builtin-only", "--out", "-"])
+                #expect(r.status == 0 && r.err.isEmpty, "\(name) with \(post.id): \(r.err)")
+                let file = expected.appendingPathComponent(post.id).appendingPathComponent(
+                    GCodeExporter.suggestedFileName(jobName: name, operationName: nil, profile: post))
+                let committed = try String(contentsOf: file, encoding: .utf8)
+                #expect(r.out == committed, "\(name) with \(post.id) differs from \(file.path)")
+                compared += 1
+            }
+        }
+        #expect(compared == BuiltInPosts.all.count * sampleNames.count)
+    }
+
+    @Test func theCommandLineIsOnlyAskedForByItsNameOrItsCommand() {
+        // The app binary starts the app for anything else (Finder passes its own arguments).
+        #expect(KerfCLI.runIfRequested(["/Applications/Kerf.app/Contents/MacOS/Kerf"]) == nil)
+        #expect(KerfCLI.runIfRequested(["Kerf", "-NSDocumentRevisionsDebugMode", "YES"]) == nil)
+        #expect(KerfCLI.runIfRequested(["Kerf", "/tmp/a.kerf"]) == nil)
+    }
+
+    @Test func twoSidedJobsPostEachSideAndTheOtherSideHasItsOwnToolpaths() throws {
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        project.document.job.twoSided = TwoSidedSetup()
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("two.kerf")
+        try project.encoded().write(to: file)
+        // Every toolpath of the sign is on the top side: the bottom has nothing to export.
+        let top = Self.run(["export", file.path, "--out", folder.path, "--quiet"])
+        #expect(top.status == 0, "\(top.err)")
+        let bottom = Self.run(["export", file.path, "--side", "bottom", "--out", folder.path])
+        #expect(bottom.status == 1 && bottom.err.contains("no calculated toolpaths"))
+    }
+}

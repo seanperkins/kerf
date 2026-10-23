@@ -130,7 +130,8 @@ Kerf drives a real 60 × 96 in router, so G-code is treated as safety-critical.
 
 - Every program goes through the G-code validator before it is saved.
 - The post's output is pinned by golden files: `samples/sign.kerf` must post byte-for-byte to
-  `samples/sign.tap`.
+  `samples/sign.tap`, and every sample posted with every built-in post must match `samples/expected/`
+  (`scripts/check-samples.sh`, also run by CI).
 - Programs retract to safe Z before XY rapids. Keep-out zones and the move home are checked on export.
 - Before cutting real material, follow the air-cut procedure in [TESTING.md](TESTING.md).
 
@@ -154,6 +155,24 @@ scripts/test.sh             # swift-testing suite
 scripts/bundle.sh           # release build → dist/Kerf.app (ad-hoc signed)
 scripts/run.sh              # debug bundle + launch
 ```
+
+## Command line
+
+`kerf-cli` posts a project exactly as the Export G-code sheet does, with the same validator, and needs no window:
+
+```sh
+swift run kerf-cli export samples/sign.kerf --out out        # out/sign.tap
+swift run kerf-cli export samples/sign.kerf --post generic-grbl-mm --operation "Pocket 1" --out -
+swift run kerf-cli posts                                      # the installed post processors
+```
+
+Validator errors and warnings go to standard error. The exit status is 0 when the program is clean (warnings
+included), 1 when the validator reports errors (nothing is written unless `--force`) or there is nothing to
+export, and 2 for a usage or file error. `--builtin-only` ignores the posts and machines in Application Support, so
+the result is the same on every Mac; `--name` sets the job name in the header (the project's by default).
+`scripts/check-samples.sh` runs it over `samples/` with every built-in post and diffs the programs against the
+committed ones in `samples/expected/` (`--update` after an intended change). The same code answers to
+`Kerf export …`; `kerf-cli` is a second product of the app's target, so it starts the command line whatever it is given.
 
 ## How it's built
 

@@ -28,7 +28,7 @@ final class KerfAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@main
+/// Started from main.swift, after it has checked that the command line was not asked for.
 struct KerfApp: App {
     @NSApplicationDelegateAdaptor(KerfAppDelegate.self) private var appDelegate
     @StateObject private var toolLibrary = ToolLibraryModel.shared
