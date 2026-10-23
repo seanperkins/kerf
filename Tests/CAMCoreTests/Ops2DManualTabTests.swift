@@ -554,3 +554,16 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     }
     #expect(tabCount(whole, ctxW) == 2 && whole.metadata["warning"] == nil)   // the roughing tab and the last pass's
 }
+
+@Test func ops2DProfileAnchorsEveryHoleOfAFrameDrawnAsSeparateShapes() throws {
+    // A 11 in frame with a hundred 0.6 in holes drawn as their own shapes, two anchors on each, cut inside (issue #53):
+    // every anchored vector shares its part's outline and loops, so the part is offset once, not once per vector.
+    let outer = F.rect(0, 0, 11, 11)
+    var holes: [Path] = []
+    for i in 0..<10 { for j in 0..<10 { holes.append(ShapeFactory.circle(center: Vec2(1 + Double(i), 1 + Double(j)), radius: 0.3)) } }
+    let (tp, ctx) = try tabbedProfile([outer] + holes, select: Array(1...holes.count), side: .inside) { ids in
+        TabSettings(isEnabled: true, length: 0.2, thickness: 0.1,
+                    manualTabs: (1...holes.count).flatMap { i in [TabAnchor(shapeID: ids[i], fraction: 0.2), TabAnchor(shapeID: ids[i], fraction: 0.7)] })
+    }
+    #expect(tabCount(tp, ctx) == 200 && tp.metadata["warning"] == nil)
+}

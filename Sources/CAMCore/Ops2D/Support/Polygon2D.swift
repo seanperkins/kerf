@@ -107,7 +107,8 @@ public enum Polygon2D {
     /// intersection has area), or whose offsets do once each is offset alone by its entry in
     /// `offsets` (outward when positive, inward when negative, none at zero), are one part, and so is
     /// anything joined to either through further loops; loops that only touch or stay apart, however
-    /// close, are not. Returns a part index per loop.
+    /// close, are not. Returns a part per loop, named by the index of one loop of it: two loops are in the
+    /// same part exactly when their entries are equal (the entries are not numbered from 0).
     public static func parts(of loops: [[Vec2]], offsets: [Double], join: GeomKernel.Join, tolerance: Double) -> [Int] {
         precondition(offsets.count == loops.count)
         var parent = Array(loops.indices)
@@ -122,13 +123,7 @@ public enum Polygon2D {
                 if overlap([loops[i]], [loops[j]]) || overlap(grown[i], grown[j]) { parent[root(j)] = root(i) }
             }
         }
-        var label: [Int: Int] = [:]
-        return loops.indices.map { i in
-            let r = root(i)
-            if let l = label[r] { return l }
-            label[r] = label.count
-            return label.count - 1
-        }
+        return loops.indices.map(root)
     }
 
     /// Which of `loops` are holes: the loops within an odd number of other distinct loops. Containment
