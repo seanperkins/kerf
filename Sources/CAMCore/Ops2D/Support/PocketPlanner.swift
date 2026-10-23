@@ -165,9 +165,10 @@ public struct PocketPlanner: Sendable {
     /// between the rings that lie in the zone around that floor: with a stepover under the diameter every
     /// point is within half a stepover of the half ring, so one halving suffices. (The half-step ring
     /// `offsetLevels` adds past the last full ring is the same idea for the middle of the pocket.) Returns
-    /// the pieces and the area still farther than the slack from every cut afterwards, which is zero unless
-    /// that argument fails.
-    func coverageCleanup(levels: [[[Vec2]]], rings: [Chain2D])
+    /// that argument fails. `target` is the floor that has to be covered (default: everything the tool can
+    /// reach; rest machining passes the part of it the earlier tools left), and a piece takes the rank
+    /// `rankBase - k` of the ring k it was halved from (default `levels.count - 1`).
+    func coverageCleanup(levels: [[[Vec2]]], rings: [Chain2D], over target: [[Vec2]]? = nil, rankBase: Int? = nil)
         -> (fragments: [(chain: Chain2D, rank: Int, probe: Vec2)], uncoveredArea: Double) {
         // Every floor point inside the tool-centre region is within one stepover of a ring (walk from it
         // straight to the nearest wall: the wall distance falls at rate 1 and crosses the ring's level),
@@ -175,7 +176,7 @@ public struct PocketPlanner: Sendable {
         // radius plus the slack leave nothing past the slack, at a corner or a tip too. (A planner with a
         // zero radius plans tool-centre paths for a caller that adds the tool itself, and needs no cleanup.)
         guard toolRadius > 0, stepover > toolRadius + coverageSlack else { return ([], 0) }
-        let reachable = GeomKernel.offset(centerRegion, by: toolRadius, join: .round, arcTolerance: tolerance)
+        let reachable = target ?? GeomKernel.offset(centerRegion, by: toolRadius, join: .round, arcTolerance: tolerance)
         guard !reachable.isEmpty else { return ([], 0) }
         func uncovered(_ walks: [[Vec2]]) -> [[Vec2]] {
             let covered = GeomKernel.offset(walks, by: toolRadius + coverageSlack, join: .round, end: .openRound,
@@ -193,7 +194,7 @@ public struct PocketPlanner: Sendable {
             // The half ring between ring k and ring k + 1 is cut with ring k.
             let half = inset(toolRadius + allowance + (Double(k) + 0.5) * stepover)
             for piece in ringPieces(half.map { chain($0).walk }, inside: zone, longerThan: max(tolerance * 4, coverageSlack)) {
-                out.append((piece.chain, levels.count - 1 - k, piece.probe))
+                out.append((piece.chain, (rankBase ?? levels.count - 1) - k, piece.probe))
                 walks.append(piece.chain.walk)
             }
         }
@@ -264,11 +265,19 @@ public struct PocketPlanner: Sendable {
     }
 
     /// Rest machining after a larger clearance tool of radius `clearanceRadius`: the walls
-    /// (level 0) plus ring fragments that reach material the big tool could not. With
-    /// `fullWalls` off (an intermediate clearance tool) the walls are only cut near rest material.
+    /// (level 0) plus ring fragments that reach material the big tool could not, and the cuts that cover
+    /// the rest floor those leave (see `coverageCleanup`). With `fullWalls` off (an intermediate clearance
+    /// tool) the walls are only cut near rest material.
     public func restClearing(clearanceRadius: Double, from start: Vec2, fullWalls: Bool = true) -> [[Chain2D]] {
+        restClearingReport(clearanceRadius: clearanceRadius, from: start, fullWalls: fullWalls).groups
+    }
+
+    /// `restClearing` plus the area of rest floor within the tool's reach that is still farther than the
+    /// coverage slack from every cut (zero unless the cleanup could not finish the job).
+    public func restClearingReport(clearanceRadius: Double, from start: Vec2, fullWalls: Bool = true)
+        -> (groups: [[Chain2D]], uncoveredArea: Double) {
         let levels = offsetLevels()
-        guard let outers0 = levels.first?.filter({ Polygon2D.signedArea($0) > 0 }), !outers0.isEmpty else { return [] }
+        guard let outers0 = levels.first?.filter({ Polygon2D.signedArea($0) > 0 }), !outers0.isEmpty else { return ([], 0) }
         let stock = inset(allowance)
         let bigCentres = inset(clearanceRadius + allowance)
         let reached = bigCentres.isEmpty ? [] : GeomKernel.offset(bigCentres, by: clearanceRadius, join: .round,
@@ -280,6 +289,7 @@ public struct PocketPlanner: Sendable {
         if fullWalls {
             for loop in levels[0] { items.append((chain(loop), 1_000_000, loop[0])) }
         }
+        var uncoveredArea = 0.0
         if !rest.isEmpty {
             let zone = GeomKernel.offset(rest, by: toolRadius + stepover * 0.5, join: .round, arcTolerance: tolerance)
             for (k, lv) in levels.enumerated() where k > 0 || !fullWalls {
@@ -287,8 +297,15 @@ public struct PocketPlanner: Sendable {
                     items.append((piece.chain, levels.count - k, piece.probe))
                 }
             }
+            // The rings of the pieces leave the same scallops and tip studs as whole rings do: cover the rest
+            // floor this tool can reach that they miss (issue #66).
+            let reachable = GeomKernel.offset(centerRegion, by: toolRadius, join: .round, arcTolerance: tolerance)
+            let target = GeomKernel.boolean(.intersection, subject: rest, clip: reachable, fillRule: .nonZero)
+            let cleanup = coverageCleanup(levels: levels, rings: items.map(\.chain), over: target, rankBase: levels.count)
+            items += cleanup.fragments
+            uncoveredArea = cleanup.uncoveredArea
         }
         // The pieces are cuts of oriented rings: they keep their direction, whichever end is nearer.
-        return order(items, outers: outers0, from: start, allowReverse: false)
+        return (order(items, outers: outers0, from: start, allowReverse: false), uncoveredArea)
     }
 }

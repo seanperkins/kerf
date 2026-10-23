@@ -224,6 +224,85 @@ func ops2DPocketCoversTheScallopAtASquareCorner(fraction: Double) throws {
     try expectCovered(square, fraction: fraction, strategy: .offset, gridDivisor: 40, comment: "offset \(Int(fraction * 100))%")
 }
 
+/// The pocket of `c` cut with a larger clearance tool and then the finish tool, as the operation generates it:
+/// the clearance tool's toolpath, then the finish tool's rest machining (issue #66).
+private func restProgram(_ c: Case, stepoverFraction: Double, bigDiameter: Double, allowance: Double = 0,
+                         zZero: ZZeroMode = .materialTop) throws -> (tps: [Toolpath], ctx: CAMContext, op: PocketOperation) {
+    func tool(_ name: String, _ d: Double) -> Tool {
+        Tool(name: name, kind: .endMill, diameter: d, flutes: 2, stepdown: 0.2, stepover: d * stepoverFraction, feedRate: 100, plungeRate: 30)
+    }
+    let finish = tool("finish", diameter), big = tool("big", bigDiameter)
+    var doc = Document()
+    doc.job.zZero = zZero
+    var ids: [UUID] = []
+    for p in [c.outer] + c.islands {
+        let s = Shape(layerID: doc.defaultLayerID, paths: [p])
+        doc.add(s)
+        ids.append(s.id)
+    }
+    let ctx = CAMContext(document: doc, tools: ToolLibrary(tools: [finish, big]))
+    let params = PocketParameters(depth: DepthSettings(cutDepth: cutDepth), strategy: .offset, allowance: allowance, clearanceToolID: big.id)
+    let op = PocketOperation(setup: OperationSetup(name: "Pocket", toolID: finish.id, shapeIDs: ids), params: params)
+    return (try op.generate(in: ctx), ctx, op)
+}
+
+/// The floor the finish tool can reach that neither tool's cuts touch: each point counts as cut when it is within
+/// a tool's radius plus its coverage slack of that tool's cuts.
+private func restCoverage(_ c: Case, stepoverFraction: Double, bigDiameter: Double = 0.5, allowance: Double = 0,
+                          gridDivisor: Double = 6) throws -> CoverageResult {
+    let (tps, ctx, op) = try restProgram(c, stepoverFraction: stepoverFraction, bigDiameter: bigDiameter, allowance: allowance)
+    let r = diameter / 2
+    let tol = ctx.tolerance
+    let loops = ShapeGeometry.loops(of: ctx.shapes(for: op.setup), tolerance: tol).closed
+    let region = Polygon2D.region(fromLoops: loops)
+    let shrunk = GeomKernel.offset(region, by: -(r + allowance), join: .round, arcTolerance: tol)
+    let reachable = GeomKernel.offset(shrunk, by: r, join: .round, arcTolerance: tol)
+    let z = ctx.coords.z(depth: cutDepth)
+    let sweeps = tps.map { tp in (Sweep(cutSegments(tp, z: z), cell: tp.tool.radius), tp.tool.radius, tp.tool.diameter) }
+    let b = Rect2(points: reachable.flatMap { $0 })
+    let h = r / gridDivisor
+    var uncut = 0
+    var worst = 0.0
+    var y = b.min.y + h / 2
+    while y < b.max.y {
+        var x = b.min.x + h / 2
+        while x < b.max.x {
+            let p = Vec2(x, y)
+            if inside(reachable, p) {
+                // The distance past the tool's reach, for the tool that came closest.
+                let past = sweeps.map { sweep, radius, d in
+                    sweep.distance(from: p, limit: radius + 4 * tol) - (radius + d * PocketPlanner.coverageSlackFraction + 2 * tol)
+                }.min() ?? .infinity
+                if past > 0 {
+                    uncut += 1
+                    worst = max(worst, past)
+                }
+            }
+            x += h
+        }
+        y += h
+    }
+    return CoverageResult(uncutArea: Double(uncut) * h * h, worstDistance: worst)
+}
+
+@Test(arguments: [0.5, 0.85, 0.9, 0.95, 1.0])
+func ops2DPocketRestMachiningCoversEverythingTheFinishToolCanReach(fraction: Double) throws {
+    for islands in [false, true] {
+        for c in cases(count: 6, seed: 7, withIslands: islands) {
+            let r = try restCoverage(c, stepoverFraction: fraction)
+            #expect(r.uncutArea == 0, Comment(rawValue: "rest \(Int(fraction * 100))%: \(c.name) leaves \(r.uncutArea) sq in uncut, up to \(r.worstDistance) in beyond the tools' reach"))
+        }
+    }
+}
+
+@Test(arguments: [0.9, 1.0])
+func ops2DPocketRestMachiningCoversTheTrackerCases(fraction: Double) throws {
+    for c in trackerCases() {
+        let r = try restCoverage(c, stepoverFraction: fraction, bigDiameter: 0.4)
+        #expect(r.uncutArea == 0, Comment(rawValue: "rest \(Int(fraction * 100))%: \(c.name) leaves \(r.uncutArea) sq in uncut, up to \(r.worstDistance) in beyond the tools' reach"))
+    }
+}
+
 /// The tracker cases: a wide pocket a little more than two tools across (a stud left in the middle), a
 /// hole 1.1 tool diameters across, a channel 1.1 diameters wide, the sharpest wedge, and islands.
 private func trackerCases() -> [Case] {
@@ -288,6 +367,54 @@ func ops2DPocketCleanupCutsStayInsideAndFollowTheConventions(mode: ZZeroMode) th
     func report(stepover: Double) -> Double {
         PocketPlanner(region: square, toolRadius: diameter / 2, stepover: stepover, allowance: 0, tolerance: 0.0005,
                       direction: .climb).offsetClearingReport(from: Vec2(0, 0)).uncoveredArea
+    }
+    #expect(report(stepover: diameter * 0.95) == 0)
+    #expect(report(stepover: diameter * 3) > 0.001)
+}
+
+/// A clearance tool three times the finish tool's width leaves a narrow wedge tip to the finish tool: its rings end
+/// short of the point it can reach (the stud the offset pocket had before issue #15) and the rest cuts left it.
+@Test(arguments: [0.85, 0.95])
+func ops2DPocketRestMachiningCoversTheTipOfAWedge(fraction: Double) throws {
+    for angle in [8.0, 12, 16, 20, 25, 30, 35] {
+        for big in [0.5, 0.75] {
+            let c = Case(name: "wedge \(angle)° with a \(big) in clearance tool", outer: wedge(origin: Vec2(1, 3), length: 3, halfAngleDegrees: angle))
+            let r = try restCoverage(c, stepoverFraction: fraction, bigDiameter: big)
+            #expect(r.uncutArea == 0, Comment(rawValue: "rest \(Int(fraction * 100))%: \(c.name) leaves \(r.uncutArea) sq in uncut, up to \(r.worstDistance) in beyond the tools' reach"))
+        }
+    }
+}
+
+/// The rest cuts are real G-code as well: conventions followed in both Z-zero modes, every cut a tool radius from the
+/// walls (the clearance tool's and the finish tool's own).
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DPocketRestCleanupCutsStayInsideAndFollowTheConventions(mode: ZZeroMode) throws {
+    for c in trackerCases() + cases(count: 3, seed: 5, withIslands: true)
+        + [Case(name: "12 degree wedge", outer: wedge(origin: Vec2(1, 3), length: 3, halfAngleDegrees: 12))] {
+        let (tps, ctx, op) = try restProgram(c, stepoverFraction: 0.95, bigDiameter: 0.75, zZero: mode)
+        let tol = ctx.tolerance
+        let loops = ShapeGeometry.loops(of: ctx.shapes(for: op.setup), tolerance: tol).closed
+        let region = Polygon2D.region(fromLoops: loops)
+        for tp in tps {
+            #expect(Ops2DFixture.conventionViolations(tp, coords: ctx.coords).isEmpty, Comment(rawValue: "\(c.name) \(tp.name)"))
+            #expect(tp.metadata["warning"] == nil, Comment(rawValue: "\(c.name) \(tp.name): \(tp.metadata["warning"] ?? "")"))
+            for p in Ops2DFixture.densePoints(tp.moves) where p.z < ctx.coords.materialTopZ - 1e-9 {
+                let q = ctx.coords.materialXY(fromMachine: p.xy)
+                #expect(inside(region, q), Comment(rawValue: "\(c.name) \(tp.name): cut point \(q) outside the pocket"))
+                let wall = region.map { Polygon2D.distance(from: q, toLoop: $0) }.min() ?? 0
+                #expect(wall >= tp.tool.radius - 4 * tol, Comment(rawValue: "\(c.name) \(tp.name): cut point \(q) is \(wall) from a wall"))
+            }
+        }
+    }
+}
+
+/// As for the whole-ring planner: a stepover the single halving cannot cover is reported, so a clearance tool that
+/// left floor uncut does not hand over unnoticed.
+@Test func ops2DPocketPlannerReportsRestFloorItCouldNotCover() {
+    let square = Polygon2D.region(fromLoops: [ShapeFactory.rectangle(Rect2(x: 0, y: 0, width: 2, height: 2)).flattened()])
+    func report(stepover: Double) -> Double {
+        PocketPlanner(region: square, toolRadius: diameter / 2, stepover: stepover, allowance: 0, tolerance: 0.0005,
+                      direction: .climb).restClearingReport(clearanceRadius: 1.1, from: Vec2(0, 0)).uncoveredArea
     }
     #expect(report(stepover: diameter * 0.95) == 0)
     #expect(report(stepover: diameter * 3) > 0.001)
