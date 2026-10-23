@@ -1,3 +1,4 @@
+import CADCore
 import Foundation
 
 /// One-time copy of Kerf's data into LoftLine's locations. It never modifies the old data, never overwrites a file or a
@@ -109,5 +110,17 @@ struct LegacyKerfMigration {
         let frame = "NSWindow Frame Kerf."
         if old.hasPrefix(frame) { return "NSWindow Frame LoftLine." + old.dropFirst(frame.count) }
         return nil
+    }
+}
+
+extension LegacyKerfMigration {
+    /// The real locations: the old `Kerf` folder beside LoftLine's support directory, and the old bundle id's defaults domain.
+    static func standard() -> LegacyKerfMigration {
+        let newSupport = ToolLibraryStore.supportDirectory
+        return LegacyKerfMigration(
+            oldSupport: newSupport.deletingLastPathComponent().appendingPathComponent("Kerf", isDirectory: true),
+            newSupport: newSupport,
+            readOldDefaults: { UserDefaults.standard.persistentDomain(forName: oldBundleID) },
+            defaults: .standard)
     }
 }
