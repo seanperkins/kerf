@@ -103,6 +103,12 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
                 out.append((.relief3D(r), 1))
                 continue
             }
+            // A facing of the whole material takes no vectors: whatever its (empty) selector would match must not decide
+            // which sheet and side it belongs to, and it is never "unmatched".
+            if case .facing(let f) = op, f.params.area == .material {
+                out.append((op.with(setup: setup), 1))
+                continue
+            }
             setup.shapeIDs = document.shapes.filter { e.selector.matches($0, in: document) }.map(\.id)
             op = op.with(setup: setup)
             out.append((op, setup.shapeIDs.count))
@@ -144,6 +150,7 @@ extension AnyOperation {
         case .merge(var o): o.setup = setup; return .merge(o)
         case .straightInlay(var o): o.setup = setup; return .straightInlay(o)
         case .moulding(var o): o.setup = setup; return .moulding(o)
+        case .facing(var o): o.setup = setup; return .facing(o)
         case .photoVCarve(var o): o.setup = setup; return .photoVCarve(o)
         }
     }

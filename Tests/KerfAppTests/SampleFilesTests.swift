@@ -102,6 +102,64 @@ struct SampleFilesTests {
         try Self.write(Data(text.utf8), "sign.tap")
     }
 
+    // MARK: Facing
+
+    /// 12 x 8 in board: the whole top faced 1/32 in with the widest end mill, then a 10 x 6 in plaque cut out of it.
+    static func facingProject() throws -> (KerfProject, ToolLibrary) {
+        var doc = Document()
+        doc.job = JobSetup(width: 12, height: 8, thickness: 0.75)
+        doc.job.zZero = .materialTop
+        doc.job.xyOrigin = .lowerLeft
+        let plaque = Shape(name: "Plaque", layerID: doc.defaultLayerID,
+                           paths: [ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 10, height: 6), cornerRadius: 0.5)])
+        doc.add(plaque)
+        var project = KerfProject(document: doc, postProfileID: BuiltInPosts.avidMach4Inch.id)
+        let library = ToolLibrary.seeded
+        let face = try #require(OperationFactory.make(kind: .facing, project: project, library: library, shapeIDs: []))
+        guard case .facing(var f) = face else { throw CAMError.invalidParameter("not a facing") }
+        f.params.depth.cutDepth = 0.03125
+        project.operations.append(.facing(f))
+        let cut = try #require(OperationFactory.make(kind: .profile, project: project, library: library,
+                                                     shapeIDs: [plaque.id]))
+        guard case .profile(var p) = cut else { throw CAMError.invalidParameter("not a profile") }
+        // The faced layer is already gone.
+        p.params.depth.startDepth = 0.03125
+        p.params.tabs.isEnabled = true
+        project.operations.append(.profile(p))
+        project.refreshToolSnapshot(from: library)
+        return (project, library)
+    }
+
+    /// The program the facing sample posts to.
+    static func facingProgram(_ project: KerfProject, library: ToolLibrary) throws -> String {
+        let profile = BuiltInPosts.avidMach4Inch
+        var results: [UUID: ToolpathResult] = [:]
+        for op in project.operations {
+            let r = ToolpathCalculator.calculate(op, project: project, library: library, designRevision: 0,
+                                                 rapidRate: profile.rapidRate)
+            #expect(r.error == nil, "\(op.setup.name): \(r.error ?? "")")
+            #expect(!r.toolpaths.isEmpty)
+            results[op.id] = r
+        }
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
+                                          groupByTool: false)
+        let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "Faced board")
+        #expect(result.errorMessage == nil)
+        #expect(result.issues.isEmpty, "\(result.issues)")
+        return try #require(result.text)
+    }
+
+    @Test("Facing: faced board .kerf and validator-clean .tap")
+    func facedBoard() throws {
+        let (project, library) = try Self.facingProject()
+        #expect(project.operations.map(\.kind) == [.facing, .profile])
+        try Self.write(try project.encoded(), "faced-board.kerf")
+        let text = try Self.facingProgram(project, library: library)
+        try Self.write(Data(text.utf8), "faced-board.tap")
+        let reopened = try KerfProject.decode(from: try project.encoded())
+        #expect(reopened.operations == project.operations)
+    }
+
     // MARK: Checked-in files
 
     /// The files in `samples/` as committed still open, and the sign's .kerf posts to exactly the
@@ -145,6 +203,16 @@ struct SampleFilesTests {
         let validator = GCodeValidator(profile: profile, job: project.document.job, units: project.document.units)
         let fileIssues = validator.validate(gcode: committed)
         #expect(fileIssues.isEmpty, "\(fileIssues)")
+
+        // The faced board posts to exactly its committed program too.
+        let faced = try KerfProject.decode(from: try read("faced-board.kerf"))
+        #expect(faced.operations.map(\.kind) == [.facing, .profile])
+        let facedText = try Self.facingProgram(faced, library: ToolLibrary.seeded)
+        let facedCommitted = String(decoding: try read("faced-board.tap"), as: UTF8.self)
+        #expect(facedText == facedCommitted)
+        let facedIssues = GCodeValidator(profile: profile, job: faced.document.job, units: faced.document.units)
+            .validate(gcode: facedCommitted)
+        #expect(facedIssues.isEmpty, "\(facedIssues)")
     }
 
     // MARK: DXF part

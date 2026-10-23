@@ -90,6 +90,46 @@ public struct ChamferParameters: Codable, Hashable, Sendable {
     }
 }
 
+/// What a facing covers.
+public enum FacingArea: String, Codable, CaseIterable, Sendable {
+    /// The bounding box of the selected vectors.
+    case vectors
+    /// The whole material block.
+    case material
+}
+
+/// How a facing sweeps its area.
+public enum FacingPattern: String, Codable, CaseIterable, Sendable {
+    /// Parallel passes along X, stepping up Y, each pass the reverse of the one before.
+    case rasterX
+    /// Parallel passes along Y, stepping across X, each pass the reverse of the one before.
+    case rasterY
+    /// Rectangular rings from the outside in.
+    case spiral
+}
+
+/// Facing (surfacing): takes a thin layer off the top of a rectangle with a wide tool.
+public struct FacingParameters: Codable, Hashable, Sendable {
+    public var area: FacingArea
+    public var pattern: FacingPattern
+    public var depth: DepthSettings
+    /// Distance between neighbouring passes, as a fraction of the tool diameter (a surfacing bit takes about 0.7).
+    public var stepover: Double
+    /// How far the cutter's edge reaches past the area's edge on every side; nil = the tool radius, so the tool's
+    /// center rides the edge and the edge comes out clean.
+    public var overhang: Double?
+    /// Which way a spiral turns (climb = clockwise, with the stock still to be cut on the tool's right). Raster passes
+    /// alternate, so half of them are climb whatever this says.
+    public var direction: CutDirection
+
+    public init(area: FacingArea = .material, pattern: FacingPattern = .rasterX,
+                depth: DepthSettings = DepthSettings(cutDepth: 0.0625), stepover: Double = 0.7,
+                overhang: Double? = nil, direction: CutDirection = .climb) {
+        self.area = area; self.pattern = pattern; self.depth = depth; self.stepover = stepover
+        self.overhang = overhang; self.direction = direction
+    }
+}
+
 public enum HoleMillMode: String, Codable, CaseIterable, Sendable {
     /// Helical boring: spiral down to the cut depth at the hole radius, then a flat lap.
     case helical

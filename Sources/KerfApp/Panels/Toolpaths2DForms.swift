@@ -235,6 +235,69 @@ struct HoleMillForm: View {
     }
 }
 
+struct FacingForm: View {
+    @Binding var params: FacingParameters
+    var units: LengthUnit
+    var tool: Tool?
+    /// The document has other sheets, or machines both sides (a toolpath without vectors cannot say which it is for).
+    var multiSheet = false
+    var twoSided = false
+
+    /// The operation for `params`: a facing of the whole material takes no vectors and cannot be projected onto a
+    /// model, so the sheet and side it belongs to are the ones every vectorless toolpath has and the note below is true
+    /// (switching the area from Selected vectors must not leave the old vectors, or a projection, behind).
+    static func operation(_ setup: OperationSetup, params: FacingParameters) -> AnyOperation {
+        var setup = setup
+        if params.area == .material {
+            setup.shapeIDs = []
+            setup.projectOntoModelID = nil
+        }
+        return .facing(FacingOperation(setup: setup, params: params))
+    }
+
+    /// Why a facing of the whole material may not be where it is expected: with no vectors it belongs to the first
+    /// sheet and the top side, as a 3D relief does. nil when there is nothing to say.
+    static func scopeNote(area: FacingArea, multiSheet: Bool, twoSided: Bool) -> String? {
+        guard area == .material, multiSheet || twoSided else { return nil }
+        return "With no vectors this facing belongs to the first sheet and the top side. To face another sheet or the bottom side, draw a rectangle on it and choose Selected vectors."
+    }
+
+    var body: some View {
+        InspectorSection(title: "Cutting Depths") {
+            DepthForm(depth: $params.depth, units: units, tool: tool)
+        }
+        Divider()
+        InspectorSection(title: "Facing") {
+            Picker("Area", selection: $params.area) {
+                Text("Whole material").tag(FacingArea.material)
+                Text("Selected vectors").tag(FacingArea.vectors)
+            }
+            .pickerStyle(.segmented)
+                .fieldHelp("Area")
+            Picker("Facing pattern", selection: $params.pattern) {
+                Text("Along X").tag(FacingPattern.rasterX)
+                Text("Along Y").tag(FacingPattern.rasterY)
+                Text("Spiral").tag(FacingPattern.spiral)
+            }
+            .pickerStyle(.segmented)
+                .fieldHelp("Facing pattern")
+            NumberField("Stepover", value: Binding(get: { params.stepover * 100 },
+                                                   set: { params.stepover = min(max($0 / 100, 0.01), FacingOperation.maxStepover) }),
+                        unit: "%", help: "Distance between passes, as a percentage of the tool diameter")
+            OptionalLengthField(label: "Overhang", value: $params.overhang, units: units,
+                                defaultValue: tool?.radius ?? (units == .inch ? 0.125 : 3))
+            if params.pattern == .spiral { DirectionPicker(direction: $params.direction) }
+            Text(params.area == .material
+                 ? "Takes a layer off the top of the whole material. The first pass is led in from outside; a raster runs out past the material before it lifts, a spiral lifts in the middle."
+                 : "Takes a layer off the top of the box round the selected vectors. The cutter reaches past the box by the overhang, so face the whole material if the stock continues beyond it.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let note = Self.scopeNote(area: params.area, multiSheet: multiSheet, twoSided: twoSided) {
+                Text(note).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
 struct PrismForm: View {
     @Binding var params: PrismParameters
     var units: LengthUnit

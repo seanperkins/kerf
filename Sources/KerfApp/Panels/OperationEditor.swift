@@ -41,7 +41,7 @@ struct OperationEditor: View {
                                         .converted(to: units), units: units)
                 warnings
             }
-            if draft.kind != .relief3D && draft.kind != .photoVCarve && draft.kind != .merge {
+            if usesVectors {
                 vectorsRow
                 if !document.document.models.isEmpty || draft.setup.projectOntoModelID != nil {
                     Picker("Project onto 3D", selection: setupBinding(\.projectOntoModelID)) {
@@ -100,6 +100,15 @@ struct OperationEditor: View {
         .onDisappear { save() }
     }
 
+    /// Whether the toolpath takes vectors (a facing of the whole material, a relief and the like do not).
+    private var usesVectors: Bool {
+        switch draft {
+        case .relief3D, .photoVCarve, .merge: return false
+        case .facing(let o): return o.params.area == .vectors
+        default: return true
+        }
+    }
+
     private var vectorsRow: some View {
         let count = draft.setup.shapeIDs.count
         let selCount = document.selection.count
@@ -153,6 +162,10 @@ struct OperationEditor: View {
         case .holeMill(let o):
             HoleMillForm(params: paramsBinding(o.params) { .holeMill(HoleMillOperation(setup: draft.setup, params: $0)) },
                          units: units, tool: primaryTool)
+        case .facing(let o):
+            FacingForm(params: paramsBinding(o.params) { FacingForm.operation(draft.setup, params: $0) },
+                       units: units, tool: primaryTool, multiSheet: document.document.isMultiSheet,
+                       twoSided: document.document.job.isTwoSided)
         case .prism(let o):
             PrismForm(params: paramsBinding(o.params) { .prism(PrismOperation(setup: draft.setup, params: $0)) },
                       units: units)

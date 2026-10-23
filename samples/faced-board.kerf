@@ -1,0 +1,251 @@
+{
+  "document" : {
+    "gridSpacing" : 0.25,
+    "job" : {
+      "height" : 8,
+      "home" : {
+        "x" : 0,
+        "y" : 0
+      },
+      "homeZ" : 0.8,
+      "safeZ" : 0.2,
+      "thickness" : 0.75,
+      "width" : 12,
+      "xyOrigin" : "lowerLeft",
+      "zZero" : "materialTop"
+    },
+    "layers" : [
+      {
+        "colorHex" : "#000000",
+        "id" : "AE7982FA-8A0D-4933-9934-2AB01377AC4F",
+        "isLocked" : false,
+        "isVisible" : true,
+        "name" : "Layer 1"
+      }
+    ],
+    "models" : [
+
+    ],
+    "name" : "Untitled",
+    "shapes" : [
+      {
+        "id" : "961B3DD7-3444-4E3C-AC73-D9F3C20B3DA3",
+        "isLocked" : false,
+        "layerID" : "AE7982FA-8A0D-4933-9934-2AB01377AC4F",
+        "name" : "Plaque",
+        "origin" : {
+          "drawn" : {
+
+          }
+        },
+        "paths" : [
+          {
+            "isClosed" : true,
+            "segments" : [
+              {
+                "line" : {
+                  "to" : {
+                    "x" : 10.5,
+                    "y" : 1
+                  }
+                }
+              },
+              {
+                "arc" : {
+                  "center" : {
+                    "x" : 10.5,
+                    "y" : 1.5
+                  },
+                  "clockwise" : false,
+                  "to" : {
+                    "x" : 11,
+                    "y" : 1.5
+                  }
+                }
+              },
+              {
+                "line" : {
+                  "to" : {
+                    "x" : 11,
+                    "y" : 6.5
+                  }
+                }
+              },
+              {
+                "arc" : {
+                  "center" : {
+                    "x" : 10.5,
+                    "y" : 6.5
+                  },
+                  "clockwise" : false,
+                  "to" : {
+                    "x" : 10.5,
+                    "y" : 7
+                  }
+                }
+              },
+              {
+                "line" : {
+                  "to" : {
+                    "x" : 1.5,
+                    "y" : 7
+                  }
+                }
+              },
+              {
+                "arc" : {
+                  "center" : {
+                    "x" : 1.5,
+                    "y" : 6.5
+                  },
+                  "clockwise" : false,
+                  "to" : {
+                    "x" : 1,
+                    "y" : 6.5
+                  }
+                }
+              },
+              {
+                "line" : {
+                  "to" : {
+                    "x" : 1,
+                    "y" : 1.5
+                  }
+                }
+              },
+              {
+                "arc" : {
+                  "center" : {
+                    "x" : 1.5,
+                    "y" : 1.5
+                  },
+                  "clockwise" : false,
+                  "to" : {
+                    "x" : 1.5,
+                    "y" : 1
+                  }
+                }
+              }
+            ],
+            "start" : {
+              "x" : 1.5,
+              "y" : 1
+            }
+          }
+        ]
+      }
+    ],
+    "units" : "inch"
+  },
+  "formatVersion" : 1,
+  "operations" : [
+    {
+      "facing" : {
+        "_0" : {
+          "params" : {
+            "area" : "material",
+            "depth" : {
+              "cutDepth" : 0.03125,
+              "finalPassDepth" : 0,
+              "startDepth" : 0
+            },
+            "direction" : "climb",
+            "pattern" : "rasterX",
+            "stepover" : 0.7
+          },
+          "setup" : {
+            "id" : "F4996481-0FB1-40ED-8F77-248950E8EAE2",
+            "isEnabled" : true,
+            "name" : "Facing 1",
+            "shapeIDs" : [
+
+            ],
+            "toolID" : "00000000-0000-4000-8000-000000000003"
+          }
+        }
+      }
+    },
+    {
+      "profile" : {
+        "_0" : {
+          "params" : {
+            "allowance" : 0,
+            "depth" : {
+              "cutDepth" : 0.75,
+              "finalPassDepth" : 0,
+              "followsThickness" : true,
+              "startDepth" : 0.03125
+            },
+            "direction" : "climb",
+            "lead" : {
+              "distance" : 0.25,
+              "overcut" : 0,
+              "type" : "none"
+            },
+            "preferArcs" : true,
+            "ramp" : {
+              "isEnabled" : false,
+              "length" : 1,
+              "maxAngle" : 10,
+              "type" : "smooth"
+            },
+            "side" : "outside",
+            "tabs" : {
+              "countPerPath" : 4,
+              "isEnabled" : true,
+              "isTriangular" : false,
+              "length" : 0.25,
+              "thickness" : 0.125
+            }
+          },
+          "setup" : {
+            "id" : "EB100336-9329-4758-AFCB-AE8516EBBF1A",
+            "isEnabled" : true,
+            "name" : "Profile 1",
+            "shapeIDs" : [
+              "961B3DD7-3444-4E3C-AC73-D9F3C20B3DA3"
+            ],
+            "toolID" : "00000000-0000-4000-8000-000000000001"
+          }
+        }
+      }
+    }
+  ],
+  "postProfileID" : "avid-pro6096-mach4-inch",
+  "tools" : [
+    {
+      "diameter" : 0.5,
+      "feedRate" : 150,
+      "fluteLength" : 1.25,
+      "flutes" : 2,
+      "id" : "00000000-0000-4000-8000-000000000003",
+      "kind" : "endMill",
+      "name" : "1\/2\" End Mill (2 flute)",
+      "notes" : "",
+      "number" : 3,
+      "plungeRate" : 40,
+      "spindleRPM" : 16000,
+      "stepdown" : 0.2,
+      "stepover" : 0.2,
+      "tipDiameter" : 0,
+      "units" : "inch"
+    },
+    {
+      "diameter" : 0.25,
+      "feedRate" : 100,
+      "fluteLength" : 1,
+      "flutes" : 2,
+      "id" : "00000000-0000-4000-8000-000000000001",
+      "kind" : "endMill",
+      "name" : "1\/4\" End Mill (2 flute)",
+      "notes" : "",
+      "number" : 1,
+      "plungeRate" : 30,
+      "spindleRPM" : 18000,
+      "stepdown" : 0.125,
+      "stepover" : 0.1,
+      "tipDiameter" : 0,
+      "units" : "inch"
+    }
+  ]
+}

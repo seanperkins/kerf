@@ -92,3 +92,10 @@ func ops2DNonPositivePassDepthIsRejected(step: Double) throws {
         #expect(slope <= tan(10.0 * .pi / 180) + 1e-6)
     }
 }
+
+@Test func ops2DPassDepthsOfASpanThatOverflowsAreNoneNotATrap() {
+    // -1e308 to 1e308 are finite, their difference is not: the pass count was a NaN converted to Int.
+    #expect(DepthSettings(startDepth: -1e308, cutDepth: 1e308).passDepths(toolStepdown: 0.1).isEmpty)
+    #expect(DepthSettings(startDepth: 0, cutDepth: .infinity).passDepths(toolStepdown: 0.1).isEmpty)
+    #expect(DepthSettings(startDepth: 0, cutDepth: .nan).passDepths(toolStepdown: 0.1).isEmpty)
+}

@@ -257,6 +257,7 @@ enum OperationWarnings {
         case .pocket(let o): return o.params.depth.cutDepth
         case .fluting(let o): return o.params.depth.cutDepth
         case .engrave(let o): return o.params.depth.cutDepth
+        case .facing(let o): return o.params.depth.cutDepth
         case .drill(let o): return o.params.cutDepth
         case .holeMill(let o): return o.params.cutDepth
         case .chamfer(let o): return (try? ChamferOperation.size(tool: tool, params: o.params))?.tipDepth

@@ -85,3 +85,26 @@ private func sourceProject() -> KerfProject {
     #expect(outcome.unmatched == ["Holes", "Engrave", "Cut out"])
     #expect(TemplateService.summary(outcome).contains("No matching vectors"))
 }
+
+@Test func aWholeMaterialFacingKeepsNoVectorsWhenATemplateIsApplied() {
+    var source = sourceProject()
+    let tool = seeded.tools[2].id
+    source.operations.insert(.facing(FacingOperation(setup: OperationSetup(name: "Face", toolID: tool),
+                                                     params: FacingParameters(area: .material))), at: 0)
+    source.operations.append(.facing(FacingOperation(setup: OperationSetup(name: "Box", toolID: tool,
+                                                                        shapeIDs: source.document.shapes.prefix(1).map(\.id)),
+                                                     params: FacingParameters(area: .vectors))))
+    let template = ToolpathTemplate.make(from: source, library: seeded)
+    // On a design whose layers match, the whole-material facing still has no vectors (its sheet and side must not follow
+    // whatever an empty selector matches) and is not reported as unmatched, even on an empty design; the box one picks its.
+    let (doc, ids) = design()
+    var target = KerfProject(document: doc)
+    let outcome = TemplateService.apply(template, to: &target, library: seeded)
+    let whole = target.operations.first { $0.setup.name == "Face" }
+    let box = target.operations.first { $0.setup.name == "Box" }
+    #expect(whole?.setup.shapeIDs.isEmpty == true)
+    #expect(box?.setup.shapeIDs == ids["outline"]!)
+    #expect(!outcome.unmatched.contains("Face"))
+    var empty = KerfProject(document: Document())
+    #expect(!TemplateService.apply(template, to: &empty, library: seeded).unmatched.contains("Face"))
+}
