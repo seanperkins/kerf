@@ -74,17 +74,17 @@ private func profile(_ tabs: (UUID) -> TabSettings) throws -> (Toolpath, CAMCont
 private let quarterTabs = TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, countPerPath: 2)
 
 /// A profile over `paths` (the first is always selected; `select` adds more by index), 0.5 in
-/// deep with the 1/4 in end mill. Returns the toolpath and its context.
+/// deep with the 1/4 in end mill (or `tool`). Returns the toolpath and its context.
 private func tabbedProfile(_ paths: [Path], select: [Int] = [], side: ProfileSide = .outside, allowance: Double = 0,
                            sharpCorners: Bool = false, lastPass: ProfileLastPass? = nil, asOneShape: Bool = false,
-                           tabs: ([UUID]) -> TabSettings) throws -> (Toolpath, CAMContext) {
+                           tool: Tool = F.endMill, tabs: ([UUID]) -> TabSettings) throws -> (Toolpath, CAMContext) {
     let (ctx, ids) = asOneShape ? F.document(shapePaths: paths) : F.document(paths)
     var p = ProfileParameters(depth: DepthSettings(cutDepth: 0.5), side: side)
     p.tabs = tabs(ids)
     p.allowance = allowance
     p.sharpCorners = sharpCorners ? true : nil
     p.lastPass = lastPass
-    let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: F.endMill.id, shapeIDs: [ids[0]] + select.map { ids[$0] }), params: p)
+    let op = ProfileOperation(setup: OperationSetup(name: "P", toolID: tool.id, shapeIDs: [ids[0]] + select.map { ids[$0] }), params: p)
     return (try op.generate(in: ctx)[0], ctx)
 }
 
@@ -435,4 +435,58 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     #expect(tabCount(frame, ctx3) == 8 && frame.metadata["warning"] == nil)
     // (A tab on a corner arc projects onto the outline a little differently from each loop.)
     #expect(try tabPlaces(frame, ctx3, along: outer, radius: 0.25, near: 0.3) == 2 && tabPlaces(frame, ctx3, along: hole, radius: 0.25, near: 0.3) == 2)
+}
+
+@Test func ops2DProfileWithTheHalfInchToolIgnoresAnchorsFacingASwallowedStretch() throws {
+    // With a 1/2 in tool the reach bound (4 x the 0.25 in offset) is 1 in, so a loop point one offset from the
+    // anchor's vector but far along it used to be taken for the anchor's own stretch (issue #52). None of these
+    // places a tab, and each is said so.
+    let big = F.bigEndMill
+    let outer = F.rect(0, 0, 8, 4)
+    // Two 1 in square holes drawn as their own shapes, 0.4 in apart, cut inside: the tool grows each by 0.25 in,
+    // the loops merge, and no loop runs through the stretch an anchor on the gap-facing edge sits on.
+    let holeA = F.rect(2, 1.5, 1, 1), holeB = F.rect(3.4, 1.5, 1, 1)
+    let onA = try #require(TabAnchors.chain(holeA, tolerance: 0.001))
+    for (name, at) in [("middle", Vec2(3, 2)), ("above the middle", Vec2(3, 2.2)), ("near the corner", Vec2(3, 2.4))] {
+        let (tp, ctx) = try tabbedProfile([outer, holeA, holeB], select: [1, 2], side: .inside, tool: big) { ids in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[1], fraction: onA.project(at).s / onA.length)])
+        }
+        #expect(tabCount(tp, ctx) == 0, "\(name)")
+        #expect(tp.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true, "\(name): \(tp.metadata["warning"] ?? "nil")")
+    }
+    // The same anchor on the edge facing away from the gap is placed, and so is one on the far hole's own side.
+    for (name, holeIndex, at) in [("outer edge", 1, Vec2(2, 2)), ("far hole's outer edge", 2, Vec2(4.4, 2))] {
+        let hole = holeIndex == 1 ? holeA : holeB
+        let chain = try #require(TabAnchors.chain(hole, tolerance: 0.001))
+        let (tp, ctx) = try tabbedProfile([outer, holeA, holeB], select: [1, 2], side: .inside, tool: big) { ids in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[holeIndex], fraction: chain.project(at).s / chain.length)])
+        }
+        #expect(tabCount(tp, ctx) == 1, "\(name)")
+        #expect(tp.metadata["warning"]?.contains(ignoredAnchors) != true, "\(name): \(tp.metadata["warning"] ?? "nil")")
+    }
+    // A curved vector's flattened chords lean a few degrees from one to the next: an anchor anywhere round a circle
+    // is still straight across from its own stretch, cut either way.
+    let circle = ShapeFactory.circle(center: Vec2(4, 2), radius: 0.75)
+    for side in [ProfileSide.inside, .outside] {
+        for k in 0..<10 {
+            let (tp, ctx) = try tabbedProfile([outer, circle], select: [1], side: side, tool: big) { ids in
+                TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[1], fraction: (Double(k) + 0.37) / 10)])
+            }
+            #expect(tabCount(tp, ctx) == 1 && tp.metadata["warning"]?.contains(ignoredAnchors) != true, "\(side) \(k): \(tp.metadata["warning"] ?? "nil")")
+        }
+    }
+    // The outline guard: an edge two touching parts share is inside the joined part, and the loop around the pair
+    // is 0.75 in from it at the 1/2 in tool. Reported, not moved.
+    let a = F.rect(0, 0, 2, 2)
+    let shared = try #require(TabAnchors.chain(a, tolerance: 0.001))
+    let (touching, ctxT) = try tabbedProfile([a, F.rect(2, 0, 2, 1)], select: [1], tool: big) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: shared.project(Vec2(2, 0.5)).s / shared.length)])
+    }
+    #expect(tabCount(touching, ctxT) == 0 && touching.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true)
+    // The identity guard: a 0.2 in hole 0.5 in from the part's edge, cut outside, has no loop of its own at this
+    // tool; its anchor is reported, not lent the part's outer loop.
+    let (tiny, ctxS) = try tabbedProfile([F.rect(0, 0, 6, 4), F.rect(0.5, 1.9, 0.2, 0.2)], select: [1], tool: big) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[1], fraction: 0.25)])
+    }
+    #expect(tabCount(tiny, ctxS) == 0 && tiny.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true)
 }
