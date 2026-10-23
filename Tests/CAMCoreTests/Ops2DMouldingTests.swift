@@ -57,3 +57,39 @@ func ops2DMouldingCutsTheStepWithoutGouging(mode: ZZeroMode) throws {
         try MouldingOperation(setup: OperationSetup(name: "M", toolID: F.endMill.id, shapeIDs: ids)).generate(in: ctx)
     }
 }
+
+/// A moulding pass is simplified for the toolpath: every point it drops must lie within the tolerance of the segment
+/// that replaces it, however gently the pass curves. (The old loop compared each point with the segment from the
+/// last kept point to the NEXT RAW point, so on a long shallow arc the error was not bounded: the V-carve simplifier
+/// had the same loop and cut a hairline 0.012 in off its axis, issue #14.)
+@Test func ops2DMouldingSimplifiedPassesStayWithinToleranceOfTheOriginal() {
+    // A shallow arc: 200 points over 1.4 in, sagitta 0.03 in, sinking slowly.
+    let radius = 8.0
+    let arc = (0...200).map { i -> CutPoint in
+        let a = Double(i) * 0.007 / radius
+        return CutPoint(Vec2(radius * sin(a), radius * (1 - cos(a))), depth: 0.02 + 0.00002 * Double(i))
+    }
+    func p3(_ p: CutPoint) -> Vec3 { Vec3(p.xy, z: p.depth) }
+    for tolerance in [0.0005, 0.002] {
+        let kept = MouldingOperation.simplify(arc, tolerance: tolerance)
+        #expect(kept.count > 2 && kept.count < arc.count)
+        #expect(kept.first == arc.first && kept.last == arc.last)
+        for p in arc.map(p3) {
+            var best = Double.infinity
+            for (a, b) in zip(kept.map(p3), kept.dropFirst().map(p3)) {
+                let ab = b - a, ap = p - a
+                let t = max(0, min(1, ap.dot(ab) / max(ab.dot(ab), 1e-300)))
+                best = min(best, p.distance(to: a + ab * t))
+            }
+            #expect(best <= tolerance + 1e-12, Comment(rawValue: "tolerance \(tolerance): a point is \(best) from the simplified pass"))
+        }
+    }
+}
+
+/// A step in depth is a corner in 3D and must survive: dropping it would cut the step's wall as a slope.
+@Test func ops2DMouldingSimplifyKeepsTheCornerOfAStep() {
+    let pts = (0...20).map { i in CutPoint(Vec2(Double(i) * 0.1, 0), depth: i < 10 ? 0.1 : 0.35) }
+    let kept = MouldingOperation.simplify(pts, tolerance: 0.001)
+    #expect(kept.contains(pts[9]) && kept.contains(pts[10]))
+    #expect(kept.first == pts.first && kept.last == pts.last)
+}
