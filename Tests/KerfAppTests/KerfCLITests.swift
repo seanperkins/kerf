@@ -125,6 +125,20 @@ import Testing
         #expect(r.out.contains("Post: Avid PRO6096 Mach4 [inch]"))
     }
 
+    @Test func anExplicitPostAnswersTheNotInstalledPostError() throws {
+        // The saved post is gone: without --post that is an error to settle ("Pick a post before saving"); naming an installed
+        // post is the settling, so the run is clean (the file would be saved with the post chosen, as the sheet does).
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        project.postProfileID = "no-such-post"
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("gone.kerf")
+        try project.encoded().write(to: file)
+        #expect(Self.run(["export", file.path, "--out", "-", "--builtin-only"]).status == 1)
+        let chosen = Self.run(["export", file.path, "--post", BuiltInPosts.avidMach4Inch.id, "--out", "-", "--builtin-only"])
+        #expect(chosen.status == 0, "\(chosen.err)")
+        #expect(chosen.out.contains("Post: Avid PRO6096 Mach4 [inch]"))
+    }
+
     @Test func forceNeverWritesAProgramThatIsShortOfAToolpath() throws {
         // An enabled toolpath that cannot calculate is a step missing from the program, whatever --force is for.
         var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))

@@ -56,8 +56,16 @@ if (( update )); then
   trap 'rm -rf "$work" "$stage"' EXIT
   cp -R "$work"/. "$stage"/
   (( $(find "$stage" -type f | wc -l) == expected_count )) || { echo "FAIL: the copy is short" >&2; exit 1; }
-  rm -rf samples/expected
-  mv "$stage" samples/expected
+  # The committed set is moved aside, not deleted, until the new one is in its place; if the swap fails it is put back,
+  # and an interrupted swap leaves it as samples/.expected-old.* for the next run to find.
+  old="samples/.expected-old.$$"
+  if [[ -e samples/expected ]]; then mv samples/expected "$old"; fi
+  if ! mv "$stage" samples/expected; then
+    [[ ! -e "$old" ]] || mv "$old" samples/expected
+    echo "FAIL: could not put the new programs in place; the committed ones are back" >&2
+    exit 1
+  fi
+  rm -rf "$old"
   echo "samples/expected rewritten: $expected_count programs"
   exit 0
 fi
