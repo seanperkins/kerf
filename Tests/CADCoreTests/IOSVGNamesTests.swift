@@ -73,5 +73,21 @@ import Testing
         let result = try SVGImporter().importVectors(from: data, targetUnits: .inch)
         #expect(result.shapes.map(\.name) == ["Hole", "Hole", "Hole", "Hole"])
     }
+
+    /// More shapes than one stepped suffix has room for in a small range still get distinct ids (the search is not
+    /// bounded): 40 shapes with the same name whose UUIDs all start with the same eight digits.
+    @Test func manyShapesWithTheSamePrefixStillGetDistinctIDs() throws {
+        let layer = Layer(name: "Drill")
+        let shapes = (0..<40).map { i in
+            Shape(id: UUID(uuidString: "abcdef00-0000-0000-0000-0000000000\(String(format: "%02x", i))")!, name: "Hole",
+                  layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(Double(i), 1), radius: 0.125)])
+        }
+        let data = try SVGExporter().export(shapes: shapes, layers: [layer], units: .inch)
+        let text = String(decoding: data, as: UTF8.self)
+        let ids = text.components(separatedBy: "id=\"").dropFirst().compactMap { $0.split(separator: "\"").first.map(String.init) }
+            .filter { $0.hasPrefix("Hole-") }
+        #expect(ids.count == 40 && Set(ids).count == 40)
+        #expect(try SVGImporter().importVectors(from: data, targetUnits: .inch).shapes.map(\.name) == Array(repeating: "Hole", count: 40))
+    }
 }
 

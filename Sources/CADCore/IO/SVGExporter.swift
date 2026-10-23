@@ -93,22 +93,19 @@ public struct SVGExporter: VectorExporter {
     }
 
     private func layerID(_ l: Layer) -> String { "layer-" + l.id.uuidString.prefix(8).lowercased() }
-    /// An id no other element of this file has: `<name>-<hash suffix>`, with the suffix's last digit stepped on in
-    /// the rare case that another shape already got the same one.
+    /// An id no other element of this file has: `<name>-<hash suffix>`; when another shape already got the same
+    /// one, the suffix is stepped on as a 32-bit number (wrapping) until it is unused. Every suffix keeps a
+    /// letter a-f, which is how the importer recognises it, so the search ends after at most one step per id
+    /// already written.
     private func uniqueID(_ s: Shape, used: inout Set<String>) -> String {
         let base = s.name.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
         let stem = (base.isEmpty ? "shape" : base) + "-"
-        var digits = Array(Self.hashSuffix(of: s.id))
-        for step in 0..<16 {
-            if step > 0, let last = digits.last?.hexDigitValue {
-                digits[digits.count - 1] = Array("0123456789abcdef")[(last + 1) % 16]
-            }
-            // The importer only drops a suffix that has a letter a-f.
-            guard digits.contains(where: { "abcdef".contains($0) }) else { continue }
-            let id = stem + String(digits)
-            if used.insert(id).inserted { return id }
+        var value = UInt32(Self.hashSuffix(of: s.id), radix: 16) ?? 0
+        while true {
+            let suffix = String(format: "%08x", value)
+            if suffix.contains(where: { "abcdef".contains($0) }), used.insert(stem + suffix).inserted { return stem + suffix }
+            value &+= 1
         }
-        return stem + String(digits)
     }
 
     /// The first eight hex digits of `id`, lowercased, with at least one letter a-f: that is how `SVGImporter`
