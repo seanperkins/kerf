@@ -173,6 +173,7 @@ private typealias F = Ops2DFixture
             ("drill", 8, [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.125)], { .drill(DrillOperation(setup: $0, params: DrillParameters(startDepth: 0.2, cutDepth: 0.5))) }),
             ("holeMill", 0, [circle], { .holeMill(HoleMillOperation(setup: $0, params: HoleMillParameters(startDepth: 0.2, cutDepth: 0.5))) }),
             ("vcarve", 5, [F.rect(1, 1, 4, 4)], { .vcarve(VCarveOperation(setup: $0, params: VCarveParameters(startDepth: 0.2, flatDepth: 0.3))) }),
+            ("chamfer", 6, [F.rect(1, 1, 4, 3)], { .chamfer(ChamferOperation(setup: $0, params: ChamferParameters(depth: 0.24, startDepth: 0.2))) }),
         ]
         for (name, index, paths, make) in starting {
             let (seeded, ids) = F.document(paths)
@@ -184,11 +185,11 @@ private typealias F = Ops2DFixture
             let w = tp.metadata["warning"] ?? ""
             #expect(w.contains("cuts \(String(format: "%.4f", depth - 0.2)) in deeper than the 0.2000 in already cleared with a 0.1000 in flute"), "\(name): \(w)")
         }
-        // The chamfer's start depth is not credited until its depth and width share a basis.
+        // A chamfer that predates the basis (measured from the material top) is not credited.
         let (chamfered, chamferIDs) = F.document([F.rect(1, 1, 4, 3)])
         let vbit = Self.tool(6, flute: 2)
         let chamfer = try AnyOperation.chamfer(ChamferOperation(setup: OperationSetup(name: "C", toolID: vbit.id, shapeIDs: chamferIDs),
-                                                                params: ChamferParameters(depth: 0.24, startDepth: 0.2)))
+                                                                params: ChamferParameters(depth: 0.24, startDepth: 0.2, basis: .materialTop)))
             .generate(in: CAMContext(document: chamfered.document, tools: ToolLibrary(tools: [vbit])))[0]
         #expect(chamfer.clearedDepth == nil)
         // Moulding's start depth is an offset into solid material, not cleared material.

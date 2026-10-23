@@ -35,6 +35,9 @@ struct ChamferForm: View {
     var units: LengthUnit
     var tool: Tool?
 
+    /// Whether the depth and width are measured from the start depth's surface (not the material top).
+    private var fromStart: Bool { params.basis == .startSurface }
+
     private var byDepth: Binding<Bool> {
         Binding(get: { params.depth != nil }, set: { on in
             if on {
@@ -63,13 +66,26 @@ struct ChamferForm: View {
                 .fieldHelp("Size by")
             if let d = params.depth {
                 LengthField("Depth", value: Binding(get: { d }, set: { params.depth = $0 }), units: units,
-                            help: "Depth of the bit tip below the start depth's surface")
+                            help: fromStart ? "Depth of the bit tip below the start depth's surface" : "Depth of the bit tip below the material top")
             } else {
-                LengthField("Width", value: $params.width, units: units, help: "Chamfer width on the top surface")
+                LengthField("Width", value: $params.width, units: units,
+                            help: fromStart ? "Chamfer width on the surface at the start depth (the material top when it is 0)"
+                                            : "Chamfer width on the top surface")
             }
             LengthField("Tip clearance", value: $params.tipClearance, units: units,
                         help: "How far the tip runs into the waste past the edge")
-            LengthField("Start depth", value: $params.startDepth, units: units)
+            LengthField("Start depth", value: $params.startDepth, units: units,
+                        help: fromStart ? "Depth of the surface the chamfer is measured from; the material above it is taken as already removed"
+                                        : "Depth the first pass starts at")
+            if !fromStart, params.startDepth > 0 {
+                Text("This chamfer is measured from the material top, as it was when it was made: the depth and width are taken "
+                     + "there and the start depth only skips the passes above it.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Measure from the start depth's surface") {
+                    if let tool, let converted = try? ChamferOperation.measuredFromStartSurface(params, tool: tool) { params = converted }
+                }
+                .help("Keeps the tip as deep as it is now; the depth is then given below the start depth and the width is read there")
+            }
             OptionalLengthField(label: "Pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.1 : 2.5)
             DirectionPicker(direction: $params.direction)
@@ -89,7 +105,10 @@ struct ChamferForm: View {
         do {
             let s = try ChamferOperation.size(tool: tool, params: params)
             let u = units.abbreviation
-            return ("\(fmt(s.width)) \(u) wide × \(fmt(s.height)) \(u) high; tip \(fmt(s.depth)) \(u) deep.", true)
+            let tip = fromStart && params.startDepth > 0
+                ? "tip \(fmt(s.depth)) \(u) below the start depth (\(fmt(s.tipDepth)) \(u) below the top)"
+                : "tip \(fmt(s.tipDepth)) \(u) deep"
+            return ("\(fmt(s.width)) \(u) wide × \(fmt(s.height)) \(u) high; \(tip).", true)
         } catch CAMError.invalidParameter(let message) {
             return (message, false)
         } catch {
