@@ -14,7 +14,8 @@ import SwiftUI
 /// It opens an untitled document, runs the scenario's steps against the live app, writes PNGs and text
 /// dumps (accessibility tree, menus) or recorded frames taken from inside the process, then exits. Nothing
 /// needs Screen Recording or Accessibility permission, the window does not need to be on screen, and
-/// `scripts/ui.sh` gives the run its own HOME so it never touches real preferences, tools or recovery files.
+/// `scripts/ui.sh` gives the run its own HOME, which keeps its tools and recovery files apart from yours; preferences are
+/// not isolated, because UserDefaults ignores HOME.
 /// See `docs/UI-HARNESS.md`.
 @MainActor
 final class UIHarness {

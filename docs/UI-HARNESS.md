@@ -42,9 +42,7 @@ your real tool library, recovery copies or window files. Preferences are the exc
 through a daemon that does not follow `HOME`, so a run reads and writes the real defaults domain of the debug binary
 (`LoftLine`, not `com.seanperkins.loftline`), including the one-time settings migration's copy of the old app's values. Set
 `LOFTLINE_NO_MIGRATION=1` to skip the migration, and use launch arguments after `--` instead of `defaults write` to
-change a setting for one run. The app also needs the window server, so under an agent sandbox the run hangs
-(`Connection invalid` in its log): run it outside the sandbox. A 90 s watchdog on its own thread ends a run that hangs
-once the harness has started.
+change a setting for one run. A 90 s watchdog on its own thread ends a run that hangs once the harness has started.
 
 ## Scenario format
 
@@ -128,7 +126,7 @@ controls (the inspector did, issue #42, and no longer does).
 In an agent shell with the Bash sandbox on, the app cannot reach the system's HIServices XPC service
 ("Connection Invalid error for service com.apple.hiservices-xpcservice" on stderr) and hangs with no output
 (no `harness.log`) until the watchdog ends it, even for the `empty` scenario. Run `scripts/ui.sh` outside the
-sandbox. It still uses its own HOME, so it touches none of your preferences.
+sandbox. Its own HOME does not isolate your preferences (see the start of this page).
 
 The GIF is encoded from the frames with one palette per clip and no alpha channel (an alpha channel makes
 every frame a full frame and the file fifty times larger). ffmpeg from Homebrew is required.

@@ -7,16 +7,18 @@
 #   scripts/ui.sh path/to/scenario.json --out .tmp/ui/mine --active
 #
 # Output goes to .tmp/ui/<scenario>-<time>/ (git-ignored): <name>.png, <name>.ax.txt (the accessibility
-# tree), <name>.menus.txt and harness.log. The app runs with its own HOME inside that folder, so it never
-# reads or writes your real preferences, tool library or recovery files. No Screen Recording or
-# Accessibility permission is needed: the app draws its own window into the PNG. Debug builds only.
+# tree), <name>.menus.txt and harness.log. The app runs with its own HOME inside that folder, which keeps its tool
+# library and recovery files apart from yours; preferences are NOT isolated (UserDefaults ignores HOME, see
+# docs/UI-HARNESS.md). No Screen Recording or Accessibility permission is needed: the app draws its own window
+# into the PNG. Debug builds only.
 #
 # --active   make the app active so the window is drawn as the key window (it steals focus briefly)
 # --key      draw the window as key without activating the app (your focus stays put; buttons take clicks, table rows do not)
 # --offscreen park the window just past the edge of its screen for the run
 # --no-build reuse the last build
-# -- ARGS     everything after `--` goes to the app, for example `-- -preview3D.showToolpaths NO` (a launch argument overrides
-#            that default for this run without writing it anywhere)
+# -- ARGS     everything after `--` goes to the app as launch arguments, which override a stored default for this run and
+#            write nothing. A value is a string unless it is XML, so a boolean takes '<false/>':
+#            `-- -preview3D.showToolpaths '<false/>'` (a plain `NO` is read as the string "NO" and the setting keeps its default)
 # Works inside a sandboxed agent shell (see swiftpm-env.sh); LOFTLINE_BUILD_FLAGS adds extra swift build flags.
 set -euo pipefail
 cd "${0:A:h}/.."
@@ -34,7 +36,7 @@ while (( $# )); do
     --offscreen) extra+=(--ui-offscreen 1); shift ;;
     --no-build) build=0; shift ;;
     --) shift; app_args=("$@"); break ;;
-    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,/^set /{/^set /!p;}' "$0"; exit 0 ;;
     *) scenario="$1"; shift ;;
   esac
 done

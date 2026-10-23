@@ -15,6 +15,7 @@ scripts/check-samples.sh             # post every sample with every built-in pos
 scripts/ui.sh main --light           # UI harness: screenshots + accessibility tree, no permissions (docs/UI-HARNESS.md)
 LOFTLINE_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
 LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
+LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter HarnessProjects   # then, in a separate run, the harness projects (they embed the sample's ids)
 ```
 
 Done means `scripts/build.sh` and `scripts/test.sh` are both green (the suite includes the samples check; a change that moves
@@ -62,8 +63,8 @@ changes as safety-critical:
 
 Run a harness scenario (`scripts/ui.sh <scenario> [--light|--dark] [--size WxH]`, see
 [docs/UI-HARNESS.md](docs/UI-HARNESS.md)) and look at the PNG and the `.ax.txt` tree instead of
-launching the app and driving it by hand. It runs in its own HOME, so it never touches real preferences or
-recovery files. Add a scenario in `harness/scenarios/` for a state you need to see.
+launching the app and driving it by hand. It runs in its own HOME, which keeps its tools and recovery files apart
+from yours, but not its preferences (docs/UI-HARNESS.md). Add a scenario in `harness/scenarios/` for a state you need to see.
 
 ## Docs to keep current
 

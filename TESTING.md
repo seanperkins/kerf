@@ -17,7 +17,9 @@
 | `bracket-plate.dxf` | 8 × 5 in plate with bolt holes, a slot and a bore |
 | `relief.stl` | 75 mm square relief (dome and waves) for the 3D toolpath |
 
-To regenerate the samples, run `LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles`.
+To regenerate the samples, run `LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles`, then, as a separate run,
+`LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter HarnessProjects` (the harness projects are the sample plus a patch each and
+embed its ids, so they go stale whenever the sample is regenerated).
 
 ## 2. Ten-minute test script
 
@@ -199,7 +201,7 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 
 ## 5. Known limitations and stubs
 
-- The app is ad-hoc signed and not notarised (Gatekeeper warns on first launch). It has no app icon.
+- The app is ad-hoc signed and not notarised (Gatekeeper warns on first launch).
 - Finder / Quick Look thumbnails of `.loftline` files come from the bundled extension
   (`Contents/PlugIns/LoftLineThumbnail.appex`). macOS picks it up once the app has been launched from
   its final place (e.g. /Applications); `pluginkit -m -i com.seanperkins.loftline.thumbnail` shows whether
