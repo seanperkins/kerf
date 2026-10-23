@@ -134,7 +134,8 @@ struct VCarveEngine {
                 sharpen = Self.cornerStrokes(axis: axis, tool: clr, vSlope: vSlope, startDepth: startDepth,
                                              bottom: bottom, flatArea: flatArea, cleared: clearedNow)
                 if sharpen.isEmpty, clr.angle == nil {
-                    warnings.append("Corner sharpening needs a tapered (V or engraving) tool; ignored for \(clr.name)")
+                    // By position, not name: this text is stored with the toolpaths and a rename does not recalculate them.
+                    warnings.append("Corner sharpening needs a tapered (V or engraving) tool; ignored for clearance tool \(index + 1)")
                 }
             }
             var all = passes
@@ -142,7 +143,7 @@ struct VCarveEngine {
             guard !all.allSatisfy(\.isEmpty) else {
                 warnings.append(out.isEmpty
                     ? "Flat area is too narrow for the clearance tool; the V-bit clears it instead"
-                    : "\(clr.name) has no remaining flat area to clear")
+                    : "Clearance tool \(index + 1) has no remaining flat area to clear")
                 continue
             }
             out.append((clr, all))

@@ -99,7 +99,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         tps.map { tp in
             guard let over = tp.cutBeyondFlute(coords: ctx.coords, units: ctx.units, tolerance: ctx.tolerance) else { return tp }
             var out = tp
-            out.metadata["warning"] = out.metadata["warning"].map { "\($0); \(over.description)" } ?? over.description
+            out.metadata["warning"] = out.metadata["warning"].map { "\($0); \(over.note)" } ?? over.note
             return out
         }
     }
