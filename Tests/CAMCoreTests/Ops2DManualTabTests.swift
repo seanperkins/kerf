@@ -490,3 +490,44 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     }
     #expect(tabCount(tiny, ctxS) == 0 && tiny.metadata["warning"]?.contains("1 \(ignoredAnchors)") == true)
 }
+
+@Test func ops2DProfileKeepsTheRoughingTabOnAPieceWhereTheLastPassAnchorsElsewhere() throws {
+    // A 0.3 in strip crossing a 4x2 rectangle, cut inside with a 0.1 in last-pass allowance, one anchor on the strip's
+    // stub below the rectangle (issue #49). The roughing offset (0.225) swallows the stub, so that pass puts the tab
+    // on the rectangle's left piece, on the same edge line of the strip; the last pass (0.125) cuts the stub and puts
+    // the tab there. The left piece's last-pass loop has no anchor of its own: it takes the roughing tab instead of
+    // cutting it away, so the piece is held on both passes.
+    let rectPath = F.rect(0, 0, 4, 2), strip = F.rect(1.85, -1, 0.3, 4)
+    let chain = try #require(TabAnchors.chain(strip, tolerance: 0.001))
+    /// Tab rises on the stub, on the left piece's roughing loop (0.225 in from the rectangle's bottom edge) and on its
+    /// last-pass loop (0.125 in from it).
+    func tabs(lastPass: ProfileLastPass?) throws -> (stub: Int, roughing: Int, lastPass: Int, warning: String?) {
+        let (tp, ctx) = try tabbedProfile([rectPath, strip], select: [1], side: .inside, lastPass: lastPass) { ids in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[1], fraction: chain.project(Vec2(1.85, -0.5)).s / chain.length)])
+        }
+        let at = tabEntries(tp, cut: ctx.coords.z(depth: 0.5), top: ctx.coords.z(depth: 0.4)).map { ctx.coords.materialXY(fromMachine: $0.xy) }
+        let left = at.filter { $0.x < 1.85 && $0.y >= 0 }
+        return (at.filter { $0.y < 0 }.count, left.filter { abs($0.y - 0.225) < 0.01 }.count,
+                left.filter { abs($0.y - 0.125) < 0.01 }.count, tp.metadata["warning"])
+    }
+    // Without a last pass the one pass (0.125) cuts the stub and holds it; the left piece has no anchor.
+    let single = try tabs(lastPass: nil)
+    #expect(single.stub == 1 && single.roughing == 0 && single.lastPass == 0 && single.warning == nil)
+    let both = try tabs(lastPass: ProfileLastPass(allowance: 0.1))
+    #expect(both.stub == 1, "the stub's tab, on the last pass")
+    #expect(both.roughing == 1, "the roughing pass put the anchor's tab on the left piece")
+    #expect(both.lastPass >= 1, "and the last pass keeps it there instead of cutting it away: \(both)")
+    #expect(both.warning == nil)
+}
+
+@Test func ops2DProfileReportsRoughingTabsThatDoNotReachTheLastPassForManualAnchorsToo() throws {
+    // The same two parts 0.27 in apart as above, one manual anchor on the big part: the roughing offset merges the
+    // parts into one loop whose tab sits on the big part, and the last pass cuts the small part's loop with no
+    // anchor and no tab to take. It is reported, as with automatic tabs.
+    let (tp, ctx) = try tabbedProfile([F.rect(0, 0, 4, 2), F.rect(4.27, 0, 1, 2)], select: [1],
+                                      lastPass: ProfileLastPass(allowance: 0.02)) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1, manualTabs: [TabAnchor(shapeID: ids[0], fraction: 0.15)])
+    }
+    #expect(tabCount(tp, ctx) == 2)   // the big part's one, on both passes
+    #expect(tp.metadata["warning"] == "tabs did not carry to the last pass on 1 loop(s); the part may come free")
+}

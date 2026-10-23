@@ -219,7 +219,11 @@ public struct ProfileOperation: ToolpathOperation {
                 }
                 let roughLoops = across.map { q in roughing.loops.filter { $0.project(q).distance <= 8 * tol + 1e-6 } } ?? []
                 counts = roughLoops.isEmpty
-                if centers == nil, !roughLoops.isEmpty {
+                // A loop no manual anchor resolved to on this pass is treated like an automatic one: the
+                // anchors can land on different loops on the two passes (where the roughing offset trims an
+                // anchor's stretch to a corner of one piece and the last pass reaches another), and the
+                // roughing tab on this one must not be cut away unseen (issue #49).
+                if centers?.isEmpty ?? true, !roughLoops.isEmpty {
                     let inherited = roughing.tabs.compactMap { p -> Double? in
                         let pr = alc.project(p)
                         return pr.distance <= within ? pr.s : nil
