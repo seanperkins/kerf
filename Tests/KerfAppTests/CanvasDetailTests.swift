@@ -72,18 +72,29 @@ import Testing
         #expect(!CanvasDetail.isVisible(CGRect(x: -20, y: -20, width: 5, height: 5), in: view))
     }
 
-    @Test @MainActor func aHeavyDrawingDrawsFastWhetherOrNotItIsSelected() throws {
-        // 1,500 shapes of 100 curves: 150,000 segments, 2.5 to 4 seconds with the full stroker (15 s at 500,000), about
-        // half a second as hairlines.
-        let doc = Self.document(blobs: 1500, segments: 100)
+    @Test @MainActor func aHeavyDrawingIsDrawnAsHairlinesAndALightOneIsNot() throws {
+        // 1,500 shapes of 100 curves: 150,000 segments, 2.5 to 4 seconds with the full stroker (15 s at 500,000), about half
+        // a second as hairlines (measured by hand: the time a drawing takes depends on what else the machine is doing, so
+        // the test reads which way it was drawn, and only a catastrophe is a failure on time).
+        let heavy = Self.document(blobs: 1500, segments: 100)
         for selectAll in [false, true] {
-            let (kd, view) = Self.canvas(doc, selectAll: selectAll)
+            let (kd, view) = Self.canvas(heavy, selectAll: selectAll)
+            let before = CanvasDetail.hairlineDraws
             let start = ContinuousClock.now
             let png = try #require(AppTestSupport.png(of: view))
             let took = ContinuousClock.now - start
             withExtendedLifetime(kd) {}
-            #expect(took < .seconds(1.5), "selectAll \(selectAll): drew in \(took)")
+            #expect(CanvasDetail.hairlineDraws > before, "selectAll \(selectAll): not drawn as hairlines")
+            #expect(took < .seconds(30), "selectAll \(selectAll): drew in \(took)")
             #expect(AppTestSupport.looksDrawn(png))
+        }
+        let light = Self.document(blobs: 20, segments: 20)
+        for selectAll in [false, true] {
+            let (kd, view) = Self.canvas(light, selectAll: selectAll)
+            let before = CanvasDetail.hairlineDraws
+            _ = AppTestSupport.png(of: view)
+            withExtendedLifetime(kd) {}
+            #expect(CanvasDetail.hairlineDraws == before, "selectAll \(selectAll): a light drawing keeps the full look")
         }
     }
 

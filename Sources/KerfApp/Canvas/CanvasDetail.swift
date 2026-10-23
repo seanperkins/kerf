@@ -14,6 +14,10 @@ enum CanvasDetail {
 
     static func usesHairlines(segmentCount: Int) -> Bool { segmentCount > hairlineSegmentCount }
 
+    /// How many times the canvas has drawn its shapes as hairlines (main thread only): what the tests read to see which way a
+    /// drawing was drawn, since how long it took depends on what else the machine is doing.
+    static var hairlineDraws = 0
+
     /// Lines, arcs and curves in `shape`.
     static func segmentCount(of shape: Shape) -> Int { shape.paths.reduce(0) { $0 + $1.segments.count } }
 

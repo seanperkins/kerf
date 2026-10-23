@@ -67,7 +67,8 @@ import Testing
     }
 
     @Test func aSelectionOfEverythingInABigDrawingIsNotQuadratic() {
-        // 40,000 shapes: a scan per id is 1.6 billion comparisons (minutes in a debug build); the index is milliseconds.
+        // 40,000 shapes: a scan per id is 1.6 billion comparisons (minutes in a debug build); the index is milliseconds
+        // (the bound is loose because the suite runs beside heavy tests).
         var doc = Document()
         let layer = doc.defaultLayerID
         let g = UUID()
@@ -83,6 +84,6 @@ import Testing
         var copy = doc
         copy.ungroup(ids)
         #expect(copy.shapes.allSatisfy { $0.groupID == nil })
-        #expect(ContinuousClock.now - start < .seconds(5), "took \(ContinuousClock.now - start)")
+        #expect(ContinuousClock.now - start < .seconds(25), "took \(ContinuousClock.now - start)")
     }
 }

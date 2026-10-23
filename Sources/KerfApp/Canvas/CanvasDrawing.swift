@@ -168,6 +168,7 @@ extension CanvasNSView {
     private func drawShapesAsHairlines(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform, _ shapes: [Shape],
                                        selected: Set<UUID>, preview: Transform2D?, nodePreview: [UUID: Shape]) {
         let project = doc.project
+        CanvasDetail.hairlineDraws += 1
         var layerColors: [UUID: NSColor] = [:]
         ctx.saveGState()
         ctx.setLineWidth(1)
