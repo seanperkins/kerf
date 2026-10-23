@@ -100,4 +100,22 @@ import Testing
         #expect(whole.setup.projectOntoModelID == nil)
         #expect(whole.setup.id == setup.id && whole.setup.name == "Face")
     }
+
+    @Test func aWholeMaterialFacingIsMachinedOnTheTopSideOfATwoSidedJob() throws {
+        var p = AppTestSupport.project()
+        p.document.job.twoSided = TwoSidedSetup()
+        let lib = ToolLibrary.seeded
+        let op = try #require(OperationFactory.make(kind: .facing, project: p, library: lib, shapeIDs: []))
+        #expect(op.setup.shapeIDs.isEmpty)
+        // No vectors: the top side (what the form says), and a job to machine it with, not a "both sides" error.
+        #expect(p.side(of: op) == .top)
+        guard case .success(let job) = p.machiningJob(for: op) else { Issue.record("no machining job"); return }
+        #expect(job.zZero == p.document.job.zZero)
+        // And it calculates.
+        p.operations = [op]
+        let doc = KerfDocument(project: p, toolLibrary: AppTestSupport.library())
+        doc.calculateNow(doc.project.operations.map(\.id))
+        #expect(doc.results[op.id]?.error == nil)
+        #expect(doc.results[op.id]?.toolpaths.isEmpty == false)
+    }
 }
