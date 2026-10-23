@@ -158,6 +158,23 @@ import Testing
         #expect(doc.document.linkedValues.isEmpty && doc.document.job.thickness == thickness)
     }
 
+    @Test func anUnknownNameFilledInDoesNotZeroADenominator() throws {
+        // The names the table lacks are filled in as the evaluation meets them; a denominator built from
+        // them ("zzz-1", "zzz-yyy") must not come out as zero and end the search before the thickness.
+        let doc = KerfDocument(project: AppTestSupport.project(), toolLibrary: AppTestSupport.library())
+        let table = doc.document.variableTable
+        for text in ["=1/(zzz-1) + thickness/2", "=1/(zzz-yyy) + thickness/2", "=1/(zzz-2*yyy) + thickness/2", "=thickness/(zzz-yyy)"] {
+            #expect(VariableLink.references("thickness", in: text, variables: table, units: .inch), "\(text)")
+            #expect(!VariableLink.references("width", in: text, variables: table, units: .inch), "\(text)")
+        }
+        // A zero that no filled name made stays "not a reference": the link can never evaluate.
+        #expect(!VariableLink.references("thickness", in: "=1/0 + thickness/2", variables: table, units: .inch))
+        doc.perform("Stale") {
+            $0.document.linkedValues = [VariableLink(target: .job(sheetID: $0.document.currentSheetID), path: ["thickness"], expression: "=1/(zzz-1) + thickness/2")]
+        }
+        #expect(doc.document.linkedValues.isEmpty)
+    }
+
     @Test func aUnitChangeLinksOnlyTheTypedField() throws {
         // A profile cut 0.375 in deep by hand, and a pocket whose depth is linked to the thickness
         // with an inch literal, which cannot mean the same in millimetres.
