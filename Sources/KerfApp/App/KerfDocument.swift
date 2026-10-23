@@ -701,6 +701,10 @@ final class KerfDocument: ReferenceFileDocument {
     struct PostedInputs: Equatable {
         var serial = 0, design = 0
         var side: JobSide = .top
+
+        /// Shown by a sheet that would not write a program posted before the document changed: the save panel is
+        /// document-modal, the Tool Database window is not, so an edit can land while the panel is up.
+        static let changedWhileSaving = "The job changed while you were choosing where to save, so the program was posted again. Save once more."
     }
 
     var postedInputs: PostedInputs { PostedInputs(serial: outputSerial, design: designRevision, side: activeSide) }

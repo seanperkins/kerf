@@ -67,7 +67,7 @@ struct SaveAllToolpathsSheet: View {
                 .disabled(posted.isEmpty || hasUnposted || postedFrom != document.postedInputs)
                 .help(hasUnposted ? "A program could not be generated; fix it before saving, so no file is left out." : "")
                 // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
-                .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
+                .replaceFilesAlert($replaceRequest) { r in finishSaving(from: r.postedFrom) { try r.set.write(to: r.directory, replacing: r.names) } }
             }
         }
         .padding(20)
@@ -152,6 +152,7 @@ struct SaveAllToolpathsSheet: View {
 
     private func save() {
         failure = nil
+        let from = postedFrom
         if mode.isSingleFile {
             guard let item = posted.first, let text = item.result.text else { return }
             let panel = PanelRunner.makeSavePanel()
@@ -161,7 +162,7 @@ struct SaveAllToolpathsSheet: View {
             panel.canCreateDirectories = true
             PanelRunner.present(panel) { response in
                 guard response == .OK, let url = panel.url else { return }
-                finishSaving { try text.write(to: url, atomically: true, encoding: .utf8) }
+                finishSaving(from: from) { try text.write(to: url, atomically: true, encoding: .utf8) }
             }
         } else {
             let panel = PanelRunner.makeOpenPanel()
@@ -174,9 +175,9 @@ struct SaveAllToolpathsSheet: View {
             PanelRunner.present(panel) { response in
                 guard response == .OK, let dir = panel.url else { return }
                 if set.needsReplaceConfirmation(in: dir) {
-                    replaceRequest = ReplaceRequest(set: set, directory: dir)
+                    replaceRequest = ReplaceRequest(set: set, directory: dir, postedFrom: from)
                 } else {
-                    finishSaving { try set.write(to: dir) }
+                    finishSaving(from: from) { try set.write(to: dir) }
                 }
             }
         }
@@ -184,8 +185,11 @@ struct SaveAllToolpathsSheet: View {
 
     /// Runs the write chosen in the panel, then remembers the post and closes the sheet. A failure
     /// stays in the sheet, above its buttons (an alert on the document would sit under the sheet),
-    /// so another file or folder can be chosen.
-    private func finishSaving(_ write: () throws -> Void) {
+    /// so another file or folder can be chosen. `inputs` is what the program was posted from when the
+    /// save began: the panel and the replace question are modal to this window only, so a program
+    /// posted before an edit made meanwhile is not written.
+    private func finishSaving(from inputs: KerfDocument.PostedInputs?, _ write: () throws -> Void) {
+        guard inputs == document.postedInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
         do {
             try write()
             if profileID != initialProfileID { document.setPostProfile(profileID) }

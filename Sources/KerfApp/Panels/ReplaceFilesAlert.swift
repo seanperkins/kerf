@@ -9,10 +9,13 @@ struct ReplaceRequest {
     var names: [String]
     /// Those of them that are symbolic links: the link is replaced, not the file it points to.
     var links: [String]
+    /// What the document was made of when `set` was posted: the write is refused if it has changed since.
+    var postedFrom: KerfDocument.PostedInputs?
 
-    init(set: GCodeFileSet, directory: URL) {
+    init(set: GCodeFileSet, directory: URL, postedFrom: KerfDocument.PostedInputs? = nil) {
         self.set = set
         self.directory = directory
+        self.postedFrom = postedFrom
         names = set.existing(in: directory)
         links = set.links(in: directory)
     }

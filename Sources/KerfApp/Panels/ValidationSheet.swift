@@ -89,6 +89,7 @@ struct ValidationSheet: View {
         calcTask = nil
         let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
         guard !stale.isEmpty else { check(); return }
+        report = nil   // the last report is of toolpaths that are being replaced
         calculatingCount = stale.count
         calcTask = Task { @MainActor in
             let done = await document.calculateAndWait(stale)

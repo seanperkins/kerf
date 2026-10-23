@@ -165,6 +165,7 @@ struct ExportGCodeSheet: View {
     private func save() {
         guard let text = result?.text else { return }
         failure = nil
+        let inputs = postedFrom
         let panel = PanelRunner.makeSavePanel()
         var opName: String?
         if case .operation(let id) = scope { opName = document.operation(id)?.setup.name }
@@ -176,6 +177,7 @@ struct ExportGCodeSheet: View {
         panel.canCreateDirectories = true
         PanelRunner.present(panel) { response in
             guard response == .OK, let url = panel.url else { return }
+            guard inputs == document.postedInputs else { failure = KerfDocument.PostedInputs.changedWhileSaving; return }
             do {
                 try text.write(to: url, atomically: true, encoding: .utf8)
                 if profileID != initialProfileID { document.setPostProfile(profileID) }
