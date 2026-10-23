@@ -370,3 +370,13 @@ func ops2DFacingSpiralLeavesNoCoreAtAnyStepover(stepover: Double) throws {
     let (tp, _) = try facing(FacingParameters(), tool: ball)
     #expect(tp.metadata["warning"]?.contains("ball nose bit is not a flat cutter") == true)
 }
+
+@Test func ops2DFacingIgnoresCustomPassesThatAreNotNumbers() throws {
+    // The pass helper keeps only values strictly between the start and cut depth, which no infinity or NaN is.
+    var p = FacingParameters(depth: DepthSettings(cutDepth: 0.3))
+    p.depth.customPasses = [.infinity, -.infinity, .nan, 0.1]
+    let (tp, ctx) = try facing(p)
+    let z = F.densePoints(tp.moves).map { ctx.coords.depth(ofMachineZ: $0.z) }
+    #expect(z.allSatisfy { $0.isFinite })
+    #expect(Set(z.map { ($0 * 1e6).rounded() }.filter { $0 > 1 }) == [100_000, 300_000])
+}
