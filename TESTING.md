@@ -218,3 +218,13 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
   change; calibrate them in the 3D preview (stopwatch button). The estimate in the G-code header is
   still length / feed.
 - The GRBL profile is untested on real hardware.
+
+## Command line (kerf-cli)
+
+1. `swift run kerf-cli export samples/sign.kerf --out .tmp/cli`: writes `.tmp/cli/sign.tap`. Export the same file from the app
+   (File → Export G-code with the same post): the two programs are byte-for-byte the same.
+2. `swift run kerf-cli export samples/sign.kerf --operation "Pocket 1" --out -` prints only that toolpath's program.
+3. Cut the sign's profile deeper than the material plus the spoilboard allowance and save a copy: `export` prints
+   `error:` lines and exits 1 without writing; with `--force` it writes the file and still exits 1.
+4. `scripts/check-samples.sh` passes on a clean checkout. Change a feed rate in `Sources/PostCore/Profiles/BuiltInPosts.swift` and
+   it fails with the diff (undo the change; `--update` is for intended changes only).

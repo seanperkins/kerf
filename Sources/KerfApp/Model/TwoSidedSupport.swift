@@ -43,6 +43,20 @@ extension KerfProject {
         return p
     }
 
+    /// Project for one export, shared by the app and the command line: a single toolpath uses its own sheet and side,
+    /// "all" the project as seen from `side`.
+    func exportProject(for scope: GCodeExportScope, side: JobSide) -> KerfProject {
+        if case .operation(let id) = scope, let op = operations.first(where: { $0.id == id }) {
+            // The toolpath was calculated against its own sheet's job (thickness, Z zero, safe Z);
+            // the post, validator and footer must use the same one, not the sheet being shown.
+            var p = self
+            if case .success(let job) = machiningJob(for: op) { p.document.job = job }
+            p.operations = [op]
+            return p
+        }
+        return sideProject(side)
+    }
+
     /// Makes sure a two-sided job has a layer for the bottom side.
     mutating func ensureBottomLayer() {
         let sheet = document.currentSheetID
@@ -65,17 +79,7 @@ extension KerfDocument {
     var isTwoSided: Bool { document.job.isTwoSided }
 
     /// Project for one export: a single toolpath uses its own side, "all" the shown side.
-    func outputProject(for scope: GCodeExportScope) -> KerfProject {
-        if case .operation(let id) = scope, let op = operation(id) {
-            // The toolpath was calculated against its own sheet's job (thickness, Z zero, safe Z);
-            // the post, validator and footer must use the same one, not the sheet being shown.
-            var p = project
-            if case .success(let job) = project.machiningJob(for: op) { p.document.job = job }
-            p.operations = [op]
-            return p
-        }
-        return outputProject
-    }
+    func outputProject(for scope: GCodeExportScope) -> KerfProject { project.exportProject(for: scope, side: activeSide) }
 
     /// True when the shape is in view: on the current sheet and, for two-sided jobs, the shown side.
     func isOnActiveSide(_ shape: Shape) -> Bool {

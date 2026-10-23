@@ -6,6 +6,8 @@ import PostCore
 /// ~/Library/Application Support/Kerf/posts/*.json (a user file with a built-in's id overrides it).
 struct PostProfileStore {
     var directory: URL
+    /// False = the built-ins only, whatever is in `directory` (the command line's `--builtin-only`).
+    var readsUserFiles = true
 
     init(directory: URL = ToolLibraryStore.supportDirectory.appendingPathComponent("posts", isDirectory: true)) {
         self.directory = directory
@@ -14,6 +16,7 @@ struct PostProfileStore {
     static let defaultProfileID = BuiltInPosts.avidMach4Inch.id
 
     func userProfiles() -> [PostProfile] {
+        guard readsUserFiles else { return [] }
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension.lowercased() == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
