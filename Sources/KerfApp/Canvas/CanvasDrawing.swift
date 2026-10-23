@@ -206,7 +206,9 @@ extension CanvasNSView {
             }
         }
         ctx.restoreGState()
-        for (_, shape) in nodePreview {
+        // As the full path draws them: the previews of shapes on this sheet and side.
+        let shownIDs = Set(shapes.map(\.id))
+        for (id, shape) in nodePreview where shownIDs.contains(id) {
             stroke(ctx, CanvasPaths.cgPath(for: shape), vt, color: .systemBlue.withAlphaComponent(0.7), width: 1.5)
         }
     }
