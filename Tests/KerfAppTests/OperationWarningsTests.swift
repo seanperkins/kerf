@@ -486,6 +486,16 @@ import Testing
         let broken = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(startDepth: 0.75, cutDepth: 0.75))
         p.operations = [.drill(broken), .holeMill(thread)]
         #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        // The same for a pocket, and a bore: depth no deeper than the start depth removes nothing.
+        var flatPocket = pocketParams
+        flatPocket.depth.startDepth = 0.75
+        flatPocket.depth.cutDepth = 0.75
+        p.operations = [.pocket(PocketOperation(setup: OperationSetup(name: "P", toolID: mill.id, shapeIDs: [a.id]), params: flatPocket)), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        var flatBore = holeMill(mill, a, depth: 0.5, diameter: 0.45)
+        flatBore.params.startDepth = 0.5
+        p.operations = [.holeMill(flatBore), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).count == 1)
         // A thread in a hole as large as the tool is skipped by the generator, and not reported here.
         let tiny = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.25)
         p.operations = [.holeMill(tiny)]
