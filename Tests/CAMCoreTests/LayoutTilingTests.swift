@@ -30,7 +30,7 @@ import Testing
     }
 
     @Test func gridUsesEqualTilesWithOverlapOnSharedEdges() {
-        let cells = ToolpathTiling.cells(job: job, settings: TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 1))
+        let cells = ToolpathTiling.cells(job: job, settings: TilingSettings(tileWidth: 61, tileHeight: 96, overlap: 1))
         #expect(cells.count == 2)
         #expect(abs(cells[0].region.min.x) < 1e-9 && abs(cells[0].region.max.x - 60.5) < 1e-9)
         #expect(abs(cells[1].region.min.x - 59.5) < 1e-9 && abs(cells[1].region.max.x - 120) < 1e-9)
@@ -40,7 +40,7 @@ import Testing
 
     @Test func aCutAcrossTheSeamIsSplitAndReEntered() {
         let tiles = ToolpathTiling.tile([line(Vec2(10, 10), Vec2(110, 10))], job: job, units: .inch,
-                                        settings: TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 1))
+                                        settings: TilingSettings(tileWidth: 61, tileHeight: 96, overlap: 1))
         #expect(tiles.count == 2)
         for t in tiles {
             #expect(t.toolpaths.count == 1)
@@ -101,3 +101,31 @@ import Testing
         }
     }
 }
+
+/// Issue #96. "Largest tile" is what the machine can reach, and a tile's region includes the overlap into its
+/// neighbours, so the grid has to leave room for it: the tile count used to ignore the overlap, and a 120 in job on a
+/// 60 in machine got 60.5 in tiles that the export then refused for exceeding the travel.
+@Test(arguments: [
+    (120.0, 60.0, 1.0, 3), (120.0, 60.0, 4.0, 3), (100.0, 60.0, 10.0, 2), (48.0, 60.0, 5.0, 1),
+    (96.0, 48.0, 2.0, 3), (200.0, 60.0, 0.0, 4), (120.0, 60.0, 0.0, 2),
+])
+func tilesWithOverlapNeverExceedTheLargestTile(width: Double, tile: Double, overlap: Double, count: Int) {
+    for horizontal in [true, false] {
+        let job = horizontal ? JobSetup(width: width, height: 10, thickness: 0.75)
+                             : JobSetup(width: 10, height: width, thickness: 0.75)
+        let settings = horizontal ? TilingSettings(tileWidth: tile, tileHeight: 96, overlap: overlap)
+                                  : TilingSettings(tileWidth: 96, tileHeight: tile, overlap: overlap)
+        let cells = ToolpathTiling.cells(job: job, settings: settings)
+        #expect(cells.count == count)
+        let extent: (Cell) -> (Double, Double) = { c in
+            horizontal ? (c.region.min.x, c.region.max.x) : (c.region.min.y, c.region.max.y)
+        }
+        let sorted = cells.sorted { extent($0).0 < extent($1).0 }
+        for c in sorted { #expect(extent(c).1 - extent(c).0 <= tile + 1e-9, "a \(extent(c).1 - extent(c).0) in tile on a \(tile) in machine") }
+        #expect(abs(extent(sorted.first!).0) < 1e-9 && abs(extent(sorted.last!).1 - width) < 1e-9)
+        // Neighbours share a band of exactly the overlap, so the seam is cut by both.
+        for (a, b) in zip(sorted, sorted.dropFirst()) { #expect(abs((extent(a).1 - extent(b).0) - overlap) < 1e-9) }
+    }
+}
+
+private typealias Cell = ToolpathTiling.Cell

@@ -44,11 +44,24 @@ public enum ToolpathTiling {
         public var clip: Rect2
     }
 
-    /// The tile grid for a job: equal tiles no larger than the requested size.
+    /// How many equal tiles cover `extent` when none may reach further than `largest`, counting the overlap: the
+    /// first and the last tile reach half of it into their one neighbour, the ones between into both.
+    static func tileCount(extent: Double, largest: Double, overlap: Double) -> Int {
+        let plain = max(1, Int((extent / largest - 1e-9).rounded(.up)))
+        let overlap = max(0, overlap)
+        guard plain > 1, overlap > 0 else { return plain }
+        if extent / 2 + overlap / 2 <= largest + 1e-9 { return 2 }
+        // Three or more: every interior tile is extent / n + overlap wide. An overlap as large as the tile
+        // cannot be made to fit; the grid then ignores it, as before.
+        guard overlap < largest else { return plain }
+        return max(3, Int((extent / (largest - overlap) - 1e-9).rounded(.up)))
+    }
+
+    /// The tile grid for a job: equal tiles no larger than the requested size, overlap into the neighbours included.
     public static func cells(job: JobSetup, settings s: TilingSettings) -> [Cell] {
         guard s.tileWidth > 0, s.tileHeight > 0 else { return [] }
-        let nx = max(1, Int((job.width / s.tileWidth - 1e-9).rounded(.up)))
-        let ny = max(1, Int((job.height / s.tileHeight - 1e-9).rounded(.up)))
+        let nx = tileCount(extent: job.width, largest: s.tileWidth, overlap: s.overlap)
+        let ny = tileCount(extent: job.height, largest: s.tileHeight, overlap: s.overlap)
         let tw = job.width / Double(nx), th = job.height / Double(ny)
         let half = max(0, s.overlap) / 2
         let far = (job.width + job.height) * 10 + 1000
