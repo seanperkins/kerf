@@ -139,9 +139,13 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
         #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty, "extra \(extra)")
         #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.5)) < 1e-9)
         #expect(tp.metadata["warning"]?.contains("peck-drilled instead") == true, "extra \(extra)")
-        // Nothing moves sideways while cutting: every cut is straight down at the centre.
+        // The cutting stays within the tool-centre radius of the hole (extra / 2), and where there is any room a lap at that
+        // radius at the bottom of each peck makes the hole its full size; none for a hole the size of the tool.
         let cut = F.densePoints(tp.moves).filter { ctx.coords.depth(ofMachineZ: $0.z) > 1e-9 }
-        #expect(cut.allSatisfy { $0.xy.distance(to: Vec2(3, 3)) < 1e-9 })
+        let reach = cut.map { $0.xy.distance(to: Vec2(3, 3)) }.max() ?? 0
+        #expect(abs(reach - extra / 2) < 1e-3, "extra \(extra): reaches \(reach)")
+        let bottomLap = cut.filter { abs(ctx.coords.depth(ofMachineZ: $0.z) - 0.5) < 1e-9 && $0.xy.distance(to: Vec2(3, 3)) > extra / 4 }
+        #expect(bottomLap.isEmpty == (extra == 0), "extra \(extra)")
         // 0.5 in at the 0.125 in pitch: four pecks, so three retracts to safe Z between them.
         let retracts = zip(tp.moves, tp.moves.dropFirst()).filter { a, b in
             if case .linear = a, case .rapid(let to) = b { return abs(to.z - ctx.coords.safeZ) < 1e-9 }
@@ -163,4 +167,14 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
     p.holeDiameter = 0.25            // as large as the 1/4 in tool
     let (tp, _) = try holeMill(p, paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.5), ShapeFactory.circle(center: Vec2(6, 3), radius: 0.5)])
     #expect(tp.metadata["warning"]?.contains("2 hole(s) are as large as the tool: no room to mill a thread") == true)
+}
+
+@Test func ops2DHoleMillAFinePitchTheUserChoseStaysAHelixHoweverManyTurnsItTakes() throws {
+    // 0.5 in deep at a 0.005 in pitch is 100 turns, and a 1 in hole's 3 degree helix is well inside the ramp angle: it is the
+    // pitch asked for, not the limit, so it is not turned into a peck drill.
+    let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.5, helixPitch: 0.005))
+    #expect(tp.metadata["warning"] == nil)
+    let ring = F.densePoints(tp.moves).filter { ctx.coords.depth(ofMachineZ: $0.z) > 1e-9 }
+    #expect(ring.contains { abs($0.xy.distance(to: Vec2(3, 3)) - 0.375) < 1e-3 })
+    #expect(steepestHelixAngle(tp, ctx) < 1)
 }

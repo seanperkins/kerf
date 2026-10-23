@@ -98,14 +98,21 @@ public struct HoleMillOperation: ToolpathOperation {
         let drop = params.cutDepth - params.startDepth
         let steepest = 2 * Double.pi * max(radius, 0) * tan(Self.maxHelixAngle * .pi / 180)   // most it may drop per turn
         let allowed = min(pitch, steepest)
+        let held = allowed < pitch - 1e-12
         let turns = max(1, ceil(drop / max(allowed, 1e-12) - 1e-9))
-        guard radius > tol, turns <= Self.maxHelixTurns else {
+        // Peck only where the ramp limit is what asks for the turns (a fine pitch the user chose stays a helix).
+        guard radius > tol, !(held && turns > Self.maxHelixTurns) else {
             builder.travel(to: c)
             var cleared = min(params.startDepth, 0)
             let pecks = DrillOperation.peckDepths(start: params.startDepth, end: params.cutDepth, peck: pitch)
             for d in pecks {
                 builder.plunge(to: d, clearedDepth: cleared)
                 cleared = d
+                // A lap at the hole's own radius at the bottom of each peck, so the hole comes out its size.
+                if radius > tol {
+                    builder.feed(to: Self.helix(centre: c, radius: radius, fromDepth: d, toDepth: d, turns: 1,
+                                                ccw: params.direction == .climb, tolerance: tol) + [CutPoint(c, depth: d)])
+                }
                 if d < pecks.last! - 1e-12 { builder.retract() }
             }
             return .pecked
@@ -118,7 +125,7 @@ public struct HoleMillOperation: ToolpathOperation {
                           turns: 1, ccw: ccw, tolerance: tol).dropFirst()
         if Self.leavesNoCore(hole, tool: tool, tolerance: tol) { pts.append(CutPoint(c, depth: params.cutDepth)) }
         builder.cutChain(pts)
-        return allowed < pitch - 1e-12 ? .clamped : .helix
+        return held ? .clamped : .helix
     }
 
     /// Thread milling: plunge at the centre (pilot hole), out to the radius, one helix turn per
