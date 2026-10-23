@@ -110,9 +110,14 @@ What that quiet mode cannot do: a click on a table row (the toolpath list, the l
 window that is not really key, so `selectToolpath` and `select` select in code and only pretend to click;
 buttons, segmented controls, checkboxes and text fields take the click. Control lookups need a visible
 window: a locked screen or a covered display hides every window from the accessibility server, and the run
-says so. SwiftUI reports the frames of a scroll view's content without the view's top inset (the inspector's
-sits 52 pt lower than its frames say), which the harness corrects; the `.ax.txt` dump ends with each scroll
-view's real frame and inset so a reader can do the same.
+says so. The `.ax.txt` dump ends with each scroll view's real frame and inset: SwiftUI reports a scroll view's content
+frames without the view's own top inset, so a scroll view inset by the toolbar would show frames above its
+controls (the inspector did, issue #42, and no longer does).
+
+In an agent shell with the Bash sandbox on, the app cannot reach the system's HIServices XPC service
+("Connection Invalid error for service com.apple.hiservices-xpcservice" on stderr) and hangs with no output
+(no `harness.log`) until the watchdog ends it, even for the `empty` scenario. Run `scripts/ui.sh` outside the
+sandbox. It still uses its own HOME, so it touches none of your preferences.
 
 The GIF is encoded from the frames with one palette per clip and no alpha channel (an alpha channel makes
 every frame a full frame and the file fifty times larger). ffmpeg from Homebrew is required.

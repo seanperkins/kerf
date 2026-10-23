@@ -9,22 +9,29 @@ struct InspectorView: View {
     @ObservedObject var document: KerfDocument
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if document.activeTool == .nodeEdit {
-                    NodeInspector(document: document)
-                } else if document.activeTool != .select {
-                    DrawingOptionsView(document: document)
-                } else if document.sidebarTab == .toolpaths, let op = document.operation(document.selectedOperationID) {
-                    OperationEditor(document: document, original: op).id(op.id)
-                } else if !document.selection.isEmpty {
-                    ShapeInspector(document: document)
-                } else {
-                    JobSummaryView(document: document)
+        // The scroll view must not take the toolbar as a content inset: SwiftUI reports a scroll view's content
+        // frames for accessibility without that inset, which put every control's frame 52 pt above where it was
+        // drawn (issue #42). So the scroll view ignores the top safe area and the content pads itself by it.
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if document.activeTool == .nodeEdit {
+                        NodeInspector(document: document)
+                    } else if document.activeTool != .select {
+                        DrawingOptionsView(document: document)
+                    } else if document.sidebarTab == .toolpaths, let op = document.operation(document.selectedOperationID) {
+                        OperationEditor(document: document, original: op).id(op.id)
+                    } else if !document.selection.isEmpty {
+                        ShapeInspector(document: document)
+                    } else {
+                        JobSummaryView(document: document)
+                    }
                 }
+                .padding(12)
+                .padding(.top, proxy.safeAreaInsets.top)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .ignoresSafeArea(.container, edges: .top)
         }
     }
 }
