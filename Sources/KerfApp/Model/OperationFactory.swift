@@ -124,7 +124,9 @@ enum OperationFactory {
 
     static func defaultTool(for kind: OperationKind, in library: ToolLibrary) -> Tool? {
         // Facing wants the widest cutter there is, to cover the area in fewer passes.
-        if kind == .facing, let wide = library.tools.filter({ $0.kind == .endMill }).max(by: { $0.diameter < $1.diameter }) {
+        // Library tools keep their own units, so the sizes are compared, not the numbers.
+        func width(_ t: Tool) -> Double { t.diameter * t.units.millimeters }
+        if kind == .facing, let wide = library.tools.filter({ $0.kind == .endMill }).max(by: { width($0) < width($1) }) {
             return wide
         }
         for k in preferredToolKinds(for: kind) {

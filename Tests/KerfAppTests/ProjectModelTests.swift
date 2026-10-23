@@ -27,6 +27,24 @@ import Testing
 }
 
 @Suite struct OperationFactoryTests {
+    /// Issue #96. Library tools keep their own units, so "the widest end mill" compares sizes, not the numbers: a 2 in
+    /// surfacing bit (2.0) is wider than a 6 mm end mill (6.0).
+    @Test func facingDefaultsToTheWidestEndMillWhateverUnitsTheToolsAreIn() {
+        let surfacing = Tool(name: "2 in surfacing bit", kind: .endMill, units: .inch, number: 30, diameter: 2,
+                             stepdown: 0.1, stepover: 1, feedRate: 200, plungeRate: 60)
+        let sixMil = Tool(name: "6 mm end mill", kind: .endMill, units: .millimeter, number: 31, diameter: 6,
+                          stepdown: 2, stepover: 3, feedRate: 1500, plungeRate: 500)
+        for order in [[surfacing, sixMil], [sixMil, surfacing]] {
+            #expect(OperationFactory.defaultTool(for: .facing, in: ToolLibrary(tools: order))?.id == surfacing.id)
+        }
+        // And the other way round: a 12 mm end mill is wider than a 1/4 in one.
+        let twelve = Tool(name: "12 mm end mill", kind: .endMill, units: .millimeter, number: 32, diameter: 12,
+                          stepdown: 4, stepover: 6, feedRate: 1500, plungeRate: 500)
+        let quarter = Tool(name: "1/4 in end mill", kind: .endMill, units: .inch, number: 33, diameter: 0.25,
+                           stepdown: 0.1, stepover: 0.1, feedRate: 100, plungeRate: 30)
+        #expect(OperationFactory.defaultTool(for: .facing, in: ToolLibrary(tools: [quarter, twelve]))?.id == twelve.id)
+    }
+
     @Test func picksSuitableDefaultTools() {
         let lib = ToolLibrary.seeded
         #expect(OperationFactory.defaultTool(for: .vcarve, in: lib)?.kind == .vBit)
