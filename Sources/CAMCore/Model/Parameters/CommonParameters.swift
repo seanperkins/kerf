@@ -74,7 +74,8 @@ public struct DepthSettings: Codable, Hashable, Sendable {
 
     public func passDepths(toolStepdown: Double) -> [Double] {
         let total = cutDepth - startDepth
-        guard total > 1e-12 else { return [] }
+        // Not a number or not finite (-1e308 to 1e308 overflows): no passes, rather than a trap in the count below.
+        guard total > 1e-12, total.isFinite else { return [] }
         let raw = passDepth ?? toolStepdown
         let step = max(raw.isFinite && raw > 0 ? raw : total, total / Double(Self.maxComputedPasses))
         if let custom = customPasses, !custom.isEmpty {

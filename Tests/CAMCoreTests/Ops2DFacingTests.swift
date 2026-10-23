@@ -265,6 +265,8 @@ func ops2DFacingAVeryLongNarrowAreaStaysSmall(pattern: FacingPattern) throws {
     fails { $0.overhang = .infinity }
     fails { $0.depth.cutDepth = 0 }
     fails { $0.depth.cutDepth = .nan }
+    // Finite depths whose span overflows.
+    fails { $0.depth.startDepth = -1e308; $0.depth.cutDepth = 1e308 }
     fails { $0.depth.passDepth = 0 }
     // The selected vectors give the area; none selected gives none.
     fails({ $0.area = .vectors })

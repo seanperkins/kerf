@@ -33,7 +33,8 @@ public struct FacingOperation: ToolpathOperation {
         if let o = params.overhang, !(o.isFinite && o >= 0) {
             throw CAMError.invalidParameter("Overhang must be zero or more")
         }
-        guard params.depth.startDepth.isFinite, params.depth.cutDepth.isFinite else {
+        guard params.depth.startDepth.isFinite, params.depth.cutDepth.isFinite,
+              (params.depth.cutDepth - params.depth.startDepth).isFinite else {
             throw CAMError.invalidParameter("Depths must be numbers")
         }
         try params.depth.validatePassDepth(toolStepdown: tool.stepdown)
