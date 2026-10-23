@@ -65,13 +65,21 @@ enum OperationWarnings {
     /// hole. Both depend on what the job does at the same centre, so they are judged here, not by the generator.
     static func holeMillProblems(_ op: HoleMillOperation, in project: KerfProject, library: ToolLibrary, tool: Tool,
                                  job: JobSetup, units: LengthUnit) -> [String] {
-        // Projected onto a 3D model its depths are measured from the model's surface, which only calculating knows.
-        guard op.setup.projectOntoModelID == nil else { return [] }
         let tol = 3 * CAMContext.defaultTolerance(units)
         let u = units.abbreviation
         var holes = HoleMillOperation.holes(project.document.shapes(ids: op.setup.shapeIDs), tolerance: tol)
         if let d = op.params.holeDiameter { holes = holes.map { HoleMillOperation.Hole(centre: $0.centre, diameter: d) } }
         holes = holes.filter { $0.diameter >= tool.diameter - tol }     // the generator skips the smaller ones
+        // Projected onto a 3D model, its depths are measured from the model's surface, which only calculating knows: the
+        // slug and the pilot cannot be judged from the settings, and the form says so where either could matter.
+        if op.setup.projectOntoModelID != nil {
+            let slugPossible = op.params.mode == .helical && holes.contains { $0.diameter - 2 * tool.diameter > tool.diameter + tol }
+            let pilotNeeded = op.params.mode == .thread && !holes.isEmpty
+            return slugPossible || pilotNeeded
+                ? ["This toolpath is projected onto a 3D model, so whether it leaves a free slug (through holes) or has the pilot "
+                   + "hole a thread needs cannot be judged from its settings: check it in the 3D preview."]
+                : []
+        }
         // Every copy of an array is a hole too, at the vector's centre shifted by the copy's offset.
         let copies = op.setup.arrayCopy?.offsets ?? [.zero]
         holes = holes.flatMap { hole in copies.map { HoleMillOperation.Hole(centre: hole.centre + $0, diameter: hole.diameter) } }

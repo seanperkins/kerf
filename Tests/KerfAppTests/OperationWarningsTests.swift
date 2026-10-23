@@ -523,7 +523,13 @@ import Testing
         var projected = thread
         projected.setup.projectOntoModelID = UUID()
         p.operations = [.holeMill(projected)]
-        #expect(warnings(.holeMill(projected), p, lib).isEmpty)
+        #expect(warnings(.holeMill(projected), p, lib).count == 1 && warnings(.holeMill(projected), p, lib)[0].contains("cannot be judged"))
+        // ...and a projected bore that could leave a slug says so too, while a small one, where neither can arise, says nothing.
+        var projectedBore = holeMill(mill, a)
+        projectedBore.setup.projectOntoModelID = UUID()
+        #expect(warnings(.holeMill(projectedBore), p, lib).first?.contains("cannot be judged") == true)
+        projectedBore.params.holeDiameter = 0.4
+        #expect(warnings(.holeMill(projectedBore), p, lib).isEmpty)
         var projectedDrill = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(cutDepth: 0.75))
         projectedDrill.setup.projectOntoModelID = UUID()
         p.operations = [.drill(projectedDrill), .holeMill(thread)]
