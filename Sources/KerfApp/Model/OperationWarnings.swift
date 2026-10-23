@@ -154,15 +154,16 @@ enum OperationWarnings {
         }
         switch other {
         case .drill(let d):
-            guard DrillOperation.holeCentres(shapes, tolerance: tol).contains(where: { $0.distance(to: c) <= tol }),
+            // The tool at the drill's own center: its width round `c` is less by twice how far off `c` is.
+            guard let centre = DrillOperation.holeCentres(shapes, tolerance: tol).first(where: { $0.distance(to: c) <= tol }),
                   let t = otherTool() else { return nil }
-            return (d.params.startDepth, d.params.cutDepth, t.diameter)
+            return (d.params.startDepth, d.params.cutDepth, t.diameter - 2 * centre.distance(to: c))
         case .holeMill(let h) where !drillOnly && h.params.mode == .helical:
             guard var hole = HoleMillOperation.holes(shapes, tolerance: tol).first(where: { $0.centre.distance(to: c) <= tol }),
                   let t = otherTool() else { return nil }
             if let d = h.params.holeDiameter { hole.diameter = d }
             guard hole.diameter >= t.diameter - tol, HoleMillOperation.leavesNoCore(hole, tool: t, tolerance: tol) else { return nil }
-            return (h.params.startDepth, h.params.cutDepth, hole.diameter)
+            return (h.params.startDepth, h.params.cutDepth, hole.diameter - 2 * hole.centre.distance(to: c))
         case .pocket(let p) where !drillOnly:
             return room(tool: otherTool(), allowance: p.params.allowance).map { (p.params.depth.startDepth, p.params.depth.cutDepth, $0) }
         default: return nil

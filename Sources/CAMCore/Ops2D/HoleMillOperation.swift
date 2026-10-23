@@ -41,6 +41,12 @@ public struct HoleMillOperation: ToolpathOperation {
         if let pitch = params.helixPitch, !(pitch.isFinite && pitch > 0) {
             throw CAMError.invalidParameter("Helix pitch must be a positive number")
         }
+        if let d = params.holeDiameter, !(d.isFinite && d > 0) {
+            throw CAMError.invalidParameter("Hole diameter must be a positive number")
+        }
+        guard tool.diameter.isFinite, tool.diameter > 0 else {
+            throw CAMError.invalidParameter("Tool diameter must be a positive number")
+        }
         let tol = context.tolerance
         var holes = Self.holes(shapes, tolerance: tol)
         guard !holes.isEmpty else { throw CAMError.invalidGeometry("Hole milling needs closed vectors (circles)") }

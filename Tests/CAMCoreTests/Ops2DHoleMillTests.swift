@@ -248,3 +248,9 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
         try holeMill(HoleMillParameters(cutDepth: 1e6, helixPitch: 0.05), paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.13)])
     }
 }
+
+@Test func ops2DHoleMillRefusesDiametersThatAreNotPositiveNumbers() throws {
+    for d in [Double.nan, .infinity, 0, -0.5] {
+        #expect(throws: CAMError.self, "hole diameter \(d)") { try holeMill(HoleMillParameters(cutDepth: 0.5, holeDiameter: d)) }
+    }
+}

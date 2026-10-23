@@ -510,6 +510,14 @@ import Testing
         let exact = try drillTool(&lib, diameter: 0.25)
         p.operations = [drill(exact, a), .holeMill(thread)]
         #expect(warnings(.holeMill(thread), p, lib).isEmpty)
+        // A pilot that is the thread mill's width but 0.001 in off its center leaves a strip of solid material.
+        let offset = Shape(name: "offset", layerID: p.document.defaultLayerID, paths: [ShapeFactory.circle(center: Vec2(3.001, 3), radius: 0.5)])
+        p.document.add(offset)
+        let offCentre = holeMill(mill, offset, mode: .thread, depth: 0.5, diameter: 1.0)
+        p.operations = [drill(exact, a), .holeMill(offCentre)]
+        #expect(warnings(.holeMill(offCentre), p, lib).count == 1)
+        p.operations = [drill(wide, a), .holeMill(offCentre)]                       // a 1/2 in drill covers it with room to spare
+        #expect(warnings(.holeMill(offCentre), p, lib).isEmpty)
         // The boundary is the generator's: a thread diameter 0.0012 in over the tool has a 0.0006 in radius, above the 0.0005 in
         // tolerance, so the generator mills it, plunging at the center, and it needs its pilot.
         let barely = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.2512)
