@@ -233,6 +233,21 @@ import Testing
         #expect(ToolpathCalculator.formatDuration(3725) == "1h 02m 05s")
     }
 
+    /// A tool-change allowance typed as 1e300 used to trap the formatter (`Int(s.rounded())`) and crash the
+    /// sidebar summary, the job sheet and the preview's time text (issue #56).
+    @Test func anAbsurdDurationShowsAPlaceholderInsteadOfTrapping() {
+        #expect(ToolpathCalculator.formatDuration(1e300) == "over 1,000,000 h")
+        #expect(ToolpathCalculator.formatDuration(.infinity) == "over 1,000,000 h")
+        #expect(ToolpathCalculator.formatDuration(.nan) == "—")
+        #expect(ToolpathCalculator.formatDuration(-.infinity) == "—")
+        #expect(ToolpathCalculator.formatDuration(-1e300) == "—")
+        #expect(ToolpathCalculator.formatDuration(Double(Int.max)) == "over 1,000,000 h")
+        // The largest value shown as a time, and the first that is not.
+        #expect(ToolpathCalculator.formatDuration(3_600_000_000) == "1000000h 00m 00s")
+        #expect(ToolpathCalculator.formatDuration(3_600_000_001) == "over 1,000,000 h")
+        #expect(ToolpathCalculator.formatDuration(0) == "0s")
+    }
+
     @Test func errorsAreDescribed() {
         #expect(ToolpathCalculator.describe(CAMError.noGeometry).contains("Select"))
         #expect(ToolpathCalculator.describe(CAMError.notImplemented("X")).contains("X"))
