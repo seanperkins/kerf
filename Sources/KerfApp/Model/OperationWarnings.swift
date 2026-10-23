@@ -45,6 +45,10 @@ enum OperationWarnings {
             }
         }
 
+        if case .holeMill(let h) = op {
+            out += holeMillProblems(h, in: project, library: library, tool: tool, job: job, units: units)
+        }
+
         // Tabs that the generator will place: on, and on a closed vector it cuts (an open vector has none, and a manual
         // anchor counts only on a selected closed vector that still exists).
         if case .profile(let p) = op, p.params.tabs.isEnabled, tabsWillBePlaced(p, in: project.document) {
@@ -55,6 +59,127 @@ enum OperationWarnings {
             }
         }
         return out
+    }
+
+    /// Hole milling: a through hole bored with a helix leaves a free slug inside it, and a thread assumes a pilot
+    /// hole. Both depend on what the job does at the same centre, so they are judged here, not by the generator.
+    static func holeMillProblems(_ op: HoleMillOperation, in project: KerfProject, library: ToolLibrary, tool: Tool,
+                                 job: JobSetup, units: LengthUnit) -> [String] {
+        let tol = 3 * CAMContext.defaultTolerance(units)
+        let u = units.abbreviation
+        var holes = HoleMillOperation.holes(project.document.shapes(ids: op.setup.shapeIDs), tolerance: tol)
+        if let d = op.params.holeDiameter { holes = holes.map { HoleMillOperation.Hole(centre: $0.centre, diameter: d) } }
+        holes = holes.filter { $0.diameter >= tool.diameter - tol }     // the generator skips the smaller ones
+        // Projected onto a 3D model, its depths are measured from the model's surface, which only calculating knows: the
+        // slug and the pilot cannot be judged from the settings, and the form says so where either could matter.
+        if op.setup.projectOntoModelID != nil {
+            let slugPossible = op.params.mode == .helical && holes.contains { $0.diameter - 2 * tool.diameter > tool.diameter + tol }
+            let pilotNeeded = op.params.mode == .thread
+                && holes.contains { ($0.diameter - tool.diameter) / 2 > CAMContext.defaultTolerance(units) }
+            return slugPossible || pilotNeeded
+                ? ["This toolpath is projected onto a 3D model, so whether it leaves a free slug (through holes) or has the pilot "
+                   + "hole a thread needs cannot be judged from its settings: check it in the 3D preview."]
+                : []
+        }
+        // Every copy of an array is a hole too, at the vector's centre shifted by the copy's offset.
+        let copies = op.setup.arrayCopy?.offsets ?? [.zero]
+        holes = holes.flatMap { hole in copies.map { HoleMillOperation.Hole(centre: hole.centre + $0, diameter: hole.diameter) } }
+        // What runs before this toolpath in the list, on its sheet and side (the others are other programs); a toolpath
+        // that is not in the list has nothing before it.
+        // (Vectors on several sheets or sides have no sheet or side, and nothing matches that: the toolpath errors anyway.)
+        let thisOp = AnyOperation.holeMill(op)
+        let sheet = project.sheetID(of: thisOp), side = project.side(of: thisOp)
+        let earlier = (project.operations.firstIndex { $0.id == op.setup.id }.map { Array(project.operations.prefix($0)) } ?? [])
+            .filter { sheet != nil && side != nil && project.sheetID(of: $0) == sheet && project.side(of: $0) == side }
+        /// An earlier toolpath that clears at least `depth` deep and `width` across at `c`, from the material top (a drill,
+        /// only, when `drillOnly`): one that starts below the top leaves the material above it for the tool to cut.
+        func made(at c: Vec2, depth: Double, width: Double, drillOnly: Bool) -> Bool {
+            earlier.contains { other in
+                clearing(of: other, at: c, project: project, library: library, material: job.material, units: units,
+                         tolerance: tol, drillOnly: drillOnly)
+                    .contains { $0.start <= tol && $0.depth >= depth - 1e-6 && $0.width >= width - 1e-6 && $0.depth > $0.start + tol }
+            }
+        }
+        var out: [String] = []
+        switch op.params.mode {
+        case .thread:
+            // The thread mill goes down the middle to the cut depth, so something earlier has to have cleared that far
+            // and at least as wide as the tool.
+            // (A thread is milled where the generator finds a radius above its own tolerance, not three times it.)
+            let generatorTol = CAMContext.defaultTolerance(units)
+            let bare = holes.filter {
+                ($0.diameter - tool.diameter) / 2 > generatorTol
+                    && !made(at: $0.centre, depth: op.params.cutDepth, width: tool.diameter, drillOnly: false)
+            }
+            if !bare.isEmpty {
+                out.append("\(bare.count) hole(s) in thread mode have no pilot hole: no earlier toolpath in the list drills, bores or "
+                           + "pockets at the center to the thread's depth and at least as wide as the tool, so the thread mill would "
+                           + "plunge into solid material.")
+            }
+        case .helical:
+            // The ring the helix sweeps leaves a core of diameter D - 2d; cut through, it comes loose.
+            guard op.params.cutDepth >= job.thickness - tol else { break }
+            // Drilled out: an earlier Drill through the material, at least as wide as the slug.
+            let slugs = holes.filter { hole in
+                let slug = hole.diameter - 2 * tool.diameter
+                return slug > tool.diameter + tol
+                    && !made(at: hole.centre, depth: job.thickness, width: slug, drillOnly: true)
+            }
+            if let widest = slugs.map({ $0.diameter - 2 * tool.diameter }).max() {
+                out.append("\(slugs.count) through hole(s) leave a free slug up to \(RulerTicks.label((widest * 1000).rounded() / 1000)) \(u) wide "
+                           + "inside the helix: it can jam against the tool when it comes loose. Drill the center out first with a "
+                           + "Drill toolpath through the material and as wide as the slug, or stop the cut short of the bottom.")
+            }
+        }
+        return out
+    }
+
+    /// How deep and how wide across `other` clears material at `c`, or nil when it does not make a hole there: a Drill at
+    /// the center (as wide as its tool), unless `drillOnly` also a helical bore there that leaves no core (a hole no wider
+    /// than twice its tool; a wider one is only a ring, the middle stays solid) and a pocket whose vectors enclose it
+    /// (as wide as the room round `c` that its tool can reach). A profile cuts the perimeter only, so it makes no pilot.
+    /// The copies of an array count at their offsets. `start` is the depth the toolpath starts at.
+    private static func clearing(of other: AnyOperation, at point: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
+                                 units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> [(start: Double, depth: Double, width: Double)] {
+        // (A toolpath projected onto a model is cut below the model's surface, not to the depth it states.)
+        guard other.setup.isEnabled, other.setup.projectOntoModelID == nil else { return [] }
+        // Every copy of an array that reaches the point counts, each by its own width: the first is not the best.
+        return (other.setup.arrayCopy?.offsets ?? [.zero]).compactMap { offset in
+            clearing(of: other, atOriginal: point - offset, project: project, library: library, material: material,
+                     units: units, tolerance: tol, drillOnly: drillOnly)
+        }
+    }
+
+    private static func clearing(of other: AnyOperation, atOriginal c: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
+                                 units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> (start: Double, depth: Double, width: Double)? {
+        let shapes = project.document.shapes(ids: other.setup.shapeIDs)
+        func otherTool() -> Tool? { library.tool(id: other.setup.toolID)?.forMaterial(material).converted(to: units) }
+        /// The room round `c` inside the area the pocket's tool reaches: the vectors' region shrunk by the tool's radius and
+        /// the allowance and grown back, twice the distance from `c` to its nearest edge (nil when `c` is outside it).
+        func room(tool: Tool?, allowance: Double) -> Double? {
+            guard let tool else { return nil }
+            let region = Polygon2D.region(fromLoops: ShapeGeometry.loops(of: shapes, tolerance: tol).closed)
+            let inset = GeomKernel.offset(region, by: -(tool.radius + allowance), join: .round, arcTolerance: tol)
+            let reached = GeomKernel.offset(inset, by: tool.radius, join: .round, arcTolerance: tol)
+            guard !reached.isEmpty, Polygon2D.regionContains(reached, c) else { return nil }
+            return 2 * (reached.map { Polygon2D.distance(from: c, toLoop: $0) }.min() ?? 0)
+        }
+        switch other {
+        case .drill(let d):
+            // The tool at the drill's own center: its width round `c` is less by twice how far off `c` is.
+            guard let centre = DrillOperation.holeCentres(shapes, tolerance: tol).first(where: { $0.distance(to: c) <= tol }),
+                  let t = otherTool() else { return nil }
+            return (d.params.startDepth, d.params.cutDepth, t.diameter - 2 * centre.distance(to: c))
+        case .holeMill(let h) where !drillOnly && h.params.mode == .helical:
+            guard var hole = HoleMillOperation.holes(shapes, tolerance: tol).first(where: { $0.centre.distance(to: c) <= tol }),
+                  let t = otherTool() else { return nil }
+            if let d = h.params.holeDiameter { hole.diameter = d }
+            guard hole.diameter >= t.diameter - tol, HoleMillOperation.leavesNoCore(hole, tool: t, tolerance: tol) else { return nil }
+            return (h.params.startDepth, h.params.cutDepth, hole.diameter - 2 * hole.centre.distance(to: c))
+        case .pocket(let p) where !drillOnly:
+            return room(tool: otherTool(), allowance: p.params.allowance).map { (p.params.depth.startDepth, p.params.depth.cutDepth, $0) }
+        default: return nil
+        }
     }
 
     /// Whether the profile's tabs land anywhere: automatic tabs need a closed vector among the selected ones, manual
