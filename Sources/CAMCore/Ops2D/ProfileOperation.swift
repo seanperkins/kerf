@@ -76,15 +76,25 @@ public struct ProfileOperation: ToolpathOperation {
             let none = TabAnchors.OwnLoops(outline: [], part: [], offset: 0, cut: false)
             guard manual else { return { _ in none } }
             let grow: Double = params.side == .outside ? offset : params.side == .inside ? -offset : 0
-            let parts = Polygon2D.parts(of: closed, offsets: holes.map { $0 ? -grow : grow }, join: join, tolerance: tol)
-            return { anchor in
-                guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex] else { return none }
-                let part = closed.indices.filter { parts[$0] == parts[k] }.map { closed[$0] }
+            // Every vector is offset the same way for the grouping: a hole always overlaps the vector it is in as
+            // drawn, so which way its own offset runs never decides whether two loops are one part.
+            let parts = Polygon2D.parts(of: closed, offsets: closed.map { _ in grow }, join: join, tolerance: tol)
+            // What an anchor is judged against depends on its part, not on the vector it sits on, so every
+            // anchored vector of a part shares one set of outline and loops (a frame with a hundred holes
+            // drawn as their own shapes would otherwise offset the whole part once per vector, issue #53).
+            struct PartLoops {
+                var outline: [ArcLengthChain]
+                var part: [ArcLengthChain]
+                var cut: Bool
+            }
+            var memo: [Int: PartLoops] = [:]
+            func loops(ofPart p: Int) -> PartLoops {
+                if let known = memo[p] { return known }
+                let part = closed.indices.filter { parts[$0] == p }.map { closed[$0] }
                 let loops = ProfileGeometry.loops(closed: part, side: params.side, offset: offset, direction: params.direction,
                                                   tolerance: tol, join: join).chains
                 // A cut on the line follows each vector as drawn; the others cut the even-odd region.
                 let outline = params.side == .on ? part : Polygon2D.region(fromLoops: part)
-                let survives = grow == 0 || !GeomKernel.offset([closed[k]], by: holes[k] ? -grow : grow, join: join, arcTolerance: tol).isEmpty
                 // A loop only counts as cut when it leaves something to hold: tool-centre loops narrower than the
                 // tool (the slivers a wall thinner than twice the offset leaves at its corners) are swept away
                 // by their own groove, and no part comes free along them (issue #48).
@@ -92,9 +102,17 @@ public struct ProfileOperation: ToolpathOperation {
                     let ring = PathGeometry.area(loop.points) < 0 ? loop.points.reversed() : loop.points
                     return !GeomKernel.offset([Array(ring)], by: -tool.radius, join: join, arcTolerance: tol).isEmpty
                 }
-                return TabAnchors.OwnLoops(outline: outline.map { ArcLengthChain(Chain2D(points: $0, isClosed: true)) },
-                                           part: loops.map { ArcLengthChain($0) }, offset: offset,
-                                           cut: !loops.isEmpty && (params.side == .on || holdsSomething) && survives)
+                let made = PartLoops(outline: outline.map { ArcLengthChain(Chain2D(points: $0, isClosed: true)) },
+                                     part: loops.map { ArcLengthChain($0) },
+                                     cut: !loops.isEmpty && (params.side == .on || holdsSomething))
+                memo[p] = made
+                return made
+            }
+            return { anchor in
+                guard let k = vectorIndex[anchor.shapeID]?[anchor.pathIndex] else { return none }
+                let shared = loops(ofPart: parts[k])
+                let survives = grow == 0 || !GeomKernel.offset([closed[k]], by: holes[k] ? -grow : grow, join: join, arcTolerance: tol).isEmpty
+                return TabAnchors.OwnLoops(outline: shared.outline, part: shared.part, offset: offset, cut: shared.cut && survives)
             }
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
