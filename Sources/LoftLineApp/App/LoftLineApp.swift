@@ -15,7 +15,6 @@ final class LoftLineAppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         RecoveryCoordinator.shared.start()
-        LegacyMigrationCoordinator.shared.presentFailureIfNeeded()
         // Let the first windows open before showing the Welcome window and asking about work
         // left by a crash.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {

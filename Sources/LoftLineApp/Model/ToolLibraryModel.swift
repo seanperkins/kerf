@@ -37,13 +37,6 @@ final class ToolLibraryModel: ObservableObject {
         }
     }
 
-    /// Re-reads the store, for example after the Kerf migration copied a `tools.json` in.
-    func reload() {
-        guard let loaded = try? store.load() else { return }
-        library = loaded
-        revision += 1
-    }
-
     var tools: [Tool] { library.tools }
 
     /// Smallest tool number not used yet (past the editor's range when the library has a tool of every number in it).

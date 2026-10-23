@@ -7,19 +7,16 @@ import Foundation
 @MainActor final class LegacyMigrationCoordinator {
     enum Choice { case retry, continueWithout }
 
-    static let shared = LegacyMigrationCoordinator(migration: .standard(), reloadTools: { ToolLibraryModel.shared.reload() })
+    static let shared = LegacyMigrationCoordinator(migration: .standard())
 
     /// The reason the last run failed; nil when it has not, or after a retry succeeded or the user chose to continue.
     private(set) var failure: String?
 
     private let migration: LegacyKerfMigration
-    private let reloadTools: () -> Void
     private let environment: [String: String]
 
-    init(migration: LegacyKerfMigration, reloadTools: @escaping () -> Void,
-         environment: [String: String] = ProcessInfo.processInfo.environment) {
+    init(migration: LegacyKerfMigration, environment: [String: String] = ProcessInfo.processInfo.environment) {
         self.migration = migration
-        self.reloadTools = reloadTools
         self.environment = environment
     }
 
@@ -30,14 +27,14 @@ import Foundation
         record(migration.run())
     }
 
-    /// Retry re-runs the migration and reloads the tool library when it completes; Continue Without Importing writes the
-    /// `skipped` flag (an explicit decision) and leaves the old data where it is. Returns the retry's outcome, nil for Continue.
+    /// Retry re-runs the migration; Continue Without Importing writes the `skipped` flag (an explicit decision) and leaves the
+    /// old data where it is. Returns the retry's outcome, nil for Continue. Nothing needs reloading afterwards: the alert runs
+    /// before the app builds the tool library, preferences, machines or gadgets, so they all read the finished result.
     @discardableResult func resolve(_ choice: Choice) -> LegacyKerfMigration.Outcome? {
         switch choice {
         case .retry:
             let outcome = migration.run()
             record(outcome)
-            if outcome == .completed { reloadTools() }
             return outcome
         case .continueWithout:
             migration.markSkipped()
@@ -46,8 +43,12 @@ import Foundation
         }
     }
 
-    /// Called once the app has launched (an alert needs the window system).
+    /// Called from `main.swift` right after `runAtLaunch()`, still before the app builds its models. An alert needs a running
+    /// `NSApplication`, so this creates and activates it; the SwiftUI `App` reuses the same shared instance.
     func presentFailureIfNeeded() {
+        guard failure != nil else { return }
+        _ = NSApplication.shared
+        NSApp.activate(ignoringOtherApps: true)
         while let reason = failure {
             let alert = NSAlert()
             alert.alertStyle = .warning

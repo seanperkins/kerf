@@ -239,7 +239,8 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 3. Quit and launch again: nothing is copied twice and no alert appears.
 4. The failure path: delete `~/Library/Application Support/LoftLine` and the `loftline.migratedFromKerf` default, then run
    `touch ~/Library/Application\ Support/LoftLine` (a file where the folder must go). Launch: an alert names the reason and offers
-   Retry or Continue Without Importing. Remove the file, choose Retry: the tools arrive without a relaunch. Run it again and
+   Retry or Continue Without Importing, before any window opens. Remove the file, choose Retry: the first window already has the
+   imported tools and settings (change a setting, then check the others kept their Kerf values). Run it again and
    choose Continue Without Importing instead: LoftLine starts with the seeded tools and never asks again.
 5. After you have checked that your data came across, delete the old `Kerf.app` by hand: it stays installed and keeps registering `.kerf`.
 
