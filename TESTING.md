@@ -229,6 +229,20 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 4. `scripts/check-samples.sh` passes on a clean checkout. Change a feed rate in `Sources/PostCore/Profiles/BuiltInPosts.swift` and
    it fails with the diff (undo the change; `--update` is for intended changes only).
 
+## Migrating from Kerf
+
+1. Make sure LoftLine has not been run on this account: `~/Library/Application Support/LoftLine` does not exist and
+   `defaults delete com.seanperkins.loftline loftline.migratedFromKerf` reports nothing to delete. Put a `tools.json` in
+   `~/Library/Application Support/Kerf/` (copy one from a Kerf install) and run `defaults write com.seanperkins.kerf kerf.groupByTool -bool true`.
+2. Launch LoftLine. Toolpaths ▸ Tool Database lists the tools from that file, not the seeded ones, and Export G-code groups the program
+   by tool. A `kerf.*` setting you changed in Kerf (Settings ▸ General, window positions) is back.
+3. Quit and launch again: nothing is copied twice and no alert appears.
+4. The failure path: delete `~/Library/Application Support/LoftLine` and the `loftline.migratedFromKerf` default, then run
+   `touch ~/Library/Application\ Support/LoftLine` (a file where the folder must go). Launch: an alert names the reason and offers
+   Retry or Continue Without Importing. Remove the file, choose Retry: the tools arrive without a relaunch. Run it again and
+   choose Continue Without Importing instead: LoftLine starts with the seeded tools and never asks again.
+5. After you have checked that your data came across, delete the old `Kerf.app` by hand: it stays installed and keeps registering `.kerf`.
+
 ## A heavy SVG
 
 1. Import an SVG with thousands of paths (a traced drawing; `File → Import…`): the window stays responsive, every new shape is selected and drawn in the selection color, and zooming and panning keep up (a drawing over 5,000 segments is drawn as one-point lines: they look slightly thinner than the shapes of a small drawing).
