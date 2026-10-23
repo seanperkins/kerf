@@ -258,3 +258,31 @@ import Testing
         #expect(r.shapes.isEmpty)
     }
 }
+
+/// Issue #96. With no viewBox and no height the page height is unknown, and flipping Y about 0 put every shape below
+/// the material. The content's lowest point is the bottom of the page then; its shape, size and X are untouched.
+@Suite struct IOSVGUnknownPageHeightTests {
+    func importInches(_ svg: String) throws -> ImportResult {
+        try SVGImporter(pixelsPerInch: 96).importVectors(from: Data(svg.utf8), targetUnits: .inch)
+    }
+
+    @Test func contentSitsOnTheBottomEdgeWhenThePageHasNoHeight() throws {
+        let r = try importInches(#"<svg xmlns="http://www.w3.org/2000/svg" width="288"><rect x="96" y="48" width="96" height="192"/></svg>"#)
+        let b = try #require(r.shapes.first).bounds()
+        #expect(approx(b, Rect2(x: 1, y: 0, width: 1, height: 2), 1e-9))
+    }
+
+    @Test func theRelativePositionOfShapesIsKept() throws {
+        let r = try importInches(#"<svg xmlns="http://www.w3.org/2000/svg"><rect id="low" x="0" y="96" width="96" height="96"/><rect id="high" x="0" y="0" width="96" height="96"/></svg>"#)
+        let low = try #require(r.shapes.first { $0.name == "low" }).bounds()
+        let high = try #require(r.shapes.first { $0.name == "high" }).bounds()
+        #expect(approx(low, Rect2(x: 0, y: 0, width: 1, height: 1), 1e-9))
+        #expect(approx(high, Rect2(x: 0, y: 1, width: 1, height: 1), 1e-9))
+    }
+
+    @Test func aPageWithAHeightIsNotMoved() throws {
+        let r = try importInches(#"<svg xmlns="http://www.w3.org/2000/svg" width="288" height="288"><rect x="96" y="48" width="96" height="96"/></svg>"#)
+        let b = try #require(r.shapes.first).bounds()
+        #expect(approx(b, Rect2(x: 1, y: 1.5, width: 1, height: 1), 1e-9))
+    }
+}
