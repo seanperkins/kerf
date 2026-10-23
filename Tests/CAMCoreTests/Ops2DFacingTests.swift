@@ -154,6 +154,23 @@ func ops2DFacingTakesTheCutInPassesAndKeepsEveryLayerTheSame(mode: ZZeroMode) th
     #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
 }
 
+@Test func ops2DFacingSplitsTheLayerByTheToolsStepdown() throws {
+    // The default 1/16 in layer on a tool whose stepdown is 0.03 is three passes, none deeper than that.
+    let (made, _) = F.document([])
+    var ctx = made
+    ctx.document.job.width = 6
+    ctx.document.job.height = 4
+    var lib = ToolLibrary.seeded
+    let i = try #require(lib.tools.firstIndex { $0.id == F.bigEndMill.id })
+    lib.tools[i].stepdown = 0.03
+    ctx.tools = lib
+    let tp = try FacingOperation(setup: OperationSetup(name: "Face", toolID: F.bigEndMill.id)).generate(in: ctx)[0]
+    let depths = Array(Set(F.densePoints(tp.moves).map { (ctx.coords.depth(ofMachineZ: $0.z) * 1e6).rounded() / 1e6 }.filter { $0 > 1e-9 })).sorted()
+    #expect(depths.count == 3)
+    for (a, b) in zip([0.0] + depths, depths) { #expect(b - a <= 0.03 + 1e-9) }
+    #expect(abs((depths.last ?? 0) - 0.0625) < 1e-9)
+}
+
 @Test func ops2DFacingOverhangMovesTheCuttersEdgeNotTheLead() throws {
     // Overhang 0.4 on a 0.25 radius: the center runs 0.15 past the edge on each side.
     var p = FacingParameters(pattern: .rasterX)

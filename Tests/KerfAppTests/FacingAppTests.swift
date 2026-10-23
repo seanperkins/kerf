@@ -84,4 +84,18 @@ import Testing
             #expect(FacingForm.scopeNote(area: .vectors, multiSheet: sheets, twoSided: sides) == nil)
         }
     }
+
+    @Test func switchingToTheWholeMaterialDropsTheVectorsAndTheProjection() {
+        var setup = OperationSetup(name: "Face", toolID: UUID(), shapeIDs: [UUID(), UUID()])
+        setup.projectOntoModelID = UUID()
+        // Selected vectors keep both.
+        let boxed = FacingForm.operation(setup, params: FacingParameters(area: .vectors))
+        #expect(boxed.setup.shapeIDs == setup.shapeIDs)
+        #expect(boxed.setup.projectOntoModelID == setup.projectOntoModelID)
+        // The whole material has neither: its sheet and side are the ones a vectorless toolpath has, and it cuts a flat plane.
+        let whole = FacingForm.operation(setup, params: FacingParameters(area: .material))
+        #expect(whole.setup.shapeIDs.isEmpty)
+        #expect(whole.setup.projectOntoModelID == nil)
+        #expect(whole.setup.id == setup.id && whole.setup.name == "Face")
+    }
 }

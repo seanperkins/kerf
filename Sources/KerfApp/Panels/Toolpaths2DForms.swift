@@ -243,6 +243,18 @@ struct FacingForm: View {
     var multiSheet = false
     var twoSided = false
 
+    /// The operation for `params`: a facing of the whole material takes no vectors and cannot be projected onto a
+    /// model, so the sheet and side it belongs to are the ones every vectorless toolpath has and the note below is true
+    /// (switching the area from Selected vectors must not leave the old vectors, or a projection, behind).
+    static func operation(_ setup: OperationSetup, params: FacingParameters) -> AnyOperation {
+        var setup = setup
+        if params.area == .material {
+            setup.shapeIDs = []
+            setup.projectOntoModelID = nil
+        }
+        return .facing(FacingOperation(setup: setup, params: params))
+    }
+
     /// Why a facing of the whole material may not be where it is expected: with no vectors it belongs to the first
     /// sheet and the top side, as a 3D relief does. nil when there is nothing to say.
     static func scopeNote(area: FacingArea, multiSheet: Bool, twoSided: Bool) -> String? {

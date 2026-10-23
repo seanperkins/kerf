@@ -59,7 +59,7 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    - **Fluting** on an open line, and **Texture** on a rectangle.
    - **Facing** with nothing selected: Toolpaths → New Toolpath → Facing faces the whole material (with
      vectors selected it takes the box round them instead). Try Along X, Along Y and Spiral in the 2D
-     preview: every pass starts and ends clear of the stock, and the first pass is fed in from outside.
+     preview: the first pass is fed in from outside, a raster runs out past the stock before it lifts, and a spiral lifts in the middle of the faced floor.
      In the form, a stepover over 95% or an overhang under 0 refuses to calculate; with "Selected
      vectors" on a part inside the stock, the form warns that the cutter reaches past the box. The
      note under the result (and on the job sheet) says how far below the original top the new surface
