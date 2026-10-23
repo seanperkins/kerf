@@ -68,6 +68,8 @@ import Testing
         #expect(CanvasDetail.isVisible(CGRect(x: 99, y: 99, width: 50, height: 50), in: view))
         #expect(CanvasDetail.isVisible(CGRect(x: -5, y: 10, width: 4, height: 4), in: view))   // reaches in at the edge
         #expect(CanvasDetail.isVisible(CGRect(x: 50, y: 50, width: 0, height: 0), in: view))   // a point
+        #expect(CanvasDetail.isVisible(CGRect(x: 100, y: 10, width: 5, height: 5), in: view))      // shares only an edge
+        #expect(CanvasDetail.isVisible(CGRect(x: 101.5, y: 10, width: 5, height: 5), in: view))    // the stroke reaches in
         #expect(!CanvasDetail.isVisible(CGRect(x: 103, y: 10, width: 5, height: 5), in: view))
         #expect(!CanvasDetail.isVisible(CGRect(x: -20, y: -20, width: 5, height: 5), in: view))
     }
@@ -109,6 +111,28 @@ import Testing
         let b = try Self.render(withOffscreen, selectAll: false, viewport: viewport)
         #expect(a == b)
         #expect(AppTestSupport.looksDrawn(a))
+    }
+
+    @Test @MainActor func aDragPreviewIsDrawnWhereTheShapeWouldLandWhetherOrNotItStartsInView() throws {
+        // A heavy drawing whose selected shapes are far outside the view; dragging them in must show them (and the shapes
+        // that start in view and are dragged out must not leave a ghost where they are not).
+        var doc = Self.document(blobs: 60, segments: 100)
+        for i in 0..<60 { doc.add(Self.blob(x: 200 + Double(i) * 0.5, y: 5, segments: 100, layer: doc.defaultLayerID)) }
+        let far = doc.shapes.suffix(60).map(\.id)
+        let viewport = CanvasViewport(scale: 45, offset: Vec2(145, 60))
+        let kd = KerfDocument(project: KerfProject(document: doc), toolLibrary: AppTestSupport.library())
+        kd.setSelection(far)
+        let view = CanvasNSView(frame: NSRect(x: 0, y: 0, width: 1200, height: 800))
+        view.document = kd
+        view.layout()
+        view.viewport = viewport
+        let still = try #require(AppTestSupport.png(of: view))
+        let before = CanvasDetail.hairlineDraws
+        view.drag = .move(startDoc: Vec2(0, 0), currentDoc: Vec2(-195, 4))
+        let dragged = try #require(AppTestSupport.png(of: view))
+        #expect(CanvasDetail.hairlineDraws > before)
+        #expect(dragged != still, "the selection dragged into view is not drawn")
+        view.drag = .none
     }
 
     @Test @MainActor func aHeavySelectionIsDrawnInTheSelectionColor() throws {

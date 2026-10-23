@@ -177,25 +177,28 @@ extension CanvasNSView {
         ctx.setLineDash(phase: 0, lengths: [])
         for s in shapes {
             let path = cgPath(s)
-            guard CanvasDetail.isVisible(path.boundingBoxOfPath.applying(vt), in: bounds) else { continue }
+            let box = path.boundingBoxOfPath
             let isSel = selected.contains(s.id)
-            var color = CanvasColors.selection
-            if !isSel {
-                if layerColors[s.layerID] == nil {
-                    layerColors[s.layerID] = NSColor(hex: project.document.layer(id: s.layerID)?.colorHex ?? "#000000") ?? .black
+            // Where it is, and where a drag in progress would put it: each is drawn when it can be seen.
+            if CanvasDetail.isVisible(box.applying(vt), in: bounds) {
+                var color = CanvasColors.selection
+                if !isSel {
+                    if layerColors[s.layerID] == nil {
+                        layerColors[s.layerID] = NSColor(hex: project.document.layer(id: s.layerID)?.colorHex ?? "#000000") ?? .black
+                    }
+                    color = layerColors[s.layerID]!
+                    if !project.isEditable(s) { color = color.withAlphaComponent(0.45) }
                 }
-                color = layerColors[s.layerID]!
-                if !project.isEditable(s) { color = color.withAlphaComponent(0.45) }
-            }
-            var tt = vt
-            if let p = path.copy(using: &tt) {
-                ctx.addPath(p)
-                ctx.setStrokeColor(color.cgColor)
-                ctx.strokePath()
+                var tt = vt
+                if let p = path.copy(using: &tt) {
+                    ctx.addPath(p)
+                    ctx.setStrokeColor(color.cgColor)
+                    ctx.strokePath()
+                }
             }
             if isSel, let t = preview, project.isEditable(s) {
                 var moved = t.cg.concatenating(vt)
-                if let p = path.copy(using: &moved) {
+                if CanvasDetail.isVisible(box.applying(moved), in: bounds), let p = path.copy(using: &moved) {
                     ctx.addPath(p)
                     ctx.setStrokeColor(CanvasColors.selection.withAlphaComponent(0.6).cgColor)
                     ctx.strokePath()
