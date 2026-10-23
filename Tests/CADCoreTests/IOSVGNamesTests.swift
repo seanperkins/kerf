@@ -54,5 +54,24 @@ import Testing
         let a = UUID(uuidString: "12345678-0000-0000-0000-000000000001")!, b = UUID(uuidString: "12345679-0000-0000-0000-000000000001")!
         #expect(SVGExporter.hashSuffix(of: a) != SVGExporter.hashSuffix(of: b))
     }
+
+    /// A prefix turned into letters can land on another shape's unchanged prefix ("00000000" gives "a0000000"):
+    /// the ids in one file must still be distinct, or a <use> would resolve to the wrong shape.
+    @Test func idsInOneFileStayDistinctWhenTheMappedSuffixesClash() throws {
+        let layer = Layer(name: "Drill")
+        func shape(_ prefix: String) throws -> Shape {
+            let id = try #require(UUID(uuidString: prefix + "-0000-0000-0000-000000000000"))
+            return Shape(id: id, name: "Hole", layerID: layer.id, paths: [ShapeFactory.circle(center: Vec2(1, 1), radius: 0.125)])
+        }
+        // 00000000 maps to a0000000, which is exactly the second shape's own suffix; 60000000 maps there too.
+        let shapes = [try shape("00000000"), try shape("a0000000"), try shape("60000000"), try shape("a0000000")]
+        let data = try SVGExporter().export(shapes: shapes, layers: [layer], units: .inch)
+        let text = String(decoding: data, as: UTF8.self)
+        let ids = text.components(separatedBy: "id=\"").dropFirst().compactMap { $0.split(separator: "\"").first.map(String.init) }
+            .filter { $0.hasPrefix("Hole-") }
+        #expect(ids.count == 4 && Set(ids).count == 4, Comment(rawValue: "\(ids)"))
+        let result = try SVGImporter().importVectors(from: data, targetUnits: .inch)
+        #expect(result.shapes.map(\.name) == ["Hole", "Hole", "Hole", "Hole"])
+    }
 }
 

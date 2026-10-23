@@ -33,6 +33,7 @@ public struct SVGExporter: VectorExporter {
         for id in Set(byLayer.keys).subtracting(layers.map(\.id)).sorted(by: { $0.uuidString < $1.uuidString }) {
             ordered.append(Layer(id: id, name: "Layer"))
         }
+        var usedIDs = Set<String>()
         for layer in ordered {
             let color = layer.colorHex.isEmpty ? "#000000" : layer.colorHex
             out += "  <g id=\"\(xmlEscape(layerID(layer)))\" inkscape:label=\"\(xmlEscape(layer.name))\" inkscape:groupmode=\"layer\""
@@ -41,7 +42,7 @@ public struct SVGExporter: VectorExporter {
             for s in byLayer[layer.id] ?? [] {
                 let d = s.paths.map(pathData).joined(separator: " ")
                 guard !d.isEmpty else { continue }
-                let name = s.name.isEmpty ? "" : " id=\"\(xmlEscape(uniqueID(s)))\""
+                let name = s.name.isEmpty ? "" : " id=\"\(xmlEscape(uniqueID(s, used: &usedIDs)))\""
                 out += "    <path\(name) d=\"\(d)\"/>\n"
             }
             out += "  </g>\n"
@@ -92,15 +93,29 @@ public struct SVGExporter: VectorExporter {
     }
 
     private func layerID(_ l: Layer) -> String { "layer-" + l.id.uuidString.prefix(8).lowercased() }
-    private func uniqueID(_ s: Shape) -> String {
+    /// An id no other element of this file has: `<name>-<hash suffix>`, with the suffix's last digit stepped on in
+    /// the rare case that another shape already got the same one.
+    private func uniqueID(_ s: Shape, used: inout Set<String>) -> String {
         let base = s.name.filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
-        return (base.isEmpty ? "shape" : base) + "-" + Self.hashSuffix(of: s.id)
+        let stem = (base.isEmpty ? "shape" : base) + "-"
+        var digits = Array(Self.hashSuffix(of: s.id))
+        for step in 0..<16 {
+            if step > 0, let last = digits.last?.hexDigitValue {
+                digits[digits.count - 1] = Array("0123456789abcdef")[(last + 1) % 16]
+            }
+            // The importer only drops a suffix that has a letter a-f.
+            guard digits.contains(where: { "abcdef".contains($0) }) else { continue }
+            let id = stem + String(digits)
+            if used.insert(id).inserted { return id }
+        }
+        return stem + String(digits)
     }
 
     /// The first eight hex digits of `id`, lowercased, with at least one letter a-f: that is how `SVGImporter`
     /// tells this suffix from a date or a revision ("Rev-20240101") and drops it. A UUID that starts with eight
     /// decimal digits (about 2 in 100) has its first digit turned into a letter, so its name survives a round
-    /// trip; two such ids collide only if the other seven digits match too (one in 270 million).
+    /// trip. That cannot be one to one (an id that already starts with that letter gives the same suffix), so
+    /// `uniqueID` checks each id against the others in the file.
     static func hashSuffix(of id: UUID) -> String {
         var digits = Array(id.uuidString.prefix(8).lowercased())
         if !digits.contains(where: { "abcdef".contains($0) }), let d = digits[0].wholeNumberValue {
