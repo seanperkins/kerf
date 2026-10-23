@@ -113,8 +113,9 @@ enum OperationWarnings {
     }
 
     /// How deep and how wide across `other` clears material at `c`, or nil when it does not make a hole there: a Drill at
-    /// the center (as wide as its tool), unless `drillOnly` also a helical bore there (as wide as the hole), a pocket
-    /// whose vectors enclose it, or a profile cut inside a vector that encloses it (as wide as the room round `c`).
+    /// the center (as wide as its tool), unless `drillOnly` also a helical bore there that leaves no core (a hole no wider
+    /// than twice its tool; a wider one is only a ring, the middle stays solid) and a pocket whose vectors enclose it
+    /// (as wide as the room round `c`). A profile cuts the perimeter only, so it makes no pilot.
     private static func clearing(of other: AnyOperation, at c: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
                                  units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> (depth: Double, width: Double)? {
         guard other.setup.isEnabled else { return nil }
@@ -132,11 +133,12 @@ enum OperationWarnings {
                   let t = otherTool() else { return nil }
             return (d.params.cutDepth, t.diameter)
         case .holeMill(let h) where !drillOnly && h.params.mode == .helical:
-            guard let hole = HoleMillOperation.holes(shapes, tolerance: tol).first(where: { $0.centre.distance(to: c) <= tol }) else { return nil }
-            return (h.params.cutDepth, h.params.holeDiameter ?? hole.diameter)
+            guard var hole = HoleMillOperation.holes(shapes, tolerance: tol).first(where: { $0.centre.distance(to: c) <= tol }),
+                  let t = otherTool() else { return nil }
+            if let d = h.params.holeDiameter { hole.diameter = d }
+            guard hole.diameter >= t.diameter - tol, HoleMillOperation.leavesNoCore(hole, tool: t, tolerance: tol) else { return nil }
+            return (h.params.cutDepth, hole.diameter)
         case .pocket(let p) where !drillOnly:
-            return room().map { (p.params.depth.cutDepth, $0) }
-        case .profile(let p) where !drillOnly && p.params.side == .inside:
             return room().map { (p.params.depth.cutDepth, $0) }
         default: return nil
         }

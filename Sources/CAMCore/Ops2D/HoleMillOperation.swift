@@ -150,7 +150,7 @@ public struct HoleMillOperation: ToolpathOperation {
     }
 
     /// True when a ring at radius (D - d)/2 sweeps the whole hole, so nothing is left at the centre.
-    static func leavesNoCore(_ hole: Hole, tool: Tool, tolerance: Double) -> Bool {
+    public static func leavesNoCore(_ hole: Hole, tool: Tool, tolerance: Double) -> Bool {
         hole.diameter <= 2 * tool.diameter + tolerance
     }
 

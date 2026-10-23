@@ -178,3 +178,22 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
     #expect(ring.contains { abs($0.xy.distance(to: Vec2(3, 3)) - 0.375) < 1e-3 })
     #expect(steepestHelixAngle(tp, ctx) < 1)
 }
+
+@Test func ops2DHoleMillPeckFallbackWorksBelowAStartDepth() throws {
+    // A start depth is where the material begins: the pecks and their laps run from it down, each peck feeding down from the top
+    // of what is cleared.
+    var p = HoleMillParameters(cutDepth: 0.5)
+    p.startDepth = 0.2
+    let (tp, ctx) = try holeMill(p, paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.13)])
+    #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
+    #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.5)) < 1e-9)
+    var feedDepths: [Double] = []
+    for m in tp.moves {
+        if case .linear(let to, _) = m { feedDepths.append(ctx.coords.depth(ofMachineZ: to.z)) }
+    }
+    let pecks: [Double] = [0.325, 0.45, 0.5]   // the 0.125 pitch from the 0.2 start depth: 0.325, 0.45, then the cut depth
+    for peck in pecks {
+        #expect(feedDepths.contains { abs($0 - peck) < 1e-6 }, "feeds down to \(peck)")
+    }
+    #expect(tp.metadata["warning"]?.contains("peck-drilled instead") == true)
+}

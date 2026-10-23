@@ -384,14 +384,15 @@ import Testing
         p.operations = [.holeMill(thread)]
         let w = warnings(.holeMill(thread), p, lib)
         #expect(w.count == 1 && w[0].contains("1 hole(s) in thread mode have no pilot hole"))
-        // Any earlier toolpath that clears the middle to the thread's depth, as wide as the thread mill, is a pilot.
-        let bore = AnyOperation.holeMill(holeMill(mill, a, depth: 0.5, diameter: 0.9))
+        // Any earlier toolpath that clears the middle to the thread's depth, as wide as the thread mill, is a pilot: a
+        // drill, a bore that leaves no core (a hole up to twice its tool), a pocket over it.
+        let bore = AnyOperation.holeMill(holeMill(mill, a, depth: 0.5, diameter: 0.45))
         var pocketParams = PocketParameters()
         pocketParams.depth.cutDepth = 0.75
         let pocket = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "P", toolID: mill.id, shapeIDs: [a.id]), params: pocketParams))
         let inside = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "I", toolID: mill.id, shapeIDs: [a.id]),
                                                            params: ProfileParameters(side: .inside)))
-        for pilot in [drill(wide, a), bore, pocket, inside] {
+        for pilot in [drill(wide, a), bore, pocket] {
             p.operations = [pilot, .holeMill(thread)]
             #expect(warnings(.holeMill(thread), p, lib).isEmpty, "\(pilot.kind)")
         }
@@ -402,7 +403,8 @@ import Testing
         let outside = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "O", toolID: mill.id, shapeIDs: [a.id]), params: ProfileParameters(side: .outside)))
         let anotherThread = AnyOperation.holeMill(holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 1.0))
         let notPilots: [AnyOperation] = [
-            drill(narrow, a), drill(wide, a, depth: 0.3), drill(wide, b), drill(wide, a, enabled: false), outside, anotherThread,
+            drill(narrow, a), drill(wide, a, depth: 0.3), drill(wide, b), drill(wide, a, enabled: false), outside, inside, anotherThread,
+            .holeMill(holeMill(mill, a, depth: 0.5, diameter: 0.9)),                    // a ring: the middle stays solid
             .pocket(PocketOperation(setup: OperationSetup(name: "P", toolID: mill.id, shapeIDs: [a.id]), params: shallowPocket)),
             .holeMill(holeMill(mill, a, depth: 0.3, diameter: 0.9)),
         ]
