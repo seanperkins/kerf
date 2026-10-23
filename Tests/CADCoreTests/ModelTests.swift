@@ -40,3 +40,13 @@ import Testing
     #expect(abs(v.vWidth(atDepth: 0.1) - 0.2) < 1e-12)
     #expect(abs(v.vDepth(forWidth: 0.2) - 0.1) < 1e-12)
 }
+
+@Test func maxStretchIsTheLargestSingularValue() {
+    #expect(abs(Transform2D.identity.maxStretch - 1) < 1e-12)
+    #expect(abs(Transform2D.rotation(0.7).maxStretch - 1) < 1e-12)
+    #expect(abs(Transform2D.scale(3, 3).concatenating(.rotation(1.1)).maxStretch - 3) < 1e-12)
+    #expect(abs(Transform2D.scale(2, 5).maxStretch - 5) < 1e-12)
+    #expect(abs(Transform2D.scale(-4, 1).maxStretch - 4) < 1e-12)
+    // A shear: [[1, 1], [0, 1]] stretches by the golden ratio.
+    #expect(abs(Transform2D(a: 1, b: 0, c: 1, d: 1, tx: 7, ty: 7).maxStretch - (1 + 5.0.squareRoot()) / 2) < 1e-12)
+}

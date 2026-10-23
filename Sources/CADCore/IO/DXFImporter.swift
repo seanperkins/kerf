@@ -21,8 +21,6 @@ public struct DXFImporter: VectorImporter {
         var warnings: [String] = []
         let scale = unitScale(file, to: targetUnits, warnings: &warnings)
         let toDoc = Transform2D.scale(scale, scale)
-        // Entities are sampled in the file's units; the tolerance is a length in the target units.
-        let splineTol = splineTolerance / max(scale, 1e-12)
         let joinTol = joinTolerance ?? (targetUnits == .inch ? 0.0005 : 0.01)
 
         var layerOrder: [String] = []
@@ -45,7 +43,10 @@ public struct DXFImporter: VectorImporter {
                     collect(block.entities, m.concatenating(t), inheritedLayer: layer, depth: depth + 1)
                     continue
                 }
-                guard let paths = DXFGeometry.paths(for: e, splineTolerance: splineTol) else {
+                // `t` maps the entity to the document (file units, INSERT scale, rotation and mirror), and the
+                // tolerance is a length in the document, so the entity is sampled to the tolerance over the most `t`
+                // can stretch it.
+                guard let paths = DXFGeometry.paths(for: e, splineTolerance: splineTolerance / max(t.maxStretch, 1e-12)) else {
                     skipped[e.type, default: 0] += 1; continue
                 }
                 guard !paths.isEmpty else { continue }

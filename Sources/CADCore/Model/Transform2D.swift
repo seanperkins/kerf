@@ -51,6 +51,12 @@ public struct Transform2D: Codable, Hashable, Sendable {
         abs(a * a + b * b - (c * c + d * d)) < 1e-9 && abs(a * c + b * d) < 1e-9
     }
     public var uniformScale: Double { (abs(determinant)).squareRoot() }
+    /// The most the transform stretches any direction (its largest singular value): a length measured before it
+    /// is at most this much longer after it, whatever the (non)uniform scale and shear.
+    public var maxStretch: Double {
+        let s = a * a + b * b + c * c + d * d, det = determinant
+        return ((s + max(s * s - 4 * det * det, 0).squareRoot()) / 2).squareRoot()
+    }
 
     public var inverted: Transform2D? {
         let det = determinant

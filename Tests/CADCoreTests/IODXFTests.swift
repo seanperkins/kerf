@@ -132,6 +132,29 @@ func dxf(header: [(Int, String)] = [], entities: [(Int, String)]) -> Data {
         #expect(abs(pts.first!.x - 100) < 1e-6 && abs(pts.last!.y - 100) < 1e-6)
     }
 
+    /// The tolerance is a length in the document's units for the sampled curve as it ends up, so an INSERT that magnifies
+    /// its block needs a finer sampling: a 100 mm quarter circle inserted at scale 100 from a 1 mm block was sampled with
+    /// 100 times the tolerance it asked for.
+    @Test(arguments: [1.0, 10.0, 100.0, 1000.0])
+    func splinesInScaledInsertsAreSampledWithinTheToleranceOfTheResult(scale: Double) throws {
+        // Rational quadratic quarter circle of radius 100 / scale (block units), centred on the origin.
+        let r = 100.0 / scale, w = 2.0.squareRoot() / 2
+        let spline: [(Int, String)] = [(0, "SPLINE"), (8, "0"), (70, "8"), (71, "2"), (72, "6"), (73, "3"), (74, "0"),
+                                       (40, "0"), (40, "0"), (40, "0"), (40, "1"), (40, "1"), (40, "1"),
+                                       (41, "1"), (41, "\(w)"), (41, "1"),
+                                       (10, "\(r)"), (20, "0"), (10, "\(r)"), (20, "\(r)"), (10, "0"), (20, "\(r)")]
+        var text = "0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n8\n0\n2\nQ\n70\n0\n10\n0\n20\n0\n"
+        for (c, v) in spline { text += "\(c)\n\(v)\n" }
+        text += "0\nENDBLK\n8\n0\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nINSERT\n8\n0\n2\nQ\n10\n0\n20\n0\n41\n\(scale)\n42\n\(scale)\n0\nENDSEC\n0\nEOF\n"
+        let res = try DXFImporter().importVectors(from: Data(text.utf8), targetUnits: .millimeter)
+        let pts = res.shapes[0].paths[0].flattened(tolerance: 1e-6)
+        #expect(pts.count > 8)
+        var sag = 0.0
+        for (a, b) in zip(pts, pts.dropFirst()) { sag = max(sag, 100 - ((a + b) / 2).length) }
+        #expect(sag < 0.01, "scale \(scale): the outline is \(sag) mm inside the circle between samples")
+        #expect(abs(pts.first!.x - 100) < 1e-6 && abs(pts.last!.y - 100) < 1e-6)
+    }
+
     @Test func lwpolylineReturningToStartWithoutClosedFlagImportsClosed() throws {
         let pl: [(Int, String)] = [(0, "LWPOLYLINE"), (8, "0"), (90, "4"), (70, "0"),
                                    (10, "0"), (20, "0"), (10, "4"), (20, "0"), (10, "2"), (20, "3"),
