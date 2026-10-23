@@ -61,8 +61,10 @@ public enum TabAnchors {
     /// only when that vector is a closed path of a shape in `shapeIDs` (the shapes this toolpath
     /// cuts), the anchor lies on its part's outline (`ownLoops`; an edge two vectors share is inside
     /// the part), the part's loop runs nearest it at a point one offset from the anchor's own vector
-    /// (straight across from its stretch, or at the corner that trims or extends it, within the miter
-    /// limit's reach), and one of `loops` runs through that point; it goes onto that loop there. One
+    /// and standing straight across from the stretch the anchor is on (`standsAcross`: straight across
+    /// from the anchor itself, or further along that stretch where a corner trims it, within the miter
+    /// limit's reach, never across a corner of the vector or from another stretch), and one of `loops`
+    /// runs through that point; it goes onto that loop there. One
     /// on another part however near, on an open vector, on a vector that no longer exists, on a
     /// stretch the toolpath does not cut, or whose own loop the offset swallowed (a hole smaller than
     /// the tool, in a part whose other loops survive) is never attached to whatever loop happens to
@@ -88,7 +90,8 @@ public enum TabAnchors {
             let slack = 8 * tolerance + 1e-6
             guard (nearest(p, on: mine.outline)?.distance ?? .infinity) <= slack,
                   let site = nearest(p, on: mine.part), site.distance <= ProfileGeometry.sharpMiterLimit * mine.offset + slack,
-                  abs(vector.project(site.point).distance - mine.offset) <= slack else { continue }
+                  abs(vector.project(site.point).distance - mine.offset) <= slack,
+                  standsAcross(from: p, at: site.point, on: vector, offset: mine.offset, slack: slack) else { continue }
             var best: (index: Int, s: Double, d: Double)?
             for (i, loop) in loops.enumerated() where loop.isClosed && loop.length > 0 {
                 let pr = loop.project(site.point)
@@ -111,6 +114,25 @@ public enum TabAnchors {
         public var cut: [Bool]
         /// Anchors that got no tab.
         public var ignored: Int { placed.filter { !$0 }.count }
+    }
+
+    /// Whether the point `site` of the part's loop is the anchor's own: some point of the vector (a foot)
+    /// stands `offset` from it, and the anchor is that foot or lies along the line the site's offset
+    /// stands square to. Two stretches of a vector can each have a foot at `offset` from one point (the
+    /// inside of a corner), so every stretch is tried. A foot beyond a corner of the vector is not: the
+    /// site there is straight across from the next stretch, and where two merged loops swallow the
+    /// anchor's own stretch it would carry the tab round the corner (issue #52). A little lean is allowed
+    /// (the vector's flattened curves turn a few degrees from one chord to the next).
+    private static func standsAcross(from anchor: Vec2, at site: Vec2, on vector: ArcLengthChain, offset: Double,
+                                     slack: Double) -> Bool {
+        let lean = max(slack, 0.3 * offset)
+        for (a, b) in zip(vector.walk, vector.walk.dropFirst()) {
+            let foot = Polygon2D.closestPoint(onSegment: a, b, to: site).0
+            guard abs(foot.distance(to: site) - offset) <= slack else { continue }
+            let back = anchor - foot
+            if back.length <= slack || abs((site - foot).dot(back / back.length)) <= lean { return true }
+        }
+        return false
     }
 
     private static func nearest(_ p: Vec2, on loops: [ArcLengthChain]) -> (point: Vec2, distance: Double)? {
