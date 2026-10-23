@@ -37,7 +37,8 @@ enum KerfCLI {
           --post <id>          post processor (default: the project's); `kerf-cli posts` lists them
           --operation <name>   only that toolpath, with its own sheet and side
           --out <dir>|-        folder to write to (created if needed), or - for standard output
-          --side top|bottom    which side of a two-sided job (default top)
+          --side top|bottom    which side of a two-sided job the whole program is for (default top); a toolpath asked for
+                       by name is posted with its own sheet and side
           --name <text>        job name in the program header (default: the project's name)
           --group-by-tool      order the program by tool, as the Export sheet's option does
           --builtin-only       ignore the user's posts and machines in Application Support (for CI)
@@ -163,17 +164,11 @@ enum KerfCLI {
     // MARK: posts
 
     private static func posts(_ arguments: [String], output: Output) -> Int32 {
-        let options: Options
-        switch parse(arguments) {
-        case .failure(let e):
-            output.standardError("error: \(e.message)\n")
-            return 2
-        case .success(let o): options = o
-        }
-        guard options.file == nil else {
-            output.standardError("error: posts takes no file\n")
+        guard arguments.allSatisfy({ $0 == "--builtin-only" }) else {
+            output.standardError("error: posts takes only --builtin-only\n")
             return 2
         }
+        let options = Options(builtinOnly: !arguments.isEmpty)
         for profile in stores(builtinOnly: options.builtinOnly).posts.allProfiles() {
             output.standardOutput("\(profile.id)\t\(profile.name)\n")
         }

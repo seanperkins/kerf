@@ -261,6 +261,8 @@ import Testing
             (["export", Self.sign, "--bogus"], "unknown option --bogus"),
             (["export", Self.sign, "--post"], "--post needs a value"),
             (["export", Self.sign, "--out", "--force"], "--out needs a value"),
+            (["posts", "--force"], "posts takes only --builtin-only"),
+            (["posts", "sign.kerf"], "posts takes only --builtin-only"),
             (["export", Self.sign, "--force=yes"], "takes no value"),
             (["export", Self.sign, "extra.kerf"], "unexpected argument"),
             (["export", "/nonexistent/none.kerf"], "cannot read"),
