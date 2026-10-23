@@ -65,11 +65,13 @@ struct ChamferForm: View {
                 LengthField("Depth", value: Binding(get: { d }, set: { params.depth = $0 }), units: units,
                             help: "Depth of the bit tip below the start depth's surface")
             } else {
-                LengthField("Width", value: $params.width, units: units, help: "Chamfer width on the top surface")
+                LengthField("Width", value: $params.width, units: units,
+                            help: "Chamfer width on the surface at the start depth (the material top when it is 0)")
             }
             LengthField("Tip clearance", value: $params.tipClearance, units: units,
                         help: "How far the tip runs into the waste past the edge")
-            LengthField("Start depth", value: $params.startDepth, units: units)
+            LengthField("Start depth", value: $params.startDepth, units: units,
+                        help: "Depth of the surface the chamfer is measured from; the material above it is taken as already removed")
             OptionalLengthField(label: "Pass depth", value: $params.passDepth, units: units,
                                 defaultValue: units == .inch ? 0.1 : 2.5)
             DirectionPicker(direction: $params.direction)
@@ -89,7 +91,10 @@ struct ChamferForm: View {
         do {
             let s = try ChamferOperation.size(tool: tool, params: params)
             let u = units.abbreviation
-            return ("\(fmt(s.width)) \(u) wide × \(fmt(s.height)) \(u) high; tip \(fmt(s.depth)) \(u) deep.", true)
+            let tip = params.startDepth > 0
+                ? "tip \(fmt(s.depth)) \(u) below the start depth (\(fmt(params.startDepth + s.depth)) \(u) below the top)"
+                : "tip \(fmt(s.depth)) \(u) deep"
+            return ("\(fmt(s.width)) \(u) wide × \(fmt(s.height)) \(u) high; \(tip).", true)
         } catch CAMError.invalidParameter(let message) {
             return (message, false)
         } catch {

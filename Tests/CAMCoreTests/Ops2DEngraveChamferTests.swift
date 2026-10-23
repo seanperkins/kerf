@@ -93,6 +93,36 @@ func ops2DChamferRunsTheTipOnTheEdgeAtTheWidthDepth(mode: ZZeroMode) throws {
     #expect(depths.max() == 250)
 }
 
+/// With a start depth the width and the depth share one basis: the surface at the start depth, where the material
+/// above is already gone (issue #51). The 90° bit's cone edge runs `depth` out from the tip at that surface, so the
+/// width is the depth the tip goes below it.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DChamferWidthAndDepthAreMeasuredFromTheStartDepthSurface(mode: ZZeroMode) throws {
+    let tip = vBit90.tipDiameter / 2
+    // By depth: the tip goes 0.24 below the start depth (0.44 below the top); the width is on the start surface.
+    let byDepth = ChamferParameters(depth: 0.24, startDepth: 0.2)
+    let size = try ChamferOperation.size(tool: vBit90, params: byDepth)
+    #expect(abs(size.depth - 0.24) < 1e-12)
+    #expect(abs(size.width - (tip + 0.24)) < 1e-12)
+    let (tp, ctx) = try chamfer(byDepth, zZero: mode)
+    #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.44)) < 1e-9)
+    #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
+    // By width: asking for the width the depth gave comes back to the same cut.
+    let byWidth = ChamferParameters(width: size.width, startDepth: 0.2)
+    let same = try ChamferOperation.size(tool: vBit90, params: byWidth)
+    #expect(abs(same.depth - size.depth) < 1e-9 && abs(same.width - size.width) < 1e-9)
+    let (tpWidth, ctxWidth) = try chamfer(byWidth, zZero: mode)
+    #expect(abs(tpWidth.minZ! - ctxWidth.coords.z(depth: 0.44)) < 1e-9)
+    // The start depth shifts the cut and nothing else: the same size at the top is the same bevel.
+    let atTop = try ChamferOperation.size(tool: vBit90, params: ChamferParameters(depth: 0.24))
+    #expect(atTop == size)
+    // Nothing is cut at or above the start depth: a depth of 0 below it, or less, is refused.
+    #expect(throws: CAMError.self) { try ChamferOperation.size(tool: vBit90, params: ChamferParameters(depth: 0, startDepth: 0.2)) }
+    #expect(throws: CAMError.self) { try ChamferOperation.size(tool: vBit90, params: ChamferParameters(depth: -0.1, startDepth: 0.2)) }
+    // Too wide for the bit is judged on the same surface: 0.3 wide on a 1/2 in bit, whatever the start depth.
+    #expect(throws: CAMError.self) { try ChamferOperation.size(tool: vBit90, params: ChamferParameters(width: 0.3, startDepth: 0.2)) }
+}
+
 @Test func ops2DChamferRejectsWrongToolsAndOversizedChamfers() {
     #expect(throws: CAMError.self) { try ChamferOperation.size(tool: F.endMill, params: ChamferParameters()) }
     // 90° bit, 1/2" diameter: the cone reaches at most 0.25 from the tip.

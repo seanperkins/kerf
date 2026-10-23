@@ -13,7 +13,9 @@ public struct ChamferOperation: ToolpathOperation {
         self.params = params
     }
 
-    /// Resolved chamfer size: tip depth, width on the top surface and bevel height on the wall.
+    /// Resolved chamfer size. Everything is measured from the surface at the start depth, where the
+    /// material above is taken as already removed (as for every operation's start depth): the tip
+    /// `depth` below it, the `width` of the bevel on it and its `height` on the wall.
     public struct Size: Equatable, Sendable {
         public var depth: Double
         public var width: Double
@@ -35,10 +37,10 @@ public struct ChamferOperation: ToolpathOperation {
             guard params.width > 0 else { throw CAMError.invalidParameter("Chamfer width must be positive") }
             depth = tool.vDepth(forWidth: 2 * (params.width + e))
         }
-        guard depth > params.startDepth else {
-            throw CAMError.invalidParameter("The chamfer is no deeper than the start depth")
+        guard depth > 0 else {
+            throw CAMError.invalidParameter("The chamfer depth must be positive")
         }
-        // Cone edge distance from the tip centre at the top surface.
+        // Cone edge distance from the tip centre at the surface the chamfer is measured from.
         let reach = tip + depth * tanHalf
         guard reach <= tool.radius + 1e-9 else {
             throw CAMError.invalidParameter("The chamfer is wider than the V-bit can cut")
@@ -52,8 +54,9 @@ public struct ChamferOperation: ToolpathOperation {
         let tool = try context.tool(setup.toolID)
         let size = try Self.size(tool: tool, params: params)
         // The tip runs `tipClearance` off the vector on the waste side: a profile whose offset
-        // (tool radius + allowance) equals that clearance.
-        var p = ProfileParameters(depth: DepthSettings(startDepth: params.startDepth, cutDepth: size.depth,
+        // (tool radius + allowance) equals that clearance. It goes `size.depth` below the start depth.
+        let tipDepth = params.startDepth + size.depth
+        var p = ProfileParameters(depth: DepthSettings(startDepth: params.startDepth, cutDepth: tipDepth,
                                                        passDepth: params.passDepth),
                                   side: params.side, direction: params.direction)
         p.allowance = max(params.tipClearance, 0) - tool.radius
@@ -61,7 +64,7 @@ public struct ChamferOperation: ToolpathOperation {
         for i in tps.indices {
             tps[i].kind = .chamfer
             tps[i].metadata["chamfer"] = String(format: "%.4g wide × %.4g high, tip depth %.4g",
-                                                size.width, size.height, size.depth)
+                                                size.width, size.height, tipDepth)
         }
         return tps
     }

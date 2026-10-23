@@ -272,6 +272,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 
             - **Side** says which side of a closed vector is the part; the bevel is cut into the part edge.
             - Give the **width** of the bevel on the top face, or a **depth**; the other follows from the bit angle.
+            - With a **start depth** both are measured from the surface at that depth (the material above it is taken as already removed).
             - **Tip clearance** keeps the bit's point off the wall by running it slightly into the waste.
             """
         case .holeMill:
@@ -502,7 +503,7 @@ enum FieldHelp {
         "Surface clearance": "Gap kept between the plug board and the pocket board when the plug is seated",
         "Size by": "Set the chamfer by its width on the surface or by how deep the tip goes",
         "Depth": "Depth of the bit tip below the start depth's surface",
-        "Width": "Chamfer width on the top surface",
+        "Width": "Chamfer width on the surface at the start depth (the material top when it is 0)",
         "Tip clearance": "How far the tip runs into the waste past the edge",
         "Passes": "Even divides the depth evenly; Exact step cuts full passes and the remainder last; Custom lists each pass",
         "Last pass thickness": "Material left for a thin last pass (0 = none)",

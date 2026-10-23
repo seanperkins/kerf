@@ -45,13 +45,16 @@ public struct EngraveParameters: Codable, Hashable, Sendable {
 public struct ChamferParameters: Codable, Hashable, Sendable {
     /// Which side of closed vectors is the part edge to bevel (outside = the part is inside the vector).
     public var side: ProfileSide
-    /// Chamfer width on the top surface, measured from the vector into the part.
+    /// Chamfer width on the surface at the start depth (the material top when that is 0), measured from the
+    /// vector into the part.
     public var width: Double
-    /// When set, the cut depth is given directly and the width follows from the bit angle.
+    /// When set, how far the tip goes below the start depth's surface, and the width follows from the bit angle.
     public var depth: Double?
     /// Extra distance the bit tip runs into the waste past the edge (keeps the tip off the wall;
     /// the cut gets deeper to keep the same width).
     public var tipClearance: Double
+    /// Depth below the material top of the surface the chamfer is measured from; the material above it is
+    /// taken as already removed, as for every operation's start depth.
     public var startDepth: Double
     /// Max depth per pass; nil = the tool's stepdown.
     public var passDepth: Double?
