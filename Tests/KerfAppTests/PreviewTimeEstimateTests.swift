@@ -56,4 +56,21 @@ import Testing
         #expect(abs(s.estimate([a, b], rapidRate: 200, units: .inch) - actual) < 1e-6)
         #expect(TimeEstimateSettings.calibratedScale(motionSeconds: 10, fixedSeconds: 60, actualSeconds: 30) == nil)
     }
+
+    /// The tool-change allowance is clamped from the field and from the saved value, so no input reaches the
+    /// duration formatter as an absurd number (issue #56).
+    @Test func theToolChangeAllowanceIsClamped() {
+        #expect(TimeEstimateSettings.clampToolChange(-5) == 0)
+        #expect(TimeEstimateSettings.clampToolChange(45) == 45)
+        #expect(TimeEstimateSettings.clampToolChange(1e300) == TimeEstimateSettings.toolChangeRange.upperBound)
+        #expect(TimeEstimateSettings.clampToolChange(.nan) == MachiningTimeEstimator.defaultToolChangeSeconds)
+        let defaults = UserDefaults(suiteName: "kerf-test-\(UUID().uuidString)")!
+        defaults.set(1e300, forKey: TimeEstimateSettings.toolChangeKey)
+        #expect(TimeEstimateSettings.load(from: defaults).toolChangeSeconds == TimeEstimateSettings.toolChangeRange.upperBound)
+        defaults.set(-Double.infinity, forKey: TimeEstimateSettings.toolChangeKey)
+        #expect(TimeEstimateSettings.load(from: defaults).toolChangeSeconds == 0)
+        defaults.set(Double.infinity, forKey: TimeEstimateSettings.toolChangeKey)
+        #expect(TimeEstimateSettings.load(from: defaults).toolChangeSeconds == TimeEstimateSettings.toolChangeRange.upperBound)
+    }
 }
+
