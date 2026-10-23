@@ -197,3 +197,12 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
     }
     #expect(tp.metadata["warning"]?.contains("peck-drilled instead") == true)
 }
+
+@Test func ops2DHoleMillBoundsTheWorkOfAHugeDepthOrATinyPitch() throws {
+    // A deep cut at a fine pitch asks for far more turns than anyone cuts: the helix is capped at 10 000 turns (a coarser pitch)
+    // instead of growing with the numbers, and an infinite depth is refused.
+    let (tp, _) = try holeMill(HoleMillParameters(cutDepth: 1e6, helixPitch: 1e-6))
+    #expect(tp.moves.count < 2_000_000)
+    #expect(throws: CAMError.self) { try holeMill(HoleMillParameters(cutDepth: .infinity)) }
+    #expect(throws: CAMError.self) { try holeMill(HoleMillParameters(startDepth: -.infinity, cutDepth: 0.5)) }
+}

@@ -19,6 +19,9 @@ public struct HoleMillOperation: ToolpathOperation {
     /// More turns than this at the steepest allowed angle and the helix is a drill in all but name: the hole is
     /// peck-drilled instead.
     static let maxHelixTurns = 50.0
+    /// Total turns of any helix, so a huge depth or a tiny pitch cannot ask for an unbounded number of points (the pitch
+    /// is then coarser than asked).
+    static let maxTotalTurns = 10_000.0
 
     /// A hole to mill: centre and finished diameter.
     public struct Hole: Hashable, Sendable {
@@ -32,7 +35,7 @@ public struct HoleMillOperation: ToolpathOperation {
         let tool = try context.tool(setup.toolID)
         let shapes = context.shapes(for: setup)
         guard !shapes.isEmpty else { throw CAMError.noGeometry }
-        guard params.cutDepth > params.startDepth + 1e-9 else {
+        guard params.cutDepth > params.startDepth + 1e-9, params.cutDepth.isFinite, params.startDepth.isFinite else {
             throw CAMError.invalidParameter("Cut depth must be deeper than start depth")
         }
         let tol = context.tolerance
@@ -99,9 +102,10 @@ public struct HoleMillOperation: ToolpathOperation {
         let steepest = 2 * Double.pi * max(radius, 0) * tan(Self.maxHelixAngle * .pi / 180)   // most it may drop per turn
         let allowed = min(pitch, steepest)
         let held = allowed < pitch - 1e-12
-        let turns = max(1, ceil(drop / max(allowed, 1e-12) - 1e-9))
+        let wanted = max(1, ceil(drop / max(allowed, 1e-12) - 1e-9))
+        let turns = min(wanted, Self.maxTotalTurns)
         // Peck only where the ramp limit is what asks for the turns (a fine pitch the user chose stays a helix).
-        guard radius > tol, !(held && turns > Self.maxHelixTurns) else {
+        guard radius > tol, !(held && wanted > Self.maxHelixTurns) else {
             builder.travel(to: c)
             var cleared = min(params.startDepth, 0)
             let pecks = DrillOperation.peckDepths(start: params.startDepth, end: params.cutDepth, peck: pitch)
