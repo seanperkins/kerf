@@ -74,7 +74,7 @@ if (( update )); then
   gone="$old"
   stage=""
   old=""
-  rm -rf "$gone"
+  rm -rf "$gone" || echo "warning: the new programs are in place, but $gone (the old ones) could not be removed" >&2
   echo "samples/expected rewritten: $expected_count programs"
   exit 0
 fi

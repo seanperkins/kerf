@@ -324,4 +324,33 @@ import Testing
         let bottom = Self.run(["export", file.path, "--side", "bottom", "--out", folder.path])
         #expect(bottom.status == 1 && bottom.err.contains("no calculated toolpaths"))
     }
+
+    @Test @MainActor func eachSideOfATwoSidedJobHasItsOwnToolpathsAndItsOwnZZero() throws {
+        // The drill holes are on a bottom-side layer; everything else is on top. Both sides have enabled toolpaths.
+        var project = try KerfProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        project.document.job.twoSided = TwoSidedSetup(flip: .leftRight, bottomZZero: .spoilboard)
+        let layer = try #require(project.document.layers.firstIndex { $0.name == "Drill" })
+        project.document.layers[layer].side = .bottom
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("both.kerf")
+        try project.encoded().write(to: file)
+        let top = Self.run(["export", file.path, "--out", "-", "--builtin-only"])
+        let bottom = Self.run(["export", file.path, "--side", "bottom", "--out", "-", "--builtin-only"])
+        #expect(top.status == 0 && bottom.status == 0, "\(top.err) \(bottom.err)")
+        for name in ["Pocket 1", "V-Carve 1", "Profile 1"] {
+            #expect(top.out.contains(name) && !bottom.out.contains(name), "\(name)")
+        }
+        #expect(bottom.out.contains("Drilling 1") && !top.out.contains("Drilling 1"))
+        // Each is the app's program for that side (the bottom's Z zero is the spoilboard, the top's the material top).
+        #expect(top.out.contains("Z zero: material top") && bottom.out.contains("Z zero: spoilboard"))
+        let doc = KerfDocument(project: project, toolLibrary: AppTestSupport.library())
+        #expect(top.out == (try Self.appExport(project)))
+        doc.showSide(.bottom)
+        doc.calculateNow(doc.outputProject.operations.filter(\.setup.isEnabled).map(\.id))
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.outputProject.operations, results: doc.results,
+                                          groupByTool: false)
+        let app = GCodeExporter.export(project: doc.outputProject(for: .all), toolpaths: tps, profile: doc.postProfile,
+                                       jobName: doc.document.name)
+        #expect(bottom.out == app.text)
+    }
 }
