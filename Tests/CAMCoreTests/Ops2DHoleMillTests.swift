@@ -195,6 +195,17 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
     for peck in pecks {
         #expect(feedDepths.contains { abs($0 - peck) < 1e-6 }, "feeds down to \(peck)")
     }
+    // The first way down into the material is fed, through what stands above the start depth too; later pecks rapid down the
+    // column the previous one cut.
+    var fedBelowTheTop = false, rapidedFirst = false
+    for m in tp.moves {
+        switch m {
+        case .rapid(let to) where ctx.coords.depth(ofMachineZ: to.z) > 1e-9: if !fedBelowTheTop { rapidedFirst = true }
+        case .linear(let to, _) where ctx.coords.depth(ofMachineZ: to.z) > 1e-9: fedBelowTheTop = true
+        default: break
+        }
+    }
+    #expect(fedBelowTheTop && !rapidedFirst)
     #expect(tp.metadata["warning"]?.contains("peck-drilled instead") == true)
 }
 

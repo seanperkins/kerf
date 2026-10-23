@@ -86,7 +86,7 @@ enum OperationWarnings {
             earlier.contains { other in
                 clearing(of: other, at: c, project: project, library: library, material: job.material, units: units,
                          tolerance: tol, drillOnly: drillOnly)
-                    .contains { $0.start <= tol && $0.depth >= depth - tol && $0.width >= width - tol && $0.depth > $0.start + tol }
+                    .contains { $0.start <= tol && $0.depth >= depth - 1e-6 && $0.width >= width - 1e-6 && $0.depth > $0.start + tol }
             }
         }
         var out: [String] = []

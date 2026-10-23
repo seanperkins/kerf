@@ -503,6 +503,13 @@ import Testing
         flatBore.params.startDepth = 0.5
         p.operations = [.holeMill(flatBore), .holeMill(thread)]
         #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        // The pilot is at least as wide as the thread mill, to the float: a drill a hair narrower is no pilot.
+        let hair = try drillTool(&lib, diameter: 0.2499)
+        p.operations = [drill(hair, a), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        let exact = try drillTool(&lib, diameter: 0.25)
+        p.operations = [drill(exact, a), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).isEmpty)
         // The boundary is the generator's: a thread diameter 0.0012 in over the tool has a 0.0006 in radius, above the 0.0005 in
         // tolerance, so the generator mills it, plunging at the center, and it needs its pilot.
         let barely = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.2512)
