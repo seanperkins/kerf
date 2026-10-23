@@ -123,7 +123,7 @@ func ops2DHoleMillHelixNeverDescendsSteeperThanTheRampAngle(mode: ZZeroMode) thr
         let r = (0.25 + extra) / 2
         let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.5), paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: r)], zZero: mode)
         #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty, "extra \(extra)")
-        #expect(steepestHelixAngle(tp, ctx) <= HoleMillOperation.maxHelixAngle + 0.1, "extra \(extra): \(steepestHelixAngle(tp, ctx))°")
+        #expect(steepestHelixAngle(tp, ctx) <= HoleMillOperation.maxHelixAngle + 1e-6, "extra \(extra): \(steepestHelixAngle(tp, ctx))°")
         #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.5)) < 1e-9)
         // Held to the angle where the asked-for pitch is steeper: those say so; the roomy ones do not.
         let clamped = tp.metadata["warning"]?.contains("ramp") == true
@@ -220,5 +220,20 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
     let pts = F.densePoints(tp.moves)
     for (a, b) in zip(pts, pts.dropFirst()) where a.xy.distance(to: b.xy) > 1e-9 {
         #expect(abs(a.z - b.z) < 1e-9 || a.z >= ctx.coords.safeZ - 1e-9 || b.z >= ctx.coords.safeZ - 1e-9, "a sideways move that also changes depth")
+    }
+}
+
+@Test func ops2DHoleMillTheCutMovesThemselvesStayWithinTheRampAngle() throws {
+    // The limit is on the straight moves the helix is cut in, whose chords are shorter than the arc: the case that measured
+    // 10.05 degrees when the limit was worked out on the circumference (0.03 in radius, 0.3323685283 in deep).
+    for depth in [0.3323685283, 0.2, 0.45, 0.5, 0.7, 1.1] {
+        for extra in [0.06, 0.07, 0.1, 0.15] {
+            let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: depth), paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: (0.25 + extra) / 2)])
+            #expect(steepestHelixAngle(tp, ctx) <= HoleMillOperation.maxHelixAngle + 1e-6, "depth \(depth) extra \(extra): \(steepestHelixAngle(tp, ctx))")
+        }
+    }
+    // A cut that would take more pecks than the bound is refused, not given deeper pecks.
+    #expect(throws: CAMError.self) {
+        try holeMill(HoleMillParameters(cutDepth: 1e6, helixPitch: 0.05), paths: [ShapeFactory.circle(center: Vec2(3, 3), radius: 0.13)])
     }
 }

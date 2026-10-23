@@ -102,12 +102,18 @@ public struct HoleMillOperation: ToolpathOperation {
         let c = hole.centre
         let pitch = max(params.helixPitch ?? tool.stepdown, tol)
         let drop = params.cutDepth - params.startDepth
-        let steepest = 2 * Double.pi * max(radius, 0) * tan(Self.maxHelixAngle * .pi / 180)   // most it may drop per turn
+        // The most it may drop per turn, measured along the chords the helix is cut in (they are shorter than the arc).
+        let perTurn = Double(Self.segmentsPerTurn(radius: radius, tolerance: tol))
+        let steepest = perTurn * 2 * max(radius, 0) * sin(Double.pi / perTurn) * tan(Self.maxHelixAngle * .pi / 180)
         let allowed = min(pitch, steepest)
         let held = allowed < pitch - 1e-12
         let turns = max(1, ceil(drop / max(allowed, 1e-12) - 1e-9))
         // Peck only where the ramp limit is what asks for the turns (a fine pitch the user chose stays a helix).
         guard radius > tol, !(held && turns > Self.maxHelixTurns) else {
+            guard drop / pitch <= Self.maxTotalTurns else {
+                throw CAMError.invalidParameter("The cut is too deep for the peck depth: it would take more than \(Int(Self.maxTotalTurns)) pecks; "
+                                                + "raise the pitch")
+            }
             builder.travel(to: c)
             var cleared = min(params.startDepth, 0)
             let pecks = DrillOperation.peckDepths(start: params.startDepth, end: params.cutDepth, peck: pitch)
@@ -165,11 +171,17 @@ public struct HoleMillOperation: ToolpathOperation {
         hole.diameter <= 2 * tool.diameter + tolerance
     }
 
+    /// How many straight pieces one turn of a helix of radius `r` is cut in (chord error within `tolerance`, at least 16).
+    static func segmentsPerTurn(radius r: Double, tolerance: Double) -> Int {
+        guard r > 0 else { return 16 }
+        let step = 2 * acos(max(-1, min(1, 1 - min(tolerance, r) / r)))
+        return max(16, Int(ceil(2 * .pi / max(step, 1e-3))))
+    }
+
     /// Helix samples starting at angle 0 (centre + (radius, 0)).
     static func helix(centre c: Vec2, radius r: Double, fromDepth: Double, toDepth: Double, turns: Double,
                       ccw: Bool, tolerance: Double) -> [CutPoint] {
-        let step = 2 * acos(max(-1, min(1, 1 - min(tolerance, r) / r)))
-        let perTurn = max(16, Int(ceil(2 * .pi / max(step, 1e-3))))
+        let perTurn = segmentsPerTurn(radius: r, tolerance: tolerance)
         let n = max(1, Int((Double(perTurn) * turns).rounded(.up)))
         let total = 2 * .pi * turns
         return (0...n).map { i in
