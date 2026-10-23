@@ -73,15 +73,18 @@ enum OperationWarnings {
         // Every copy of an array is a hole too, at the vector's centre shifted by the copy's offset.
         let copies = op.setup.arrayCopy?.offsets ?? [.zero]
         holes = holes.flatMap { hole in copies.map { HoleMillOperation.Hole(centre: hole.centre + $0, diameter: hole.diameter) } }
-        // What runs before this toolpath in the list; a toolpath that is not in the list has nothing before it.
-        let earlier = project.operations.firstIndex { $0.id == op.setup.id }.map { Array(project.operations.prefix($0)) } ?? []
+        // What runs before this toolpath in the list, on its sheet and side (the others are other programs); a toolpath
+        // that is not in the list has nothing before it.
+        let thisOp = AnyOperation.holeMill(op)
+        let earlier = (project.operations.firstIndex { $0.id == op.setup.id }.map { Array(project.operations.prefix($0)) } ?? [])
+            .filter { project.sheetID(of: $0) == project.sheetID(of: thisOp) && project.side(of: $0) == project.side(of: thisOp) }
         /// An earlier toolpath that clears at least `depth` deep and `width` across at `c`, from the material top (a drill,
         /// only, when `drillOnly`): one that starts below the top leaves the material above it for the tool to cut.
         func made(at c: Vec2, depth: Double, width: Double, drillOnly: Bool) -> Bool {
             earlier.contains { other in
-                guard let cleared = clearing(of: other, at: c, project: project, library: library, material: job.material,
-                                             units: units, tolerance: tol, drillOnly: drillOnly) else { return false }
-                return cleared.start <= tol && cleared.depth >= depth - tol && cleared.width >= width - tol
+                clearing(of: other, at: c, project: project, library: library, material: job.material, units: units,
+                         tolerance: tol, drillOnly: drillOnly)
+                    .contains { $0.start <= tol && $0.depth >= depth - tol && $0.width >= width - tol && $0.depth > $0.start + tol }
             }
         }
         var out: [String] = []
@@ -122,13 +125,13 @@ enum OperationWarnings {
     /// (as wide as the room round `c` that its tool can reach). A profile cuts the perimeter only, so it makes no pilot.
     /// The copies of an array count at their offsets. `start` is the depth the toolpath starts at.
     private static func clearing(of other: AnyOperation, at point: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
-                                 units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> (start: Double, depth: Double, width: Double)? {
-        guard other.setup.isEnabled else { return nil }
-        for offset in other.setup.arrayCopy?.offsets ?? [.zero] {
-            if let found = clearing(of: other, atOriginal: point - offset, project: project, library: library, material: material,
-                                    units: units, tolerance: tol, drillOnly: drillOnly) { return found }
+                                 units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> [(start: Double, depth: Double, width: Double)] {
+        guard other.setup.isEnabled else { return [] }
+        // Every copy of an array that reaches the point counts, each by its own width: the first is not the best.
+        return (other.setup.arrayCopy?.offsets ?? [.zero]).compactMap { offset in
+            clearing(of: other, atOriginal: point - offset, project: project, library: library, material: material,
+                     units: units, tolerance: tol, drillOnly: drillOnly)
         }
-        return nil
     }
 
     private static func clearing(of other: AnyOperation, atOriginal c: Vec2, project: KerfProject, library: ToolLibrary, material: String?,

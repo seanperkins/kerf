@@ -450,6 +450,42 @@ import Testing
         if case .drill(var d) = copiedPilot { d.setup.arrayCopy = ArrayCopySettings(columns: 2, rows: 1, spacingX: 4, spacingY: 0); copiedPilot = .drill(d) }
         p.operations = [copiedPilot, .holeMill(copied)]
         #expect(warnings(.holeMill(copied), p, lib).isEmpty)
+        // A copy of the pocket that reaches the point counts by its own width, not the first that reaches it.
+        var wideLeft = PocketParameters()
+        wideLeft.depth.cutDepth = 0.75
+        wideLeft.allowance = 0.05
+        let big2 = try #require(lib.tools.first { $0.kind == .endMill && abs($0.diameter - 0.25) < 1e-9 })
+        let narrowSpot = Shape(name: "narrow", layerID: p.document.defaultLayerID, paths: [ShapeFactory.circle(center: Vec2(7, 9), radius: 0.2)])
+        let wideSpot = Shape(name: "wide", layerID: p.document.defaultLayerID, paths: [ShapeFactory.circle(center: Vec2(3, 9), radius: 0.75)])
+        p.document.add(narrowSpot); p.document.add(wideSpot)
+        var overlapping = PocketOperation(setup: OperationSetup(name: "SP2", toolID: big2.id, shapeIDs: [narrowSpot.id, wideSpot.id]), params: wideLeft)
+        overlapping.setup.arrayCopy = ArrayCopySettings(columns: 2, rows: 1, spacingX: 4, spacingY: 0)
+        let threadAtSeven = holeMill(mill, narrowSpot, mode: .thread, depth: 0.5, diameter: 0.4)
+        p.operations = [.pocket(overlapping), .holeMill(threadAtSeven)]
+        // At (7, 9) the narrow original reaches the point with too little room, and the copy of the wide circle with plenty.
+        #expect(warnings(.holeMill(threadAtSeven), p, lib).isEmpty)
+        // Another side or sheet is another program: its pilot is not this one's.
+        var other = p
+        other.document.job.twoSided = TwoSidedSetup()
+        var pilot = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(cutDepth: 0.75))
+        other.document.layers = other.document.layers.map { var l = $0; l.side = .top; return l }
+        other.operations = [.drill(pilot), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), other, lib).isEmpty)                     // same side: still a pilot
+        if let layer = other.document.shapes(ids: [a.id]).first?.layerID, let i = other.document.layers.firstIndex(where: { $0.id == layer }) {
+            var drillLayer = Layer(id: UUID(), name: "Bottom")
+            drillLayer.side = .bottom
+            other.document.layers.append(drillLayer)
+            var moved = other.document.shape(id: a.id)!
+            moved.id = UUID(); moved.layerID = drillLayer.id
+            other.document.add(moved)
+            pilot.setup.shapeIDs = [moved.id]
+            other.operations = [.drill(pilot), .holeMill(thread)]
+            #expect(warnings(.holeMill(thread), other, lib).count == 1, "a bottom-side drill is not this side's pilot \(i)")
+        }
+        // A pilot whose own depth is not deeper than its start depth cuts nothing.
+        let broken = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(startDepth: 0.75, cutDepth: 0.75))
+        p.operations = [.drill(broken), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).count == 1)
         // A thread in a hole as large as the tool is skipped by the generator, and not reported here.
         let tiny = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.25)
         p.operations = [.holeMill(tiny)]
