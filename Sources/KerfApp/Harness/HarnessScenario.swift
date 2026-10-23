@@ -62,7 +62,8 @@ struct HarnessScenario: Decodable {
         "captureWindow": "value: the title of a window other than the document's (Tool Database), opened first with press on its toolbar button; name: file stem, as <name>.png and <name>.ax.txt",
         "selectTool": "name: a tool to select in the open Tool Database window (by its name)",
         "searchTools": "value: the text to put in the open Tool Database window's search field (empty clears it)",
-        "editTool": "value: diameter | rename | number | describe; edits the tool of the first toolpath in the Tool Database, as that window does while a sheet is open (diameter makes the toolpaths stale, rename only relabels them, number gives it another library tool's T number, describe gives it a description)",
+        "editToolpath": "value: deeper | tabs; name: the toolpath (default the first); deeper cuts a profile or pocket 0.5 below the material bottom, tabs turns on tabs as tall as a profile's cut; the toolpath form shows its warnings",
+        "editTool": "value: diameter | rename | number | describe | rpm; edits the tool of the first toolpath in the Tool Database, as that window does while a sheet is open (diameter makes the toolpaths stale, rename only relabels them, number gives it another library tool's T number, describe gives it a description, rpm gives it a spindle speed no post runs)",
         "fileTarget": "name: the path that Export G-code, Save All Toolpaths and Save Tiled G-code answer their save or folder panel with, until closeSheet or an empty fileTarget (the system file panel cannot be driven)",
         "sheet": "value: " + sheets.sorted().joined(separator: " | "),
         "closeSheet": "close the open sheet or alert",
@@ -128,7 +129,9 @@ struct HarnessScenario: Decodable {
         case "selectToolpath":
             guard step.name?.isEmpty == false else { throw fail("name must name a toolpath") }
         case "editTool":
-            guard let v = step.value, ["diameter", "rename", "number", "describe"].contains(v) else { throw fail("value must be diameter, rename, number or describe") }
+            guard let v = step.value, ["diameter", "rename", "number", "describe", "rpm"].contains(v) else { throw fail("value must be diameter, rename, number, describe or rpm") }
+        case "editToolpath":
+            guard let v = step.value, ["deeper", "tabs"].contains(v) else { throw fail("value must be deeper or tabs") }
         case "captureWindow":
             guard step.name?.isEmpty == false, step.value?.isEmpty == false else { throw fail("name is the file stem and value the window's title") }
         case "selectTool":

@@ -1,0 +1,15 @@
+{
+  "name": "Toolpath form: warnings for a cut past the spoilboard allowance, tall tabs and a spindle speed the post cannot run",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "calculate"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "selectToolpath", "name": "Profile 1"},
+    {"op": "editToolpath", "name": "Profile 1", "value": "deeper"},
+    {"op": "editToolpath", "name": "Profile 1", "value": "tabs"},
+    {"op": "editTool", "value": "rpm"},
+    {"op": "wait", "seconds": 1},
+    {"op": "capture", "name": "toolpath-warnings"}
+  ]
+}

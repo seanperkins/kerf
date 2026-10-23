@@ -1,5 +1,6 @@
 import CADCore
 import CAMCore
+import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -141,6 +142,17 @@ extension Notification.Name {
 #endif
 
 extension ToolDatabaseView {
+    /// The post a new job starts with, as the job would use it: the machine and post chosen in Preferences (an
+    /// unknown or incompatible post falls back to the machine's) with the machine's limits applied.
+    static func defaultPost(prefs: AppPreferences = PreferencesModel.shared.prefs, machines: [MachineDefinition] = MachineCatalog.shared.machines,
+                            profiles: [PostProfile] = PostProfileCatalog.shared.profiles) -> PostProfile {
+        let project = prefs.newProject(machines: machines, profiles: profiles)
+        // From the profiles given: the one the project names, else the built-in default's, else any, else the Avid's.
+        let post = profiles.first { $0.id == project.postProfileID }
+            ?? profiles.first { $0.id == PostProfileStore.defaultProfileID } ?? profiles.first ?? BuiltInPosts.avidMach4Inch
+        return MachineResolver.effectiveProfile(post, machine: machines.first { $0.id == project.machineID })
+    }
+
     private static var exchangeTypes: [UTType] {
         [UTType(filenameExtension: ToolLibraryExchange.fileExtension, conformingTo: .json), .json, .commaSeparatedText]
             .compactMap { $0 }
@@ -210,6 +222,10 @@ enum ToolEditorField: Hashable {
 
 struct ToolEditor: View {
     @EnvironmentObject var library: ToolLibraryModel
+    // What `ToolDatabaseView.defaultPost` reads, watched so that the spindle-range note follows a change made in Preferences.
+    @ObservedObject private var preferences = PreferencesModel.shared
+    @ObservedObject private var machines = MachineCatalog.shared
+    @ObservedObject private var posts = PostProfileCatalog.shared
     /// The library's current copy of the tool (what Revert goes back to); the window passes it fresh on
     /// every update.
     let original: Tool
@@ -302,8 +318,9 @@ struct ToolEditor: View {
                 NumberField("Spindle speed", value: $tool.spindleRPM, unit: "RPM")
                 NumberField("Feed rate", value: $tool.feedRate, unit: u.feedUnit)
                 NumberField("Plunge rate", value: $tool.plungeRate, unit: u.feedUnit)
-                if tool.spindleRPM < 6000 || tool.spindleRPM > 24000 {
-                    Text("The Avid 2.2 kW spindle runs 6000–24000 RPM.").font(.caption).foregroundStyle(Color.warningText)
+                // The range of the post the app starts new jobs with (Preferences), not a constant.
+                if let rpm = OperationWarnings.rpmProblem(tool.spindleRPM, profile: ToolDatabaseView.defaultPost()) {
+                    Text(rpm).font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
                 }
             }
             ToolShapeSection(tool: $tool)
