@@ -47,16 +47,26 @@ public struct TextureOperation: ToolpathOperation {
         let lines = planner.rasterLines(in: region, angle: p.angle)
         let dir = Vec2(cos(p.angle * .pi / 180), sin(p.angle * .pi / 180))
         let normal = dir.perpendicular
-        // Group clipped segments by their raster line (signed offset along the normal).
-        let keyed = lines.map { seg -> (Double, [Vec2]) in
+        // Group clipped segments by their raster line (signed offset along the normal). The lines are span / n
+        // apart, a little closer than the spacing but never closer than half of it, while the pieces of one line
+        // differ by rounding only, so a quarter of the spacing tells them apart.
+        let offsets = lines.map { seg -> (offset: Double, seg: [Vec2]) in
             let mid = seg[0].lerp(to: seg.last!, 0.5)
             let ordered = (seg.last! - seg[0]).dot(dir) >= 0 ? seg : Array(seg.reversed())
-            return ((mid.dot(normal) / p.spacing).rounded(), ordered)
-        }.sorted { $0.0 != $1.0 ? $0.0 < $1.0 : $0.1[0].dot(dir) < $1.1[0].dot(dir) }
+            return (mid.dot(normal), ordered)
+        }.sorted { $0.offset < $1.offset }
+        var keyed: [(Int, [Vec2])] = []
+        var line = -1
+        var lineOffset = -Double.infinity
+        for item in offsets {
+            if item.offset - lineOffset > p.spacing * 0.25 { line += 1; lineOffset = item.offset }
+            keyed.append((line, item.seg))
+        }
+        keyed.sort { $0.0 != $1.0 ? $0.0 < $1.0 : $0.1[0].dot(dir) < $1.1[0].dot(dir) }
 
         var out: [[CutPoint]] = []
         var lineStrokes: [[CutPoint]] = []
-        var currentKey: Double?
+        var currentKey: Int?
         var reverse = false
         func flush() {
             out += reverse ? lineStrokes.reversed().map { $0.reversed() } : lineStrokes
