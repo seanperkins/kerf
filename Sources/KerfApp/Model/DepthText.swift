@@ -6,6 +6,10 @@ enum DepthText {
     /// A length to three decimals with trailing zeros dropped ("0.125", "-0.77", "19.05").
     static func number(_ v: Double) -> String {
         let r = (v * 1000).rounded() / 1000
-        return r == 0 ? "0" : String(format: "%g", r)
+        if r == 0 { return "0" }
+        var s = String(format: "%.3f", r)   // not "%g": it keeps six significant digits and drops decimals from 1000 up
+        while s.hasSuffix("0") { s.removeLast() }
+        if s.hasSuffix(".") { s.removeLast() }
+        return s
     }
 }
