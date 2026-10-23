@@ -7,7 +7,7 @@ import Testing
 
 /// The job sheet's step times and its total come from one model: the user's time-estimate settings (issue #55).
 @Suite struct JobSheetStepTimesTests {
-    /// A pocket and a profile with two different tools, calculated.
+    /// A pocket and a profile, calculated (the factory gives both the same end mill).
     func calculatedDoc() throws -> KerfDocument {
         var p = AppTestSupport.project()
         p.document.job.thickness = 0.75
@@ -49,7 +49,23 @@ import Testing
     @Test func theSheetSaysWhatTheTotalHoldsBeyondTheSteps() throws {
         let doc = try calculatedDoc()
         let html = JobSheetHTML.render(sheet(doc, TimeEstimateSettings()))
-        #expect(html.contains("Each time is that toolpath's own cutting, rapids and dwell."))
-        #expect(html.contains("the rapids between toolpaths, the tool-change allowance and the stops."))
+        #expect(html.contains("Each time is that toolpath timed on its own, from a standstill."))
+        #expect(html.contains("so it is not the sum of this column."))
+    }
+
+    /// Why the sheet does not claim the total is above the column: toolpaths that follow on without a stop share
+    /// speed across the join, and one timed alone starts and ends at rest.
+    @Test func theTotalCanBeBelowTheSumOfTheSteps() {
+        let tool = ToolLibrary.seeded.tools[0]
+        func run(from: Double, to: Double) -> Toolpath {
+            Toolpath(name: "run", kind: .profile, tool: tool,
+                     moves: [.linear(to: Vec3(from, 0, 0), feed: 600), .linear(to: Vec3(to, 0, 0), feed: 600)])
+        }
+        let a = run(from: 0, to: 30), b = run(from: 30, to: 60)
+        let settings = TimeEstimateSettings()
+        let total = settings.estimate([a, b], rapidRate: 600, units: .inch, toolChanges: false)
+        let steps = settings.estimate([a], rapidRate: 600, units: .inch, toolChanges: false)
+            + settings.estimate([b], rapidRate: 600, units: .inch, toolChanges: false)
+        #expect(total < steps - 0.3, "\(total) against \(steps)")
     }
 }

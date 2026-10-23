@@ -255,9 +255,10 @@ enum JobSheetHTML {
         if js.steps.isEmpty { h += "<tr><td colspan=\"7\" class=\"muted\">No calculated toolpaths.</td></tr>\n" }
         h += "</table>\n"
         if js.steps.count > 1 {
-            // The same model as the total, one toolpath at a time: the two differ by what lies between the steps.
-            h += "<p class=\"muted\">Each time is that toolpath's own cutting, rapids and dwell. The estimated total also "
-                + "holds the rapids between toolpaths, the tool-change allowance and the stops.</p>\n"
+            // The same model as the total, one toolpath at a time: the total plans the program as one run.
+            h += "<p class=\"muted\">Each time is that toolpath timed on its own, from a standstill. The estimated total "
+                + "times the whole program as one run (the moves between toolpaths, the tool-change allowance, the stops, "
+                + "speed carried across a join), so it is not the sum of this column.</p>\n"
         }
         for sheet in js.sheets {
             h += "<div class=\"sheet\"><h2>\(e(sheet.title))</h2>\n" + preview(sheet, js) + "\n"
