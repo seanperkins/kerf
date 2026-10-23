@@ -9,7 +9,7 @@ public struct DXFImporter: VectorImporter {
 
     /// Endpoint tolerance (in target units) for joining open entities; nil disables joining.
     public var joinTolerance: Double?
-    /// Chordal tolerance (in DXF units) used to sample splines.
+    /// Chordal tolerance (in the target units, whatever units the file is in) used to sample splines.
     public var splineTolerance: Double
 
     public init(joinTolerance: Double? = nil, splineTolerance: Double = 0.001) {
@@ -21,6 +21,8 @@ public struct DXFImporter: VectorImporter {
         var warnings: [String] = []
         let scale = unitScale(file, to: targetUnits, warnings: &warnings)
         let toDoc = Transform2D.scale(scale, scale)
+        // Entities are sampled in the file's units; the tolerance is a length in the target units.
+        let splineTol = splineTolerance / max(scale, 1e-12)
         let joinTol = joinTolerance ?? (targetUnits == .inch ? 0.0005 : 0.01)
 
         var layerOrder: [String] = []
@@ -43,7 +45,7 @@ public struct DXFImporter: VectorImporter {
                     collect(block.entities, m.concatenating(t), inheritedLayer: layer, depth: depth + 1)
                     continue
                 }
-                guard let paths = DXFGeometry.paths(for: e, splineTolerance: splineTolerance) else {
+                guard let paths = DXFGeometry.paths(for: e, splineTolerance: splineTol) else {
                     skipped[e.type, default: 0] += 1; continue
                 }
                 guard !paths.isEmpty else { continue }
