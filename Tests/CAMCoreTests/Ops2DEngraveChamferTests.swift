@@ -83,6 +83,30 @@ func ops2DChamferRunsTheTipOnTheEdgeAtTheWidthDepth(mode: ZZeroMode) throws {
     }
 }
 
+/// Issue #96. A chamfer "On" the line puts the tip on the vector, not `tipClearance` off it, so the clearance
+/// must not deepen the cut or widen the bevel: it used to cut `clearance` wider on each side (0.35 in groove for a
+/// 0.25 in one) and `clearance / tan(half angle)` too deep.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DChamferOnTheLineIgnoresTheTipClearance(mode: ZZeroMode) throws {
+    let rect = Rect2(x: 2, y: 2, width: 4, height: 3)
+    let p = ChamferParameters(side: .on, width: 0.125, tipClearance: 0.05)
+    let size = try ChamferOperation.size(tool: vBit90, params: p)
+    #expect(abs(size.depth - 0.125) < 1e-12)
+    #expect(abs(size.width - 0.125) < 1e-12)
+    #expect(abs(size.height - 0.125) < 1e-12)
+    #expect(abs(size.tipDepth - 0.125) < 1e-12)
+    let (tp, ctx) = try chamfer(p, zZero: mode)
+    #expect(abs(tp.minZ! - ctx.coords.z(depth: 0.125)) < 1e-9)
+    // The tip runs on the outline.
+    for q in F.densePoints(tp.moves) where ctx.coords.depth(ofMachineZ: q.z) > 1e-9 {
+        #expect(F.distanceToRectBoundary(q.xy, rect) < 0.0011)
+    }
+    // Outside and inside still put the tip the clearance off the vector, which is where it deepens the cut.
+    var outside = p
+    outside.side = .outside
+    #expect(abs(try ChamferOperation.size(tool: vBit90, params: outside).depth - 0.175) < 1e-12)
+}
+
 @Test func ops2DChamferDepthModeAndPasses() throws {
     let p = ChamferParameters(depth: 0.25, passDepth: 0.1)
     let size = try ChamferOperation.size(tool: vBit60, params: p)

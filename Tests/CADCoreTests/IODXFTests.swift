@@ -109,6 +109,52 @@ func dxf(header: [(Int, String)] = [], entities: [(Int, String)]) -> Data {
         #expect(p.segments.count == 2 && p.segments[0].end == Vec2(5, 5) && p.end == Vec2(10, 0))
     }
 
+    /// Issue #96. The spline sampling tolerance is a length in the document's units, whatever units the file is in.
+    /// It used to be read in the file's own units, so a quarter circle of 100 mm radius in a metre drawing got 14
+    /// samples (0.17 mm off the circle between them) where the same drawing in millimetres got 200 (0.001 mm).
+    @Test(arguments: [(6, 0.001), (4, 1.0), (1, 1.0 / 25.4), (2, 1.0 / 304.8)])
+    func splinesAreSampledWithinTheToleranceWhateverTheFileUnits(insunits: Int, unit: Double) throws {
+        // Rational quadratic quarter circle of radius 100 mm, centred on the origin.
+        let r = 100 * unit
+        let w = 2.0.squareRoot() / 2
+        let sp: [(Int, String)] = [(0, "SPLINE"), (8, "0"), (70, "8"), (71, "2"), (72, "6"), (73, "3"), (74, "0"),
+                                   (40, "0"), (40, "0"), (40, "0"), (40, "1"), (40, "1"), (40, "1"),
+                                   (41, "1"), (41, "\(w)"), (41, "1"),
+                                   (10, "\(r)"), (20, "0"), (10, "\(r)"), (20, "\(r)"), (10, "0"), (20, "\(r)")]
+        let res = try DXFImporter().importVectors(from: dxf(header: [(9, "$INSUNITS"), (70, "\(insunits)")], entities: sp),
+                                                  targetUnits: .millimeter)
+        let pts = res.shapes[0].paths[0].flattened(tolerance: 1e-6)
+        #expect(pts.count > 8)
+        // Between samples the chord falls short of the circle by its sagitta.
+        var sag = 0.0
+        for (a, b) in zip(pts, pts.dropFirst()) { sag = max(sag, 100 - ((a + b) / 2).length) }
+        #expect(sag < 0.01, "the outline is \(sag) mm inside the circle between samples")
+        #expect(abs(pts.first!.x - 100) < 1e-6 && abs(pts.last!.y - 100) < 1e-6)
+    }
+
+    /// The tolerance is a length in the document's units for the sampled curve as it ends up, so an INSERT that magnifies
+    /// its block needs a finer sampling: a 100 mm quarter circle inserted at scale 100 from a 1 mm block was sampled with
+    /// 100 times the tolerance it asked for.
+    @Test(arguments: [1.0, 10.0, 100.0, 1000.0])
+    func splinesInScaledInsertsAreSampledWithinTheToleranceOfTheResult(scale: Double) throws {
+        // Rational quadratic quarter circle of radius 100 / scale (block units), centred on the origin.
+        let r = 100.0 / scale, w = 2.0.squareRoot() / 2
+        let spline: [(Int, String)] = [(0, "SPLINE"), (8, "0"), (70, "8"), (71, "2"), (72, "6"), (73, "3"), (74, "0"),
+                                       (40, "0"), (40, "0"), (40, "0"), (40, "1"), (40, "1"), (40, "1"),
+                                       (41, "1"), (41, "\(w)"), (41, "1"),
+                                       (10, "\(r)"), (20, "0"), (10, "\(r)"), (20, "\(r)"), (10, "0"), (20, "\(r)")]
+        var text = "0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n8\n0\n2\nQ\n70\n0\n10\n0\n20\n0\n"
+        for (c, v) in spline { text += "\(c)\n\(v)\n" }
+        text += "0\nENDBLK\n8\n0\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nINSERT\n8\n0\n2\nQ\n10\n0\n20\n0\n41\n\(scale)\n42\n\(scale)\n0\nENDSEC\n0\nEOF\n"
+        let res = try DXFImporter().importVectors(from: Data(text.utf8), targetUnits: .millimeter)
+        let pts = res.shapes[0].paths[0].flattened(tolerance: 1e-6)
+        #expect(pts.count > 8)
+        var sag = 0.0
+        for (a, b) in zip(pts, pts.dropFirst()) { sag = max(sag, 100 - ((a + b) / 2).length) }
+        #expect(sag < 0.01, "scale \(scale): the outline is \(sag) mm inside the circle between samples")
+        #expect(abs(pts.first!.x - 100) < 1e-6 && abs(pts.last!.y - 100) < 1e-6)
+    }
+
     @Test func lwpolylineReturningToStartWithoutClosedFlagImportsClosed() throws {
         let pl: [(Int, String)] = [(0, "LWPOLYLINE"), (8, "0"), (90, "4"), (70, "0"),
                                    (10, "0"), (20, "0"), (10, "4"), (20, "0"), (10, "2"), (20, "3"),

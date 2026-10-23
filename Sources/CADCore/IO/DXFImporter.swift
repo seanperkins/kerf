@@ -9,7 +9,7 @@ public struct DXFImporter: VectorImporter {
 
     /// Endpoint tolerance (in target units) for joining open entities; nil disables joining.
     public var joinTolerance: Double?
-    /// Chordal tolerance (in DXF units) used to sample splines.
+    /// Chordal tolerance (in the target units, whatever units the file is in) used to sample splines.
     public var splineTolerance: Double
 
     public init(joinTolerance: Double? = nil, splineTolerance: Double = 0.001) {
@@ -43,7 +43,10 @@ public struct DXFImporter: VectorImporter {
                     collect(block.entities, m.concatenating(t), inheritedLayer: layer, depth: depth + 1)
                     continue
                 }
-                guard let paths = DXFGeometry.paths(for: e, splineTolerance: splineTolerance) else {
+                // `t` maps the entity to the document (file units, INSERT scale, rotation and mirror), and the
+                // tolerance is a length in the document, so the entity is sampled to the tolerance over the most `t`
+                // can stretch it.
+                guard let paths = DXFGeometry.paths(for: e, splineTolerance: splineTolerance / max(t.maxStretch, 1e-12)) else {
                     skipped[e.type, default: 0] += 1; continue
                 }
                 guard !paths.isEmpty else { continue }

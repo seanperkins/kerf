@@ -64,6 +64,7 @@ public struct SVGImporter: VectorImporter {
         let guess = Self.scaleGuess(root: root, data: data)
         let scale = guess.map { pixelsPerInch ?? $0.pixelsPerInch } ?? 96
         ctx.pixelsPerInch = scale
+        ctx.viewport = Self.percentageViewport(root, pixelsPerInch: scale)
         if let guess {
             ctx.origin = .imported(format: "svg", pixelsPerInch: scale)
             if pixelsPerInch == nil {
@@ -86,8 +87,31 @@ public struct SVGImporter: VectorImporter {
             }
         }
         if ctx.shapes.contains(where: { $0.layerID == defaultLayer.id }) { ctx.layers.insert(defaultLayer, at: 0) }
+        // No viewBox and no height: the page height is unknown, so flipping Y about it put everything below the
+        // material. The lowest point of the content (shapes and embedded pictures) is the bottom of the page then.
+        if !(ctx.viewport.h > 0) {
+            var bottom = ctx.shapes.isEmpty ? Double.infinity : PathGeometry.bounds(of: ctx.shapes).min.y
+            for image in ctx.images { bottom = min(bottom, image.rect.min.y) }
+            if bottom.isFinite {
+                ctx.warnings.append("This SVG gives no page height, so its artwork was placed on the bottom edge of the material.")
+                if bottom != 0 {
+                    let lift = Vec2(0, -bottom)
+                    ctx.shapes = ctx.shapes.map { $0.transformed(.translation(lift)) }
+                    ctx.images = ctx.images.map { var i = $0; i.rect = Rect2(min: i.rect.min + lift, max: i.rect.max + lift); return i }
+                }
+            }
+        }
         ctx.warnings += ImportGaps.warnings(shapes: ctx.shapes, layers: ctx.layers, units: targetUnits)
         return ImportResult(layers: ctx.layers, shapes: ctx.shapes, warnings: ctx.warnings, images: ctx.images)
+    }
+
+    /// The size, in user units, that percentage lengths on shapes resolve against: the viewBox, else the root's own
+    /// width and height (a user unit is a pixel then). 0 where the file does not give one.
+    static func percentageViewport(_ root: SVGNode, pixelsPerInch: Double) -> (w: Double, h: Double) {
+        let vb = root["viewBox"].map(SVGNumberScanner.numbers(in:)) ?? []
+        if vb.count == 4, vb[2] > 0, vb[3] > 0 { return (vb[2], vb[3]) }
+        return (SVGAttributes.pixels(root["width"], pixelsPerInch: pixelsPerInch) ?? 0,
+                SVGAttributes.pixels(root["height"], pixelsPerInch: pixelsPerInch) ?? 0)
     }
 
     /// Maps root user space → document units with Y flipped (page bottom at y = 0). `pixelsPerInch` is the
@@ -148,6 +172,9 @@ public struct SVGImporter: VectorImporter {
         var origin = ShapeOrigin.imported(format: "svg")
         /// User units per inch: what a length written with a physical unit ("1in", "12pt") is worth.
         var pixelsPerInch = 96.0
+        /// Width and height, in user units, that percentage lengths on shapes resolve against (the viewBox, else the
+        /// root's size). 0 when the file does not say.
+        var viewport = (w: 0.0, h: 0.0)
         var ids: [String: SVGNode] = [:]
         private var warned: Set<String> = []
         private var useDepth = 0
@@ -165,6 +192,12 @@ public struct SVGImporter: VectorImporter {
             SVGAttributes.pixels(s, percentOf: ref, pixelsPerInch: pixelsPerInch)
         }
 
+        /// The length of attribute `key` (x, width, cy, ...): a percentage is of the viewport along that axis.
+        func length(_ n: SVGNode, _ key: String) -> Double? {
+            SVGAttributes.pixels(n[key], percentOf: SVGAttributes.percentReference(key, viewport: viewport),
+                                 pixelsPerInch: pixelsPerInch)
+        }
+
         mutating func warnOnce(_ msg: String) {
             if warned.insert(msg).inserted { warnings.append(msg) }
         }
@@ -178,14 +211,14 @@ public struct SVGImporter: VectorImporter {
                 for c in n.children { walk(c, ctm: ctm, layerID: layerID) }
             case "svg":
                 // Nested viewport: honour x/y offset only.
-                let off = Transform2D.translation(Vec2(length(n["x"]) ?? 0, length(n["y"]) ?? 0))
+                let off = Transform2D.translation(Vec2(length(n, "x") ?? 0, length(n, "y") ?? 0))
                 for c in n.children { walk(c, ctm: off.concatenating(ctm), layerID: layerID) }
             case "use":
                 let ref = (n["xlink:href"] ?? n["href"]).map { $0.hasPrefix("#") ? String($0.dropFirst()) : $0 }
                 guard let ref, let target = ids[ref], useDepth < 16 else {
                     warnOnce("Ignored <use> with a missing reference."); return
                 }
-                let off = Transform2D.translation(Vec2(length(n["x"]) ?? 0, length(n["y"]) ?? 0))
+                let off = Transform2D.translation(Vec2(length(n, "x") ?? 0, length(n, "y") ?? 0))
                 useDepth += 1
                 if target.name == "symbol" {
                     for c in target.children { walk(c, ctm: off.concatenating(ctm), layerID: layerID) }
@@ -198,7 +231,7 @@ public struct SVGImporter: VectorImporter {
             case "image":
                 addImage(n, ctm: ctm)
             default:
-                if let paths = SVGImporter.geometry(of: n, pixelsPerInch: pixelsPerInch), !paths.isEmpty {
+                if let paths = SVGImporter.geometry(of: n, pixelsPerInch: pixelsPerInch, viewport: viewport), !paths.isEmpty {
                     // A subpath that returns to its start without "Z" is still a closed vector.
                     let doc = PathGeometry.closeNearlyClosed(paths.map { $0.transformed(ctm) },
                                                              tolerance: units == .inch ? 0.0005 : 0.01)
@@ -240,16 +273,18 @@ public struct SVGImporter: VectorImporter {
     }
 
     /// The paths of a basic shape or path element; lengths with a physical unit are worth `pixelsPerInch` per inch.
-    static func geometry(of n: SVGNode, pixelsPerInch: Double) -> [Path]? {
-        func length(_ s: String?, _ ref: Double = 0) -> Double? { SVGAttributes.pixels(s, percentOf: ref, pixelsPerInch: pixelsPerInch) }
-        func num(_ k: String, _ ref: Double = 0) -> Double { length(n[k], ref) ?? 0 }
+    static func geometry(of n: SVGNode, pixelsPerInch: Double, viewport: (w: Double, h: Double) = (0, 0)) -> [Path]? {
+        func length(_ k: String) -> Double? {
+            SVGAttributes.pixels(n[k], percentOf: SVGAttributes.percentReference(k, viewport: viewport), pixelsPerInch: pixelsPerInch)
+        }
+        func num(_ k: String) -> Double { length(k) ?? 0 }
         switch n.name {
         case "path":
             return SVGPathParser.parse(n["d"] ?? "")
         case "rect":
             let w = num("width"), h = num("height")
             guard w > 0, h > 0 else { return nil }
-            var rx = length(n["rx"]), ry = length(n["ry"])
+            var rx = length("rx"), ry = length("ry")
             if rx == nil { rx = ry }
             if ry == nil { ry = rx }
             let r = Rect2(x: num("x"), y: num("y"), width: w, height: h)
@@ -305,7 +340,7 @@ extension SVGImporter.Context {
     mutating func addText(_ n: SVGNode, ctm: Transform2D, layerID: UUID) {
         var paths: [Path] = []
         var label = ""
-        var cursor = Vec2(length(n["x"]) ?? 0, length(n["y"]) ?? 0)
+        var cursor = Vec2(length(n, "x") ?? 0, length(n, "y") ?? 0)
         var atStart = true
 
         func run(_ node: SVGNode) {
@@ -319,10 +354,10 @@ extension SVGImporter.Context {
                     emit(s, style: node)
                 } else if c.name == "tspan" || c.name == "textPath" {
                     if c.property("display") == "none" { continue }
-                    if let x = length(c["x"]) { cursor.x = x }
-                    if let y = length(c["y"]) { cursor.y = y }
-                    cursor.x += length(c["dx"]) ?? 0
-                    cursor.y += length(c["dy"]) ?? 0
+                    if let x = length(c, "x") { cursor.x = x }
+                    if let y = length(c, "y") { cursor.y = y }
+                    cursor.x += length(c, "dx") ?? 0
+                    cursor.y += length(c, "dy") ?? 0
                     run(c)
                 }
             }
@@ -356,8 +391,8 @@ extension SVGImporter.Context {
 
     /// `<image>` with an embedded (data: URI) picture → tracing image; linked files are skipped.
     mutating func addImage(_ n: SVGNode, ctm: Transform2D) {
-        let x = length(n["x"]) ?? 0, y = length(n["y"]) ?? 0
-        guard let w = length(n["width"]), let h = length(n["height"]), w > 0, h > 0 else {
+        let x = length(n, "x") ?? 0, y = length(n, "y") ?? 0
+        guard let w = length(n, "width"), let h = length(n, "height"), w > 0, h > 0 else {
             warnOnce("An <image> without a width and height was skipped.")
             return
         }

@@ -34,43 +34,41 @@ public enum KeepOut {
                 return (z, region, topZ, Rect2(points: region.flatMap { $0 }))
             }
             var reported = Set<UUID>()
-            // Any segment that crosses a zone crosses its grown outline for at least 2r: sampling
-            // every 0.9r cannot step over it.
-            let step = max(r * 0.9, tolerance * 10)
             for m in tp.moves {
                 guard let target = m.target else { continue }
                 defer { cur = target }
                 guard let from = cur else { continue }
                 // The post climbs to safe Z before an XY rapid from below it.
-                var pts = samples(from: from, move: m, step: step)
+                var pts = polyline(from: from, move: m, tolerance: tolerance)
                 if m.isRapid, from.z < coords.safeZ - 1e-9, from.xy.distance(to: target.xy) > 1e-9 {
                     let up = Vec3(from.xy, z: max(coords.safeZ, target.z))
-                    pts = samples(from: from, move: .rapid(to: up), step: step)
-                        + samples(from: up, move: .rapid(to: Vec3(target.xy, z: up.z)), step: step)
-                        + [target]
+                    pts = [from, up, Vec3(target.xy, z: up.z), target]
                 }
                 for g in grown where !reported.contains(g.zone.id) {
-                    for p in pts where p.z < g.topZ - 1e-9 && g.box.contains(p.xy) && Polygon2D.regionContains(g.region, p.xy) {
-                        reported.insert(g.zone.id)
-                        out.append(Violation(toolpathName: tp.name, zoneName: g.zone.name, isRapid: m.isRapid,
-                                             at: coords.materialXY(fromMachine: p.xy)))
-                        break
-                    }
+                    // Every piece is tested against the grown outline exactly, not by sampling points along it:
+                    // a move grazing a convex corner crosses the grown region along a chord that can be
+                    // shorter than any sampling step.
+                    guard let at = zip(pts, pts.dropFirst()).lazy.compactMap({ firstHit($0, $1, region: g.region, box: g.box, topZ: g.topZ) }).first
+                    else { continue }
+                    reported.insert(g.zone.id)
+                    out.append(Violation(toolpathName: tp.name, zoneName: g.zone.name, isRapid: m.isRapid,
+                                         at: coords.materialXY(fromMachine: at.xy)))
                 }
             }
         }
         return out
     }
 
-    /// Points along a move (arcs sampled around their centre), including both ends.
-    static func samples(from a: Vec3, move m: Move, step: Double) -> [Vec3] {
+    /// The move as a polyline: the end points of a straight move, an arc cut into chords within `tolerance`.
+    static func polyline(from a: Vec3, move m: Move, tolerance: Double) -> [Vec3] {
         guard let b = m.target else { return [] }
         switch m {
         case .arcCW(_, let c, _), .arcCCW(_, let c, _):
             let cw: Bool = { if case .arcCW = m { return true } else { return false } }()
             let sweep = Flattening.arcSweep(from: a.xy, to: b.xy, center: c, clockwise: cw)
             let radius = a.xy.distance(to: c)
-            let n = max(2, Int((abs(sweep) * radius / step).rounded(.up)))
+            let maxStep = radius > tolerance ? 2 * acos(max(-1, 1 - tolerance / radius)) : Double.pi / 2
+            let n = min(4000, max(2, Int((abs(sweep) / max(maxStep, 1e-3)).rounded(.up))))
             let a0 = (a.xy - c).angle
             return (0...n).map { k in
                 let t = Double(k) / Double(n)
@@ -78,11 +76,35 @@ public enum KeepOut {
                 return Vec3(c + Vec2(cos(ang), sin(ang)) * radius, z: a.z + (b.z - a.z) * t)
             }
         default:
-            let n = max(1, Int((a.xy.distance(to: b.xy) / step).rounded(.up)))
-            return (0...n).map { k in
-                let t = Double(k) / Double(n)
-                return Vec3(a.xy.lerp(to: b.xy, t), z: a.z + (b.z - a.z) * t)
+            return [a, b]
+        }
+    }
+
+    /// A point of the straight piece a→b that is over `region` while lower than `topZ`, or nil. The piece is
+    /// cut where it crosses the region's edges (and where it passes `topZ`), and the middle of each part is
+    /// tested.
+    static func firstHit(_ a: Vec3, _ b: Vec3, region: [[Vec2]], box: Rect2, topZ: Double) -> Vec3? {
+        guard min(a.z, b.z) < topZ - 1e-9, Rect2(points: [a.xy, b.xy]).intersects(box) else { return nil }
+        var ts: [Double] = [0, 1]
+        let d = b.xy - a.xy
+        for loop in region {
+            for i in 0..<loop.count {
+                let p = loop[i], q = loop[(i + 1) % loop.count]
+                let e = q - p
+                let den = d.cross(e)
+                guard abs(den) > 1e-15 else { continue }
+                let w = p - a.xy
+                let t = w.cross(e) / den, u = w.cross(d) / den
+                if t > 0, t < 1, u >= 0, u <= 1 { ts.append(t) }
             }
         }
+        if (a.z < topZ) != (b.z < topZ), a.z != b.z { ts.append((topZ - a.z) / (b.z - a.z)) }
+        ts.sort()
+        for (t0, t1) in zip(ts, ts.dropFirst()) where t1 - t0 > 1e-12 {
+            let tm = (t0 + t1) / 2
+            let p = Vec3(a.xy.lerp(to: b.xy, tm), z: a.z + (b.z - a.z) * tm)
+            if p.z < topZ - 1e-9, Polygon2D.regionContains(region, p.xy) { return p }
+        }
+        return nil
     }
 }

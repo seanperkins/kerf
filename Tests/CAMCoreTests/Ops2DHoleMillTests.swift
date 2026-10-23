@@ -82,6 +82,36 @@ func ops2DHoleMillHelicalBoreStaysOnTheHoleRadius(mode: ZZeroMode) throws {
     #expect(abs(tp.minZ! + 0.45) < 1e-9)
 }
 
+/// Issue #96. Climb or conventional is how the cutter meets the wall, which inside a bore depends on the
+/// direction around it alone (counter-clockwise is climb with the spindle turning clockwise). The thread's hand
+/// depends on the direction around together with the direction along Z: counter-clockwise while rising, or
+/// clockwise while descending, is right-handed. The two choices are independent.
+@Test(arguments: [true, false], [CutDirection.climb, .conventional])
+func ops2DHoleMillThreadHandAndMillingDirectionAreIndependent(rightHand: Bool, direction: CutDirection) throws {
+    for mode in [ZZeroMode.materialTop, .spoilboard] {
+        var p = HoleMillParameters(mode: .thread, cutDepth: 0.5, threadPitch: 0.1, rightHandThread: rightHand, direction: direction)
+        p.holeDiameter = 0.75
+        let (tp, ctx) = try holeMill(p, zZero: mode)
+        let ring = F.densePoints(tp.moves).filter {
+            abs($0.xy.distance(to: Vec2(3, 3)) - 0.25) < 0.001 && $0.z < ctx.coords.safeZ - 1e-9
+        }
+        #expect(!ring.isEmpty)
+        var sweep = 0.0
+        for (a, b) in zip(ring, ring.dropFirst()) {
+            var d = (b.xy - Vec2(3, 3)).angle - (a.xy - Vec2(3, 3)).angle
+            while d > .pi { d -= 2 * .pi }
+            while d < -.pi { d += 2 * .pi }
+            sweep += d
+        }
+        let counterClockwise = sweep > 0
+        let rising = ctx.coords.depth(ofMachineZ: ring.last!.z) < ctx.coords.depth(ofMachineZ: ring.first!.z)
+        #expect(counterClockwise == (direction == .climb), "the milling direction is \(direction) but the helix turns \(counterClockwise ? "counter-" : "")clockwise")
+        #expect((counterClockwise == rising) == rightHand, "the thread is \(rightHand ? "right" : "left")-handed but the helix is not")
+        #expect(abs(abs(sweep) - 10 * .pi) < 0.01)
+        #expect(F.conventionViolations(tp, coords: ctx.coords).isEmpty)
+    }
+}
+
 @Test func ops2DHoleMillNeverFeedsThroughTheUncutCore() throws {
     // 1" hole, 1/4" tool: the ring leaves a 0.5" core standing in the middle.
     let (tp, ctx) = try holeMill(HoleMillParameters(cutDepth: 0.5))

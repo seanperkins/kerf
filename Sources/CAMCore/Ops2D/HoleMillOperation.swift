@@ -152,8 +152,9 @@ public struct HoleMillOperation: ToolpathOperation {
     }
 
     /// Thread milling: plunge at the centre (pilot hole), out to the radius, one helix turn per
-    /// pitch over the thread length, back to the centre. Climb right-hand threads go up
-    /// counter-clockwise; conventional ones go down clockwise; left-hand threads mirror that.
+    /// pitch over the thread length, back to the centre. Climb turns counter-clockwise and conventional
+    /// clockwise; a right-hand thread rises while turning counter-clockwise (climb goes up, conventional comes
+    /// down) and a left-hand thread does the opposite (climb comes down, conventional goes up).
     /// Whether the thread was milled (false: the hole is as large as the tool, so there is nothing to thread).
     private func thread(_ hole: Hole, radius: Double, tolerance tol: Double, builder: inout ToolpathBuilder) throws -> Bool {
         let c = hole.centre
@@ -163,9 +164,11 @@ public struct HoleMillOperation: ToolpathOperation {
         guard turns <= Self.maxTotalTurns else {
             throw CAMError.invalidParameter("The thread is too long for its pitch: it would take more than \(Int(Self.maxTotalTurns)) turns")
         }
+        // Climb inside a bore is counter-clockwise (clockwise spindle), whatever the thread's hand. The hand sets
+        // which way along Z that turn goes: counter-clockwise while rising is a right-hand thread.
         let climb = params.direction == .climb
-        let upward = climb
-        let ccw = climb == params.rightHandThread
+        let ccw = climb
+        let upward = climb == params.rightHandThread
         // A whole number of turns at the thread pitch, ending at the cut depth when going down.
         let span = turns * params.threadPitch
         let (from, to) = upward ? (params.cutDepth, params.cutDepth - span) : (params.cutDepth - span, params.cutDepth)

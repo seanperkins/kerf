@@ -25,7 +25,13 @@ public struct CutterProfile: Hashable, Sendable {
         case .endMill, .drill: self.init(shape: .flat, radius: tool.radius)
         case .ballNose: self.init(shape: .ball, radius: tool.radius)
         case .vBit, .engraving:
-            self.init(shape: .vee(angle: tool.angle ?? 90, tipDiameter: tool.tipDiameter), radius: tool.radius)
+            // A tool without a usable angle is flat, as `Tool.heightAboveTip` (the one definition of a cutter's
+            // shape, which the simulation uses) takes it; guessing a cone here made the plan disagree with the preview.
+            if let angle = tool.angle, angle > 0, angle < 180 {
+                self.init(shape: .vee(angle: angle, tipDiameter: tool.tipDiameter), radius: tool.radius)
+            } else {
+                self.init(shape: .flat, radius: tool.radius)
+            }
         }
     }
 

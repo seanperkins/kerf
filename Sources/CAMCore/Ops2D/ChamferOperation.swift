@@ -38,6 +38,12 @@ public struct ChamferOperation: ToolpathOperation {
         return p
     }
 
+    /// How far the tip runs off the vector into the waste. A chamfer "On" the line has the tip on the vector, so a
+    /// clearance there would only deepen the cut and widen the bevel past the width asked for.
+    static func tipClearance(_ params: ChamferParameters) -> Double {
+        params.side == .on ? 0 : max(params.tipClearance, 0)
+    }
+
     /// Works out the cut for `tool` (a V-bit or engraving bit with an angle).
     public static func size(tool: Tool, params: ChamferParameters) throws -> Size {
         guard tool.kind == .vBit || tool.kind == .engraving, let angle = tool.angle, angle > 0, angle < 180 else {
@@ -51,7 +57,7 @@ public struct ChamferOperation: ToolpathOperation {
         }
         let tanHalf = tan(angle / 2 * .pi / 180)
         let tip = tool.tipDiameter / 2
-        let e = max(params.tipClearance, 0)
+        let e = Self.tipClearance(params)
         let depth: Double
         if let d = params.depth {
             depth = d
@@ -84,7 +90,7 @@ public struct ChamferOperation: ToolpathOperation {
         var p = ProfileParameters(depth: DepthSettings(startDepth: params.startDepth, cutDepth: size.tipDepth,
                                                        passDepth: params.passDepth),
                                   side: params.side, direction: params.direction)
-        p.allowance = max(params.tipClearance, 0) - tool.radius
+        p.allowance = Self.tipClearance(params) - tool.radius
         var tps = try ProfileOperation(setup: setup, params: p).generate(in: context)
         for i in tps.indices {
             tps[i].kind = .chamfer

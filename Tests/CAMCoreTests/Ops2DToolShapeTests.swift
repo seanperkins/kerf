@@ -51,3 +51,21 @@ private func shaped(_ kind: ToolKind, _ d: Double, _ shape: CutterShape) -> Tool
     }
     #expect(EngraveOperation.cutWidth(tool: tool, depth: 0.1) > 0.29)
 }
+
+/// Issue #96. `Tool.heightAboveTip` is the one definition of a cutter's shape, and the drop-cutter's profile has to
+/// agree with it. A V-bit or engraving tool with no angle (a stored tool can lack one) was a 90° cone in the
+/// drop-cutter but flat in the simulation and `Tool.heightAboveTip`.
+@Test func dropCutterProfileAgreesWithTheToolsOwnShape() {
+    var tools = ToolLibrary.seeded.tools
+    tools.append(Tool(name: "V without an angle", kind: .vBit, number: 90, diameter: 0.5, stepdown: 0.1, stepover: 0.02,
+                      feedRate: 80, plungeRate: 30))
+    tools.append(Tool(name: "Engraver without an angle", kind: .engraving, number: 91, diameter: 0.125, tipDiameter: 0.01,
+                      stepdown: 0.02, stepover: 0.005, feedRate: 40, plungeRate: 10))
+    for tool in tools {
+        let profile = CutterProfile(tool: tool)
+        for r in stride(from: 0.0, through: tool.radius, by: tool.radius / 20) {
+            let expected = tool.heightAboveTip(atRadius: r) ?? 0
+            #expect(abs(profile.height(at: r) - expected) < 1e-9, "\(tool.name) at r = \(r)")
+        }
+    }
+}
