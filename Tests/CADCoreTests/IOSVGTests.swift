@@ -202,3 +202,59 @@ import Testing
     #expect(r.shapes[0].isClosed)
     #expect(!r.shapes[1].isClosed)
 }
+
+/// Issue #96. A percentage length on a shape resolves against the viewport, which is the viewBox: x, width, cx, rx and
+/// x1/x2 against its width, y, height, cy, ry and y1/y2 against its height, r against sqrt((w^2 + h^2) / 2). It
+/// resolved against 0, so `width="50%"` dropped the shape without a word.
+@Suite struct IOSVGPercentLengthTests {
+    func importMM(_ body: String, root: String = #"viewBox="0 0 200 100" width="200mm" height="100mm""#) throws -> ImportResult {
+        try SVGImporter().importVectors(from: Data("<svg xmlns=\"http://www.w3.org/2000/svg\" \(root)>\(body)</svg>".utf8),
+                                        targetUnits: .millimeter)
+    }
+
+    @Test func rectangleSizeAndPositionResolveAgainstTheViewBox() throws {
+        let r = try importMM(#"<rect x="25%" y="10%" width="50%" height="80%"/>"#)
+        #expect(r.shapes.count == 1)
+        let b = try #require(r.shapes.first).bounds()
+        // y is flipped: the rectangle spans 10..90 of the 100 high page.
+        #expect(approx(b, Rect2(x: 50, y: 10, width: 100, height: 80), 1e-9))
+    }
+
+    @Test func radiusUsesTheNormalisedDiagonalAndCentresUseTheirOwnAxis() throws {
+        let r = try importMM(#"<circle cx="50%" cy="50%" r="10%"/>"#)
+        let b = try #require(r.shapes.first).bounds()
+        let radius = ((200.0 * 200 + 100 * 100) / 2).squareRoot() * 0.1
+        #expect(approx(b, Rect2(x: 100 - radius, y: 50 - radius, width: 2 * radius, height: 2 * radius), 1e-6))
+    }
+
+    @Test func ellipseLineAndUseResolvePerAxis() throws {
+        let r = try importMM(#"""
+            <defs><rect id="dot" width="10" height="10"/></defs>
+            <ellipse cx="50%" cy="50%" rx="25%" ry="10%"/>
+            <line x1="0%" y1="0%" x2="100%" y2="50%"/>
+            <use href="#dot" x="50%" y="50%"/>
+            """#)
+        let ellipse = try #require(r.shapes.first { $0.name == "ellipse" }).bounds()
+        #expect(approx(ellipse, Rect2(x: 50, y: 40, width: 100, height: 20), 1e-6))
+        let line = try #require(r.shapes.first { $0.name == "line" })
+        #expect(line.paths[0].start.isApproximatelyEqual(to: Vec2(0, 100), tolerance: 1e-9))
+        #expect(line.paths[0].end.isApproximatelyEqual(to: Vec2(200, 50), tolerance: 1e-9))
+        let dot = try #require(r.shapes.first { $0.name == "dot" }).bounds()
+        #expect(approx(dot, Rect2(x: 100, y: 40, width: 10, height: 10), 1e-9))
+    }
+
+    /// Without a viewBox the viewport is the root's width and height, in user units (pixels).
+    @Test func withoutAViewBoxThePercentageIsOfTheRootSize() throws {
+        let r = try SVGImporter(pixelsPerInch: 96).importVectors(
+            from: Data(#"<svg xmlns="http://www.w3.org/2000/svg" width="192" height="96"><rect width="50%" height="100%"/></svg>"#.utf8),
+            targetUnits: .inch)
+        let b = try #require(r.shapes.first).bounds()
+        #expect(approx(b, Rect2(x: 0, y: 0, width: 1, height: 1), 1e-9))
+    }
+
+    /// A file that gives no viewport size keeps its old reading (the shape is not guessed at).
+    @Test func aPercentageWithNoViewportSizeIsStillZero() throws {
+        let r = try importMM(#"<rect width="50%" height="100%"/>"#, root: "")
+        #expect(r.shapes.isEmpty)
+    }
+}

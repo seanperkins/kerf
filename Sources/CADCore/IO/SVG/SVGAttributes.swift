@@ -68,6 +68,16 @@ enum SVGAttributes {
         }
     }
 
+    /// What a percentage on attribute `key` is of: the viewport's width for x-like attributes, its height for y-like
+    /// ones, and the normalised diagonal sqrt((w^2 + h^2) / 2) for everything else (r, stroke widths).
+    static func percentReference(_ key: String, viewport v: (w: Double, h: Double)) -> Double {
+        switch key {
+        case "x", "cx", "rx", "width", "x1", "x2", "dx": return v.w
+        case "y", "cy", "ry", "height", "y1", "y2", "dy": return v.h
+        default: return ((v.w * v.w + v.h * v.h) / 2).squareRoot()
+        }
+    }
+
     /// Declarations from a `style="a:b; c:d"` attribute.
     static func style(_ s: String?) -> [String: String] {
         guard let s else { return [:] }
