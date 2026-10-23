@@ -108,6 +108,11 @@ import Testing
         ("Surfacing bit", []),
         ("#3 center drill", []),
         ("60 deg V", []),
+        // Issue #96: a mixed number is one size (1 1/4 in), not the fraction alone.
+        ("1-1/4\" Surfacing Bit", [1.25]),
+        ("1-1/2 in Spoilboard Cutter", [1.5]),
+        ("2-3/8 inch Bit", [2.375]),
+        ("2-flute 1/4\" End Mill", [0.25]),
     ]
 
     @Test(arguments: nameCases)

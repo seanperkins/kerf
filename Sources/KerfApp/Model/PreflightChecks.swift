@@ -117,8 +117,14 @@ enum PreflightChecks {
     static func sizesInInches(inName name: String) -> [Double] {
         var sizes: [Double] = []
         let patterns: [(String, (NSTextCheckingResult, String) -> Double?)] = [
+            // 1-1/4", 1-1/2 in: a mixed number is one size, so the fraction after "1-" is not read on its own below
+            (#"(?<![\d./])(\d+)\s*-\s*(\d+)\s*/\s*(\d+)\s*(?:"|”|in\b|inch(?:es)?\b)?"#, { m, s in
+                guard let w = Double(group(m, 1, s)), let a = Double(group(m, 2, s)), let b = Double(group(m, 3, s)), b > 0
+                else { return nil }
+                return w + a / b
+            }),
             // 1/4", 1/4 in, 1/4in, 1/4 inch, or a bare 1/4
-            (#"(?<![\d.])(\d+)\s*/\s*(\d+)\s*(?:"|”|in\b|inch(?:es)?\b)?"#, { m, s in
+            (#"(?<![\d.])(?<!\d-)(\d+)\s*/\s*(\d+)\s*(?:"|”|in\b|inch(?:es)?\b)?"#, { m, s in
                 guard let a = Double(group(m, 1, s)), let b = Double(group(m, 2, s)), b > 0 else { return nil }
                 return a / b
             }),
