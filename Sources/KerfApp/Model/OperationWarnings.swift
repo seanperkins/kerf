@@ -74,7 +74,8 @@ enum OperationWarnings {
         // slug and the pilot cannot be judged from the settings, and the form says so where either could matter.
         if op.setup.projectOntoModelID != nil {
             let slugPossible = op.params.mode == .helical && holes.contains { $0.diameter - 2 * tool.diameter > tool.diameter + tol }
-            let pilotNeeded = op.params.mode == .thread && !holes.isEmpty
+            let pilotNeeded = op.params.mode == .thread
+                && holes.contains { ($0.diameter - tool.diameter) / 2 > CAMContext.defaultTolerance(units) }
             return slugPossible || pilotNeeded
                 ? ["This toolpath is projected onto a 3D model, so whether it leaves a free slug (through holes) or has the pilot "
                    + "hole a thread needs cannot be judged from its settings: check it in the 3D preview."]

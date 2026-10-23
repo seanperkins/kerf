@@ -530,6 +530,9 @@ import Testing
         #expect(warnings(.holeMill(projectedBore), p, lib).first?.contains("cannot be judged") == true)
         projectedBore.params.holeDiameter = 0.4
         #expect(warnings(.holeMill(projectedBore), p, lib).isEmpty)
+        // A projected thread in a hole as large as the tool is skipped by the generator and has no pilot to judge.
+        projected.params.holeDiameter = 0.25
+        #expect(warnings(.holeMill(projected), p, lib).isEmpty)
         var projectedDrill = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(cutDepth: 0.75))
         projectedDrill.setup.projectOntoModelID = UUID()
         p.operations = [.drill(projectedDrill), .holeMill(thread)]
