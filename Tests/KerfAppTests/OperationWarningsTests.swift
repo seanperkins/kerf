@@ -354,6 +354,12 @@ import Testing
         #expect(warnings(.holeMill(holeMill(mill, a, depth: 0.5)), p, lib).isEmpty)
         #expect(warnings(.holeMill(holeMill(mill, a, diameter: 0.7)), p, lib).isEmpty)           // core 0.2 in
         #expect(!warnings(.holeMill(holeMill(mill, a, diameter: 0.8)), p, lib).isEmpty)          // core 0.3 in
+        // A copy of the array is a through hole too.
+        var copiedBore = bore
+        copiedBore.setup.arrayCopy = ArrayCopySettings(columns: 2, rows: 1, spacingX: 4, spacingY: 0)
+        p.operations = [drill(slugWide, a), .holeMill(copiedBore)]
+        #expect(warnings(.holeMill(copiedBore), p, lib).first?.contains("1 through hole(s)") == true)      // the copy at x = 7
+        p.operations = [.holeMill(bore)]
         // Two holes are counted, the widest named.
         var two = bore
         two.setup.shapeIDs = [a.id, b.id]
@@ -414,6 +420,36 @@ import Testing
         }
         p.operations = [.holeMill(thread), drill(wide, a)]
         #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        // The pilot has to start at the top: a drill that starts 0.2 in down leaves that much for the thread mill to cut.
+        var startsLow = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(startDepth: 0.2, cutDepth: 0.75))
+        p.operations = [.drill(startsLow), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        startsLow.params.startDepth = 0
+        p.operations = [.drill(startsLow), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).isEmpty)
+        // A pocket whose tool cannot reach the middle makes no pilot: a 1/2 in tool with a 0.1 in allowance does not enter a 0.4 in circle.
+        let small = Shape(name: "small", layerID: p.document.defaultLayerID, paths: [ShapeFactory.circle(center: Vec2(3, 8), radius: 0.2)])
+        p.document.add(small)
+        var smallParams = PocketParameters(allowance: 0.1)
+        smallParams.depth.cutDepth = 0.75
+        let big = try #require(lib.tools.first { $0.kind == .endMill && abs($0.diameter - 0.5) < 1e-9 })
+        let smallPocket = AnyOperation.pocket(PocketOperation(setup: OperationSetup(name: "SP", toolID: big.id, shapeIDs: [small.id]), params: smallParams))
+        let smallThread = holeMill(mill, small, mode: .thread, depth: 0.5, diameter: 0.4)
+        p.operations = [smallPocket, .holeMill(smallThread)]
+        #expect(warnings(.holeMill(smallThread), p, lib).count == 1)
+        smallParams.allowance = 0
+        p.operations = [.pocket(PocketOperation(setup: OperationSetup(name: "SP", toolID: mill.id, shapeIDs: [small.id]), params: smallParams)), .holeMill(smallThread)]
+        #expect(warnings(.holeMill(smallThread), p, lib).isEmpty)          // a 1/4 in tool reaches the middle of a 0.4 in circle
+        // The copies of an array are holes too: a pilot at the original is no pilot at the copy.
+        var copied = thread
+        copied.setup.arrayCopy = ArrayCopySettings(columns: 2, rows: 1, spacingX: 4, spacingY: 0)
+        p.operations = [drill(wide, a), .holeMill(copied)]
+        #expect(warnings(.holeMill(copied), p, lib).count == 1)
+        // ...unless the pilot is copied the same way.
+        var copiedPilot = drill(wide, a)
+        if case .drill(var d) = copiedPilot { d.setup.arrayCopy = ArrayCopySettings(columns: 2, rows: 1, spacingX: 4, spacingY: 0); copiedPilot = .drill(d) }
+        p.operations = [copiedPilot, .holeMill(copied)]
+        #expect(warnings(.holeMill(copied), p, lib).isEmpty)
         // A thread in a hole as large as the tool is skipped by the generator, and not reported here.
         let tiny = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.25)
         p.operations = [.holeMill(tiny)]

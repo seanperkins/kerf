@@ -70,14 +70,18 @@ enum OperationWarnings {
         var holes = HoleMillOperation.holes(project.document.shapes(ids: op.setup.shapeIDs), tolerance: tol)
         if let d = op.params.holeDiameter { holes = holes.map { HoleMillOperation.Hole(centre: $0.centre, diameter: d) } }
         holes = holes.filter { $0.diameter >= tool.diameter - tol }     // the generator skips the smaller ones
+        // Every copy of an array is a hole too, at the vector's centre shifted by the copy's offset.
+        let copies = op.setup.arrayCopy?.offsets ?? [.zero]
+        holes = holes.flatMap { hole in copies.map { HoleMillOperation.Hole(centre: hole.centre + $0, diameter: hole.diameter) } }
         // What runs before this toolpath in the list; a toolpath that is not in the list has nothing before it.
         let earlier = project.operations.firstIndex { $0.id == op.setup.id }.map { Array(project.operations.prefix($0)) } ?? []
-        /// An earlier toolpath that clears at least `depth` deep and `width` across at `c` (a drill, only, when `drillOnly`).
+        /// An earlier toolpath that clears at least `depth` deep and `width` across at `c`, from the material top (a drill,
+        /// only, when `drillOnly`): one that starts below the top leaves the material above it for the tool to cut.
         func made(at c: Vec2, depth: Double, width: Double, drillOnly: Bool) -> Bool {
             earlier.contains { other in
                 guard let cleared = clearing(of: other, at: c, project: project, library: library, material: job.material,
                                              units: units, tolerance: tol, drillOnly: drillOnly) else { return false }
-                return cleared.depth >= depth - tol && cleared.width >= width - tol
+                return cleared.start <= tol && cleared.depth >= depth - tol && cleared.width >= width - tol
             }
         }
         var out: [String] = []
@@ -115,31 +119,45 @@ enum OperationWarnings {
     /// How deep and how wide across `other` clears material at `c`, or nil when it does not make a hole there: a Drill at
     /// the center (as wide as its tool), unless `drillOnly` also a helical bore there that leaves no core (a hole no wider
     /// than twice its tool; a wider one is only a ring, the middle stays solid) and a pocket whose vectors enclose it
-    /// (as wide as the room round `c`). A profile cuts the perimeter only, so it makes no pilot.
-    private static func clearing(of other: AnyOperation, at c: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
-                                 units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> (depth: Double, width: Double)? {
+    /// (as wide as the room round `c` that its tool can reach). A profile cuts the perimeter only, so it makes no pilot.
+    /// The copies of an array count at their offsets. `start` is the depth the toolpath starts at.
+    private static func clearing(of other: AnyOperation, at point: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
+                                 units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> (start: Double, depth: Double, width: Double)? {
         guard other.setup.isEnabled else { return nil }
+        for offset in other.setup.arrayCopy?.offsets ?? [.zero] {
+            if let found = clearing(of: other, atOriginal: point - offset, project: project, library: library, material: material,
+                                    units: units, tolerance: tol, drillOnly: drillOnly) { return found }
+        }
+        return nil
+    }
+
+    private static func clearing(of other: AnyOperation, atOriginal c: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
+                                 units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> (start: Double, depth: Double, width: Double)? {
         let shapes = project.document.shapes(ids: other.setup.shapeIDs)
         func otherTool() -> Tool? { library.tool(id: other.setup.toolID)?.forMaterial(material).converted(to: units) }
-        /// The room round `c` inside the loops that enclose it: twice the distance to the nearest edge.
-        func room() -> Double? {
-            let loops = ShapeGeometry.loops(of: shapes, tolerance: tol).closed
-            guard Polygon2D.regionContains(Polygon2D.region(fromLoops: loops), c) else { return nil }
-            return 2 * (loops.map { Polygon2D.distance(from: c, toLoop: $0) }.min() ?? 0)
+        /// The room round `c` inside the area the pocket's tool reaches: the vectors' region shrunk by the tool's radius and
+        /// the allowance and grown back, twice the distance from `c` to its nearest edge (nil when `c` is outside it).
+        func room(tool: Tool?, allowance: Double) -> Double? {
+            guard let tool else { return nil }
+            let region = Polygon2D.region(fromLoops: ShapeGeometry.loops(of: shapes, tolerance: tol).closed)
+            let inset = GeomKernel.offset(region, by: -(tool.radius + allowance), join: .round, arcTolerance: tol)
+            let reached = GeomKernel.offset(inset, by: tool.radius, join: .round, arcTolerance: tol)
+            guard !reached.isEmpty, Polygon2D.regionContains(reached, c) else { return nil }
+            return 2 * (reached.map { Polygon2D.distance(from: c, toLoop: $0) }.min() ?? 0)
         }
         switch other {
         case .drill(let d):
             guard DrillOperation.holeCentres(shapes, tolerance: tol).contains(where: { $0.distance(to: c) <= tol }),
                   let t = otherTool() else { return nil }
-            return (d.params.cutDepth, t.diameter)
+            return (d.params.startDepth, d.params.cutDepth, t.diameter)
         case .holeMill(let h) where !drillOnly && h.params.mode == .helical:
             guard var hole = HoleMillOperation.holes(shapes, tolerance: tol).first(where: { $0.centre.distance(to: c) <= tol }),
                   let t = otherTool() else { return nil }
             if let d = h.params.holeDiameter { hole.diameter = d }
             guard hole.diameter >= t.diameter - tol, HoleMillOperation.leavesNoCore(hole, tool: t, tolerance: tol) else { return nil }
-            return (h.params.cutDepth, hole.diameter)
+            return (h.params.startDepth, h.params.cutDepth, hole.diameter)
         case .pocket(let p) where !drillOnly:
-            return room().map { (p.params.depth.cutDepth, $0) }
+            return room(tool: otherTool(), allowance: p.params.allowance).map { (p.params.depth.startDepth, p.params.depth.cutDepth, $0) }
         default: return nil
         }
     }
