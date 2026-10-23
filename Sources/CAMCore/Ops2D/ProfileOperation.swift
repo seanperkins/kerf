@@ -85,8 +85,16 @@ public struct ProfileOperation: ToolpathOperation {
                 // A cut on the line follows each vector as drawn; the others cut the even-odd region.
                 let outline = params.side == .on ? part : Polygon2D.region(fromLoops: part)
                 let survives = grow == 0 || !GeomKernel.offset([closed[k]], by: holes[k] ? -grow : grow, join: join, arcTolerance: tol).isEmpty
+                // A loop only counts as cut when it leaves something to hold: tool-centre loops narrower than the
+                // tool (the slivers a wall thinner than twice the offset leaves at its corners) are swept away
+                // by their own groove, and no part comes free along them (issue #48).
+                let holdsSomething = loops.contains { loop in
+                    let ring = PathGeometry.area(loop.points) < 0 ? loop.points.reversed() : loop.points
+                    return !GeomKernel.offset([Array(ring)], by: -tool.radius, join: join, arcTolerance: tol).isEmpty
+                }
                 return TabAnchors.OwnLoops(outline: outline.map { ArcLengthChain(Chain2D(points: $0, isClosed: true)) },
-                                           part: loops.map { ArcLengthChain($0) }, offset: offset, cut: !loops.isEmpty && survives)
+                                           part: loops.map { ArcLengthChain($0) }, offset: offset,
+                                           cut: !loops.isEmpty && (params.side == .on || holdsSomething) && survives)
             }
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,

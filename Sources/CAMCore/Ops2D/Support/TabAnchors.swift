@@ -45,8 +45,9 @@ public enum TabAnchors {
     /// What a manual anchor is judged against. `outline` is the anchor's part as drawn (its vector
     /// and whatever selected vectors the offset joins it to, as the even-odd region the toolpath
     /// offsets), `part` what the toolpath cuts for it (the outline offset by `offset`), and `cut`
-    /// whether this pass cuts the anchor's vector at all: its part has a loop and the vector's own
-    /// offset survives (a hole smaller than this pass's offset is not cut by it).
+    /// whether this pass cuts the anchor's vector at all: its part has a loop that leaves something to
+    /// hold (not a sliver narrower than the tool) and the vector's own offset survives (a hole smaller
+    /// than this pass's offset is not cut by it).
     public struct OwnLoops {
         public var outline: [ArcLengthChain]
         public var part: [ArcLengthChain]
