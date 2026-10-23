@@ -518,6 +518,16 @@ import Testing
         #expect(warnings(.holeMill(offCentre), p, lib).count == 1)
         p.operations = [drill(wide, a), .holeMill(offCentre)]                       // a 1/2 in drill covers it with room to spare
         #expect(warnings(.holeMill(offCentre), p, lib).isEmpty)
+        // A toolpath projected onto a 3D model is cut to depths only calculating knows: nothing is judged, and a projected
+        // drill is no pilot.
+        var projected = thread
+        projected.setup.projectOntoModelID = UUID()
+        p.operations = [.holeMill(projected)]
+        #expect(warnings(.holeMill(projected), p, lib).isEmpty)
+        var projectedDrill = DrillOperation(setup: OperationSetup(name: "D", toolID: wide.id, shapeIDs: [a.id]), params: DrillParameters(cutDepth: 0.75))
+        projectedDrill.setup.projectOntoModelID = UUID()
+        p.operations = [.drill(projectedDrill), .holeMill(thread)]
+        #expect(warnings(.holeMill(thread), p, lib).count == 1)
         // The boundary is the generator's: a thread diameter 0.0012 in over the tool has a 0.0006 in radius, above the 0.0005 in
         // tolerance, so the generator mills it, plunging at the center, and it needs its pilot.
         let barely = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.2512)

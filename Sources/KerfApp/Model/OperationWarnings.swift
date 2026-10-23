@@ -65,6 +65,8 @@ enum OperationWarnings {
     /// hole. Both depend on what the job does at the same centre, so they are judged here, not by the generator.
     static func holeMillProblems(_ op: HoleMillOperation, in project: KerfProject, library: ToolLibrary, tool: Tool,
                                  job: JobSetup, units: LengthUnit) -> [String] {
+        // Projected onto a 3D model its depths are measured from the model's surface, which only calculating knows.
+        guard op.setup.projectOntoModelID == nil else { return [] }
         let tol = 3 * CAMContext.defaultTolerance(units)
         let u = units.abbreviation
         var holes = HoleMillOperation.holes(project.document.shapes(ids: op.setup.shapeIDs), tolerance: tol)
@@ -130,7 +132,8 @@ enum OperationWarnings {
     /// The copies of an array count at their offsets. `start` is the depth the toolpath starts at.
     private static func clearing(of other: AnyOperation, at point: Vec2, project: KerfProject, library: ToolLibrary, material: String?,
                                  units: LengthUnit, tolerance tol: Double, drillOnly: Bool) -> [(start: Double, depth: Double, width: Double)] {
-        guard other.setup.isEnabled else { return [] }
+        // (A toolpath projected onto a model is cut below the model's surface, not to the depth it states.)
+        guard other.setup.isEnabled, other.setup.projectOntoModelID == nil else { return [] }
         // Every copy of an array that reaches the point counts, each by its own width: the first is not the best.
         return (other.setup.arrayCopy?.offsets ?? [.zero]).compactMap { offset in
             clearing(of: other, atOriginal: point - offset, project: project, library: library, material: material,

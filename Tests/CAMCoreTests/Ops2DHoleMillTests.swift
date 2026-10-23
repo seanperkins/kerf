@@ -254,3 +254,11 @@ func ops2DHoleMillPeckDrillsAHoleTooCloseToTheToolForAHelix(mode: ZZeroMode) thr
         #expect(throws: CAMError.self, "hole diameter \(d)") { try holeMill(HoleMillParameters(cutDepth: 0.5, holeDiameter: d)) }
     }
 }
+
+@Test func ops2DHoleMillRefusesAThreadThatWouldTakeMoreThanTheTurnBound() throws {
+    var p = HoleMillParameters(mode: .thread, cutDepth: 1e30, threadPitch: 0.1)
+    p.holeDiameter = 0.75
+    #expect(throws: CAMError.self) { try holeMill(p) }
+    p.cutDepth = 500                    // 5 000 turns: fine
+    #expect((try? holeMill(p)) != nil)
+}

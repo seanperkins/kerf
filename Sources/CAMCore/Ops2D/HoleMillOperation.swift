@@ -75,7 +75,7 @@ public struct HoleMillOperation: ToolpathOperation {
                 case .pecked: pecked += 1
                 }
             case .thread:
-                if !thread(hole, radius: radius, tolerance: tol, builder: &builder) { noRoom += 1 }
+                if try !thread(hole, radius: radius, tolerance: tol, builder: &builder) { noRoom += 1 }
             }
         }
         var meta = ["holes": "\(order.count)"]
@@ -155,11 +155,14 @@ public struct HoleMillOperation: ToolpathOperation {
     /// pitch over the thread length, back to the centre. Climb right-hand threads go up
     /// counter-clockwise; conventional ones go down clockwise; left-hand threads mirror that.
     /// Whether the thread was milled (false: the hole is as large as the tool, so there is nothing to thread).
-    private func thread(_ hole: Hole, radius: Double, tolerance tol: Double, builder: inout ToolpathBuilder) -> Bool {
+    private func thread(_ hole: Hole, radius: Double, tolerance tol: Double, builder: inout ToolpathBuilder) throws -> Bool {
         let c = hole.centre
         guard radius > tol else { return false }
         let length = params.cutDepth - params.startDepth
         let turns = max(1, ceil(length / params.threadPitch - 1e-9))
+        guard turns <= Self.maxTotalTurns else {
+            throw CAMError.invalidParameter("The thread is too long for its pitch: it would take more than \(Int(Self.maxTotalTurns)) turns")
+        }
         let climb = params.direction == .climb
         let upward = climb
         let ccw = climb == params.rightHandThread
