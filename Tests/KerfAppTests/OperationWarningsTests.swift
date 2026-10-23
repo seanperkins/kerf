@@ -156,7 +156,7 @@ import Testing
         let (p, _, lib) = try setup()
         var broken = lib
         let finish = try #require(lib.tools.first { $0.kind == .endMill })
-        var big = try #require(lib.tools.first { $0.kind == .endMill && $0.id != finish.id })
+        var big = try #require(lib.tools.first { $0.kind == .endMill && $0.diameter > finish.diameter + 1e-9 })   // a clearance tool is the larger one
         big.feedRate = 0; big.spindleRPM = 40000
         broken.upsert(big)
         let id = p.document.shapes[0].id
@@ -188,7 +188,31 @@ import Testing
         let relief = Relief3DOperation(setup: OperationSetup(name: "R", toolID: finish.id),
                                        params: Relief3DParameters(modelID: UUID(), roughing: RoughingSettings(toolID: big.id)))
         #expect(warnings(.relief3D(relief), p, broken).contains { $0.hasPrefix("\(big.name): ") })
-        #expect(OperationWarnings.secondaryToolIDs(of: pocket) == [big.id])
+        #expect(OperationWarnings.secondaryToolIDs(of: pocket, primary: finish, library: broken, material: nil, units: .inch) == [big.id])
+    }
+
+    @Test func aPocketJudgesOnlyTheClearanceToolsTheGeneratorWillUse() throws {
+        let (p, _, lib) = try setup()
+        let id = p.document.shapes[0].id
+        let quarter = try #require(lib.tools.first { $0.kind == .endMill && abs($0.diameter - 0.25) < 1e-9 })
+        var half = try #require(lib.tools.first { $0.kind == .endMill && abs($0.diameter - 0.5) < 1e-9 })
+        var eighth = try #require(lib.tools.first { $0.kind == .endMill && abs($0.diameter - 0.125) < 1e-9 })
+        half.feedRate = 0; eighth.feedRate = 0
+        var broken = lib
+        broken.upsert(half); broken.upsert(eighth)
+        var op = PocketOperation(setup: OperationSetup(name: "P", toolID: quarter.id, shapeIDs: [id]), params: PocketParameters())
+        // Smaller than the finish tool: skipped by the generator, so not judged. Larger: judged.
+        op.params.clearanceToolIDs = [eighth.id]
+        #expect(warnings(.pocket(op), p, broken).isEmpty)
+        op.params.clearanceToolIDs = [half.id]
+        #expect(warnings(.pocket(op), p, broken).contains { $0.hasPrefix("\(half.name): ") })
+        // Each must be smaller than the one before: a second 1/2 in tool is skipped.
+        var half2 = half
+        half2.id = UUID(); half2.name = "Another half"
+        broken.upsert(half2)
+        op.params.clearanceToolIDs = [half.id, half2.id]
+        let w = warnings(.pocket(op), p, broken)
+        #expect(w.allSatisfy { $0.hasPrefix("\(half.name): ") } && !w.isEmpty)
     }
 
     @Test func onlyToolsThatMakeACutAreJudged() throws {
@@ -222,6 +246,8 @@ import Testing
         #expect(!warnings(relief(rough: false, roughTool: nil, finishing: true, rest: nil), p, reliefLib).isEmpty)
         #expect(!warnings(relief(rough: true, roughTool: nil, finishing: false, rest: nil), p, reliefLib).isEmpty)
         #expect(warnings(relief(rough: true, roughTool: other.id, finishing: false, rest: nil), p, reliefLib).isEmpty)
+        // Roughing explicitly with the primary tool is the primary tool cutting.
+        #expect(!warnings(relief(rough: true, roughTool: finish.id, finishing: false, rest: nil), p, reliefLib).isEmpty)
         #expect(warnings(relief(rough: false, roughTool: nil, finishing: false, rest: nil), p, reliefLib).isEmpty)
         // The rest tool is never judged; the roughing tool when roughing is on.
         #expect(warnings(relief(rough: false, roughTool: nil, finishing: true, rest: other.id), p, broken).isEmpty)

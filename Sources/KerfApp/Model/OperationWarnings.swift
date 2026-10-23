@@ -23,9 +23,10 @@ enum OperationWarnings {
 
         if op.kind != .merge {
             if primaryToolCuts(op) { out += toolProblems(tool, profile: profile, overridable: true) }
-            // The other tools the operation cuts with (clearance, roughing, rest) are judged the same way, by name.
+            // The other tools the operation cuts with (clearance, roughing) are judged the same way, by name.
             var seen: Set<UUID> = [op.setup.toolID]
-            for id in secondaryToolIDs(of: op) where seen.insert(id).inserted {
+            for id in secondaryToolIDs(of: op, primary: tool, library: library, material: job.material, units: units)
+            where seen.insert(id).inserted {
                 guard let other = library.tool(id: id)?.forMaterial(job.material).converted(to: units) else { continue }
                 out += toolProblems(other, profile: profile, overridable: false).map { "\(other.name): \($0)" }
             }
@@ -64,19 +65,35 @@ enum OperationWarnings {
     }
 
     /// Whether the operation's primary tool makes any cut: always, except a relief with finishing off whose
-    /// roughing has a tool of its own (or is off too), when the primary tool does nothing.
+    /// roughing has another tool (or is off too), when the primary tool does nothing. (A roughing tool that is
+    /// the primary tool itself, chosen or by default, is the primary tool cutting.)
     static func primaryToolCuts(_ op: AnyOperation) -> Bool {
         guard case .relief3D(let o) = op else { return true }
-        return o.params.finishing.isEnabled || (o.params.roughing.isEnabled && o.params.roughing.toolID == nil)
+        let roughsWithPrimary = o.params.roughing.toolID.map { $0 == op.setup.toolID } ?? true
+        return o.params.finishing.isEnabled || (o.params.roughing.isEnabled && roughsWithPrimary)
     }
 
     /// The tools besides the primary one that the operation cuts with, in the order it uses them: a pocket's
     /// clearance tools, the flat-area clearance tools of a V-carve (only with a flat depth) and an inlay, and a
     /// relief's roughing tool when roughing is on and has one of its own. A relief's rest tool is not here: it
-    /// only says what an earlier tool already finished, and cuts nothing.
-    static func secondaryToolIDs(of op: AnyOperation) -> [UUID] {
+    /// only says what an earlier tool already finished, and cuts nothing. A pocket's clearance tools are the ones
+    /// `PocketOperation.usableClearanceTools` keeps: larger than the finish tool and smaller than the clearance
+    /// tool before; the rest are skipped by the generator. `primary` is the primary tool in document units.
+    static func secondaryToolIDs(of op: AnyOperation, primary: Tool, library: ToolLibrary, material: String?,
+                                 units: LengthUnit) -> [UUID] {
         switch op {
-        case .pocket(let o): return o.params.clearanceTools
+        case .pocket(let o):
+            let tol = CAMContext.defaultTolerance(units)
+            var used: [UUID] = []
+            var limit = Double.infinity
+            for id in o.params.clearanceTools where id != op.setup.toolID {
+                guard let t = library.tool(id: id)?.forMaterial(material).converted(to: units) else { continue }
+                if t.diameter > primary.diameter + tol && t.diameter < limit - tol {
+                    used.append(id)
+                    limit = t.diameter
+                }
+            }
+            return used
         case .vcarve(let o): return o.params.flatDepth == nil ? [] : o.params.clearanceTools.map(\.toolID)
         case .inlay(let o): return o.params.clearanceToolIDs
         case .relief3D(let o): return o.params.roughing.isEnabled ? o.params.roughing.toolID.map { [$0] } ?? [] : []
