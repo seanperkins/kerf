@@ -44,16 +44,26 @@ public enum ToolpathTiling {
         public var clip: Rect2
     }
 
+    /// The overlap a grid can use along an axis whose tiles may reach `largest`: less than half of it, so every tile
+    /// still advances by more than half its size and the grid never needs more than about twice the tiles it would
+    /// without overlap. A larger overlap is ignored (0).
+    static func usableOverlap(_ overlap: Double, largest: Double) -> Double {
+        overlap > 0 && overlap < largest / 2 ? overlap : 0
+    }
+
+    /// False when `settings` asks for an overlap that is ignored on some axis (half a tile or more).
+    public static func overlapIsUsable(_ s: TilingSettings) -> Bool {
+        s.overlap <= 0 || (usableOverlap(s.overlap, largest: s.tileWidth) > 0 && usableOverlap(s.overlap, largest: s.tileHeight) > 0)
+    }
+
     /// How many equal tiles cover `extent` when none may reach further than `largest`, counting the overlap: the
     /// first and the last tile reach half of it into their one neighbour, the ones between into both.
     static func tileCount(extent: Double, largest: Double, overlap: Double) -> Int {
         let plain = max(1, Int((extent / largest - 1e-9).rounded(.up)))
-        let overlap = max(0, overlap)
+        let overlap = usableOverlap(overlap, largest: largest)
         guard plain > 1, overlap > 0 else { return plain }
         if extent / 2 + overlap / 2 <= largest + 1e-9 { return 2 }
-        // Three or more: every interior tile is extent / n + overlap wide. An overlap as large as the tile
-        // cannot be made to fit; the grid then ignores it, as before.
-        guard overlap < largest else { return plain }
+        // Three or more: every interior tile is extent / n + overlap wide.
         return max(3, Int((extent / (largest - overlap) - 1e-9).rounded(.up)))
     }
 
@@ -63,14 +73,14 @@ public enum ToolpathTiling {
         let nx = tileCount(extent: job.width, largest: s.tileWidth, overlap: s.overlap)
         let ny = tileCount(extent: job.height, largest: s.tileHeight, overlap: s.overlap)
         let tw = job.width / Double(nx), th = job.height / Double(ny)
-        let half = max(0, s.overlap) / 2
+        let halfX = usableOverlap(s.overlap, largest: s.tileWidth) / 2, halfY = usableOverlap(s.overlap, largest: s.tileHeight) / 2
         let far = (job.width + job.height) * 10 + 1000
         var out: [Cell] = []
         for r in 0..<ny {
             for c in 0..<nx {
                 let x0 = Double(c) * tw, y0 = Double(r) * th
-                let lo = Vec2(c == 0 ? x0 : x0 - half, r == 0 ? y0 : y0 - half)
-                let hi = Vec2(c == nx - 1 ? x0 + tw : x0 + tw + half, r == ny - 1 ? y0 + th : y0 + th + half)
+                let lo = Vec2(c == 0 ? x0 : x0 - halfX, r == 0 ? y0 : y0 - halfY)
+                let hi = Vec2(c == nx - 1 ? x0 + tw : x0 + tw + halfX, r == ny - 1 ? y0 + th : y0 + th + halfY)
                 let clipLo = Vec2(c == 0 ? -far : lo.x, r == 0 ? -far : lo.y)
                 let clipHi = Vec2(c == nx - 1 ? far : hi.x, r == ny - 1 ? far : hi.y)
                 out.append(Cell(column: c, row: r, region: Rect2(min: lo, max: hi), clip: Rect2(min: clipLo, max: clipHi)))

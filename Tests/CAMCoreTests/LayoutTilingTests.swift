@@ -108,6 +108,8 @@ import Testing
 @Test(arguments: [
     (120.0, 60.0, 1.0, 3), (120.0, 60.0, 4.0, 3), (100.0, 60.0, 10.0, 2), (48.0, 60.0, 5.0, 1),
     (96.0, 48.0, 2.0, 3), (200.0, 60.0, 0.0, 4), (120.0, 60.0, 0.0, 2),
+    // Half a tile or more cannot be used: it is ignored, so the tiles stay within the machine's reach.
+    (120.0, 60.0, 30.0, 2), (120.0, 60.0, 60.0, 2), (120.0, 60.0, 59.99, 2), (200.0, 60.0, 45.0, 4),
 ])
 func tilesWithOverlapNeverExceedTheLargestTile(width: Double, tile: Double, overlap: Double, count: Int) {
     for horizontal in [true, false] {
@@ -123,9 +125,25 @@ func tilesWithOverlapNeverExceedTheLargestTile(width: Double, tile: Double, over
         let sorted = cells.sorted { extent($0).0 < extent($1).0 }
         for c in sorted { #expect(extent(c).1 - extent(c).0 <= tile + 1e-9, "a \(extent(c).1 - extent(c).0) in tile on a \(tile) in machine") }
         #expect(abs(extent(sorted.first!).0) < 1e-9 && abs(extent(sorted.last!).1 - width) < 1e-9)
-        // Neighbours share a band of exactly the overlap, so the seam is cut by both.
-        for (a, b) in zip(sorted, sorted.dropFirst()) { #expect(abs((extent(a).1 - extent(b).0) - overlap) < 1e-9) }
+        // Neighbours share a band of exactly the overlap (when it is usable), so the seam is cut by both.
+        let used = overlap > 0 && overlap < tile / 2 ? overlap : 0
+        for (a, b) in zip(sorted, sorted.dropFirst()) { #expect(abs((extent(a).1 - extent(b).0) - used) < 1e-9) }
     }
 }
 
 private typealias Cell = ToolpathTiling.Cell
+
+/// An overlap close to the tile size used to make the count explode: 120 in, 60 in tiles and 59.99 in of overlap asked for
+/// 12,001 tiles an axis, and the sheet posts them as the field is typed into.
+@Test func aHugeOverlapNeverMakesAHugeGrid() {
+    let job = JobSetup(width: 120, height: 120, thickness: 0.75)
+    for overlap in [29.9, 30.0, 45.0, 59.99, 60.0, 500.0, .infinity] {
+        let cells = ToolpathTiling.cells(job: job, settings: TilingSettings(tileWidth: 60, tileHeight: 60, overlap: overlap))
+        // Just under half a tile each tile advances half its size: 4 an axis for 120 in, never thousands.
+        #expect(cells.count <= 16, "overlap \(overlap) made \(cells.count) tiles")
+        #expect(cells.allSatisfy { $0.region.width <= 60 + 1e-9 && $0.region.height <= 60 + 1e-9 })
+    }
+    #expect(ToolpathTiling.overlapIsUsable(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 29)))
+    #expect(!ToolpathTiling.overlapIsUsable(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 30)))
+    #expect(ToolpathTiling.overlapIsUsable(TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 0)))
+}
