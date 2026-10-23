@@ -9,6 +9,8 @@ struct ValidationSheet: View {
     @ObservedObject var document: KerfDocument
     @Environment(\.dismiss) private var dismiss
     @State private var report: ValidationReport?
+    /// What the document was made of when `report` was made.
+    @State private var checkedFrom: KerfDocument.PostedInputs?
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
@@ -66,6 +68,7 @@ struct ValidationSheet: View {
         .onAppear { run() }
         .onDisappear { calcTask?.cancel() }
         .onChange(of: groupByTool) { _, _ in run() }
+        .onChange(of: document.postedInputs) { _, now in if now != checkedFrom { run() } }
     }
 
     private func summary(_ r: ValidationReport) -> some View {
@@ -96,6 +99,7 @@ struct ValidationSheet: View {
     }
 
     private func check() {
+        checkedFrom = document.postedInputs
         report = ValidationReport.make(project: document.outputProject, results: document.results,
                                        profile: document.postProfile, groupByTool: groupByTool)
     }

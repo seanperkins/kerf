@@ -1,0 +1,22 @@
+{
+  "name": "Export sheets: a Tool Database edit made while a sheet is open posts the program again",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "calculate"},
+    {"op": "sheet", "value": "exportGCode"},
+    {"op": "wait", "seconds": 1},
+    {"op": "captureSheet", "name": "export-before-edit"},
+    {"op": "editTool", "value": "diameter"},
+    {"op": "wait", "seconds": 4},
+    {"op": "captureSheet", "name": "export-after-edit"},
+    {"op": "closeSheet"},
+    {"op": "sheet", "value": "saveAllToolpaths"},
+    {"op": "wait", "seconds": 1},
+    {"op": "captureSheet", "name": "saveall-before-rename"},
+    {"op": "editTool", "value": "rename"},
+    {"op": "wait", "seconds": 2},
+    {"op": "captureSheet", "name": "saveall-after-rename"},
+    {"op": "closeSheet"}
+  ]
+}

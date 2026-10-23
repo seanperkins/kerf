@@ -16,6 +16,8 @@ struct SaveAllToolpathsSheet: View {
     /// The id shown on open; the project keeps its own reference unless the user picks another.
     @State private var initialProfileID = ""
     @State private var posted: [(file: PlannedGCodeFile, result: GCodeExportResult)] = []
+    /// What the document was made of when `posted` was made; Save waits while the document has moved on.
+    @State private var postedFrom: KerfDocument.PostedInputs?
     @State private var confirmErrors = false
     /// A folder save waiting for the user to agree to replace the files already there.
     @State private var replaceRequest: ReplaceRequest?
@@ -62,7 +64,7 @@ struct SaveAllToolpathsSheet: View {
                     if hasErrors { confirmErrors = true } else { save() }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(posted.isEmpty || hasUnposted)
+                .disabled(posted.isEmpty || hasUnposted || postedFrom != document.postedInputs)
                 .help(hasUnposted ? "A program could not be generated; fix it before saving, so no file is left out." : "")
                 // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
                 .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
@@ -78,6 +80,7 @@ struct SaveAllToolpathsSheet: View {
         .onDisappear { calcTask?.cancel() }
         .onChange(of: mode) { _, _ in run() }
         .onChange(of: profileID) { _, _ in run() }
+        .onChange(of: document.postedInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
@@ -144,6 +147,7 @@ struct SaveAllToolpathsSheet: View {
                 return (item.file, r)
             }
         }
+        postedFrom = document.postedInputs
     }
 
     private func save() {
@@ -185,6 +189,7 @@ struct SaveAllToolpathsSheet: View {
         do {
             try write()
             if profileID != initialProfileID { document.setPostProfile(profileID) }
+            postedFrom = document.postedInputs  // the post just written already used that profile
             dismiss()
         } catch {
             failure = "Could not save G-code: \(error.localizedDescription)"

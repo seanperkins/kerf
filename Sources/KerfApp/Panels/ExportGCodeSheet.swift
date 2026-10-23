@@ -16,6 +16,8 @@ struct ExportGCodeSheet: View {
     /// The id shown on open; the project keeps its own reference unless the user picks another.
     @State private var initialProfileID: String = ""
     @State private var result: GCodeExportResult?
+    /// What the document was made of when `result` was posted; Save waits while the document has moved on.
+    @State private var postedFrom: KerfDocument.PostedInputs?
     @State private var confirmErrors = false
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
@@ -62,7 +64,7 @@ struct ExportGCodeSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Save…") { if result?.hasErrors == true { confirmErrors = true } else { save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(result?.text == nil || calcTask != nil)
+                    .disabled(result?.text == nil || calcTask != nil || postedFrom != document.postedInputs)
             }
         }
         .padding(20)
@@ -76,6 +78,7 @@ struct ExportGCodeSheet: View {
         .onChange(of: scope) { _, _ in run() }
         .onChange(of: groupByTool) { _, _ in run() }
         .onChange(of: profileID) { _, _ in run() }
+        .onChange(of: document.postedInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
@@ -156,6 +159,7 @@ struct ExportGCodeSheet: View {
                                      jobName: document.document.name)
         r.issues.insert(contentsOf: document.postProfileIssues + missing, at: 0)
         result = r
+        postedFrom = document.postedInputs
     }
 
     private func save() {
@@ -175,6 +179,7 @@ struct ExportGCodeSheet: View {
             do {
                 try text.write(to: url, atomically: true, encoding: .utf8)
                 if profileID != initialProfileID { document.setPostProfile(profileID) }
+                postedFrom = document.postedInputs  // the post just written already used that profile
                 dismiss()
             } catch {
                 failure = "Could not save G-code: \(error.localizedDescription)"

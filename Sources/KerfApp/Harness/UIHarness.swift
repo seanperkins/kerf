@@ -324,6 +324,13 @@ final class UIHarness {
                 doc.calculating.isEmpty && !doc.results.isEmpty
             }
             await settle(0.8)
+        case "editTool":
+            guard let op = doc.project.operations.first, var tool = doc.toolLibrary.library.tool(id: op.setup.toolID) else {
+                throw HarnessError(message: "there is no toolpath whose tool could be edited")
+            }
+            if step.value == "rename" { tool.name += " (renamed)" } else { tool.diameter += doc.units == .inch ? 0.0625 : 1.5 }
+            doc.toolLibrary.update(tool)
+            await settle(1.0)
         case "sheet":
             doc.sheet = try sheet(named: step.value ?? "")
             try await waitUntil("a sheet") { self.window?.attachedSheet != nil }

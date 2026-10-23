@@ -12,6 +12,8 @@ struct TilingSheet: View {
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var settings = TilingSettings(tileWidth: 60, tileHeight: 96)
     @State private var files: [TiledExport.File] = []
+    /// What the document was made of when `files` was posted; Save waits while the document has moved on.
+    @State private var postedFrom: KerfDocument.PostedInputs?
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
     @State private var confirmErrors = false
@@ -52,7 +54,7 @@ struct TilingSheet: View {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Choose Folder…") { if hasErrors { confirmErrors = true } else { save() } }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(files.isEmpty || hasUnposted)
+                    .disabled(files.isEmpty || hasUnposted || postedFrom != document.postedInputs)
                     .help(hasUnposted ? "A tile could not be generated; fix it before saving, so no tile is left out." : "")
                     // On the button, not the sheet: a view carries one alert, and the sheet has the validator's.
                     .replaceFilesAlert($replaceRequest) { r in finishSaving { try r.set.write(to: r.directory, replacing: r.names) } }
@@ -66,6 +68,7 @@ struct TilingSheet: View {
         }
         .onDisappear { calcTask?.cancel() }
         .onChange(of: settings) { _, _ in if calcTask == nil { post() } }
+        .onChange(of: document.postedInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
             Button("Cancel", role: .cancel) {}
@@ -116,6 +119,7 @@ struct TilingSheet: View {
 
     private func post() {
         failure = nil
+        postedFrom = document.postedInputs
         guard settings.tileWidth > 0, settings.tileHeight > 0 else { files = []; return }
         files = TiledExport.files(project: document.outputProject, results: document.results, profile: document.postProfile,
                                   groupByTool: groupByTool, settings: settings)

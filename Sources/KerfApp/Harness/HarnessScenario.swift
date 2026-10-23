@@ -59,6 +59,7 @@ struct HarnessScenario: Decodable {
         "select": "names: shapes to select by name",
         "selectToolpath": "name: a toolpath to select (also shows the Toolpaths tab)",
         "calculate": "calculate all toolpaths and wait",
+        "editTool": "value: diameter | rename; edits the tool of the first toolpath in the Tool Database, as that window does while a sheet is open (diameter makes the toolpaths stale, rename only relabels them)",
         "fileTarget": "name: the path that Export G-code, Save All Toolpaths and Save Tiled G-code answer their save or folder panel with, until closeSheet or an empty fileTarget (the system file panel cannot be driven)",
         "sheet": "value: " + sheets.sorted().joined(separator: " | "),
         "closeSheet": "close the open sheet or alert",
@@ -123,6 +124,8 @@ struct HarnessScenario: Decodable {
             guard let names = step.names, !names.isEmpty else { throw fail("names must list the shapes to select") }
         case "selectToolpath":
             guard step.name?.isEmpty == false else { throw fail("name must name a toolpath") }
+        case "editTool":
+            guard let v = step.value, ["diameter", "rename"].contains(v) else { throw fail("value must be diameter or rename") }
         case "sheet":
             guard let v = step.value, sheets.contains(v) else { throw fail("value must be one of \(sheets.sorted())") }
         case "press", "move", "scroll":
