@@ -14,8 +14,30 @@ extension Document {
     public func expandToGroups(_ ids: [UUID]) -> [UUID] {
         var seen = Set<UUID>()
         var out: [UUID] = []
+        // Many ids (a selection of thousands of imported shapes): the groups are indexed once, instead of the document
+        // being scanned for each id's shape and again for its group mates.
+        var firstGroup: [UUID: UUID] = [:], members: [UUID: [UUID]] = [:]
+        let indexed = ids.count > 16
+        if indexed {
+            var seenShape = Set<UUID>()
+            for s in shapes {
+                let first = seenShape.insert(s.id).inserted
+                guard let g = s.groupID else { continue }
+                if first { firstGroup[s.id] = g }
+                members[g, default: []].append(s.id)
+            }
+        }
+        var expanded = Set<UUID>()
         for id in ids {
-            for m in [id] + groupMembers(of: id) where seen.insert(m).inserted { out.append(m) }
+            guard indexed else {
+                for m in [id] + groupMembers(of: id) where seen.insert(m).inserted { out.append(m) }
+                continue
+            }
+            if seen.insert(id).inserted { out.append(id) }
+            // `groupMembers`: the group of the first shape with this id (none when that shape is ungrouped, or is not there).
+            // Once a group's members are in, its other ids add nothing: one big group is a pass, not a pass per member.
+            guard let g = firstGroup[id], expanded.insert(g).inserted else { continue }
+            for m in members[g] ?? [] where seen.insert(m).inserted { out.append(m) }
         }
         return out
     }
@@ -40,14 +62,14 @@ extension Document {
     /// Removes one level of grouping from the selected shapes' groups: members fall back to
     /// the group they had inside it (or none).
     public mutating func ungroup(_ ids: [UUID]) {
-        let groups = Set(ids.compactMap { shape(id: $0)?.groupID })
+        let groups = Set(shapes(ids: ids).compactMap(\.groupID))
         guard !groups.isEmpty else { return }
         for i in shapes.indices where shapes[i].groupID.map(groups.contains) == true { popGroup(i) }
     }
 
     /// Removes every level of grouping from the selected shapes' groups.
     public mutating func ungroupAllLevels(_ ids: [UUID]) {
-        let groups = Set(ids.compactMap { shape(id: $0)?.groupID })
+        let groups = Set(shapes(ids: ids).compactMap(\.groupID))
         guard !groups.isEmpty else { return }
         for i in shapes.indices where shapes[i].groupID.map(groups.contains) == true {
             shapes[i].groupID = nil

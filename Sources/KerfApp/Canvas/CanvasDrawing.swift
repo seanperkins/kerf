@@ -138,7 +138,12 @@ extension CanvasNSView {
         let preview = selectionPreviewTransform
         let nodePreview = nodeDragPreview
         let selected = doc.selection
-        for s in project.document.shapes where project.isVisible(s) && doc.isOnActiveSide(s) {
+        let shown = project.document.shapes.filter { project.isVisible($0) && doc.isOnActiveSide($0) }
+        if CanvasDetail.usesHairlines(segmentCount: CanvasDetail.segmentCount(of: shown)) {
+            drawShapesAsHairlines(ctx, doc, vt, shown, selected: selected, preview: preview, nodePreview: nodePreview)
+            return
+        }
+        for s in shown {
             let layer = project.document.layer(id: s.layerID)
             let base = NSColor(hex: layer?.colorHex ?? "#000000") ?? .black
             let path = cgPath(s)
@@ -154,6 +159,57 @@ extension CanvasNSView {
             if let ps = nodePreview[s.id] {
                 stroke(ctx, CanvasPaths.cgPath(for: ps), vt, color: .systemBlue.withAlphaComponent(0.7), width: 1.5)
             }
+        }
+    }
+
+    /// The shapes of a drawing too big for the full stroker (`CanvasDetail`): one point wide, one color each, those out of
+    /// view skipped. The state is set once for all of them (a width of exactly one point, the default join and cap, no
+    /// dash) and only the color changes from shape to shape.
+    private func drawShapesAsHairlines(_ ctx: CGContext, _ doc: KerfDocument, _ vt: CGAffineTransform, _ shapes: [Shape],
+                                       selected: Set<UUID>, preview: Transform2D?, nodePreview: [UUID: Shape]) {
+        let project = doc.project
+        CanvasDetail.hairlineDraws += 1
+        var layerColors: [UUID: NSColor] = [:]
+        ctx.saveGState()
+        ctx.setLineWidth(1)
+        ctx.setLineJoin(.miter)
+        ctx.setLineCap(.butt)
+        ctx.setLineDash(phase: 0, lengths: [])
+        for s in shapes {
+            let path = cgPath(s)
+            let box = path.boundingBoxOfPath
+            let isSel = selected.contains(s.id)
+            // Where it is, and where a drag in progress would put it: each is drawn when it can be seen.
+            if CanvasDetail.isVisible(box.applying(vt), in: bounds) {
+                var color = CanvasColors.selection
+                if !isSel {
+                    if layerColors[s.layerID] == nil {
+                        layerColors[s.layerID] = NSColor(hex: project.document.layer(id: s.layerID)?.colorHex ?? "#000000") ?? .black
+                    }
+                    color = layerColors[s.layerID]!
+                    if !project.isEditable(s) { color = color.withAlphaComponent(0.45) }
+                }
+                var tt = vt
+                if let p = path.copy(using: &tt) {
+                    ctx.addPath(p)
+                    ctx.setStrokeColor(color.cgColor)
+                    ctx.strokePath()
+                }
+            }
+            if isSel, let t = preview, project.isEditable(s) {
+                var moved = t.cg.concatenating(vt)
+                if CanvasDetail.isVisible(box.applying(moved), in: bounds), let p = path.copy(using: &moved) {
+                    ctx.addPath(p)
+                    ctx.setStrokeColor(CanvasColors.selection.withAlphaComponent(0.6).cgColor)
+                    ctx.strokePath()
+                }
+            }
+        }
+        ctx.restoreGState()
+        // As the full path draws them: the previews of shapes on this sheet and side.
+        let shownIDs = Set(shapes.map(\.id))
+        for (id, shape) in nodePreview where shownIDs.contains(id) {
+            stroke(ctx, CanvasPaths.cgPath(for: shape), vt, color: .systemBlue.withAlphaComponent(0.7), width: 1.5)
         }
     }
 

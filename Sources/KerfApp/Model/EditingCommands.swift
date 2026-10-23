@@ -124,7 +124,7 @@ extension KerfProject {
 extension DesignCommands {
     /// Groups the selection (and any groups it touches). Returns the group ID.
     static func group(_ ids: [UUID], in project: inout KerfProject) -> UUID? {
-        let editable = ids.filter { id in project.document.shape(id: id).map(project.isEditable) ?? false }
+        let editable = project.document.shapes(ids: ids).filter(project.isEditable).map(\.id)
         return project.document.group(editable)
     }
 
