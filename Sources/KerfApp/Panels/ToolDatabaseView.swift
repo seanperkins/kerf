@@ -130,7 +130,7 @@ extension ToolDatabaseView {
     private func runExport(ids: Set<UUID>?) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = Self.exchangeTypes
-        let base = ids.flatMap { $0.first }.flatMap { library.library.tool(id: $0)?.name } ?? "Kerf Tools"
+        let base = library.exportName(for: ids)
         panel.nameFieldStringValue = base.replacingOccurrences(of: "/", with: "-") + "." + ToolLibraryExchange.fileExtension
         panel.message = "Export tools (.kerftools keeps everything; .csv for spreadsheets — choose by file extension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }

@@ -176,6 +176,13 @@ final class ToolLibraryModel: ObservableObject {
     }
 
     /// Writes the tools with `ids` (all tools when nil) in the format of `url`'s extension.
+    /// The name to suggest for the exported file: the one tool's name, else "Kerf Tools". A name still being
+    /// typed counts: it is saved first, the way `export` saves it, so the suggestion matches the file's contents.
+    func exportName(for ids: Set<UUID>?) -> String {
+        flushDraft()
+        return ids.flatMap { $0.first }.flatMap { library.tool(id: $0)?.name } ?? "Kerf Tools"
+    }
+
     func export(ids: Set<UUID>?, to url: URL) throws {
         flushDraft()
         let tools = ids.map { ids in library.tools.filter { ids.contains($0.id) } } ?? library.tools
