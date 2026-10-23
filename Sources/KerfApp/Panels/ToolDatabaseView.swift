@@ -13,19 +13,31 @@ struct ToolDatabaseView: View {
     @State private var pendingImport: [Tool]?
     @State private var pendingConflicts = 0
     @State private var importMessage: String?
+    @State private var query = ""
 
     var body: some View {
         let clashes = ToolNumbers.clashes(in: library.tools)
+        let shown = ToolSearch.filter(library.tools, query: query)
+        // Duplicate and Delete act on what the list shows: a tool the search hides is not offered for either.
+        let selectionShown = selectedID.map { id in shown.contains { $0.id == id } } ?? false
         NavigationSplitView {
             List(selection: $selectedID) {
-                ForEach(ToolGrouping.sections(library.tools), id: \.title) { section in
+                if shown.isEmpty {
+                    Text(library.tools.isEmpty ? "No tools" : "No tool matches \"\(query)\"").foregroundStyle(.secondary)
+                }
+                ForEach(ToolGrouping.sections(shown), id: \.title) { section in
                     let tools = section.tools
                     if !tools.isEmpty {
                         Section(section.title) {
                             ForEach(tools) { t in
                                 HStack {
                                     Text("T\(t.number)").monospacedDigit().foregroundStyle(.secondary).frame(width: 30, alignment: .leading)
-                                    Text(t.name).lineLimit(1)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(t.name).lineLimit(1)
+                                        if let d = ToolSearch.description(of: t) {
+                                            Text(d).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                        }
+                                    }
                                     if let shared = clashes[t.number] {
                                         // A badge on every tool that has the number, naming the others.
                                         let others = ToolNumbers.names(shared.filter { $0.id != t.id })
@@ -42,6 +54,7 @@ struct ToolDatabaseView: View {
                     }
                 }
             }
+            .searchable(text: $query, placement: .sidebar, prompt: "Search tools")
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .toolbar {
                 ToolbarItem {
@@ -59,16 +72,16 @@ struct ToolDatabaseView: View {
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     Button("Duplicate") { if let id = selectedID { selectedID = library.duplicate(id: id)?.id } }
-                        .disabled(selectedID == nil)
+                        .disabled(!selectionShown)
                     Button("Delete") { if let id = selectedID { library.delete(id: id); selectedID = nil } }
-                        .disabled(selectedID == nil)
+                        .disabled(!selectionShown)
                     Spacer()
                     Menu("Share") {
                         Button("Import Tools…") { runImport() }
                         Divider()
                         Button("Export All Tools…") { runExport(ids: nil) }
                         Button("Export Selected Tool…") { if let id = selectedID { runExport(ids: [id]) } }
-                            .disabled(selectedID == nil)
+                            .disabled(!selectionShown)
                     }
                     .fixedSize()
                     .help("Import or export tools as a .kerftools file (or CSV) to share them between machines")
@@ -85,6 +98,10 @@ struct ToolDatabaseView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 520)
+        // Typing in the search box that hides the tool being edited closes its editor (it saves as it closes).
+        .onChange(of: query) { _, _ in
+            if let id = selectedID, !ToolSearch.filter(library.tools, query: query).contains(where: { $0.id == id }) { selectedID = nil }
+        }
         .confirmationDialog("\(pendingConflicts) imported tool\(pendingConflicts == 1 ? "" : "s") already exist with different settings",
                             isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
             Button("Replace Existing") { finishImport(.replace) }
@@ -107,6 +124,9 @@ struct ToolDatabaseView: View {
         .onReceive(NotificationCenter.default.publisher(for: .harnessSelectTool)) { note in
             if let name = note.object as? String, let tool = library.tools.first(where: { $0.name == name }) { selectedID = tool.id }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .harnessSearchTools)) { note in
+            query = note.object as? String ?? ""
+        }
         #endif
     }
 }
@@ -115,6 +135,8 @@ struct ToolDatabaseView: View {
 extension Notification.Name {
     /// Posted by the UI harness's `selectTool` step with the tool's name.
     static let harnessSelectTool = Notification.Name("kerf.harness.selectTool")
+    /// Posted by the UI harness's `searchTools` step with the text to search for.
+    static let harnessSearchTools = Notification.Name("kerf.harness.searchTools")
 }
 #endif
 
@@ -228,8 +250,14 @@ struct ToolEditor: View {
         let u = tool.units
         Form {
             Section {
-                TextField("Name", text: $tool.name)
-                    .focused($typing, equals: .name)
+                HStack {
+                    TextField("Name", text: $tool.name)
+                        .focused($typing, equals: .name)
+                    Button { tool.name = ToolNaming.name(for: tool) } label: { Image(systemName: "wand.and.stars") }
+                        .buttonStyle(.borderless)
+                        .help("Name from geometry: \"\(ToolNaming.name(for: tool))\"")
+                        .accessibilityLabel("Name from geometry")
+                }
                 Picker("Type", selection: Binding(get: { tool.kind }, set: { tool.setKind($0) })) {
                     ForEach(ToolKind.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
@@ -283,9 +311,11 @@ struct ToolEditor: View {
             MaterialDataSection(tool: $tool, knownMaterials: ToolGrouping.materialNames(library.tools), typing: $typing)
             ToolGroupSection(tool: $tool, existingGroups: Array(Set(library.tools.compactMap(\.group))).sorted(),
                              typing: $typing)
-            Section("Notes") {
+            Section("Description") {
                 TextEditor(text: $tool.notes).frame(minHeight: 60)
                     .focused($typing, equals: .notes)
+                Text("The first line shows in the tool list and in the tool pickers; search looks through all of it.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 HStack {
