@@ -1,4 +1,4 @@
-solid kerf_relief
+solid loftline_relief
   facet normal 0.00000 0.00000 1.00000
     outer loop
       vertex 0.00000 0.00000 1.00000
@@ -47039,4 +47039,4 @@ solid kerf_relief
       vertex 0.00000 75.00000 1.00000
     endloop
   endfacet
-endsolid kerf_relief
+endsolid loftline_relief

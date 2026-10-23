@@ -24,7 +24,13 @@ struct SampleFilesTests {
 
     // MARK: Sign (SVG + .loftline + .tap)
 
-    /// 24 x 12 in sign: rounded border, recessed panel, "KERF" text, hanging hole + 4 mounting holes.
+    /// The sign's lettering, shared by the SVG and the fit test.
+    static func signText(layerID: UUID) throws -> Shape {
+        try TextOutliner().shape(for: "LOFTLINE", fontName: "Helvetica-Bold", size: 2.5,
+                                 origin: Vec2(12, 5), alignment: .center, layerID: layerID)
+    }
+
+    /// 24 x 12 in sign: rounded border, recessed panel, "LOFTLINE" text, hanging hole + 4 mounting holes.
     static func signSVG() throws -> Data {
         let names = ["Outline", "Pocket", "Text", "Drill"]
         let layers = names.map { Layer(name: $0) }
@@ -33,8 +39,7 @@ struct SampleFilesTests {
                             paths: [ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 22, height: 10), cornerRadius: 1)])
         let panel = Shape(name: "Panel", layerID: id["Pocket"]!,
                           paths: [ShapeFactory.rectangle(Rect2(x: 4, y: 2, width: 16, height: 1.5), cornerRadius: 0.25)])
-        let text = try TextOutliner().shape(for: "KERF", fontName: "Helvetica-Bold", size: 2.5,
-                                            origin: Vec2(12, 5), alignment: .center, layerID: id["Text"]!)
+        let text = try Self.signText(layerID: id["Text"]!)
         let holeCentres = [Vec2(12, 10), Vec2(2.25, 2.25), Vec2(21.75, 2.25), Vec2(2.25, 9.75), Vec2(21.75, 9.75)]
         let holes = holeCentres.map {
             Shape(name: "Hole", layerID: id["Drill"]!, paths: [ShapeFactory.circle(center: $0, radius: 0.125)])
@@ -68,6 +73,17 @@ struct SampleFilesTests {
         }
         project.refreshToolSnapshot(from: library)
         return (project, library)
+    }
+
+    /// The lettering sits between the recessed panel (y 2 to 3.5) and the hanging hole (x 12, y 10), inside the border.
+    @Test("Sign: the text says LOFTLINE and fits the sign")
+    func signTextIsLoftlineAndFitsTheSign() throws {
+        let text = try Self.signText(layerID: UUID())
+        #expect(text.name == "LOFTLINE")
+        let room = Rect2(x: 1.5, y: 3.8, width: 21, height: 4)
+        let b = text.bounds()
+        #expect(b.min.x >= room.min.x && b.max.x <= room.max.x && b.min.y >= room.min.y && b.max.y <= room.max.y,
+                "text bounds \(b) must lie inside \(room)")
     }
 
     @Test("Sign: SVG, .loftline and validator-clean .tap")
@@ -255,7 +271,7 @@ struct SampleFilesTests {
         func p(_ i: Int, _ j: Int, _ zz: Double) -> (Double, Double, Double) {
             (Double(i) / Double(n) * size, Double(j) / Double(n) * size, zz)
         }
-        var out = "solid kerf_relief\n"
+        var out = "solid loftline_relief\n"
         func tri(_ a: (Double, Double, Double), _ b: (Double, Double, Double), _ c: (Double, Double, Double)) {
             let ux = b.0 - a.0, uy = b.1 - a.1, uz = b.2 - a.2
             let vx = c.0 - a.0, vy = c.1 - a.1, vz = c.2 - a.2
@@ -288,7 +304,7 @@ struct SampleFilesTests {
             wall((k + 1, n), (k, n))
             wall((0, k + 1), (0, k))
         }
-        out += "endsolid kerf_relief\n"
+        out += "endsolid loftline_relief\n"
         return out
     }
 
