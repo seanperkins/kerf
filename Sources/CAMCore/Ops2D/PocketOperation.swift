@@ -32,19 +32,33 @@ public struct PocketOperation: ToolpathOperation {
             let planner = try makePlanner(region: region, tool: big, tolerance: tol)
             // The first tool clears everything; each later one only what the previous could not reach.
             var stageUncut = false
-            let groups = restAfter.map { planner.restClearing(clearanceRadius: $0, from: start, fullWalls: false) }
-                ?? clearing(planner, from: start, leftUncut: &stageUncut)
+            let groups: [[Chain2D]]
+            if let rest = restAfter {
+                let report = planner.restClearingReport(clearanceRadius: rest, from: start, fullWalls: false)
+                stageUncut = report.uncoveredArea > planner.coverageSlack * planner.coverageSlack
+                groups = report.groups
+            } else {
+                groups = clearing(planner, from: start, leftUncut: &stageUncut)
+            }
+            // Floor this tool could reach and left uncut is reported even when it cut nothing at all.
+            if stageUncut { leftUncut = true }
             guard !groups.isEmpty else { continue }
             let label = clearanceTools.count == 1 ? "clearance" : "clearance \(i + 1)"
             toolpaths.append(try emit(groups, planner: planner, tool: big, context: context, name: "\(setup.name) (\(label))"))
             // Later tools take everything this one reached as cleared, so a tool that left floor uncut
             // does not hand over (the floor it missed stays in the next tool's job, and is reported).
-            if stageUncut { leftUncut = true } else { restAfter = big.radius }
+            if !stageUncut { restAfter = big.radius }
         }
         let planner = try makePlanner(region: region, tool: tool, tolerance: tol)
         var finishUncut = false
-        let groups = restAfter.map { planner.restClearing(clearanceRadius: $0, from: start) }
-            ?? clearing(planner, from: start, leftUncut: &finishUncut)
+        let groups: [[Chain2D]]
+        if let rest = restAfter {
+            let report = planner.restClearingReport(clearanceRadius: rest, from: start)
+            finishUncut = report.uncoveredArea > planner.coverageSlack * planner.coverageSlack
+            groups = report.groups
+        } else {
+            groups = clearing(planner, from: start, leftUncut: &finishUncut)
+        }
         if finishUncut { leftUncut = true }
         guard !groups.isEmpty else {
             throw CAMError.invalidGeometry("The tool does not fit inside the selected vectors")
