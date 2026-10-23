@@ -15,6 +15,8 @@ import Testing
         #expect(whole.params.area == .material)
         let widest = try #require(lib.tools.filter { $0.kind == .endMill }.max { $0.diameter < $1.diameter })
         #expect(whole.setup.toolID == widest.id)
+        // Only an end mill is a facing tool by preference (a ball nose is for profiles and pockets).
+        #expect(OperationFactory.preferredToolKinds(for: .facing) == [.endMill])
         // A selection makes it the box round the vectors.
         let some = try #require(OperationFactory.make(kind: .facing, project: p, library: lib, shapeIDs: [p.document.shapes[0].id]))
         guard case .facing(let box) = some else { Issue.record("not a facing"); return }

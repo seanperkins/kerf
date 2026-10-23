@@ -109,7 +109,8 @@ enum OperationFactory {
     /// Preferred tool kinds for an operation (first match in the library wins).
     static func preferredToolKinds(for kind: OperationKind) -> [ToolKind] {
         switch kind {
-        case .profile, .pocket, .holeMill, .merge, .facing: return [.endMill, .ballNose]
+        case .profile, .pocket, .holeMill, .merge: return [.endMill, .ballNose]
+        case .facing: return [.endMill]
         case .straightInlay: return [.endMill]
         case .moulding: return [.ballNose, .endMill, .vBit]
         case .drill: return [.drill, .endMill]

@@ -65,6 +65,9 @@ public struct FacingOperation: ToolpathOperation {
         let centre = Self.centreRect(area: area, toolRadius: r, overhang: overhang)
 
         var warnings: [String] = []
+        if tool.kind != .endMill {
+            warnings.append("a \(tool.kind.displayName.lowercased()) bit is not a flat cutter, so the faced surface is left ridged; use an end mill")
+        }
         // One layer of the pattern at a depth, as tool-center points; the same XY every layer.
         let flat: [Vec2]
         switch params.pattern {

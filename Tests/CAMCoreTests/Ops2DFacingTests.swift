@@ -362,3 +362,11 @@ func ops2DFacingSpiralLeavesNoCoreAtAnyStepover(stepover: Double) throws {
     // Two later layers (0.5 in at a 0.2 in stepdown is three).
     #expect(rapidsDown == 2)
 }
+
+@Test func ops2DFacingWarnsWhenTheToolIsNotAFlatEndMill() throws {
+    let (flat, _) = try facing(FacingParameters())
+    #expect(flat.metadata["warning"] == nil)
+    let ball = try #require(ToolLibrary.seeded.tools.first { $0.kind == .ballNose })
+    let (tp, _) = try facing(FacingParameters(), tool: ball)
+    #expect(tp.metadata["warning"]?.contains("ball nose bit is not a flat cutter") == true)
+}
