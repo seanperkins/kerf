@@ -19,8 +19,8 @@ public struct HoleMillOperation: ToolpathOperation {
     /// More turns than this at the steepest allowed angle and the helix is a drill in all but name: the hole is
     /// peck-drilled instead.
     static let maxHelixTurns = 50.0
-    /// Total turns of any helix, so a huge depth or a tiny pitch cannot ask for an unbounded number of points (the pitch
-    /// is then coarser than asked).
+    /// Most turns a helix may take, so a huge depth or a tiny pitch cannot ask for an unbounded number of points. More is
+    /// refused: spreading the depth over fewer turns would make the helix steeper than `maxHelixAngle`.
     static let maxTotalTurns = 10_000.0
 
     /// A hole to mill: centre and finished diameter.
@@ -63,7 +63,7 @@ public struct HoleMillOperation: ToolpathOperation {
             let radius = (hole.diameter - tool.diameter) / 2
             switch params.mode {
             case .helical:
-                switch bore(hole, radius: radius, tool: tool, tolerance: tol, builder: &builder) {
+                switch try bore(hole, radius: radius, tool: tool, tolerance: tol, builder: &builder) {
                 case .helix: break
                 case .clamped: clamped += 1
                 case .pecked: pecked += 1
@@ -98,17 +98,16 @@ public struct HoleMillOperation: ToolpathOperation {
     /// the size of the tool, there is no helix to make and the hole is peck-drilled at its centre.
     private enum Bore { case helix, clamped, pecked }
 
-    private func bore(_ hole: Hole, radius: Double, tool: Tool, tolerance tol: Double, builder: inout ToolpathBuilder) -> Bore {
+    private func bore(_ hole: Hole, radius: Double, tool: Tool, tolerance tol: Double, builder: inout ToolpathBuilder) throws -> Bore {
         let c = hole.centre
         let pitch = max(params.helixPitch ?? tool.stepdown, tol)
         let drop = params.cutDepth - params.startDepth
         let steepest = 2 * Double.pi * max(radius, 0) * tan(Self.maxHelixAngle * .pi / 180)   // most it may drop per turn
         let allowed = min(pitch, steepest)
         let held = allowed < pitch - 1e-12
-        let wanted = max(1, ceil(drop / max(allowed, 1e-12) - 1e-9))
-        let turns = min(wanted, Self.maxTotalTurns)
+        let turns = max(1, ceil(drop / max(allowed, 1e-12) - 1e-9))
         // Peck only where the ramp limit is what asks for the turns (a fine pitch the user chose stays a helix).
-        guard radius > tol, !(held && wanted > Self.maxHelixTurns) else {
+        guard radius > tol, !(held && turns > Self.maxHelixTurns) else {
             builder.travel(to: c)
             var cleared = min(params.startDepth, 0)
             let pecks = DrillOperation.peckDepths(start: params.startDepth, end: params.cutDepth, peck: pitch)
@@ -124,6 +123,10 @@ public struct HoleMillOperation: ToolpathOperation {
                 if d < bottom - 1e-12 { builder.retract() }
             }
             return .pecked
+        }
+        guard turns <= Self.maxTotalTurns else {
+            throw CAMError.invalidParameter("The cut is too deep for the helix pitch: it would take more than \(Int(Self.maxTotalTurns)) turns; "
+                                            + "raise the pitch or the depth per turn")
         }
         // Climb inside a hole (clockwise spindle) = counter-clockwise.
         let ccw = params.direction == .climb
