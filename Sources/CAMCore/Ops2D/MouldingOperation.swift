@@ -116,20 +116,10 @@ public struct MouldingOperation: ToolpathOperation {
         return out
     }
 
-    /// Drops points that lie within `tolerance` of the 3D line through their neighbours.
+    /// Removes points so that every removed point lies within `tolerance` of the 3D segment that replaces it
+    /// (Douglas-Peucker, so the error does not build up along a gentle curve).
     static func simplify(_ pts: [CutPoint], tolerance: Double) -> [CutPoint] {
-        guard pts.count > 2 else { return pts }
-        var out = [pts[0]]
-        for k in 1..<(pts.count - 1) {
-            let a = out.last!, p = pts[k], b = pts[k + 1]
-            let ab = Vec3(b.xy - a.xy, z: b.depth - a.depth), ap = Vec3(p.xy - a.xy, z: p.depth - a.depth)
-            let len2 = ab.x * ab.x + ab.y * ab.y + ab.z * ab.z
-            let t = len2 > 0 ? (ap.x * ab.x + ap.y * ab.y + ap.z * ab.z) / len2 : 0
-            let ex = ap.x - ab.x * t, ey = ap.y - ab.y * t, ez = ap.z - ab.z * t
-            if t <= 0 || t >= 1 || (ex * ex + ey * ey + ez * ez).squareRoot() > tolerance { out.append(p) }
-        }
-        out.append(pts[pts.count - 1])
-        return out
+        Polyline3D.simplify(pts.map { Vec3($0.xy, z: $0.depth) }, tolerance: tolerance).map { CutPoint($0.xy, depth: $0.z) }
     }
 
     /// The section as depth below its top for lateral offsets 0…width (upper envelope).
