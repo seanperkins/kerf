@@ -247,8 +247,12 @@ public struct FacingOperation: ToolpathOperation {
             break
         }
         let first = out[0]
-        let toward = out.dropFirst().first { $0.distance(to: first) > 1e-9 }
-        let direction = toward.map { ($0 - first) * (1 / $0.distance(to: first)) } ?? Vec2(1, 0)
+        // The first side is along an axis (a ring's side, or a ring shrunk to a line): its direction without a length,
+        // so nothing overflows however large the area.
+        let toward = out.dropFirst().first { max(abs($0.x - first.x), abs($0.y - first.y)) > 1e-9 }
+        let direction: Vec2 = toward.map { t in
+            abs(t.x - first.x) >= abs(t.y - first.y) ? Vec2(t.x > first.x ? 1 : -1, 0) : Vec2(0, t.y > first.y ? 1 : -1)
+        } ?? Vec2(1, 0)
         let lead = leadLength(from: first, toward: direction * -1, clearOf: area, toolRadius: r)
         return [first - direction * lead] + out
     }
