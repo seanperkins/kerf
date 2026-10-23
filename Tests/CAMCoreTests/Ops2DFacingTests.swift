@@ -300,3 +300,17 @@ func ops2DFacingAVeryLongNarrowAreaStaysSmall(pattern: FacingPattern) throws {
     let tps = try back.generate(in: ctx)
     #expect(tps.first?.clearedDepth == 0.1)
 }
+
+@Test func ops2DFacingLeadClearanceIsAFullRadiusOnOneSideNotACornerGraze() {
+    let box = Rect2(x: 0, y: 0, width: 6, height: 4)
+    let r = 0.25, tol = 0.0005
+    // A radius clear on one side is clear, however near the other axis it is.
+    #expect(FacingOperation.isClear(Vec2(-0.25, 2), of: box, toolRadius: r, tolerance: tol))
+    #expect(FacingOperation.isClear(Vec2(-0.25, -0.2), of: box, toolRadius: r, tolerance: tol))
+    #expect(FacingOperation.isClear(Vec2(3, 4.25), of: box, toolRadius: r, tolerance: tol))
+    // 0.2 outside on both axes is 0.283 from the corner, but only 0.2 from each edge: not accepted (the test is the grown
+    // square, never looser than the round cutter), nor is a point inside.
+    #expect(!FacingOperation.isClear(Vec2(-0.2, -0.2), of: box, toolRadius: r, tolerance: tol))
+    #expect(!FacingOperation.isClear(Vec2(-0.2, 2), of: box, toolRadius: r, tolerance: tol))
+    #expect(!FacingOperation.isClear(Vec2(3, 2), of: box, toolRadius: r, tolerance: tol))
+}
