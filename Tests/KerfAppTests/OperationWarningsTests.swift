@@ -55,6 +55,17 @@ import Testing
         #expect(warnings(.profile(projected), p, lib).isEmpty)
     }
 
+    @Test func aNegativeAllowanceIsTheValidatorsRuleToo() throws {
+        let (p, op, lib) = try setup()
+        var strict = post
+        strict.limits.maxSpoilboardCut = -0.05          // cuts must stop 0.05 in above the bottom
+        let through = warnings(profile(op, depth: 0.75), p, lib, profile: strict)
+        #expect(through.count == 1 && through[0].contains("below the material bottom") && through[0].contains("0.05 in above the bottom"))
+        let above = warnings(profile(op, depth: 0.74), p, lib, profile: strict)
+        #expect(above.count == 1 && above[0].contains("above the material bottom") && !above[0].contains("-"))
+        #expect(warnings(profile(op, depth: 0.7), p, lib, profile: strict).isEmpty)
+    }
+
     @Test func everyKindWithOneCutDepthIsChecked() throws {
         let (p, _, lib) = try setup()
         let id = p.document.shapes[0].id

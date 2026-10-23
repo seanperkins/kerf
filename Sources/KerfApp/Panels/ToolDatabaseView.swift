@@ -222,6 +222,10 @@ enum ToolEditorField: Hashable {
 
 struct ToolEditor: View {
     @EnvironmentObject var library: ToolLibraryModel
+    // What `ToolDatabaseView.defaultPost` reads, watched so that the spindle-range note follows a change made in Preferences.
+    @ObservedObject private var preferences = PreferencesModel.shared
+    @ObservedObject private var machines = MachineCatalog.shared
+    @ObservedObject private var posts = PostProfileCatalog.shared
     /// The library's current copy of the tool (what Revert goes back to); the window passes it fresh on
     /// every update.
     let original: Tool

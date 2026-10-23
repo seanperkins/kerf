@@ -34,11 +34,14 @@ enum OperationWarnings {
 
         if let depth = cutDepth(of: op, tool: tool), op.setup.projectOntoModelID == nil {
             // The validator's rule: the material bottom plus what the machine lets a cut into the spoilboard.
-            let allowed = job.thickness + max(0, profile.limits.maxSpoilboardCut) * profile.units.factor(to: units)
+            let into = profile.limits.maxSpoilboardCut * profile.units.factor(to: units)   // as `MotionChecker` has it, sign and all
+            let allowed = job.thickness + into
             if depth > allowed + CAMContext.defaultTolerance(units) {
-                let past = RulerTicks.label(((depth - job.thickness) * 10000).rounded() / 10000)
-                out.append("The cut is \(past) \(u) below the material bottom (\(RulerTicks.label(job.thickness)) \(u) thick); "
-                           + "the machine allows \(RulerTicks.label(allowed - job.thickness)) \(u) into the spoilboard.")
+                let past = RulerTicks.label((abs(depth - job.thickness) * 10000).rounded() / 10000)
+                let rule = into >= 0 ? "the machine allows \(RulerTicks.label(into)) \(u) into the spoilboard"
+                                     : "the machine wants cuts to stop \(RulerTicks.label(-into)) \(u) above the bottom"
+                out.append("The cut is \(past) \(u) \(depth >= job.thickness ? "below" : "above") the material bottom "
+                           + "(\(RulerTicks.label(job.thickness)) \(u) thick); \(rule).")
             }
         }
 
