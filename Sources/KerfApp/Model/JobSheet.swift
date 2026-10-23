@@ -101,7 +101,8 @@ struct JobSheet: Equatable {
 
     /// - Parameters:
     ///   - sheets: one entry per piece of material; nil = one sheet with every visible shape.
-    ///   - settings: the user's time-estimate settings, so the total is the sidebar's and the preview's.
+    ///   - settings: the user's time-estimate settings, so the total is the sidebar's and the preview's, and each
+    ///     step's time is the same model applied to that toolpath alone.
     static func make(project: KerfProject, results: [UUID: ToolpathResult], profile: PostProfile,
                      groupByTool: Bool, rapidRate: Double, date: Date = Date(),
                      sheets: [Sheet]? = nil, settings: TimeEstimateSettings) -> JobSheet {
@@ -125,7 +126,7 @@ struct JobSheet: Equatable {
             steps.append(Step(index: steps.count + 1, name: tp.name, kind: tp.kind.displayName,
                               tool: JobSummary.label(tp.tool), toolChange: lastTool != tp.tool.id,
                               maxDepth: depth.map { fmt(max(0, $0), u) } ?? "—",
-                              time: ToolpathCalculator.formatDuration(ToolpathStats(tp).estimatedSeconds(rapidRate: rapidRate)),
+                              time: ToolpathCalculator.formatDuration(settings.estimate([tp], rapidRate: rapidRate, units: u, toolChanges: false)),
                               notes: notes,
                               pauseAfter: pause.map { $0.text(afterToolpath: tp.name) + ($0.isOptionalStop ? " (optional stop, M1)" : "") }))
             lastTool = tp.tool.id
@@ -253,6 +254,11 @@ enum JobSheetHTML {
         }
         if js.steps.isEmpty { h += "<tr><td colspan=\"7\" class=\"muted\">No calculated toolpaths.</td></tr>\n" }
         h += "</table>\n"
+        if js.steps.count > 1 {
+            // The same model as the total, one toolpath at a time: the two differ by what lies between the steps.
+            h += "<p class=\"muted\">Each time is that toolpath's own cutting, rapids and dwell. The estimated total also "
+                + "holds the rapids between toolpaths, the tool-change allowance and the stops.</p>\n"
+        }
         for sheet in js.sheets {
             h += "<div class=\"sheet\"><h2>\(e(sheet.title))</h2>\n" + preview(sheet, js) + "\n"
             if !sheet.partNames.isEmpty {
