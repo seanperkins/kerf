@@ -72,8 +72,10 @@ struct ChamferForm: View {
                             help: fromStart ? "Chamfer width on the surface at the start depth (the material top when it is 0)"
                                             : "Chamfer width on the top surface")
             }
-            LengthField("Tip clearance", value: $params.tipClearance, units: units,
-                        help: "How far the tip runs into the waste past the edge")
+            if params.side != .on {
+                LengthField("Tip clearance", value: $params.tipClearance, units: units,
+                            help: "How far the tip runs into the waste past the edge")
+            }
             LengthField("Start depth", value: $params.startDepth, units: units,
                         help: fromStart ? "Depth of the surface the chamfer is measured from; the material above it is taken as already removed"
                                         : "Depth the first pass starts at")
