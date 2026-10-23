@@ -30,6 +30,8 @@ public enum PassShaping {
     ///   - spiralFinish: for spiral ramps, append a flat lap at `toDepth` (last pass).
     /// Upper bound on zig-zag legs per pass (even).
     static let maxZigzagLegs = 200
+    /// Upper bound on the laps one smooth ramp may take (a pathologically tiny loop and a deep pass).
+    static let maxSmoothLaps = 200.0
 
     public static func pass(on chain: ArcLengthChain, s0: Double, fromDepth: Double, toDepth: Double,
                             ramp: RampSettings, overcut: Double = 0, spiralFinish: Bool = true) -> ChainPass {
@@ -54,7 +56,9 @@ public enum PassShaping {
             }
             return ChainPass(pieces: pieces, endS: end)
         case .smooth:
-            let lr = min(max(ramp.length, drop / tanA), L)
+            // The asked-for length is cut short at one lap, but the maximum angle is not: a loop shorter than
+            // drop / tan(angle) goes round again until the descent is gentle enough (a helix, then one lap flat).
+            let lr = min(max(min(ramp.length, L), drop / tanA), L * Self.maxSmoothLaps)
             let end = s0 + L + max(lr, overcut)
             let piece = chain.samples(from: s0, to: end, extraBreaks: [s0 + lr]) { s in
                 s < s0 + lr ? fromDepth + drop * (s - s0) / lr : toDepth
