@@ -23,7 +23,7 @@ extension KerfDocument {
                 try html.write(to: url, atomically: true, encoding: .utf8)
                 NSWorkspace.shared.open(url)
             } catch {
-                alert = AlertMessage(title: "Job sheet not saved", message: error.localizedDescription)
+                report(AlertMessage(title: "Job sheet not saved", message: error.localizedDescription))
             }
         }
     }

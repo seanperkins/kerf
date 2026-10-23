@@ -19,13 +19,13 @@ enum GCodePreviewWindow {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let data = try? Data(contentsOf: url),
               let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
-            document.alert = AlertMessage(title: "Preview G-code", message: "Could not read \(url.lastPathComponent).")
+            document.report(AlertMessage(title: "Preview G-code", message: "Could not read \(url.lastPathComponent)."))
             return
         }
         let model = GCodePreviewModel(text: text, fileName: url.lastPathComponent, units: document.units,
                                       job: document.document.job)
         guard model.reader.moveCount > 0 else {
-            document.alert = AlertMessage(title: "Preview G-code", message: "\(url.lastPathComponent) has no moves Kerf can preview.")
+            document.report(AlertMessage(title: "Preview G-code", message: "\(url.lastPathComponent) has no moves Kerf can preview."))
             return
         }
         let view = GCodePreviewView(model: model, job: document.document.job, rapidRate: document.rapidRateInDocumentUnits)

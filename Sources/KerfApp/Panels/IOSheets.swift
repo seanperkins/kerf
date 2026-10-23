@@ -103,7 +103,7 @@ extension KerfDocument {
             let data = try Data(contentsOf: url)
             sheet = .io(.modelParts(try ModelPartsForm.read(data: data, fileName: url.lastPathComponent, units: units)))
         } catch {
-            alert = AlertMessage(title: "Import", message: "\(url.lastPathComponent): \(ImportService.describe(error))")
+            report(AlertMessage(title: "Import", message: "\(url.lastPathComponent): \(ImportService.describe(error))"))
         }
     }
 

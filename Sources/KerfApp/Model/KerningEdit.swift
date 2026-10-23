@@ -15,7 +15,7 @@ extension KerfDocument {
     func beginKerning(_ id: UUID? = nil) {
         let target = id ?? (selectedShapes.count == 1 ? selectedShapes.first?.id : nil)
         guard let t = target, let s = project.document.shape(id: t), s.text != nil, project.isEditable(s) else {
-            alert = AlertMessage(title: "Kerning", message: "Select one editable text object first.")
+            report(AlertMessage(title: "Kerning", message: "Select one editable text object first."))
             return
         }
         envelopeEdit = nil
@@ -48,7 +48,7 @@ extension KerfDocument {
             let updated = p
             perform(actionName) { $0 = updated }
         } catch {
-            alert = AlertMessage(title: "Text", message: ImportService.describe(error))
+            report(AlertMessage(title: "Text", message: ImportService.describe(error)))
         }
     }
 

@@ -574,8 +574,8 @@ final class KerfDocument: ReferenceFileDocument {
         if kind == .straightInlay { addStraightInlayPair(); return }
         guard let op = OperationFactory.make(kind: kind, project: project, library: mergedLibrary,
                                              shapeIDs: selectionOrder) else {
-            alert = AlertMessage(title: "No 3D model",
-                                 message: "Import an STL model (File > Import) before adding a 3D toolpath.")
+            report(AlertMessage(title: "No 3D model",
+                                 message: "Import an STL model (File > Import) before adding a 3D toolpath."))
             return
         }
         perform("New \(kind.displayName) Toolpath") { $0.upsertOperation(op) }
@@ -862,10 +862,15 @@ final class KerfDocument: ReferenceFileDocument {
         return outcome
     }
 
+    /// A sheet attached to the window by AppKit, which `sheet` does not know about (the gadget run dialog): while it
+    /// is open a report waits for it, like one under a SwiftUI sheet.
+    var platformSheetOpen = false
+
     /// Reports a result to the user: at once, or after the open sheet closes (`sheetDismissed()` shows
-    /// it), because an alert cannot show over a sheet.
+    /// it), because an alert cannot show over a sheet. Every message for the user goes through here: a command
+    /// that can run while a sheet is up (a menu item, a dialog's own action) never sets `alert` itself.
     func report(_ message: AlertMessage) {
-        if sheet == nil { alert = message } else { hold(message) }
+        if sheet == nil && !platformSheetOpen { alert = message } else { hold(message) }
     }
 
     /// Keeps a report for `sheetDismissed()`. Reports held together are joined, each under its own
@@ -890,7 +895,8 @@ final class KerfDocument: ReferenceFileDocument {
             showNextPlacement()
         } else if !pendingScales.isEmpty {
             showNextScaleRequest()
-        } else if let a = deferredAlert {
+        } else if sheet == nil, !platformSheetOpen, let a = deferredAlert {
+            // Only when no sheet of either kind is up: closing one of two leaves the report waiting for the other.
             deferredAlert = nil
             alert = a
         }
@@ -904,7 +910,7 @@ final class KerfDocument: ReferenceFileDocument {
             let data = try exporter.export(shapes: shapes, layers: project.document.layers, units: units)
             try data.write(to: url, options: .atomic)
         } catch {
-            alert = AlertMessage(title: "Export failed", message: ImportService.describe(error))
+            report(AlertMessage(title: "Export failed", message: ImportService.describe(error)))
         }
     }
 }

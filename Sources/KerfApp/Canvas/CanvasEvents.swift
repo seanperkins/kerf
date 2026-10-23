@@ -332,7 +332,7 @@ extension CanvasNSView {
             guard !s.paths.isEmpty else { return }
             doc.addShape(s, actionName: "Add Text")
         } catch {
-            doc.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
+            doc.report(AlertMessage(title: "Text", message: ImportService.describe(error)))
         }
     }
 }
