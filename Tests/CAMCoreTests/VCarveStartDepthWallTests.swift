@@ -96,14 +96,14 @@ func vcarveTaperedFlatClearanceToolStaysOffTheFlaredWallWhenCarvingFromADepth(zZ
     let narrow = Tool(name: "20° engraver", kind: .engraving, number: 21, diameter: 0.25, angle: 20, tipDiameter: 0.02,
                       stepdown: 0.05, stepover: 0.01, feedRate: 40, plungeRate: 10)
     let tV = F.tan30
-    // Wider taper, no start depth: tip radius + flat depth * (tT - tV), as before.
-    #expect(abs(VCarveEngine.wallClearance(of: wideEngraver, flatDepth: 0.1, startDepth: 0, vSlope: tV)
+    // Wider taper, no start depth: tip radius + the tip's depth * (tT - tV), as before.
+    #expect(abs(VCarveEngine.wallClearance(of: wideEngraver, tipDepth: 0.1, vSlope: tV)
                 - (0.01 + 0.1 * (1 - tV))) < 1e-12)
-    // With a start depth the cone is lowered by it as well.
-    #expect(abs(VCarveEngine.wallClearance(of: wideEngraver, flatDepth: 0.1, startDepth: 0.1, vSlope: tV)
+    // With a start depth the tip is that much deeper below the surface, and the cone is lowered with it.
+    #expect(abs(VCarveEngine.wallClearance(of: wideEngraver, tipDepth: 0.2, vSlope: tV)
                 - (0.01 + 0.2 * (1 - tV))) < 1e-12)
     // A taper narrower than the V-bit gains nothing on the wall, whatever the start depth.
-    #expect(abs(VCarveEngine.wallClearance(of: narrow, flatDepth: 0.1, startDepth: 0.3, vSlope: tV) - 0.01) < 1e-12)
+    #expect(abs(VCarveEngine.wallClearance(of: narrow, tipDepth: 0.4, vSlope: tV) - 0.01) < 1e-12)
     // A cylindrical tool is its radius.
-    #expect(VCarveEngine.wallClearance(of: halfInchMill, flatDepth: 0.1, startDepth: 0.3, vSlope: tV) == 0.25)
+    #expect(VCarveEngine.wallClearance(of: halfInchMill, tipDepth: 0.4, vSlope: tV) == 0.25)
 }

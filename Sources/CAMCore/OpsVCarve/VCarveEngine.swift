@@ -108,11 +108,10 @@ struct VCarveEngine {
     private func clearFlatArea(_ flatArea: VCarveRegion, bottom: Double, vSlope: Double, axis: VCarveMedialAxis,
                                warnings: inout [String]) -> [(tool: Tool, passes: [[VCarveStroke]])] {
         guard !clearanceTools.isEmpty else { return [] }
-        let flatBelowStart = bottom - startDepth
         var out: [(tool: Tool, passes: [[VCarveStroke]])] = []
         var cleared: VCarveRegion?
         for (index, clr) in clearanceTools.enumerated() {
-            let reach = Self.wallClearance(of: clr, flatDepth: flatBelowStart, startDepth: startDepth, vSlope: vSlope)
+            let reach = Self.wallClearance(of: clr, tipDepth: bottom, vSlope: vSlope)
             let foot = Self.floorRadius(of: clr)
             var centres = flatArea.offset(by: -reach, arcTolerance: tolerance)
             if let done = cleared {
@@ -188,15 +187,15 @@ struct VCarveEngine {
 
     /// How far a clearance tool's centre must stay inside the flat area so no part of it cuts
     /// the V-carved walls: the radius for cylindrical tools; for tapered (V / engraving) tools
-    /// the tip radius plus whatever the taper gains on the walls. The tool's tip is `startDepth +
-    /// flatDepth` below the surface, and the V walls reach the surface (they flare above the start
-    /// depth), so the taper gains over that whole height.
-    static func wallClearance(of tool: Tool, flatDepth: Double, startDepth: Double, vSlope: Double) -> Double {
+    /// the tip radius plus whatever the taper gains on the walls. The tool's tip is `tipDepth` below
+    /// the surface (start depth plus flat depth), and the V walls reach the surface (they flare above
+    /// the start depth), so the taper gains over that whole height.
+    static func wallClearance(of tool: Tool, tipDepth: Double, vSlope: Double) -> Double {
         guard let angle = tool.angle, angle > 0, angle < 180, tool.kind == .vBit || tool.kind == .engraving else {
             return tool.radius
         }
         let toolSlope = tan(angle / 2 * .pi / 180)
-        return min(tool.radius, max(0, tool.tipDiameter / 2) + (startDepth + flatDepth) * max(0, toolSlope - vSlope))
+        return min(tool.radius, max(0, tool.tipDiameter / 2) + tipDepth * max(0, toolSlope - vSlope))
     }
 
     /// Radius of the flat floor a clearance tool leaves at its tip.
