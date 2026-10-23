@@ -12,6 +12,14 @@ import Testing
         }
     }
 
+    /// The name is stored in documents and templates (`TextSpec.fontName`). Work saved before the rename carries the old name,
+    /// and without this alias editing its text looks the font up by name, fails to find it and throws.
+    @Test func theNameKerfStoredIsStillTheStrokeFont() {
+        #expect(StrokeFont.isStrokeFont("LoftLine Single Line"))
+        #expect(StrokeFont.isStrokeFont("Kerf Single Line"))
+        #expect(!StrokeFont.isStrokeFont("Helvetica"))
+    }
+
     @Test func capHeightAndOpenStrokes() {
         let paths = StrokeFont.outlines(for: "HELLO", size: 2, origin: Vec2(1, 1))
         let b = Rect2(points: paths.flatMap { $0.flattened() })
