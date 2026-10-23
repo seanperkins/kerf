@@ -94,8 +94,10 @@ enum OperationWarnings {
         case .thread:
             // The thread mill goes down the middle to the cut depth, so something earlier has to have cleared that far
             // and at least as wide as the tool.
+            // (A thread is milled where the generator finds a radius above its own tolerance, not three times it.)
+            let generatorTol = CAMContext.defaultTolerance(units)
             let bare = holes.filter {
-                $0.diameter > tool.diameter + tol
+                ($0.diameter - tool.diameter) / 2 > generatorTol
                     && !made(at: $0.centre, depth: op.params.cutDepth, width: tool.diameter, drillOnly: false)
             }
             if !bare.isEmpty {

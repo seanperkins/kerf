@@ -503,6 +503,11 @@ import Testing
         flatBore.params.startDepth = 0.5
         p.operations = [.holeMill(flatBore), .holeMill(thread)]
         #expect(warnings(.holeMill(thread), p, lib).count == 1)
+        // The boundary is the generator's: a thread diameter 0.0012 in over the tool has a 0.0006 in radius, above the 0.0005 in
+        // tolerance, so the generator mills it, plunging at the center, and it needs its pilot.
+        let barely = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.2512)
+        p.operations = [.holeMill(barely)]
+        #expect(warnings(.holeMill(barely), p, lib).count == 1)
         // A thread in a hole as large as the tool is skipped by the generator, and not reported here.
         let tiny = holeMill(mill, a, mode: .thread, depth: 0.5, diameter: 0.25)
         p.operations = [.holeMill(tiny)]
