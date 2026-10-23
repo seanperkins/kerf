@@ -10,7 +10,7 @@ import Testing
 ///
 /// Fixtures live in Tests/Fixtures/e2e and Tests/Fixtures/golden. Regenerate them with
 /// `LOFTLINE_UPDATE_GOLDEN=1 scripts/test.sh --filter EndToEnd` after an intentional output change.
-@Suite("End to end: sign")
+@Suite("End to end: sign", .serialized)
 struct EndToEndSignTests {
     static let fixtures = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
@@ -22,7 +22,7 @@ struct EndToEndSignTests {
     enum SignLayer: String, CaseIterable { case outline = "Outline", pocket = "Pocket", text = "Text", drill = "Drill" }
 
     /// Builds the sign design (24 x 12 in): rounded-rect outline, a recessed panel along the bottom,
-    /// "KERF" as outlines and a hanging hole.
+    /// "LOFTLINE" as outlines and a hanging hole.
     static func makeSignSVG() throws -> Data {
         var layers: [SignLayer: Layer] = [:]
         for l in SignLayer.allCases { layers[l] = Layer(name: l.rawValue) }
@@ -30,7 +30,7 @@ struct EndToEndSignTests {
                             paths: [ShapeFactory.rectangle(Rect2(x: 1, y: 1, width: 22, height: 10), cornerRadius: 1)])
         let panel = Shape(name: "Panel", layerID: layers[.pocket]!.id,
                           paths: [ShapeFactory.rectangle(Rect2(x: 4, y: 2, width: 16, height: 1.5), cornerRadius: 0.25)])
-        let text = try TextOutliner().shape(for: "KERF", fontName: "Helvetica-Bold", size: 2.5,
+        let text = try TextOutliner().shape(for: "LOFTLINE", fontName: "Helvetica-Bold", size: 2.5,
                                             origin: Vec2(12, 5), alignment: .center,
                                             layerID: layers[.text]!.id)
         let hole = Shape(name: "Hole", layerID: layers[.drill]!.id,
@@ -103,10 +103,10 @@ struct EndToEndSignTests {
         #expect(project.operations.count == 4)
         let names = Set(project.document.layers.map(\.name))
         for l in SignLayer.allCases { #expect(names.contains(l.rawValue)) }
-        // "KERF" has 4 letters plus a counter in R.
+        // "LOFTLINE" has 8 letters plus a counter in O.
         let textLayer = project.document.layers.first { $0.name == "Text" }!
         let textPaths = project.document.shapes.filter { $0.layerID == textLayer.id }.flatMap(\.paths)
-        #expect(textPaths.count >= 5)
+        #expect(textPaths.count >= 9, "the fixture should hold LOFTLINE: \(textPaths.count) paths")
     }
 
     @Test("Posts with the Avid inch profile with zero validator errors", arguments: ZZeroMode.allCases)
