@@ -300,4 +300,21 @@ import Testing
         #expect(lib.lastError == nil)
         #expect(ToolLibraryModel(store: lib.store).tools.first?.feedRate == edited.feedRate)
     }
+
+    /// Export Selected Tool builds the save panel's suggested file name before the file is written: with the Name
+    /// field still being typed in, the name must be the typed one (the exported file contains it), not the old one.
+    @Test func theSuggestedExportNameIsTheNameBeingTyped() throws {
+        let lib = AppTestSupport.library()
+        var typed = try #require(lib.tools.first)
+        let id = typed.id
+        let old = typed.name
+        typed.name = "Typed name"
+        lib.hold(typed)
+        #expect(lib.library.tool(id: id)?.name == old)           // not saved yet: the field has focus
+        #expect(lib.exportName(for: [id]) == "Typed name")
+        #expect(lib.library.tool(id: id)?.name == "Typed name")  // and now it is, the same way export itself saves it
+        #expect(lib.exportName(for: nil) == "Kerf Tools")
+        #expect(lib.exportName(for: [UUID()]) == "Kerf Tools")
+    }
 }
+
