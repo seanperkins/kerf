@@ -40,12 +40,14 @@ public struct PocketOperation: ToolpathOperation {
             } else {
                 groups = clearing(planner, from: start, leftUncut: &stageUncut)
             }
+            // Floor this tool could reach and left uncut is reported even when it cut nothing at all.
+            if stageUncut { leftUncut = true }
             guard !groups.isEmpty else { continue }
             let label = clearanceTools.count == 1 ? "clearance" : "clearance \(i + 1)"
             toolpaths.append(try emit(groups, planner: planner, tool: big, context: context, name: "\(setup.name) (\(label))"))
             // Later tools take everything this one reached as cleared, so a tool that left floor uncut
             // does not hand over (the floor it missed stays in the next tool's job, and is reported).
-            if stageUncut { leftUncut = true } else { restAfter = big.radius }
+            if !stageUncut { restAfter = big.radius }
         }
         let planner = try makePlanner(region: region, tool: tool, tolerance: tol)
         var finishUncut = false
