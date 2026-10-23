@@ -21,20 +21,27 @@ public struct VariableLink: Codable, Hashable, Identifiable, Sendable {
         self.id = id; self.target = target; self.path = path; self.expression = expression
     }
 
+    /// Values for the names the table lacks, one per name in the order the evaluation meets them. They are
+    /// unrelated irrationals, so neither a round denominator ("zzz-1", "zzz-0.5") nor one built from two
+    /// of them ("zzz-yyy", "zzz-2*yyy") comes out as zero.
+    private static let fillValues: [Double] = [1.4142135, 2.7182818, 3.1415926, 1.6180339, 2.2360679, 1.7320508, 2.4494897, 0.5772156]
+
     /// True when the expression uses the variable `name` (case-insensitive): evaluated without it,
-    /// the expression fails on that name. Other names the table lacks are filled in (as 1, which
-    /// no arithmetic chokes on) as the evaluation meets them, so an unknown name first in the text
-    /// cannot hide the one asked about.
+    /// the expression fails on that name. Other names the table lacks are filled in (see `fillValues`)
+    /// as the evaluation meets them, so an unknown name first in the text cannot hide the one asked
+    /// about. A fill can still make a denominator zero by coincidence (`1/(zzz-1.4142135)`); the
+    /// search then ends as "not a reference", which is safe: that link cannot write while the name is
+    /// undefined, and once it is defined the real table is used.
     public static func references(_ name: String, in expression: String, variables: [String: Double], units: LengthUnit?) -> Bool {
         var table = variables
         table[name.lowercased()] = nil
-        for _ in 0..<64 {
+        for filled in 0..<64 {
             do {
                 _ = try ExpressionEvaluator.evaluate(expression, variables: table, units: units)
                 return false
             } catch ExpressionEvaluator.ExpressionError.unknownVariable(let n) {
                 if n.lowercased() == name.lowercased() { return true }
-                table[n.lowercased()] = 1
+                table[n.lowercased()] = fillValues[filled % fillValues.count]
             } catch {
                 return false
             }
