@@ -111,7 +111,13 @@ enum KerfCLI {
                 name = String(word[..<eq])
                 inline = String(word[word.index(after: eq)...])
             }
-            func value() -> String? { inline ?? words.popFirst() }
+            // The next word is the value unless it is another option (`--out --force` is a missing value, not a folder
+            // named --force); `--out=--force` is how to name one.
+            func value() -> String? {
+                if let inline { return inline }
+                guard let next = words.first, !next.hasPrefix("--") else { return nil }
+                return words.popFirst()
+            }
             switch name {
             case "--post", "--operation", "--out", "--side", "--name":
                 guard let v = value() else { return .failure(ParseError("\(name) needs a value")) }

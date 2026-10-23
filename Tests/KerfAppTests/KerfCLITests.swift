@@ -242,6 +242,7 @@ import Testing
             (["export", Self.sign, "--side", "middle"], "--side is top or bottom"),
             (["export", Self.sign, "--bogus"], "unknown option --bogus"),
             (["export", Self.sign, "--post"], "--post needs a value"),
+            (["export", Self.sign, "--out", "--force"], "--out needs a value"),
             (["export", Self.sign, "--force=yes"], "takes no value"),
             (["export", Self.sign, "extra.kerf"], "unexpected argument"),
             (["export", "/nonexistent/none.kerf"], "cannot read"),

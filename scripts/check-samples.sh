@@ -21,7 +21,17 @@ cli="$(swift build "${SWIFTPM_FLAGS[@]}" --product kerf-cli --show-bin-path)/ker
 
 mkdir -p .tmp
 work="$(mktemp -d .tmp/check-samples.XXXXXX)"
-trap 'rm -rf "$work"' EXIT
+stage=""
+old=""
+# Whatever stops the script, the committed programs end up in samples/expected: a swap that was begun and not finished is undone.
+cleanup() {
+  rm -rf "$work"
+  [[ -z "$stage" ]] || rm -rf "$stage"
+  if [[ -n "$old" && -e "$old" && ! -e samples/expected ]]; then mv "$old" samples/expected; fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Assigned first, so that a failing `posts` stops the script (a failure inside a for loop's word list would not).
 ids="$("$cli" posts --builtin-only | cut -f1)"
@@ -53,19 +63,16 @@ done
 if (( update )); then
   # Staged next to the committed set and swapped in whole, so a failed copy leaves the committed programs as they were.
   stage="$(mktemp -d samples/.expected-new.XXXXXX)"
-  trap 'rm -rf "$work" "$stage"' EXIT
   cp -R "$work"/. "$stage"/
   (( $(find "$stage" -type f | wc -l) == expected_count )) || { echo "FAIL: the copy is short" >&2; exit 1; }
-  # The committed set is moved aside, not deleted, until the new one is in its place; if the swap fails it is put back,
-  # and an interrupted swap leaves it as samples/.expected-old.* for the next run to find.
+  # The committed set is moved aside, not deleted, until the new one is in its place; a failed or interrupted swap puts it
+  # back (`cleanup`).
   old="samples/.expected-old.$$"
   if [[ -e samples/expected ]]; then mv samples/expected "$old"; fi
-  if ! mv "$stage" samples/expected; then
-    [[ ! -e "$old" ]] || mv "$old" samples/expected
-    echo "FAIL: could not put the new programs in place; the committed ones are back" >&2
-    exit 1
-  fi
+  mv "$stage" samples/expected || { echo "FAIL: could not put the new programs in place; the committed ones are back" >&2; exit 1; }
+  stage=""
   rm -rf "$old"
+  old=""
   echo "samples/expected rewritten: $expected_count programs"
   exit 0
 fi
