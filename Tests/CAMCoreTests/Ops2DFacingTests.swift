@@ -273,6 +273,9 @@ func ops2DFacingAVeryLongNarrowAreaStaysSmall(pattern: FacingPattern) throws {
     // Vectors with no finite extent give no area.
     fails({ $0.area = .vectors }, paths: [F.rect(0, 0, .infinity, 1)])
     fails({ $0.area = .vectors }, paths: [F.rect(0, 0, .nan, 1)])
+    // Finite edges whose span overflows.
+    let wide = ShapeFactory.rectangle(Rect2(min: Vec2(-1e308, 0), max: Vec2(1e308, 1)))
+    for pattern in [FacingPattern.rasterX, .rasterY, .spiral] { fails({ $0.area = .vectors; $0.pattern = pattern }, paths: [wide]) }
 }
 
 @Test func ops2DFacingSurvivesSavingAndCreditsTheStartDepth() throws {

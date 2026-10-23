@@ -43,7 +43,8 @@ public struct FacingOperation: ToolpathOperation {
         let tol = context.tolerance
         let units = context.units
         let area = try facedArea(in: context)
-        guard [area.min.x, area.min.y, area.max.x, area.max.y].allSatisfy(\.isFinite) else {
+        // Finite edges can still be a span that overflows (-1e308 to 1e308).
+        guard [area.min.x, area.min.y, area.max.x, area.max.y, area.width, area.height].allSatisfy(\.isFinite) else {
             throw CAMError.invalidGeometry("The area to face is not a finite size")
         }
         guard area.width > tol, area.height > tol else {
@@ -73,6 +74,9 @@ public struct FacingOperation: ToolpathOperation {
                                tolerance: tol)
         }
         guard flat.count > 1 else { throw CAMError.invalidGeometry("The area to face leaves nothing to cut") }
+        guard flat.allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else {
+            throw CAMError.invalidGeometry("The area to face is too large")
+        }
         guard flat.count * passes.count <= Self.maxPoints else {
             throw CAMError.invalidParameter("Too many passes: raise the stepover or the depth per pass")
         }
@@ -210,7 +214,8 @@ public struct FacingOperation: ToolpathOperation {
                        tolerance: Double) -> [Vec2] {
         var out: [Vec2] = []
         var k = 0.0
-        while true {
+        // The caller bounds the rings; the loop is bounded here as well, whatever the arithmetic does.
+        while k <= Double(Self.maxRows) {
             let l = c.min.x + k * step, b = c.min.y + k * step
             let w = max(0, c.width - 2 * k * step), h = max(0, c.height - 2 * k * step)
             let right = l + w, top = b + h
