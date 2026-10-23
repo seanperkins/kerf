@@ -73,7 +73,9 @@ minimum is 1000 x 640). Steps run in order and the run stops at the first error,
 | `select` | `names`: shape names | selects shapes |
 | `selectToolpath` | `name` | selects a toolpath (and shows the Toolpaths tab) |
 | `calculate` | | calculates all toolpaths and waits |
-| `editTool` | `value`: `diameter` or `rename` | edits the tool of the first toolpath in the Tool Database, as that window does while a sheet is open: `diameter` makes the toolpaths stale, `rename` only relabels them |
+| `editTool` | `value`: `diameter`, `rename` or `number` | edits the tool of the first toolpath in the Tool Database, as that window does while a sheet is open: `diameter` makes the toolpaths stale, `rename` only relabels them, `number` gives it another library tool's T number |
+| `captureWindow` | `value`: a window's title (`Tool Database`), `name` | window PNG and accessibility tree of a window other than the document's; open it first with `press` on its toolbar button (`"name": "Tool Database", "value": "AXButton"`) |
+| `selectTool` | `name`: a tool's name | selects that tool in the open Tool Database window (its list rows cannot be clicked) |
 | `fileTarget` | `name`: a file or folder path (empty clears it) | the save or folder panel of Export G-code, Save All Toolpaths and Save Tiled G-code answers OK with that path at once, until `closeSheet` or an empty `fileTarget` (other panels are not routed through it), so the sheet's real save runs (and fails, for an unwritable path); `closeSheet` clears it. The system file panel itself is never driven |
 | `sheet` / `closeSheet` | `value`: jobSetup, exportGCode, validation, … | opens a sheet, or closes the open sheet or alert |
 | `import` | `name`: a file path relative to the repo root | imports it as File > Import does; an import alert stays open until a `closeSheet` step |

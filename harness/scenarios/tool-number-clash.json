@@ -1,0 +1,13 @@
+{
+  "name": "Tool Database: two tools with one T number are badged, and the editor offers the next free number",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "calculate"},
+    {"op": "editTool", "value": "number"},
+    {"op": "press", "name": "Tool Database", "value": "AXButton"},
+    {"op": "captureWindow", "name": "tool-database-badges", "value": "Tool Database"},
+    {"op": "selectTool", "name": "1/4\" End Mill (2 flute)"},
+    {"op": "captureWindow", "name": "tool-database-editor", "value": "Tool Database"}
+  ]
+}
