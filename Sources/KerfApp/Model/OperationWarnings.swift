@@ -45,8 +45,9 @@ enum OperationWarnings {
             }
         }
 
-        // Tabs that will be cut: on, and not manual with no anchor placed.
-        if case .profile(let p) = op, p.params.tabs.isEnabled, !(p.params.tabs.manualTabs?.isEmpty ?? false) {
+        // Tabs that the generator will place: on, and on a closed vector it cuts (an open vector has none, and a manual
+        // anchor counts only on a selected closed vector that still exists).
+        if case .profile(let p) = op, p.params.tabs.isEnabled, tabsWillBePlaced(p, in: project.document) {
             let span = p.params.depth.cutDepth - p.params.depth.startDepth
             if p.params.tabs.thickness >= span - CAMContext.defaultTolerance(units), span > 0 {
                 out.append("The tabs (\(RulerTicks.label(p.params.tabs.thickness)) \(u) tall) are as tall as the cut "
@@ -54,6 +55,18 @@ enum OperationWarnings {
             }
         }
         return out
+    }
+
+    /// Whether the profile's tabs land anywhere: automatic tabs need a closed vector among the selected ones, manual
+    /// ones an anchor on a selected, existing, closed path (`TabAnchors.centers` ignores the others).
+    static func tabsWillBePlaced(_ op: ProfileOperation, in document: Document) -> Bool {
+        let shapes = document.shapes(ids: op.setup.shapeIDs)
+        guard let anchors = op.params.tabs.manualTabs else { return shapes.contains { $0.paths.contains(where: \.isClosed) } }
+        let selected = Set(op.setup.shapeIDs)
+        return anchors.contains { a in
+            guard selected.contains(a.shapeID), let shape = document.shape(id: a.shapeID), shape.paths.indices.contains(a.pathIndex) else { return false }
+            return shape.paths[a.pathIndex].isClosed
+        }
     }
 
     /// What is wrong with a tool's own numbers: diameter, feed, plunge and spindle speed. Only the toolpath's

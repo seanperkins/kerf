@@ -163,6 +163,20 @@ import Testing
         #expect(warnings(profile(op, depth: 0.5, tabs: manual), p, lib).isEmpty)
         manual.manualTabs = [TabAnchor(shapeID: p.document.shapes[0].id, fraction: 0.5)]
         #expect(!warnings(profile(op, depth: 0.5, tabs: manual), p, lib).isEmpty)
+        // An anchor on a vector that is gone or not selected places no tab, and automatic tabs need a closed vector.
+        manual.manualTabs = [TabAnchor(shapeID: UUID(), fraction: 0.5)]
+        #expect(warnings(profile(op, depth: 0.5, tabs: manual), p, lib).isEmpty)
+        var open = p
+        let line = Shape(layerID: open.document.defaultLayerID, paths: [Path(points: [Vec2(0, 0), Vec2(2, 0)], closed: false)])
+        open.document.add(line)
+        guard case .profile(var onLine) = profile(op, depth: 0.5, tabs: tall) else { return }
+        onLine.setup.shapeIDs = [line.id]
+        #expect(warnings(.profile(onLine), open, lib).allSatisfy { !$0.contains("tabs") })
+        onLine.setup.shapeIDs = [line.id, p.document.shapes[0].id]
+        #expect(warnings(.profile(onLine), open, lib).contains { $0.contains("tabs") })
+        manual.manualTabs = [TabAnchor(shapeID: line.id, fraction: 0.5)]
+        onLine.params.tabs = manual
+        #expect(warnings(.profile(onLine), open, lib).allSatisfy { !$0.contains("tabs") })     // an open path has no tab
         // Tabs that are off say nothing.
         var off = tall
         off.isEnabled = false
