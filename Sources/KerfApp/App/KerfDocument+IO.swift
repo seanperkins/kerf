@@ -36,7 +36,7 @@ extension KerfDocument {
                 try p.encoded().write(to: url, options: .atomic)
             }
         } catch {
-            alert = AlertMessage(title: "Template not saved", message: error.localizedDescription)
+            report(AlertMessage(title: "Template not saved", message: error.localizedDescription))
         }
     }
 }

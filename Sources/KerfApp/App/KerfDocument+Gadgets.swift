@@ -30,7 +30,7 @@ extension KerfDocument {
         }
         let output = result.messages + result.log
         if !output.isEmpty {
-            alert = AlertMessage(title: script.name, message: output.joined(separator: "\n"))
+            report(AlertMessage(title: script.name, message: output.joined(separator: "\n")))
         }
         return .success(result)
     }

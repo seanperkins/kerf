@@ -63,7 +63,7 @@ extension KerfDocument {
         do {
             try template.encoded().write(to: url, options: .atomic)
         } catch {
-            alert = AlertMessage(title: "Could not save the template", message: error.localizedDescription)
+            report(AlertMessage(title: "Could not save the template", message: error.localizedDescription))
         }
     }
 
@@ -78,9 +78,9 @@ extension KerfDocument {
             var outcome = TemplateService.Outcome(added: 0, unmatched: [], skipped: 0)
             let lib = toolLibrary.library
             perform("Apply Toolpath Template") { outcome = TemplateService.apply(template, to: &$0, library: lib) }
-            alert = AlertMessage(title: "Toolpath template applied", message: TemplateService.summary(outcome))
+            report(AlertMessage(title: "Toolpath template applied", message: TemplateService.summary(outcome)))
         } catch {
-            alert = AlertMessage(title: "Could not open the template", message: error.localizedDescription)
+            report(AlertMessage(title: "Could not open the template", message: error.localizedDescription))
         }
     }
 }

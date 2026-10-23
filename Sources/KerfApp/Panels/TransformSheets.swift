@@ -56,8 +56,9 @@ struct DistortSheet: View {
             if envelope {
                 Button("Drag Corners on Canvas") {
                     let o = offsets
-                    document.sheet = nil
+                    // Before the sheet closes: a message it reports (nothing editable selected) waits for the sheet.
                     document.beginEnvelopeEdit(offsets: o)
+                    document.sheet = nil
                 }
                 .disabled(ids.isEmpty)
                 .help("Close this dialog and drag the four corners on the design; the vectors are previewed as they bend")

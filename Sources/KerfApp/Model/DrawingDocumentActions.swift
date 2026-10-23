@@ -11,9 +11,9 @@ extension KerfDocument {
         let dups = VectorValidator.duplicates(scope, tolerance: VectorCommands.tolerance(units))
         var removed = 0
         if !dups.isEmpty { perform("Delete Duplicates") { removed = VectorCommands.repair(dups, in: &$0) } }
-        alert = AlertMessage(title: "Duplicate Vectors",
+        report(AlertMessage(title: "Duplicate Vectors",
                              message: removed == 0 ? "No duplicate or overlapping vectors found."
-                                 : "Deleted \(removed) duplicate or overlapping vector\(removed == 1 ? "" : "s").")
+                                 : "Deleted \(removed) duplicate or overlapping vector\(removed == 1 ? "" : "s")."))
     }
 
     /// Lines the selected nodes up on their average X (`vertical` line) or Y.

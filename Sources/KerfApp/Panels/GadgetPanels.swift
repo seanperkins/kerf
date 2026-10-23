@@ -43,7 +43,7 @@ struct GadgetCommands: Commands {
         panel.message = "Choose a Kerf gadget script (.js)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let loaded = GadgetLibrary.load(url) else {
-            doc.alert = AlertMessage(title: "Gadget", message: "\(url.lastPathComponent) could not be read as UTF-8 text.")
+            doc.report(AlertMessage(title: "Gadget", message: "\(url.lastPathComponent) could not be read as UTF-8 text."))
             return
         }
         GadgetRunner.start(loaded.script, in: doc, problems: loaded.problems)
@@ -59,7 +59,7 @@ enum GadgetRunner {
         let problems = problems ?? GadgetLibrary.shared.problems[script.id] ?? []
         guard !script.parameters.isEmpty || !problems.isEmpty else {
             if case .failure(let e) = document.runGadget(script, values: [:]) {
-                document.alert = AlertMessage(title: script.name, message: e.message)
+                document.report(AlertMessage(title: script.name, message: e.message))
             }
             return
         }
@@ -67,14 +67,18 @@ enum GadgetRunner {
         let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 300),
                          styleMask: [.titled], backing: .buffered, defer: false)
         w.title = script.name
-        let view = GadgetRunView(document: document, script: script, problems: problems) { [weak w, weak parent] in
+        let view = GadgetRunView(document: document, script: script, problems: problems) { [weak w, weak parent, weak document] in
             if let w { parent?.endSheet(w) }
             panel = nil
+            // The gadget's output was held while this dialog was open: show it now.
+            document?.platformSheetOpen = false
+            document?.sheetDismissed()
         }
         .environment(\.documentVariables, document.document.variableTable)
         .environment(\.expressionUnits, document.units)
         w.contentViewController = NSHostingController(rootView: view)
         panel = w
+        document.platformSheetOpen = true
         parent.beginSheet(w)
     }
 

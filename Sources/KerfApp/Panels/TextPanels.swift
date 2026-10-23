@@ -216,7 +216,7 @@ struct TextEditSection: View {
             let updated = p
             document.perform("Adjust Letters") { $0 = updated }
         } catch {
-            document.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
+            document.report(AlertMessage(title: "Text", message: ImportService.describe(error)))
         }
     }
 
@@ -233,7 +233,7 @@ struct TextEditSection: View {
             let updated = p
             document.perform("Edit Text") { $0 = updated }
         } catch {
-            document.alert = AlertMessage(title: "Text", message: ImportService.describe(error))
+            document.report(AlertMessage(title: "Text", message: ImportService.describe(error)))
         }
     }
 }

@@ -46,7 +46,7 @@ extension KerfDocument {
     /// Shows draggable envelope corners on the canvas for the selection.
     func beginEnvelopeEdit(offsets: [Vec2]? = nil) {
         guard let e = EnvelopeEdit(selectionOrder.isEmpty ? Array(selection) : selectionOrder, in: project, offsets: offsets) else {
-            alert = AlertMessage(title: "Distort", message: "Select one or more editable vectors with a width and height first.")
+            report(AlertMessage(title: "Distort", message: "Select one or more editable vectors with a width and height first."))
             return
         }
         activeTool = .select
