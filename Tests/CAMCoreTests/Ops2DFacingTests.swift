@@ -265,6 +265,8 @@ func ops2DFacingAVeryLongNarrowAreaStaysSmall(pattern: FacingPattern) throws {
     fails { $0.overhang = .infinity }
     fails { $0.depth.cutDepth = 0 }
     fails { $0.depth.cutDepth = .nan }
+    // A custom list is not capped by the pass helper.
+    fails { $0.depth.customPasses = (1...10_001).map { Double($0) * 1e-5 }; $0.depth.cutDepth = 1 }
     // Finite depths whose span overflows.
     fails { $0.depth.startDepth = -1e308; $0.depth.cutDepth = 1e308 }
     fails { $0.depth.passDepth = 0 }

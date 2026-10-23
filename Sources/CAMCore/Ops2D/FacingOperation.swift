@@ -40,6 +40,10 @@ public struct FacingOperation: ToolpathOperation {
         try params.depth.validatePassDepth(toolStepdown: tool.stepdown)
         let passes = params.depth.passDepths(toolStepdown: tool.stepdown)
         guard !passes.isEmpty else { throw CAMError.invalidParameter("Cut depth must be deeper than start depth") }
+        // A computed list is capped by the helper; a hand-edited custom list is not.
+        guard passes.count <= DepthSettings.maxComputedPasses else {
+            throw CAMError.invalidParameter("Too many depth passes: at most \(DepthSettings.maxComputedPasses)")
+        }
 
         let tol = context.tolerance
         let units = context.units
