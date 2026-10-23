@@ -123,6 +123,7 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `tp-drilling` | toolpaths-2d | Drilling with peck, dwell, retract | done | P1 | CAMCore/Ops2D/DrillOperation.swift; Ops2DDrillTests |
 | `tp-drill-bank` | toolpaths-2d | Drill bank / multi-spindle drilling | missing | P3 | Won't do: the Avid has a single spindle and no drill-bank head (DECISIONS toolpaths-2d, re-confirmed round 2) |
 | `tp-helical-hole` | toolpaths-2d | Helical hole milling / thread milling | done | P2 | HoleMillOperation (helical bore + internal thread milling); Ops2DHoleMillTests |
+| `tp-facing` | toolpaths-2d | Facing (surfacing) a rectangle: the whole material or the box round the selected vectors | done | P2 | FacingOperation: raster along X or Y, or a spiral of rectangular rings; stepover as a share of the tool diameter (default 70%); overhang past the edge (default a tool radius); led in from outside the area; the job sheet says where the top is afterwards; Ops2DFacingTests; samples/faced-board.kerf |
 | `tp-quick-engrave` | toolpaths-2d | Quick engrave (follow vector on centreline) | done | P1 | EngraveOperation (OperationKind.engrave), groove width in form + metadata; Ops2DEngraveChamferTests |
 | `tp-chamfer` | toolpaths-2d | Chamfer toolpath | done | P1 | ChamferOperation (width or depth, tip clearance, side); ChamferForm; Ops2DEngraveChamferTests |
 | `tp-inlay-straight` | toolpaths-2d | Straight-wall (end-mill) inlay toolpath | done | P3 | StraightInlayOperation (matched close(open(S,r),r) outline); Ops2DStraightInlayTests |

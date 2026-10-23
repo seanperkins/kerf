@@ -19,6 +19,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
     case merge(MergeOperation)
     case straightInlay(StraightInlayOperation)
     case moulding(MouldingOperation)
+    case facing(FacingOperation)
 
     public var operation: any ToolpathOperation {
         switch self {
@@ -38,6 +39,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .merge(let o): return o
         case .straightInlay(let o): return o
         case .moulding(let o): return o
+        case .facing(let o): return o
         }
     }
 
@@ -55,6 +57,7 @@ public enum AnyOperation: Codable, Hashable, Identifiable, Sendable {
         case .pocket(let o): o.params.depth.startDepth
         case .fluting(let o): o.params.depth.startDepth
         case .engrave(let o): o.params.depth.startDepth
+        case .facing(let o): o.params.depth.startDepth
         case .drill(let o): o.params.startDepth
         case .holeMill(let o): o.params.startDepth
         case .vcarve(let o): o.params.startDepth

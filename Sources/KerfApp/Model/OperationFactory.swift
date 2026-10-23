@@ -24,11 +24,12 @@ extension AnyOperation {
             case .merge(var o): o.setup = newValue; self = .merge(o)
             case .straightInlay(var o): o.setup = newValue; self = .straightInlay(o)
             case .moulding(var o): o.setup = newValue; self = .moulding(o)
+            case .facing(var o): o.setup = newValue; self = .facing(o)
             }
         }
     }
 
-    /// The depth settings of an operation that has them (profile, pocket, fluting, quick engrave).
+    /// The depth settings of an operation that has them (profile, pocket, fluting, quick engrave, facing).
     var editableDepth: DepthSettings? {
         get {
             switch self {
@@ -36,6 +37,7 @@ extension AnyOperation {
             case .pocket(let o): return o.params.depth
             case .fluting(let o): return o.params.depth
             case .engrave(let o): return o.params.depth
+            case .facing(let o): return o.params.depth
             default: return nil
             }
         }
@@ -46,6 +48,7 @@ extension AnyOperation {
             case .pocket(var o): o.params.depth = d; self = .pocket(o)
             case .fluting(var o): o.params.depth = d; self = .fluting(o)
             case .engrave(var o): o.params.depth = d; self = .engrave(o)
+            case .facing(var o): o.params.depth = d; self = .facing(o)
             default: break
             }
         }
@@ -81,7 +84,7 @@ extension AnyOperation {
 /// in inches; millimetre documents get them scaled by 25.4).
 enum OperationFactory {
     /// Kinds offered in the "New toolpath" menu, in VCarve-like order.
-    static let menuKinds: [OperationKind] = [.profile, .pocket, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .straightInlay, .photoVCarve, .fluting, .moulding, .texture, .relief3D]
+    static let menuKinds: [OperationKind] = [.profile, .pocket, .facing, .drill, .holeMill, .engrave, .chamfer, .vcarve, .prism, .inlay, .straightInlay, .photoVCarve, .fluting, .moulding, .texture, .relief3D]
 
     /// Title in the "New toolpath" menus (Inlay opens the pocket + plug wizard).
     static func menuTitle(_ kind: OperationKind) -> String {
@@ -106,7 +109,7 @@ enum OperationFactory {
     /// Preferred tool kinds for an operation (first match in the library wins).
     static func preferredToolKinds(for kind: OperationKind) -> [ToolKind] {
         switch kind {
-        case .profile, .pocket, .holeMill, .merge: return [.endMill, .ballNose]
+        case .profile, .pocket, .holeMill, .merge, .facing: return [.endMill, .ballNose]
         case .straightInlay: return [.endMill]
         case .moulding: return [.ballNose, .endMill, .vBit]
         case .drill: return [.drill, .endMill]
@@ -119,6 +122,10 @@ enum OperationFactory {
     }
 
     static func defaultTool(for kind: OperationKind, in library: ToolLibrary) -> Tool? {
+        // Facing wants the widest cutter there is, to cover the area in fewer passes.
+        if kind == .facing, let wide = library.tools.filter({ $0.kind == .endMill }).max(by: { $0.diameter < $1.diameter }) {
+            return wide
+        }
         for k in preferredToolKinds(for: kind) {
             if let t = library.tools.first(where: { $0.kind == k }) { return t }
         }
@@ -190,6 +197,10 @@ enum OperationFactory {
             return .straightInlay(StraightInlayOperation(setup: setup, params: p))
         case .prism:
             return .prism(PrismOperation(setup: setup, params: PrismParameters().scaled(by: f)))
+        case .facing:
+            var p = FacingParameters(area: shapeIDs.isEmpty ? .material : .vectors).scaled(by: f)
+            p.depth.cutDepth = min(p.depth.cutDepth, thickness)
+            return .facing(FacingOperation(setup: setup, params: p))
         case .holeMill:
             var p = HoleMillParameters().scaled(by: f)
             p.cutDepth = min(p.cutDepth, thickness)

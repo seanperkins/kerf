@@ -128,6 +128,14 @@ extension ChamferParameters {
     }
 }
 
+extension FacingParameters {
+    func scaled(by f: Double) -> FacingParameters {
+        var p = self
+        p.depth = depth.scaled(by: f); p.overhang = overhang.map { $0 * f }
+        return p
+    }
+}
+
 extension HoleMillParameters {
     func scaled(by f: Double) -> HoleMillParameters {
         var p = self
@@ -199,6 +207,7 @@ extension AnyOperation {
         case .merge(var o): o.params.children = o.params.children.map { $0.scaled(by: f) }; return .merge(o)
         case .straightInlay(var o): o.params = o.params.scaled(by: f); return .straightInlay(o)
         case .moulding(var o): o.params = o.params.scaled(by: f); return .moulding(o)
+        case .facing(var o): o.params = o.params.scaled(by: f); return .facing(o)
         }
     }
 }

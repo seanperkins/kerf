@@ -121,6 +121,8 @@ struct JobSheet: Equatable {
             let depth = tp.minZ.map { coords.depth(ofMachineZ: $0) }
             var notes: [String] = []
             if let w = tp.metadata["warning"] { notes.append(w) }
+            // A facing changes where the top of the material is for the steps after it.
+            if tp.kind == .facing, let n = tp.metadata["note"] { notes.append(n) }
             // As in the post: no stop after the last toolpath, the program ends there.
             let pause = i + 1 < toolpaths.count ? tp.pauseAfter : nil
             steps.append(Step(index: steps.count + 1, name: tp.name, kind: tp.kind.displayName,

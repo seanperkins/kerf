@@ -6,7 +6,7 @@ import Foundation
 enum HelpTopic: String, CaseIterable, Identifiable {
     case gettingStarted, jobSetup, machines, drawing, nodeEditing, layers, transforms
     case toolpathsOverview, profile, pocket, drilling, vcarve, inlay, fluting, texture, relief3D, tabs
-    case engrave, chamfer, holeMill, prism, mergeToolpaths, straightInlay, moulding, photoVCarve
+    case engrave, chamfer, holeMill, prism, mergeToolpaths, straightInlay, moulding, photoVCarve, facing
     case toolDatabase, preview, checkToolpaths, exportGCode, saveAllToolpaths, airCut
     case preferences, recovery, shortcuts
 
@@ -38,6 +38,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .straightInlay: return "Straight Inlay Toolpaths"
         case .moulding: return "Moulding Toolpath"
         case .photoVCarve: return "Photo V-Carve Toolpath"
+        case .facing: return "Facing Toolpath"
         case .tabs: return "Tabs, Ramps and Leads"
         case .toolDatabase: return "Tool Database"
         case .preview: return "2D and 3D Preview"
@@ -77,6 +78,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .straightInlay: return "square.inset.filled"
         case .moulding: return "waveform.path"
         case .photoVCarve: return "photo"
+        case .facing: return "rectangle.split.3x1"
         case .tabs: return "pin"
         case .toolDatabase: return "wrench.and.screwdriver"
         case .preview: return "cube.transparent"
@@ -109,6 +111,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .straightInlay: return .straightInlay
         case .moulding: return .moulding
         case .photoVCarve: return .photoVCarve
+        case .facing: return .facing
         }
     }
 
@@ -131,6 +134,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .straightInlay: return [.inlay, .pocket]
         case .moulding: return [.fluting, .preview]
         case .photoVCarve: return [.vcarve, .preview]
+        case .facing: return [.pocket, .jobSetup]
         case .tabs: return [.profile]
         case .toolDatabase: return [.toolpathsOverview]
         case .preview: return [.checkToolpaths]
@@ -274,6 +278,15 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             - Give the **width** of the bevel on the top face, or a **depth**; the other follows from the bit angle.
             - With a **start depth** both are measured from the surface at that depth (the material above it is taken as already removed).
             - **Tip clearance** keeps the bit's point off the wall by running it slightly into the waste.
+            """
+        case .facing:
+            return """
+            Facing takes a thin layer off the top of a rectangle with a wide tool: the whole material, or the box round the selected vectors. Use it to flatten a warped board, or to surface the spoilboard.
+
+            - **Pattern**: passes along X or along Y (each the reverse of the one before), or a spiral of rectangular rings from the outside in.
+            - **Stepover** is the distance between passes as a percentage of the tool diameter; 70% is usual for a surfacing bit.
+            - **Overhang** is how far the cutter's edge reaches past the edge of the area. By default the tool's center rides the edge, so the edge is cleaned. Passes are led in from outside the area, so the first pass does not plunge into the surface.
+            - **Cut depth** is how far below the original top the new surface ends up. Later toolpaths still measure depth from the original top (or from the spoilboard), so touch off Z0 once and do not re-zero after facing.
             """
         case .holeMill:
             return """
@@ -428,6 +441,9 @@ enum FieldHelp {
         "Ramp length": "Distance over which the tool descends into the material",
         "Max angle": "Steepest allowed ramp angle",
         "Raster angle": "Direction of raster lines (0° = along X)",
+        "Overhang": "How far the cutter's edge reaches past the area's edge (off = a tool radius)",
+        "Area": "Face the whole material, or the box round the selected vectors",
+        "Facing pattern": "Parallel passes along X or Y, or rectangular rings from the outside in",
         "Allowance": "Material left on the part for a later finishing pass (negative removes more)",
         "Length": "Length of each tab along the cut",
         "Tab height": "Height of each tab, measured up from the bottom of the cut",

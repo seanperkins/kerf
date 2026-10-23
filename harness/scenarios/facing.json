@@ -1,0 +1,15 @@
+{
+  "name": "Facing toolpath: the form, its job-sheet note, and the cut in the 2D and 3D previews",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "project", "name": "samples/faced-board.kerf"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "calculate"},
+    {"op": "selectToolpath", "name": "Facing 1"},
+    {"op": "wait", "seconds": 1},
+    {"op": "capture", "name": "facing"},
+    {"op": "mode", "value": "3d"},
+    {"op": "wait", "seconds": 3},
+    {"op": "capture", "name": "facing-3d"}
+  ]
+}

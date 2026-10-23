@@ -144,6 +144,7 @@ extension AnyOperation {
         case .merge(var o): o.setup = setup; return .merge(o)
         case .straightInlay(var o): o.setup = setup; return .straightInlay(o)
         case .moulding(var o): o.setup = setup; return .moulding(o)
+        case .facing(var o): o.setup = setup; return .facing(o)
         case .photoVCarve(var o): o.setup = setup; return .photoVCarve(o)
         }
     }

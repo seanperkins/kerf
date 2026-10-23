@@ -235,6 +235,44 @@ struct HoleMillForm: View {
     }
 }
 
+struct FacingForm: View {
+    @Binding var params: FacingParameters
+    var units: LengthUnit
+    var tool: Tool?
+
+    var body: some View {
+        InspectorSection(title: "Cutting Depths") {
+            DepthForm(depth: $params.depth, units: units, tool: tool)
+        }
+        Divider()
+        InspectorSection(title: "Facing") {
+            Picker("Area", selection: $params.area) {
+                Text("Whole material").tag(FacingArea.material)
+                Text("Selected vectors").tag(FacingArea.vectors)
+            }
+            .pickerStyle(.segmented)
+                .fieldHelp("Area")
+            Picker("Facing pattern", selection: $params.pattern) {
+                Text("Along X").tag(FacingPattern.rasterX)
+                Text("Along Y").tag(FacingPattern.rasterY)
+                Text("Spiral").tag(FacingPattern.spiral)
+            }
+            .pickerStyle(.segmented)
+                .fieldHelp("Facing pattern")
+            NumberField("Stepover", value: Binding(get: { params.stepover * 100 },
+                                                   set: { params.stepover = min(max($0 / 100, 0.01), FacingOperation.maxStepover) }),
+                        unit: "%", help: "Distance between passes, as a percentage of the tool diameter")
+            OptionalLengthField(label: "Overhang", value: $params.overhang, units: units,
+                                defaultValue: tool?.radius ?? (units == .inch ? 0.125 : 3))
+            if params.pattern == .spiral { DirectionPicker(direction: $params.direction) }
+            Text(params.area == .material
+                 ? "Takes a layer off the top of the whole material. The tool leaves the stock at the end of every pass, and the first pass is led in from outside."
+                 : "Takes a layer off the top of the box round the selected vectors. The cutter reaches past the box by the overhang, so face the whole material if the stock continues beyond it.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 struct PrismForm: View {
     @Binding var params: PrismParameters
     var units: LengthUnit

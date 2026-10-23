@@ -57,6 +57,13 @@ To regenerate the samples, run `KERF_WRITE_SAMPLES=1 scripts/test.sh --filter Sa
    - **Inlay (Pocket + Plug)…** on a simple shape. The wizard creates a female pocket and a plug
      (the plug is disabled; export it as its own file).
    - **Fluting** on an open line, and **Texture** on a rectangle.
+   - **Facing** with nothing selected: Toolpaths → New Toolpath → Facing faces the whole material (with
+     vectors selected it takes the box round them instead). Try Along X, Along Y and Spiral in the 2D
+     preview: every pass starts and ends clear of the stock, and the first pass is fed in from outside.
+     In the form, a stepover over 95% or an overhang under 0 refuses to calculate; with "Selected
+     vectors" on a part inside the stock, the form warns that the cutter reaches past the box. The
+     note under the result (and on the job sheet) says how far below the original top the new surface
+     is and not to re-zero Z afterwards. Air-cut `samples/faced-board.tap` before cutting real stock.
    - **3D:** import `relief.stl`. The "Place 3D Model" dialog creates Roughing and Finishing toolpaths.
      In the inspector, try Offset roughing, the Offset/Spiral finishing patterns, "Rest after" a
      larger ball nose, "Combine with" a second model, and "Two-Sided" (one toolpath per side).
