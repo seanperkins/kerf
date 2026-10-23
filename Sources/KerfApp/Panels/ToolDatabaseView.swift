@@ -17,9 +17,11 @@ struct ToolDatabaseView: View {
 
     var body: some View {
         let clashes = ToolNumbers.clashes(in: library.tools)
+        let shown = ToolSearch.filter(library.tools, query: query)
+        // Duplicate and Delete act on what the list shows: a tool the search hides is not offered for either.
+        let selectionShown = selectedID.map { id in shown.contains { $0.id == id } } ?? false
         NavigationSplitView {
             List(selection: $selectedID) {
-                let shown = ToolSearch.filter(library.tools, query: query)
                 if shown.isEmpty {
                     Text(library.tools.isEmpty ? "No tools" : "No tool matches \"\(query)\"").foregroundStyle(.secondary)
                 }
@@ -70,16 +72,16 @@ struct ToolDatabaseView: View {
             .safeAreaInset(edge: .bottom) {
                 HStack {
                     Button("Duplicate") { if let id = selectedID { selectedID = library.duplicate(id: id)?.id } }
-                        .disabled(selectedID == nil)
+                        .disabled(!selectionShown)
                     Button("Delete") { if let id = selectedID { library.delete(id: id); selectedID = nil } }
-                        .disabled(selectedID == nil)
+                        .disabled(!selectionShown)
                     Spacer()
                     Menu("Share") {
                         Button("Import Tools…") { runImport() }
                         Divider()
                         Button("Export All Tools…") { runExport(ids: nil) }
                         Button("Export Selected Tool…") { if let id = selectedID { runExport(ids: [id]) } }
-                            .disabled(selectedID == nil)
+                            .disabled(!selectionShown)
                     }
                     .fixedSize()
                     .help("Import or export tools as a .kerftools file (or CSV) to share them between machines")
@@ -96,6 +98,10 @@ struct ToolDatabaseView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 520)
+        // Typing in the search box that hides the tool being edited closes its editor (it saves as it closes).
+        .onChange(of: query) { _, _ in
+            if let id = selectedID, !ToolSearch.filter(library.tools, query: query).contains(where: { $0.id == id }) { selectedID = nil }
+        }
         .confirmationDialog("\(pendingConflicts) imported tool\(pendingConflicts == 1 ? "" : "s") already exist with different settings",
                             isPresented: Binding(get: { pendingImport != nil }, set: { if !$0 { pendingImport = nil } })) {
             Button("Replace Existing") { finishImport(.replace) }

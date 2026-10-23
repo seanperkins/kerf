@@ -96,6 +96,16 @@ import Testing
         #expect(ToolNaming.name(for: tool("", kind: .ballNose, diameter: 0.25, shape: .taperedBallNose(tipRadius: 0.02, halfAngle: 5))) == "1/4 in tapered ball nose")
     }
 
+    @Test func aHugeOrOddDiameterIsNamedAsADecimalWithoutTrapping() {
+        // An imported file can carry any number; the fraction search must stay inside Int.
+        for d in [2e17, 1e12 / 64, 1e30, 0.0, -0.25, Double.nan, Double.infinity] {
+            let name = ToolNaming.name(for: tool("", diameter: d))
+            #expect(name.hasSuffix("2-flute end mill"), "\(d): \(name)")
+        }
+        #expect(ToolNaming.name(for: tool("", diameter: 2e17)).hasPrefix("200000000000000000 in"))
+        #expect(ToolNaming.length(1.0 / 64, in: .inch) == "1/64 in" && ToolNaming.length(0, in: .inch) == "0 in")
+    }
+
     @Test func aToolWithoutANameIsNamedWhenItIsSaved() throws {
         let lib = AppTestSupport.library()
         var t = try #require(lib.tools.first)

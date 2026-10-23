@@ -117,7 +117,8 @@ enum ToolNaming {
     static func length(_ v: Double, in units: LengthUnit) -> String {
         guard units == .inch else { return trimmed(v, places: 3) + " mm" }
         let sixtyFourths = (v * 64).rounded()
-        if v > 0, abs(v - sixtyFourths / 64) < 1e-4 {
+        // (A size past a trillion 64ths is no fraction a person made; `Int` would trap on the huge ones.)
+        if v > 0, sixtyFourths < 1e12, abs(v - sixtyFourths / 64) < 1e-4 {
             var n = Int(sixtyFourths), d = 64
             while n % 2 == 0, d > 1 { n /= 2; d /= 2 }
             let whole = n / d, rest = n % d
