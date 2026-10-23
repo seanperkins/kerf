@@ -1,5 +1,5 @@
 {
-  "name": "the accessibility tree still answers after a DXF import and inside the Join Open Vectors sheet (a lookup that stops answering ends in a failed press or the watchdog); the gap is closed at a tolerance above its 0.008 in",
+  "name": "the accessibility tree still answers after a DXF import and inside the Join Open Vectors sheet (the run fails if lookups stay unresponsive through the press's retries, or the watchdog ends it); the gap is closed at a tolerance above its 0.008 in",
   "window": [
     1280,
     820
