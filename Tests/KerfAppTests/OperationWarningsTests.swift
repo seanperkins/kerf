@@ -157,6 +157,12 @@ import Testing
         #expect(warnings(profile(op, depth: 0.4, tabs: ok), p, lib).isEmpty)
         // The cut is measured from the start depth.
         #expect(warnings(profile(op, depth: 0.5, start: 0.45, tabs: ok), p, lib).contains { $0.contains("tabs") })
+        // Manual placement with no anchor has no tab to cut: nothing to say.
+        var manual = tall
+        manual.manualTabs = []
+        #expect(warnings(profile(op, depth: 0.5, tabs: manual), p, lib).isEmpty)
+        manual.manualTabs = [TabAnchor(shapeID: p.document.shapes[0].id, fraction: 0.5)]
+        #expect(!warnings(profile(op, depth: 0.5, tabs: manual), p, lib).isEmpty)
         // Tabs that are off say nothing.
         var off = tall
         off.isEnabled = false

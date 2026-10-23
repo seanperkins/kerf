@@ -8,6 +8,10 @@ import SwiftUI
 /// when the editor opened.
 struct OperationEditor: View {
     @ObservedObject var document: KerfDocument
+    // What the form's warnings read through `document.postProfile`: a machine saved in Preferences, or a reloaded post,
+    // changes the spindle range and the spoilboard allowance they judge by.
+    @ObservedObject private var machines = MachineCatalog.shared
+    @ObservedObject private var posts = PostProfileCatalog.shared
     let original: AnyOperation
     @State private var draft: AnyOperation
     /// The operation when the editor opened (for Revert).

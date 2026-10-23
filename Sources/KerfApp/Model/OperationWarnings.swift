@@ -45,11 +45,12 @@ enum OperationWarnings {
             }
         }
 
-        if case .profile(let p) = op, p.params.tabs.isEnabled {
+        // Tabs that will be cut: on, and not manual with no anchor placed.
+        if case .profile(let p) = op, p.params.tabs.isEnabled, !(p.params.tabs.manualTabs?.isEmpty ?? false) {
             let span = p.params.depth.cutDepth - p.params.depth.startDepth
             if p.params.tabs.thickness >= span - CAMContext.defaultTolerance(units), span > 0 {
                 out.append("The tabs (\(RulerTicks.label(p.params.tabs.thickness)) \(u) tall) are as tall as the cut "
-                           + "(\(RulerTicks.label(span)) \(u) deep): nothing is cut through between them.")
+                           + "(\(RulerTicks.label(span)) \(u) deep): the tool will not cut at all where a tab is.")
             }
         }
         return out
