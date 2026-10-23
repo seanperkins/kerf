@@ -531,3 +531,26 @@ private func noTabWarning(_ tp: Toolpath) -> Bool {
     #expect(tabCount(tp, ctx) == 2)   // the big part's one, on both passes
     #expect(tp.metadata["warning"] == "tabs did not carry to the last pass on 1 loop(s); the part may come free")
 }
+
+@Test func ops2DProfileDoesNotWarnWhenTheRoughingOffsetLeavesOnlyCornerSlivers() throws {
+    // A 4x3 frame cut inside with the 1/4 in tool and a 0.1 in last pass (roughing offset 0.225): a wall thinner than
+    // 0.45 in collapses on the roughing pass except for slivers at the corners, narrower than the tool. They are
+    // no cut through anything, so an anchor on the outer vector holds on the last pass alone without the "hold only on
+    // the last pass" warning (issue #48). From 0.46 in the roughing loop is real.
+    let outer = F.rect(0, 0, 4, 3)
+    let chain = try #require(TabAnchors.chain(outer, tolerance: 0.001))
+    for wall in [0.3, 0.36, 0.384, 0.39, 0.42, 0.44, 0.449] {
+        let (tp, ctx) = try tabbedProfile([outer, F.rect(wall, wall, 4 - 2 * wall, 3 - 2 * wall)], select: [1], side: .inside,
+                                          lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+            TabSettings(isEnabled: true, length: 0.25, thickness: 0.1,
+                        manualTabs: [TabAnchor(shapeID: ids[0], fraction: chain.project(Vec2(2, 0)).s / chain.length)])
+        }
+        #expect(tabCount(tp, ctx) == 1 && tp.metadata["warning"] == nil, "wall \(wall): \(tp.metadata["warning"] ?? "nil")")
+    }
+    let (whole, ctxW) = try tabbedProfile([outer, F.rect(0.6, 0.6, 2.8, 1.8)], select: [1], side: .inside,
+                                          lastPass: ProfileLastPass(allowance: 0.1)) { ids in
+        TabSettings(isEnabled: true, length: 0.25, thickness: 0.1,
+                    manualTabs: [TabAnchor(shapeID: ids[0], fraction: chain.project(Vec2(2, 0)).s / chain.length)])
+    }
+    #expect(tabCount(whole, ctxW) == 2 && whole.metadata["warning"] == nil)   // the roughing tab and the last pass's
+}
