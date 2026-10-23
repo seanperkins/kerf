@@ -13,6 +13,7 @@ scripts/ui.sh sheets --size 1000x640  # override the window's content size
 scripts/ui.sh interact --key          # draw the window as key without taking your focus (see Clips)
 scripts/ui.sh interact --active       # really activate the app (steals focus; table rows then take clicks)
 scripts/ui.sh path/to/mine.json --out .tmp/ui/mine
+scripts/ui.sh main -- -preview3D.showToolpaths '<false/>'   # everything after -- goes to the app as launch arguments
 scripts/reel.sh reel-pause            # record harness/scenarios/reel-pause.json → docs/images/pause.{gif,mp4}
 scripts/reel.sh all                   # every reel-*.json
 ```
@@ -37,8 +38,13 @@ the app's own tree through the Accessibility API from a background thread; that 
 trusted for Accessibility (without it the dump lists only the window chrome and says so).
 
 `scripts/ui.sh` gives each run its own `HOME` inside the output folder, so the app never reads or writes
-your real preferences, tool library, recovery copies or window state. A 90 s watchdog on its own thread
-ends a run that hangs.
+your real tool library, recovery copies or window files. Preferences are the exception: macOS serves `UserDefaults`
+through a daemon that does not follow `HOME`, so a run reads and writes the real defaults domain of the debug binary
+(`LoftLine`, not `com.seanperkins.loftline`), including the one-time settings migration's copy of the old app's values. Set
+`LOFTLINE_NO_MIGRATION=1` to skip the migration, and use launch arguments after `--` instead of `defaults write` to
+change a setting for one run. The app also needs the window server, so under an agent sandbox the run hangs
+(`Connection invalid` in its log): run it outside the sandbox. A 90 s watchdog on its own thread ends a run that hangs
+once the harness has started.
 
 ## Scenario format
 

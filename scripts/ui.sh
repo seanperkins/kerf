@@ -15,12 +15,14 @@
 # --key      draw the window as key without activating the app (your focus stays put; buttons take clicks, table rows do not)
 # --offscreen park the window just past the edge of its screen for the run
 # --no-build reuse the last build
+# -- ARGS     everything after `--` goes to the app, for example `-- -preview3D.showToolpaths NO` (a launch argument overrides
+#            that default for this run without writing it anywhere)
 # Works inside a sandboxed agent shell (see swiftpm-env.sh); LOFTLINE_BUILD_FLAGS adds extra swift build flags.
 set -euo pipefail
 cd "${0:A:h}/.."
 source scripts/swiftpm-env.sh
 
-scenario=""; out=""; extra=(); build=1
+scenario=""; out=""; extra=(); app_args=(); build=1
 while (( $# )); do
   case "$1" in
     --out) out="$2"; shift 2 ;;
@@ -31,6 +33,7 @@ while (( $# )); do
     --key) extra+=(--ui-key 1); shift ;;
     --offscreen) extra+=(--ui-offscreen 1); shift ;;
     --no-build) build=0; shift ;;
+    --) shift; app_args=("$@"); break ;;
     -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) scenario="$1"; shift ;;
   esac
@@ -48,7 +51,7 @@ echo "scenario: $scenario -> $out"
 # The app's exit status is the result (0 ok, 1 a failed step, 2 the watchdog); grep only filters.
 set +e
 HOME="$out/home" CFFIXED_USER_HOME="$out/home" "$BIN" \
-  --ui-scenario "${scenario:A}" --ui-out "$out" "${extra[@]}" \
+  --ui-scenario "${scenario:A}" --ui-out "$out" "${extra[@]}" "${app_args[@]}" \
   -ApplePersistenceIgnoreState YES -NSQuitAlwaysKeepsWindows NO 2>&1 | grep '^\[harness\]'
 rc=${pipestatus[1]}
 set -e
